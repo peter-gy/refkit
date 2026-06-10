@@ -94,11 +94,36 @@ def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
     assert entry is not None
     assert entry.title == "Inline Source"
     assert library.get("missing") is None
+    assert [entry.key for entry in library.get_many(["inline"])] == ["inline"]
+    assert library.get_many(["inline"])[0].title == "Inline Source"
+    with pytest.raises(KeyError):
+        library.get_many(["missing"])
+    with pytest.raises(TypeError, match="keys must be an iterable"):
+        library.get_many("inline")
+    assert library.project(["key", "title", "doi", "volume"]) == [
+        {"key": "inline", "title": "Inline Source", "doi": None, "volume": None}
+    ]
+    assert library.project(["key", "title"], keys=["inline"]) == [
+        {"key": "inline", "title": "Inline Source"}
+    ]
+
+    with pytest.raises(KeyError):
+        library.project(["key"], keys=["missing"])
+    with pytest.raises(ValueError, match="unsupported projection field"):
+        library.project(["unknown"])
 
     yaml_library = rk.Library.parse((FIXTURES / "parent.yaml").read_text(), format="yaml")
     matches = yaml_library.select("article > periodical[volume]")
 
     assert matches[0].key == "doe2024"
+    assert matches[0].volume == "12"
+    assert yaml_library.project(["key", "title", "volume"], keys=["doe2024"]) == [
+        {
+            "key": "doe2024",
+            "title": "Refkit for Bibliographies",
+            "volume": "12",
+        }
+    ]
 
 
 def test_version_and_missing_module_attribute() -> None:

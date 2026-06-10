@@ -1,5 +1,6 @@
 mod raw;
 
+use std::collections::HashMap;
 use std::fmt::{self, Write as _};
 use std::fs;
 use std::path::PathBuf;
@@ -19,9 +20,11 @@ use hayagriva::{
 use pyo3::create_exception;
 use pyo3::exceptions::{PyException, PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyModule};
+use pyo3::sync::PyOnceLock;
+use pyo3::types::{PyAny, PyDict, PyDictMethods, PyList, PyListMethods, PyModule};
+use pyo3::{IntoPyObjectExt, intern};
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{Value, json};
 
 create_exception!(refkit, RefkitError, PyException);
 create_exception!(refkit, MissingReferenceError, RefkitError);
@@ -31,11 +34,118 @@ create_exception!(refkit, MissingReferenceError, RefkitError);
 pub struct Library {
     inner: Arc<HayLibrary>,
     diagnostics: Vec<String>,
+    cache: Arc<OnceLock<LibraryCache>>,
+    py_keys: Arc<PyOnceLock<Py<PyList>>>,
+    py_entries: Arc<PyOnceLock<Py<PyDict>>>,
 }
 
 struct ParsedLibrary {
     inner: HayLibrary,
     diagnostics: Vec<String>,
+}
+
+struct LibraryCache {
+    keys: Vec<String>,
+    entries: Vec<Arc<EntryData>>,
+    index: HashMap<String, usize>,
+}
+
+struct EntryData {
+    inner: Arc<HayEntry>,
+    key: String,
+    entry_type: String,
+    title: Option<String>,
+    volume: Option<String>,
+    doi: Option<String>,
+}
+
+impl EntryData {
+    fn new(inner: HayEntry) -> Self {
+        let key = inner.key().to_string();
+        let entry_type = format!("{:?}", inner.entry_type());
+        let title = inner.title().map(ToString::to_string);
+        let volume = inner
+            .volume()
+            .or_else(|| inner.parents().first().and_then(|parent| parent.volume()))
+            .map(|value| value.to_string());
+        let doi = inner
+            .serial_number()
+            .and_then(|serial| serial.0.get("doi").cloned());
+
+        Self {
+            inner: Arc::new(inner),
+            key,
+            entry_type,
+            title,
+            volume,
+            doi,
+        }
+    }
+}
+
+impl LibraryCache {
+    fn from_library(library: &HayLibrary) -> Self {
+        let mut keys = Vec::with_capacity(library.len());
+        let mut entries = Vec::with_capacity(library.len());
+        let mut index = HashMap::with_capacity(library.len());
+
+        for entry in library.iter() {
+            let key = entry.key().to_string();
+            keys.push(key.clone());
+            index.insert(key, entries.len());
+            entries.push(Arc::new(EntryData::new(entry.clone())));
+        }
+
+        Self {
+            keys,
+            entries,
+            index,
+        }
+    }
+}
+
+impl Library {
+    fn from_parsed(parsed: ParsedLibrary) -> Self {
+        Self {
+            inner: Arc::new(parsed.inner),
+            diagnostics: parsed.diagnostics,
+            cache: Arc::new(OnceLock::new()),
+            py_keys: Arc::new(PyOnceLock::new()),
+            py_entries: Arc::new(PyOnceLock::new()),
+        }
+    }
+
+    fn cache(&self) -> &LibraryCache {
+        self.cache
+            .get_or_init(|| LibraryCache::from_library(self.inner.as_ref()))
+    }
+
+    fn entry_for_key(&self, key: &str) -> Option<Entry> {
+        let cache = self.cache();
+        cache
+            .index
+            .get(key)
+            .map(|index| Entry::from_data(Arc::clone(&cache.entries[*index])))
+    }
+
+    fn entry_for_hay_entry(&self, entry: &HayEntry) -> Entry {
+        self.entry_for_key(entry.key())
+            .unwrap_or_else(|| Entry::from_owned(entry.clone()))
+    }
+
+    fn py_entry_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let entries = self.py_entries.get_or_try_init(py, || {
+            let dict = PyDict::new(py);
+            for entry in &self.cache().entries {
+                dict.set_item(
+                    &entry.key,
+                    Py::new(py, Entry::from_data(Arc::clone(entry)))?,
+                )?;
+            }
+            Ok::<_, PyErr>(dict.unbind())
+        })?;
+        Ok(entries.bind(py).clone())
+    }
 }
 
 #[pymethods]
@@ -44,12 +154,7 @@ impl Library {
     #[pyo3(signature = (path, strict = true, diagnostics = false))]
     fn read(py: Python<'_>, path: PathBuf, strict: bool, diagnostics: bool) -> PyResult<Self> {
         let parsed = py.detach(move || parse_library_path(path, strict, diagnostics));
-        parsed
-            .map(|parsed| Self {
-                inner: Arc::new(parsed.inner),
-                diagnostics: parsed.diagnostics,
-            })
-            .map_err(RefkitError::new_err)
+        parsed.map(Self::from_parsed).map_err(RefkitError::new_err)
     }
 
     #[staticmethod]
@@ -63,12 +168,7 @@ impl Library {
     ) -> PyResult<Self> {
         let format = format.to_string();
         let parsed = py.detach(move || parse_library_source(&source, &format, strict, diagnostics));
-        parsed
-            .map(|parsed| Self {
-                inner: Arc::new(parsed.inner),
-                diagnostics: parsed.diagnostics,
-            })
-            .map_err(RefkitError::new_err)
+        parsed.map(Self::from_parsed).map_err(RefkitError::new_err)
     }
 
     #[getter]
@@ -76,20 +176,44 @@ impl Library {
         self.diagnostics.clone()
     }
 
-    fn keys(&self) -> Vec<String> {
-        self.inner.keys().map(ToOwned::to_owned).collect()
+    fn keys(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let keys = self.py_keys.get_or_try_init(py, || {
+            PyList::new(py, self.cache().keys.iter().map(String::as_str)).map(Bound::unbind)
+        })?;
+        keys.call_method0(py, "copy")
+    }
+
+    fn get_many(&self, py: Python<'_>, keys: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        if keys.extract::<String>().is_ok() {
+            return Err(PyTypeError::new_err(
+                "keys must be an iterable of entry keys",
+            ));
+        }
+        let entries = self.py_entry_dict(py)?;
+        let rows = PyList::empty(py);
+        let iter = keys
+            .try_iter()
+            .map_err(|_| PyTypeError::new_err("keys must be an iterable of entry keys"))?;
+        for key in iter {
+            let key = key?;
+            let Some(entry) = entries.get_item(&key)? else {
+                return Err(PyKeyError::new_err(key.str()?.to_string()));
+            };
+            rows.append(entry)?;
+        }
+        Ok(rows.into_any().unbind())
     }
 
     fn values(&self) -> Vec<Entry> {
-        self.inner
+        self.cache()
+            .entries
             .iter()
-            .cloned()
-            .map(|inner| Entry { inner })
+            .map(|entry| Entry::from_data(Arc::clone(entry)))
             .collect()
     }
 
     fn get(&self, key: &str) -> Option<Entry> {
-        self.inner.get(key).cloned().map(|inner| Entry { inner })
+        self.entry_for_key(key)
     }
 
     fn is_empty(&self) -> bool {
@@ -103,24 +227,46 @@ impl Library {
             .inner
             .iter()
             .filter(|entry| selector.matches(entry))
-            .cloned()
-            .map(|inner| Entry { inner })
+            .map(|entry| self.entry_for_hay_entry(entry))
             .collect())
     }
 
     fn to_dicts(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let mut values = Vec::new();
+        let values = PyList::empty(py);
         for entry in self.inner.iter() {
             let mut value =
                 serde_json::to_value(entry).map_err(|err| RefkitError::new_err(err.to_string()))?;
             if let Some(map) = value.as_object_mut() {
                 map.insert("key".to_string(), json!(entry.key()));
             }
-            values.push(value);
+            values.append(json_value_to_py(py, &value)?)?;
         }
-        let payload =
-            serde_json::to_string(&values).map_err(|err| RefkitError::new_err(err.to_string()))?;
-        json_to_py(py, &payload)
+        Ok(values.into_any().unbind())
+    }
+
+    #[pyo3(signature = (fields = None, keys = None))]
+    fn project(
+        &self,
+        py: Python<'_>,
+        fields: Option<&Bound<'_, PyAny>>,
+        keys: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let fields = parse_project_fields_arg(fields)?;
+        let cache = self.cache();
+        let rows = PyList::empty(py);
+
+        match keys {
+            Some(keys) if !keys.is_none() => {
+                append_projected_keyed_entries(py, &rows, cache, keys, &fields)?
+            }
+            _ => {
+                for entry in &cache.entries {
+                    rows.append(project_entry(py, entry, &fields)?)?;
+                }
+            }
+        }
+
+        Ok(rows.into_any().unbind())
     }
 
     fn __len__(&self) -> usize {
@@ -136,10 +282,7 @@ impl Library {
     }
 
     fn __getitem__(&self, key: &str) -> PyResult<Entry> {
-        self.inner
-            .get(key)
-            .cloned()
-            .map(|inner| Entry { inner })
+        self.entry_for_key(key)
             .ok_or_else(|| PyKeyError::new_err(key.to_string()))
     }
 
@@ -151,62 +294,73 @@ impl Library {
 #[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Entry {
-    inner: HayEntry,
+    data: Arc<EntryData>,
+}
+
+impl Entry {
+    fn from_owned(inner: HayEntry) -> Self {
+        Self {
+            data: Arc::new(EntryData::new(inner)),
+        }
+    }
+
+    fn from_data(data: Arc<EntryData>) -> Self {
+        Self { data }
+    }
 }
 
 #[pymethods]
 impl Entry {
     #[getter]
     fn key(&self) -> String {
-        self.inner.key().to_string()
+        self.data.key.clone()
     }
 
     #[getter]
     fn entry_type(&self) -> String {
-        format!("{:?}", self.inner.entry_type())
+        self.data.entry_type.clone()
     }
 
     #[getter]
     fn title(&self) -> Option<String> {
-        self.inner.title().map(ToString::to_string)
+        self.data.title.clone()
     }
 
     #[getter]
     fn parent(&self) -> Option<Entry> {
-        self.inner
+        self.data
+            .inner
             .parents()
             .first()
             .cloned()
-            .map(|inner| Entry { inner })
+            .map(Entry::from_owned)
     }
 
     #[getter]
     fn parents(&self) -> Vec<Entry> {
-        self.inner
+        self.data
+            .inner
             .parents()
             .iter()
             .cloned()
-            .map(|inner| Entry { inner })
+            .map(Entry::from_owned)
             .collect()
     }
 
     #[getter]
     fn volume(&self) -> Option<String> {
-        self.inner.volume().map(|value| value.to_string())
+        self.data.volume.clone()
     }
 
     #[getter]
     fn doi(&self) -> Option<String> {
-        self.inner
-            .serial_number()
-            .and_then(|serial| serial.0.get("doi").cloned())
+        self.data.doi.clone()
     }
 
     fn __repr__(&self) -> String {
         format!(
             "Entry(key={:?}, type={:?})",
-            self.inner.key(),
-            self.entry_type()
+            self.data.key, self.data.entry_type
         )
     }
 }
@@ -394,6 +548,142 @@ fn rendered_tree_to_json(tree: &RenderedTree) -> String {
                 .expect("rendered bibliography tree is JSON serializable")
         }
     }
+}
+
+fn default_project_fields() -> Vec<String> {
+    ["key", "title", "doi", "volume"]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum ProjectField {
+    Key,
+    EntryType,
+    Type,
+    Title,
+    Doi,
+    Volume,
+}
+
+fn parse_project_fields_arg(fields: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<ProjectField>> {
+    let Some(fields) = fields.filter(|fields| !fields.is_none()) else {
+        return parse_project_fields(default_project_fields().iter().map(String::as_str));
+    };
+    if fields.extract::<String>().is_ok() {
+        return Err(PyTypeError::new_err(
+            "fields must be an iterable of field names",
+        ));
+    }
+    let iter = fields
+        .try_iter()
+        .map_err(|_| PyTypeError::new_err("fields must be an iterable of field names"))?;
+    let mut parsed = Vec::new();
+    for field in iter {
+        let field = field?;
+        parsed.push(parse_project_field(field.extract::<&str>()?)?);
+    }
+    Ok(parsed)
+}
+
+fn parse_project_fields<'a>(fields: impl Iterator<Item = &'a str>) -> PyResult<Vec<ProjectField>> {
+    let mut parsed = Vec::new();
+    for field in fields {
+        parsed.push(parse_project_field(field)?);
+    }
+    Ok(parsed)
+}
+
+fn parse_project_field(field: &str) -> PyResult<ProjectField> {
+    match field {
+        "key" => Ok(ProjectField::Key),
+        "entry_type" => Ok(ProjectField::EntryType),
+        "type" => Ok(ProjectField::Type),
+        "title" => Ok(ProjectField::Title),
+        "doi" => Ok(ProjectField::Doi),
+        "volume" => Ok(ProjectField::Volume),
+        _ => Err(PyValueError::new_err(format!(
+            "unsupported projection field {field:?}"
+        ))),
+    }
+}
+
+fn append_projected_keyed_entries(
+    py: Python<'_>,
+    rows: &Bound<'_, PyList>,
+    cache: &LibraryCache,
+    keys: &Bound<'_, PyAny>,
+    fields: &[ProjectField],
+) -> PyResult<()> {
+    if keys.extract::<String>().is_ok() {
+        return Err(PyTypeError::new_err(
+            "keys must be an iterable of entry keys",
+        ));
+    }
+    let iter = keys
+        .try_iter()
+        .map_err(|_| PyTypeError::new_err("keys must be an iterable of entry keys"))?;
+    for key in iter {
+        let key = key?;
+        let key = key.extract::<&str>()?;
+        let Some(index) = cache.index.get(key) else {
+            return Err(PyKeyError::new_err(key.to_string()));
+        };
+        rows.append(project_entry(py, &cache.entries[*index], fields)?)?;
+    }
+    Ok(())
+}
+
+fn project_entry(
+    py: Python<'_>,
+    entry: &EntryData,
+    fields: &[ProjectField],
+) -> PyResult<Py<PyAny>> {
+    if fields == [ProjectField::Key, ProjectField::Title] {
+        return project_key_title_entry(py, entry);
+    }
+    if fields
+        == [
+            ProjectField::Key,
+            ProjectField::Title,
+            ProjectField::Doi,
+            ProjectField::Volume,
+        ]
+    {
+        return project_common_entry(py, entry);
+    }
+
+    let row = PyDict::new(py);
+    for field in fields {
+        match field {
+            ProjectField::Key => row.set_item(intern!(py, "key"), &entry.key)?,
+            ProjectField::EntryType => {
+                row.set_item(intern!(py, "entry_type"), &entry.entry_type)?
+            }
+            ProjectField::Type => row.set_item(intern!(py, "type"), &entry.entry_type)?,
+            ProjectField::Title => row.set_item(intern!(py, "title"), entry.title.as_deref())?,
+            ProjectField::Doi => row.set_item(intern!(py, "doi"), entry.doi.as_deref())?,
+            ProjectField::Volume => row.set_item(intern!(py, "volume"), entry.volume.as_deref())?,
+        }
+    }
+    Ok(row.into_any().unbind())
+}
+
+fn project_key_title_entry(py: Python<'_>, entry: &EntryData) -> PyResult<Py<PyAny>> {
+    let row = PyDict::new(py);
+    row.set_item(intern!(py, "key"), &entry.key)?;
+    row.set_item(intern!(py, "title"), entry.title.as_deref())?;
+    Ok(row.into_any().unbind())
+}
+
+fn project_common_entry(py: Python<'_>, entry: &EntryData) -> PyResult<Py<PyAny>> {
+    let row = PyDict::new(py);
+    row.set_item(intern!(py, "key"), &entry.key)?;
+    row.set_item(intern!(py, "title"), entry.title.as_deref())?;
+    row.set_item(intern!(py, "doi"), entry.doi.as_deref())?;
+    row.set_item(intern!(py, "volume"), entry.volume.as_deref())?;
+    Ok(row.into_any().unbind())
 }
 
 #[pyclass(module = "refkit", skip_from_py_object)]
@@ -980,6 +1270,39 @@ fn formatting_to_tree(formatting: hayagriva::Formatting) -> TreeFormatting {
 fn json_to_py(py: Python<'_>, value: &str) -> PyResult<Py<PyAny>> {
     let json = PyModule::import(py, "json")?;
     Ok(json.call_method1("loads", (value,))?.unbind())
+}
+
+fn json_value_to_py(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
+    match value {
+        Value::Null => Ok(py.None()),
+        Value::Bool(value) => value.into_py_any(py),
+        Value::Number(value) => {
+            if let Some(value) = value.as_i64() {
+                value.into_py_any(py)
+            } else if let Some(value) = value.as_u64() {
+                value.into_py_any(py)
+            } else if let Some(value) = value.as_f64() {
+                value.into_py_any(py)
+            } else {
+                Ok(py.None())
+            }
+        }
+        Value::String(value) => value.into_py_any(py),
+        Value::Array(values) => {
+            let list = PyList::empty(py);
+            for value in values {
+                list.append(json_value_to_py(py, value)?)?;
+            }
+            Ok(list.into_any().unbind())
+        }
+        Value::Object(values) => {
+            let dict = PyDict::new(py);
+            for (key, value) in values {
+                dict.set_item(key, json_value_to_py(py, value)?)?;
+            }
+            Ok(dict.into_any().unbind())
+        }
+    }
 }
 
 fn preview(value: &str) -> String {
