@@ -12,7 +12,7 @@ from ._native import (
     BibField,
     BibFieldMap,
     Cite,
-    CitecoreError,
+    RefkitError,
     Document,
     Entry,
     Library,
@@ -29,7 +29,7 @@ __all__ = [
     "BibField",
     "BibFieldMap",
     "Cite",
-    "CitecoreError",
+    "RefkitError",
     "Document",
     "Entry",
     "Library",
@@ -73,4 +73,4 @@ def bibliography(
 def __getattr__(name: str) -> Any:
     if name == "__version__":
         return "0.0.0"
-    raise AttributeError(f"module 'citecore' has no attribute {name!r}")
+    raise AttributeError(f"module 'refkit' has no attribute {name!r}")

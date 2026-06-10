@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyModule;
 use serde_json::json;
 
-use crate::{CitecoreError, json_to_py};
+use crate::{RefkitError, json_to_py};
 
 #[derive(Debug, Clone)]
 struct RawFieldData {
@@ -101,7 +101,7 @@ struct RawDocumentData {
 
 type SharedDocument = Rc<RefCell<RawDocumentData>>;
 
-#[pyclass(module = "citecore", unsendable)]
+#[pyclass(module = "refkit", unsendable)]
 pub struct BibDocument {
     doc: SharedDocument,
 }
@@ -117,7 +117,7 @@ impl BibDocument {
             data.path = Some(path);
             Ok(data)
         });
-        let data = parsed.map_err(CitecoreError::new_err)?;
+        let data = parsed.map_err(RefkitError::new_err)?;
         Ok(Self {
             doc: Rc::new(RefCell::new(data)),
         })
@@ -195,8 +195,8 @@ impl BibDocument {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let payload = serde_json::to_string(&blocks)
-            .map_err(|err| CitecoreError::new_err(err.to_string()))?;
+        let payload =
+            serde_json::to_string(&blocks).map_err(|err| RefkitError::new_err(err.to_string()))?;
         json_to_py(py, &payload)
     }
 
@@ -209,8 +209,8 @@ impl BibDocument {
             .iter()
             .map(block_to_json)
             .collect::<Vec<_>>();
-        let payload = serde_json::to_string(&blocks)
-            .map_err(|err| CitecoreError::new_err(err.to_string()))?;
+        let payload =
+            serde_json::to_string(&blocks).map_err(|err| RefkitError::new_err(err.to_string()))?;
         json_to_py(py, &payload)
     }
 
@@ -221,7 +221,7 @@ impl BibDocument {
             .ok_or_else(|| PyValueError::new_err("write path is required"))?;
         let rendered = render_document(&self.doc.borrow())?;
         fs::write(&target, rendered)
-            .map_err(|err| CitecoreError::new_err(format!("failed to write BibTeX: {err}")))?;
+            .map_err(|err| RefkitError::new_err(format!("failed to write BibTeX: {err}")))?;
         Ok(())
     }
 
@@ -235,7 +235,7 @@ impl BibDocument {
     }
 }
 
-#[pyclass(module = "citecore", unsendable)]
+#[pyclass(module = "refkit", unsendable)]
 pub struct BibEntryMap {
     doc: SharedDocument,
 }
@@ -285,7 +285,7 @@ impl BibEntryMap {
     }
 }
 
-#[pyclass(module = "citecore", unsendable)]
+#[pyclass(module = "refkit", unsendable)]
 pub struct BibEntry {
     doc: SharedDocument,
     key: String,
@@ -330,7 +330,7 @@ impl BibEntry {
     }
 }
 
-#[pyclass(module = "citecore", unsendable)]
+#[pyclass(module = "refkit", unsendable)]
 pub struct BibFieldMap {
     doc: SharedDocument,
     entry_key: String,
@@ -394,7 +394,7 @@ impl BibFieldMap {
     }
 }
 
-#[pyclass(module = "citecore", unsendable)]
+#[pyclass(module = "refkit", unsendable)]
 pub struct BibField {
     doc: SharedDocument,
     entry_key: String,
@@ -1099,7 +1099,7 @@ fn patch_entry(entry: &RawEntryData) -> PyResult<String> {
     for field in fields {
         let (span, value) = patch_field_value(field);
         if span.start < entry.span.start || span.end > entry.span.end || span.start < cursor {
-            return Err(CitecoreError::new_err(format!(
+            return Err(RefkitError::new_err(format!(
                 "invalid source span for BibTeX field {}",
                 field.name
             )));

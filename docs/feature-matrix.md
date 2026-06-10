@@ -1,6 +1,6 @@
 # Feature Matrix
 
-This matrix compares citecore 0.0.0 with the inspected local checkouts of
+This matrix compares refkit 0.0.0 with the inspected local checkouts of
 citeproc-js, citeproc-py, and python-bibtexparser on 2026-06-10. It describes
 the features visible in the checked source trees, README files, tests, and
 package metadata. Upstream releases may differ.
@@ -23,11 +23,11 @@ Evidence paths are relative to the corresponding project root.
 | citeproc-js | JavaScript CSL and CSL-M processor. It renders citation clusters and bibliographies from CSL-like item data supplied by a host application. | `new CSL.Engine(sys, style)`, then `processCitationCluster`, `makeCitationCluster`, `makeBibliography`, `updateItems`, and related state APIs. | Mature processor package. `package.json` reports `citeproc` 2.4.63, based on citeproc-js 1.4.63. README states the project passes more than 1,300 integration tests. |
 | citeproc-py | Python CSL 1.0.1 processor with JSON and BibTeX source adapters. | `CitationStylesStyle`, `CitationStylesBibliography`, `Citation`, `CitationItem`, source adapters, and formatter modules. | Alpha API by package metadata. README states Python 3.9 and newer, lxml dependency, and almost 60 percent of the relevant citeproc test suite. |
 | python-bibtexparser | Python parser and writer for `.bib` documents. It preserves document blocks and supports transformation middleware. | `parse_string`, `parse_file`, `write_string`, `write_file`, `Library`, block classes, middleware, and `BibtexFormat`. | Version 2 beta in README and metadata. It is a BibTeX document library, not a CSL renderer. |
-| citecore | Python package backed by Rust through PyO3 and maturin. It combines normalized citation rendering with a raw BibTeX editing model. | `Library`, `Entry`, `Style`, `Locale`, `Cite`, `Document`, `Rendered`, `BibDocument`, `cite`, and `bibliography`. | Version 0.0.0. Current API supports Python 3.11 to 3.14, native parsing and rendering, and a 100 percent Python coverage gate. |
+| refkit | Python package backed by Rust through PyO3 and maturin. It combines normalized citation rendering with a raw BibTeX editing model. | `Library`, `Entry`, `Style`, `Locale`, `Cite`, `Document`, `Rendered`, `BibDocument`, `cite`, and `bibliography`. | Version 0.0.0. Current API supports Python 3.11 to 3.14, native parsing and rendering, and a 100 percent Python coverage gate. |
 
 ## High-Level Workflows
 
-| Workflow | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Workflow | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | Render citations from a style and reference database | Yes. It is the core processor workflow. | Yes. It registers citation items against a source and renders through a style. | No. It does not render CSL citations. | Yes. `Document.cite` renders from `Library` and `Style`. |
 | Render a bibliography | Yes. `makeBibliography` renders registered and uncited items with optional section filters. | Yes. `CitationStylesBibliography.bibliography` renders registered items. | No. It writes BibTeX, not styled bibliographies. | Yes. `Document.bibliography` and top-level `bibliography` render non-empty text and HTML. |
@@ -38,7 +38,7 @@ Evidence paths are relative to the corresponding project root.
 
 ## Input And Data Model
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | CSL item data input | Yes. Items are retrieved through `sys.retrieveItem`. | Yes. `CiteProcJSON` accepts citeproc-js-like JSON. | No. | No public CSL JSON reader yet. |
 | Host-supplied item retrieval | Yes. `CSL.Engine` stores `sys` and calls `retrieveItem`. | Partial. Sources are Python mappings that return references by key. | No. | No. `Library` owns parsed entries. |
@@ -53,7 +53,7 @@ Evidence paths are relative to the corresponding project root.
 
 ## Raw BibTeX Document Features
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | Top-level block order | No. | No. | Yes. `Library.blocks` preserves insertion order. | Yes. `BibDocument.blocks` reports block order. |
 | Entry blocks | No. | Partial. BibTeX source reads entries for rendering, not raw editing. | Yes. `Entry` exposes `entry_type`, `key`, `fields`, and `fields_dict`. | Yes. `BibEntry` exposes `key`, `kind`, `fields`, and `span`. |
@@ -77,7 +77,7 @@ Evidence paths are relative to the corresponding project root.
 
 ## CSL Styles And Locales
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | CSL style parsing | Yes. `CSL.setupXml` accepts serialized XML, serialized JSON, DOM, E4X, or JS objects. | Yes. `CitationStylesStyle` parses CSL XML through lxml. | No. | Yes. `Style.load`, `Style.from_xml`, and `Style.from_path` use Hayagriva and Citationberg. |
 | CSL schema validation | Partial. The repo includes CSL and CSL-M schemata and test infrastructure. Runtime setup accepts parsed style input. | Yes. `CitationStylesXML` validates with RelaxNG when enabled. | No. | Partial. `Style.from_xml` returns a parse error for invalid CSL XML. No public schema-validation switch is exposed. |
@@ -92,27 +92,27 @@ Evidence paths are relative to the corresponding project root.
 
 ## Citation Rendering
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | Citation cluster rendering | Yes. `processCitationCluster`, `appendCitationCluster`, `previewCitationCluster`, and `makeCitationCluster` exist. | Yes. `Citation` and `CitationItem` are rendered through `CitationStylesBibliography.cite`. | No. | Yes. `Document.cite` accepts a key, a `Cite`, or an iterable citation group. |
 | Citation item locators | Yes. Locator parsing and labels are supported. | Partial. `CitationItem` accepts `locator`, `prefix`, and `suffix`, while locator labels are modeled separately in `Locator`. | No. | Yes. `Cite(key, locator, label)` maps labels to CSL locators. |
 | Citation item prefix and suffix | Yes. CSL item data can carry affixes. | Yes. `CitationItem` optional arguments include `prefix` and `suffix`. | No. | No current `Cite` prefix or suffix API. |
 | Citation sorting inside a cluster | Yes. `makeCitationCluster` computes citation sort keys when the style defines citation sorting. | Yes through style layout processing. | No. | Yes through Hayagriva rendering. |
 | Bibliography sorting | Yes. `updateItems` and registry sort keys drive bibliography order. | Yes. `sort_bibliography` and `CitationStylesBibliography.sort` exist. | No citation sorting. | Yes through Hayagriva rendering. |
-| Disambiguation | Yes. Dedicated disambiguation state and registry logic are implemented. | Partial. README lists several disambiguation and year-suffix features as missing. | No. | Partial through Hayagriva. citecore does not expose a separate disambiguation control API. |
+| Disambiguation | Yes. Dedicated disambiguation state and registry logic are implemented. | Partial. README lists several disambiguation and year-suffix features as missing. | No. | Partial through Hayagriva. refkit does not expose a separate disambiguation control API. |
 | Numeric citation numbering | Yes. Registry renumbering and numeric output mode are implemented. | Yes for supported CSL styles. | No. | Yes through CSL styles such as IEEE. |
-| Citation collapsing | Yes. citeproc-js handles collapse behavior. | No. README lists collapsing as missing. | No. | Partial through Hayagriva. Full CSL test-suite parity is not claimed by citecore. |
+| Citation collapsing | Yes. citeproc-js handles collapse behavior. | No. README lists collapsing as missing. | No. | Partial through Hayagriva. Full CSL test-suite parity is not claimed by refkit. |
 | Et-al subsequent settings | Yes. Options exist for first and subsequent references. | No. README lists subsequent et-al settings as missing. | No. | Partial through Hayagriva. No public per-style override is exposed. |
 | Punctuation in quote | Yes. citeproc-js has locale and punctuation behavior. | No. README lists `punctuation-in-quote` as missing. | No. | Partial through Hayagriva style rendering. No public override is exposed. |
 | Display attributes | Yes. Output modes handle display classes such as block, left margin, right inline, and indent. | No. README lists `display` as missing. | No. | Yes for rendered HTML tree output where Hayagriva display metadata is present. |
 | Raw dates extension | Yes. README names raw dates as a citeproc-js extension. | No. README lists raw dates as unsupported. | No. | No current public extension API. |
 | Static ordering extension | Yes. README names static ordering as a citeproc-js extension. | No. README lists static ordering as unsupported. | No. | No current public extension API. |
-| Literal names extension | Yes. README names literal names as a citeproc-js extension. | No. README lists literal names as unsupported. | No. | Partial. Hayagriva data may represent names. citecore exposes no citeproc-js literal-name extension API. |
+| Literal names extension | Yes. README names literal names as a citeproc-js extension. | No. README lists literal names as unsupported. | No. | Partial. Hayagriva data may represent names. refkit exposes no citeproc-js literal-name extension API. |
 | Missing reference behavior | External by host data retrieval and processor errors. | Partial. `register` can call a callback for missing items. | No citation references. | Yes. `Document.cite` raises `MissingReferenceError` and leaves citation state usable. |
 
 ## Dynamic Document State
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | Append citation to current document | Yes. `appendCitationCluster` computes prior citation state and appends. | Partial. Calls to `register` and `cite` accumulate registered items. | No. | Yes. Each `Document.cite` appends a citation group to the document. |
 | Insert or edit citation with pre and post citation context | Yes. `processCitationCluster` accepts `citationsPre` and `citationsPost`. | No direct equivalent found. | No. | No current public API. |
@@ -125,7 +125,7 @@ Evidence paths are relative to the corresponding project root.
 
 ## Output Formats And Rendered Shape
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | Plain text citation output | Yes. `text` output mode exists. | Yes. `formatter.plain` exists. | No citation output. | Yes. `Rendered.text` and `to_text`. |
 | HTML citation output | Yes. `html` output mode exists. | Yes. `formatter.html` exists. | No citation output. | Yes. `Rendered.html` and `to_html`. |
@@ -141,7 +141,7 @@ Evidence paths are relative to the corresponding project root.
 
 ## Querying, Conversion, And Export
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | Select entries by bibliography conditions | Partial. Bibliography section filters apply during rendering. | No general query language found. | Partial. Users can iterate blocks and entries in Python. | Yes. `Library.select` accepts Hayagriva selectors such as `article > periodical[volume]`. |
 | Retrieve keys | Yes through host item lists and registry state. | Yes. `CitationStylesBibliography.keys` tracks registered keys. | Yes. `entries_dict` and block APIs expose keys. | Yes. `Library.keys` and `BibEntryMap.keys`. |
@@ -153,7 +153,7 @@ Evidence paths are relative to the corresponding project root.
 
 ## Extensibility And Integration
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | Host integration hooks | Yes. `sys` supplies items, locales, abbreviations, style modules, wrappers, and comparison functions. | Partial. Source mappings and callback-based missing references are extension points. | No renderer integration hooks. | Partial. Python API exposes objects and exceptions. No callback hooks are used in the main API. |
 | Middleware stack | No general Python-style middleware stack. The processor has many internal extension points. | No general middleware stack. | Yes. Parse and write stacks accept middleware. | No current public middleware stack. |
@@ -165,7 +165,7 @@ Evidence paths are relative to the corresponding project root.
 
 ## Errors, Diagnostics, And Validation
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | Structured missing-reference error | External or processor error depending on host behavior. | Partial. Missing items can be passed to a callback during registration. | No citation references. | Yes. `MissingReferenceError`. |
 | Parser diagnostics | Yes for processor style errors and test runner output. | Partial. CSL validation warnings and Python exceptions. | Yes. Failed blocks carry exceptions and raw block data. | Yes. Non-strict `Library.read` can return diagnostics, and `BibDocument.failed_blocks` preserves raw errors. |
@@ -175,21 +175,21 @@ Evidence paths are relative to the corresponding project root.
 
 ## Packaging And Compatibility
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | citecore 0.0.0 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | Package language | JavaScript. | Python. | Python. | Python plus Rust. |
-| Package name from metadata | `citeproc`. | `citeproc-py`. | `bibtexparser`. | `citecore`. |
-| Import name | `CSL` from bundled JS or CommonJS module. | `citeproc`. | `bibtexparser`. | `citecore`. |
+| Package name from metadata | `citeproc`. | `citeproc-py`. | `bibtexparser`. | `refkit`. |
+| Import name | `CSL` from bundled JS or CommonJS module. | `citeproc`. | `bibtexparser`. | `refkit`. |
 | Version from inspected metadata | 2.4.63. | Versioneer-managed. | 2.0.0b9. | 0.0.0. |
 | Python version support | Not applicable. | Python 3.9 and newer, classifiers through 3.13. | Python 3.9 and newer, classifiers through 3.12. | Python 3.11 to 3.14. |
 | License from inspected metadata | CPAL-1.0 or AGPL-1.0. | BSD-2-Clause-Views. | MIT. | MIT. |
 | Build system | JavaScript package and repo build scripts. | setuptools with versioneer and schema conversion. | setuptools. | maturin with PyO3. |
 
-## What citecore Unifies Today
+## What refkit Unifies Today
 
-citecore already covers the main overlap that requires two Python packages today:
+refkit already covers the main overlap that requires two Python packages today:
 
-| User workflow | Existing split | citecore path |
+| User workflow | Existing split | refkit path |
 | --- | --- | --- |
 | Read a `.bib` file and render citations | citeproc-py can render from a BibTeX adapter, while python-bibtexparser can parse raw BibTeX without rendering. | `Library.read`, `Style.load`, `Document.cite`, and `Document.bibliography`. |
 | Render from a normalized bibliography format | citeproc-py expects CSL JSON or BibTeX sources. python-bibtexparser has no normalized citation renderer. | `Library.read` supports `.bib`, `.yaml`, and `.yml`. |
@@ -197,19 +197,19 @@ citecore already covers the main overlap that requires two Python packages today
 | Repair a `.bib` title while keeping comments and malformed blocks | python-bibtexparser can preserve and write blocks. citeproc-py does not expose raw editing. | `BibDocument.read`, field mutation through `BibField.value`, and `BibDocument.write`. |
 | Query normalized parent relationships | citeproc-py and python-bibtexparser expose Python iteration. No selector language was found. | `Library.select("article > periodical[volume]")`. |
 
-## Current citecore Gaps
+## Current refkit Gaps
 
 These gaps are current product boundaries, not hidden implementation details.
 
 | Area | Gap | Reference package with broader coverage |
 | --- | --- | --- |
-| Dynamic word-processor workflows | citecore does not expose citation IDs, insert-before and insert-after context, preview without mutation, state rebuild, uncited item APIs, or paged bibliography output. | citeproc-js. |
-| CSL-M and legal citation extensions | citecore has no public jurisdiction module, abbreviation, multilingual preference, or CSL-M extension API. | citeproc-js. |
-| Full CSL compatibility claim | citecore relies on Hayagriva and has smoke and regression tests. It does not claim full citeproc-test-suite parity. | citeproc-js is the strongest reference from inspected docs. |
-| Raw BibTeX transform pipeline | citecore preserves raw blocks and edits existing field values. It does not expose add, remove, reorder, formatting presets, middleware, LaTeX transforms, month transforms, or name transforms. | python-bibtexparser. |
-| CSL JSON import and export | citecore does not currently expose `from_csl_json` or `to_csl_json`. | citeproc-py imports citeproc-js-like JSON. citeproc-js consumes host-supplied CSL item objects. |
-| Output formats | citecore exposes text, HTML, and tree. | citeproc-js adds RTF, AsciiDoc, and FO. citeproc-py adds RST. |
-| Prefix and suffix on cite items | citecore `Cite` currently supports key, locator, and label. | citeproc-js and citeproc-py. |
+| Dynamic word-processor workflows | refkit does not expose citation IDs, insert-before and insert-after context, preview without mutation, state rebuild, uncited item APIs, or paged bibliography output. | citeproc-js. |
+| CSL-M and legal citation extensions | refkit has no public jurisdiction module, abbreviation, multilingual preference, or CSL-M extension API. | citeproc-js. |
+| Full CSL compatibility claim | refkit relies on Hayagriva and has smoke and regression tests. It does not claim full citeproc-test-suite parity. | citeproc-js is the strongest reference from inspected docs. |
+| Raw BibTeX transform pipeline | refkit preserves raw blocks and edits existing field values. It does not expose add, remove, reorder, formatting presets, middleware, LaTeX transforms, month transforms, or name transforms. | python-bibtexparser. |
+| CSL JSON import and export | refkit does not currently expose `from_csl_json` or `to_csl_json`. | citeproc-py imports citeproc-js-like JSON. citeproc-js consumes host-supplied CSL item objects. |
+| Output formats | refkit exposes text, HTML, and tree. | citeproc-js adds RTF, AsciiDoc, and FO. citeproc-py adds RST. |
+| Prefix and suffix on cite items | refkit `Cite` currently supports key, locator, and label. | citeproc-js and citeproc-py. |
 
 ## Evidence Map
 
@@ -218,4 +218,4 @@ These gaps are current product boundaries, not hidden implementation details.
 | citeproc-js | `README.rst`, `package.json`, `src/build.js`, `src/system.js`, `src/api_control.js`, `src/api_update.js`, `src/api_cite.js`, `src/api_bibliography.js`, `src/formats.js`, `src/state.js`, `src/util_modules.js`, `demo/demo.js`, and `src/test_runner.js`. |
 | citeproc-py | `README.md`, `setup.py`, `setup.cfg`, `citeproc/frontend.py`, `citeproc/model.py`, `citeproc/source/__init__.py`, `citeproc/source/json.py`, `citeproc/source/bibtex/bibtex.py`, `citeproc/formatter/plain.py`, `citeproc/formatter/html.py`, `citeproc/formatter/rst.py`, and `tests/failing_tests.txt`. |
 | python-bibtexparser | `README.md`, `setup.py`, `bibtexparser/__init__.py`, `bibtexparser/entrypoint.py`, `bibtexparser/library.py`, `bibtexparser/model.py`, `bibtexparser/splitter.py`, `bibtexparser/writer.py`, `bibtexparser/middlewares`, `docs/source/quickstart.rst`, `docs/source/customize.rst`, `docs/source/biber.rst`, and parser, writer, model, library, splitter, and middleware tests. |
-| citecore | `README.md`, `pyproject.toml`, `Cargo.toml`, `src/citecore/__init__.py`, `src/citecore/__init__.pyi`, `src/lib.rs`, `src/raw.rs`, and `tests/test_public_api.py`. |
+| refkit | `README.md`, `pyproject.toml`, `Cargo.toml`, `src/refkit/__init__.py`, `src/refkit/__init__.pyi`, `src/lib.rs`, `src/raw.rs`, and `tests/test_public_api.py`. |

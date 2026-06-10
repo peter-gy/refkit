@@ -1,7 +1,7 @@
 doe2024:
   type: Article
   author: Doe, Jane
-  title: Citecore for Bibliographies
+  title: Refkit for Bibliographies
   date: 2024
   parent:
     type: Periodical

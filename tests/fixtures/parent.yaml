@@ -1,11 +1,11 @@
 doe2024:
   type: Article
   author: Doe, Jane
-  title: Citecore for Bibliographies
+  title: Refkit for Bibliographies
   date: 2024
   page-range: 1-20
   serial-number:
-    doi: 10.1234/citecore.2024
+    doi: 10.1234/refkit.2024
   parent:
     type: Periodical
     title: Journal of Citation Systems

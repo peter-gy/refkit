@@ -1,5 +1,5 @@
 [project]
-name = "citecore"
+name = "refkit"
 version = "0.0.0"
 description = "Fast Python citation parsing, rendering, and BibTeX editing backed by Rust"
 readme = "README.md"
@@ -27,7 +27,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 python-source = "src"
-module-name = "citecore._native"
+module-name = "refkit._native"
 bindings = "pyo3"
 features = ["extension-module"]
 editable-profile = "dev"
@@ -45,7 +45,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = [
-    "--cov=citecore",
+    "--cov=refkit",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",

@@ -23,10 +23,10 @@ use pyo3::types::{PyAny, PyModule};
 use serde::Serialize;
 use serde_json::json;
 
-create_exception!(citecore, CitecoreError, PyException);
-create_exception!(citecore, MissingReferenceError, CitecoreError);
+create_exception!(refkit, RefkitError, PyException);
+create_exception!(refkit, MissingReferenceError, RefkitError);
 
-#[pyclass(module = "citecore", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Library {
     inner: Arc<HayLibrary>,
@@ -49,7 +49,7 @@ impl Library {
                 inner: Arc::new(parsed.inner),
                 diagnostics: parsed.diagnostics,
             })
-            .map_err(CitecoreError::new_err)
+            .map_err(RefkitError::new_err)
     }
 
     #[staticmethod]
@@ -68,7 +68,7 @@ impl Library {
                 inner: Arc::new(parsed.inner),
                 diagnostics: parsed.diagnostics,
             })
-            .map_err(CitecoreError::new_err)
+            .map_err(RefkitError::new_err)
     }
 
     #[getter]
@@ -111,15 +111,15 @@ impl Library {
     fn to_dicts(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let mut values = Vec::new();
         for entry in self.inner.iter() {
-            let mut value = serde_json::to_value(entry)
-                .map_err(|err| CitecoreError::new_err(err.to_string()))?;
+            let mut value =
+                serde_json::to_value(entry).map_err(|err| RefkitError::new_err(err.to_string()))?;
             if let Some(map) = value.as_object_mut() {
                 map.insert("key".to_string(), json!(entry.key()));
             }
             values.push(value);
         }
-        let payload = serde_json::to_string(&values)
-            .map_err(|err| CitecoreError::new_err(err.to_string()))?;
+        let payload =
+            serde_json::to_string(&values).map_err(|err| RefkitError::new_err(err.to_string()))?;
         json_to_py(py, &payload)
     }
 
@@ -148,7 +148,7 @@ impl Library {
     }
 }
 
-#[pyclass(module = "citecore", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Entry {
     inner: HayEntry,
@@ -211,7 +211,7 @@ impl Entry {
     }
 }
 
-#[pyclass(module = "citecore", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Style {
     id: String,
@@ -238,7 +238,7 @@ impl Style {
     #[staticmethod]
     fn from_path(path: PathBuf) -> PyResult<Self> {
         let xml = fs::read_to_string(&path)
-            .map_err(|err| CitecoreError::new_err(format!("failed to read style: {err}")))?;
+            .map_err(|err| RefkitError::new_err(format!("failed to read style: {err}")))?;
         let style = CslStyle::from_xml(&xml)
             .map_err(|err| PyValueError::new_err(format!("invalid CSL XML: {err}")))?;
         independent_style(path.display().to_string(), style)
@@ -259,7 +259,7 @@ impl Style {
     }
 }
 
-#[pyclass(module = "citecore", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Locale {
     code: String,
@@ -292,7 +292,7 @@ impl Locale {
     }
 }
 
-#[pyclass(module = "citecore", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Cite {
     #[pyo3(get)]
@@ -323,7 +323,7 @@ impl Cite {
     }
 }
 
-#[pyclass(module = "citecore", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 pub struct Rendered {
     #[pyo3(get)]
     text: String,
@@ -396,7 +396,7 @@ fn rendered_tree_to_json(tree: &RenderedTree) -> String {
     }
 }
 
-#[pyclass(module = "citecore", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Document {
     library: Arc<HayLibrary>,
@@ -430,7 +430,7 @@ impl Document {
         };
         let Some(citation) = rendered.citations.last() else {
             self.citations.pop();
-            return Err(CitecoreError::new_err(
+            return Err(RefkitError::new_err(
                 "citation renderer returned no citations",
             ));
         };
@@ -688,7 +688,7 @@ fn rendered_from_bibliography(
         write_bibliography_item_text(item, &mut text)?;
 
         render_bibliography_item_html(&item, &mut html)
-            .map_err(|err| CitecoreError::new_err(err.to_string()))?;
+            .map_err(|err| RefkitError::new_err(err.to_string()))?;
     }
 
     Ok(Rendered::new(text, html, RenderedTree::Bibliography(items)))
@@ -698,7 +698,7 @@ fn elem_children_to_string(children: &ElemChildren, format: BufWriteFormat) -> P
     let mut output = String::new();
     children
         .write_buf(&mut output, format)
-        .map_err(|err| CitecoreError::new_err(err.to_string()))?;
+        .map_err(|err| RefkitError::new_err(err.to_string()))?;
     Ok(output)
 }
 
@@ -710,7 +710,7 @@ fn write_bibliography_item_text(
     if let Some(first_field) = &item.first_field {
         first_field
             .write_buf(output, BufWriteFormat::Plain)
-            .map_err(|err| CitecoreError::new_err(err.to_string()))?;
+            .map_err(|err| RefkitError::new_err(err.to_string()))?;
     }
 
     let content = elem_children_to_string(&item.content, BufWriteFormat::Plain)?;
@@ -724,7 +724,7 @@ fn write_bibliography_item_text(
 fn elem_children_to_html(children: &ElemChildren) -> PyResult<String> {
     let mut output = String::new();
     render_children_html(children, &mut output)
-        .map_err(|err| CitecoreError::new_err(err.to_string()))?;
+        .map_err(|err| RefkitError::new_err(err.to_string()))?;
     Ok(output)
 }
 
@@ -1009,7 +1009,7 @@ fn write_html_escaped(output: &mut String, value: &str) {
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
-    m.add("CitecoreError", py.get_type::<CitecoreError>())?;
+    m.add("RefkitError", py.get_type::<RefkitError>())?;
     m.add(
         "MissingReferenceError",
         py.get_type::<MissingReferenceError>(),

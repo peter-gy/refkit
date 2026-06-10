@@ -5,25 +5,25 @@ from pathlib import Path
 
 import pytest
 
-import citecore as ck
+import refkit as rk
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def test_public_document_example_renders_text_html_and_tree() -> None:
-    library = ck.Library.read(FIXTURES / "basic.bib")
-    style = ck.Style.load("apa")
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    style = rk.Style.load("apa")
 
-    doc = ck.Document(library, style, locale="en-US")
+    doc = rk.Document(library, style, locale="en-US")
     first = doc.cite("doe2024")
-    second = doc.cite([ck.Cite("doe2024", locator="12", label="page"), "roe2022"])
+    second = doc.cite([rk.Cite("doe2024", locator="12", label="page"), "roe2022"])
     bibliography = doc.bibliography()
     entry = library["doe2024"]
 
     assert "Doe" in first.text
     assert entry.volume is None or isinstance(entry.volume, str)
-    assert entry.doi == "10.1234/citecore.2024"
+    assert entry.doi == "10.1234/refkit.2024"
     assert second.text
     assert bibliography.text
     assert "<div" in bibliography.html
@@ -34,8 +34,8 @@ def test_public_document_example_renders_text_html_and_tree() -> None:
 
 
 def test_document_accepts_iterables_for_citation_groups() -> None:
-    library = ck.Library.read(FIXTURES / "basic.bib")
-    doc = ck.Document(library, ck.Style.load("apa"), locale="en-US")
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
     rendered = doc.cite(key for key in ["doe2024", "roe2022"])
 
@@ -44,8 +44,8 @@ def test_document_accepts_iterables_for_citation_groups() -> None:
 
 
 def test_one_off_helpers_render_citation_and_bibliography() -> None:
-    citation = ck.cite(FIXTURES / "basic.bib", "doe2024", style="ieee")
-    bibliography = ck.bibliography(FIXTURES / "basic.bib", style="chicago-author-date")
+    citation = rk.cite(FIXTURES / "basic.bib", "doe2024", style="ieee")
+    bibliography = rk.bibliography(FIXTURES / "basic.bib", style="chicago-author-date")
 
     assert citation.text
     assert bibliography.text
@@ -55,18 +55,18 @@ def test_one_off_helpers_render_citation_and_bibliography() -> None:
 
 
 def test_one_off_helpers_accept_loaded_style_objects() -> None:
-    style = ck.Style.load("apa")
+    style = rk.Style.load("apa")
 
-    citation = ck.cite(FIXTURES / "basic.bib", "doe2024", style=style)
-    bibliography = ck.bibliography(FIXTURES / "basic.bib", style=style)
+    citation = rk.cite(FIXTURES / "basic.bib", "doe2024", style=style)
+    bibliography = rk.bibliography(FIXTURES / "basic.bib", style=style)
 
     assert "Doe" in citation.text
     assert "Doe" in bibliography.text
 
 
 def test_document_bibliography_all_renders_uncited_library_entries() -> None:
-    library = ck.Library.read(FIXTURES / "basic.bib")
-    doc = ck.Document(library, ck.Style.load("apa"), locale="en-US")
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
     cited = doc.bibliography()
     full = doc.bibliography(all=True)
@@ -78,7 +78,7 @@ def test_document_bibliography_all_renders_uncited_library_entries() -> None:
 
 
 def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
-    library = ck.Library.parse(
+    library = rk.Library.parse(
         """@article{inline,
   author = {Doe, Jane},
   title = {Inline Source},
@@ -95,17 +95,17 @@ def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
     assert entry.title == "Inline Source"
     assert library.get("missing") is None
 
-    yaml_library = ck.Library.parse((FIXTURES / "parent.yaml").read_text(), format="yaml")
+    yaml_library = rk.Library.parse((FIXTURES / "parent.yaml").read_text(), format="yaml")
     matches = yaml_library.select("article > periodical[volume]")
 
     assert matches[0].key == "doe2024"
 
 
 def test_version_and_missing_module_attribute() -> None:
-    assert ck.__version__ == "0.0.0"
+    assert rk.__version__ == "0.0.0"
 
     with pytest.raises(AttributeError, match="has no attribute"):
-        getattr(ck, "does_not_exist")
+        getattr(rk, "does_not_exist")
 
 
 def test_rendered_html_escapes_bibliography_data(tmp_path: Path) -> None:
@@ -119,7 +119,7 @@ def test_rendered_html_escapes_bibliography_data(tmp_path: Path) -> None:
 """,
     )
 
-    rendered = ck.bibliography(source, style="apa")
+    rendered = rk.bibliography(source, style="apa")
 
     assert "<script>" not in rendered.html
     assert "&lt;script&gt;" in rendered.html
@@ -137,7 +137,7 @@ def test_rendered_html_does_not_emit_unsafe_link_schemes(tmp_path: Path) -> None
 """,
     )
 
-    rendered = ck.bibliography(source, style="apa")
+    rendered = rk.bibliography(source, style="apa")
 
     assert 'href="javascript:alert(1)"' not in rendered.html
     assert "javascript:alert(1)" in rendered.html
@@ -147,19 +147,19 @@ def test_rendered_html_does_not_emit_unsafe_link_schemes(tmp_path: Path) -> None
 
 
 def test_rendered_html_preserves_csl_formatting() -> None:
-    library = ck.Library.read(FIXTURES / "basic.bib")
-    doc = ck.Document(library, ck.Style.load("apa"), locale="en-US")
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
     doc.cite("doe2024")
     rendered = doc.bibliography()
 
     assert "<i>Journal of Citation Systems</i>" in rendered.html
-    assert '<a href="https://doi.org/10.1234/citecore.2024">' in rendered.html
+    assert '<a href="https://doi.org/10.1234/refkit.2024">' in rendered.html
 
 
 def test_bibliography_text_and_tree_include_second_field_labels() -> None:
-    library = ck.Library.read(FIXTURES / "basic.bib")
-    doc = ck.Document(library, ck.Style.load("ieee"), locale="en-US")
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("ieee"), locale="en-US")
 
     doc.cite("doe2024")
     rendered = doc.bibliography()
@@ -169,21 +169,21 @@ def test_bibliography_text_and_tree_include_second_field_labels() -> None:
 
 
 def test_library_reads_yaml_and_selects_parent_periodical() -> None:
-    library = ck.Library.read(FIXTURES / "parent.yaml")
+    library = rk.Library.read(FIXTURES / "parent.yaml")
     matches = library.select("article > periodical[volume]")
 
     assert len(matches) == 1
     assert matches[0].key == "doe2024"
-    assert matches[0].title == "Citecore for Bibliographies"
+    assert matches[0].title == "Refkit for Bibliographies"
     assert matches[0].parent is not None
     assert matches[0].parent.title == "Journal of Citation Systems"
 
 
 def test_library_reads_yml() -> None:
-    library = ck.Library.read(FIXTURES / "parent.yml")
+    library = rk.Library.read(FIXTURES / "parent.yml")
 
     assert "doe2024" in library
-    assert library["doe2024"].title == "Citecore for Bibliographies"
+    assert library["doe2024"].title == "Refkit for Bibliographies"
 
 
 def test_library_non_strict_keeps_valid_bibtex_entries_with_diagnostics(tmp_path: Path) -> None:
@@ -200,10 +200,10 @@ def test_library_non_strict_keeps_valid_bibtex_entries_with_diagnostics(tmp_path
 """,
     )
 
-    with pytest.raises(ck.CitecoreError):
-        ck.Library.read(source)
+    with pytest.raises(rk.RefkitError):
+        rk.Library.read(source)
 
-    library = ck.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, strict=False, diagnostics=True)
 
     assert library.keys() == ["valid"]
     assert library["valid"].title == "Kept Entry"
@@ -231,7 +231,7 @@ def test_library_non_strict_recovers_entries_after_unclosed_block(tmp_path: Path
 """,
     )
 
-    library = ck.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, strict=False, diagnostics=True)
 
     assert library.keys() == ["before", "after"]
     assert library["after"].title == "After"
@@ -250,7 +250,7 @@ def test_library_non_strict_recovers_entry_after_malformed_at_line(tmp_path: Pat
 """,
     )
 
-    library = ck.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, strict=False, diagnostics=True)
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -272,7 +272,7 @@ def test_library_non_strict_drops_closed_malformed_entries(tmp_path: Path) -> No
 """,
     )
 
-    library = ck.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, strict=False, diagnostics=True)
 
     assert library.keys() == ["valid"]
     assert library.diagnostics
@@ -295,7 +295,7 @@ def test_library_non_strict_drops_missing_separator_after_bare_value(tmp_path: P
 """,
     )
 
-    library = ck.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, strict=False, diagnostics=True)
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -317,7 +317,7 @@ def test_library_non_strict_drops_missing_field_values(tmp_path: Path) -> None:
 """,
     )
 
-    library = ck.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, strict=False, diagnostics=True)
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -339,7 +339,7 @@ def test_library_non_strict_drops_entries_missing_key_comma(tmp_path: Path) -> N
 """,
     )
 
-    library = ck.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, strict=False, diagnostics=True)
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -361,7 +361,7 @@ def test_library_non_strict_drops_malformed_field_identifiers(tmp_path: Path) ->
 """,
     )
 
-    library = ck.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, strict=False, diagnostics=True)
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -383,7 +383,7 @@ def test_library_non_strict_drops_malformed_unsafe_bare_values(tmp_path: Path) -
 """,
     )
 
-    library = ck.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, strict=False, diagnostics=True)
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -404,7 +404,7 @@ def test_library_non_strict_drops_malformed_string_definitions(tmp_path: Path) -
 """,
     )
 
-    library = ck.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, strict=False, diagnostics=True)
 
     assert library.keys() == ["valid"]
     assert len(library.diagnostics) == 3
@@ -412,17 +412,17 @@ def test_library_non_strict_drops_malformed_string_definitions(tmp_path: Path) -
 
 
 def test_missing_reference_raises_structured_error() -> None:
-    library = ck.Library.read(FIXTURES / "basic.bib")
-    doc = ck.Document(library, ck.Style.load("apa"), locale="en-US")
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
-    with pytest.raises(ck.MissingReferenceError, match="missing-key"):
+    with pytest.raises(rk.MissingReferenceError, match="missing-key"):
         doc.cite("missing-key")
 
     assert "Doe" in doc.cite("doe2024").text
 
 
 def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path) -> None:
-    raw = ck.BibDocument.read(FIXTURES / "raw.bib")
+    raw = rk.BibDocument.read(FIXTURES / "raw.bib")
 
     assert raw.comments[0].startswith("% library comment")
     assert raw.preamble == "BibTeX preamble"
@@ -448,7 +448,7 @@ def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path)
 
 
 def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers() -> None:
-    raw = ck.BibDocument.parse(
+    raw = rk.BibDocument.parse(
         """% inline comment
 @article{inline,
   title = {Inline Raw}
@@ -478,7 +478,7 @@ def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers() -> 
 
 
 def test_raw_bib_document_accepts_permissive_citation_keys() -> None:
-    raw = ck.BibDocument.parse(
+    raw = rk.BibDocument.parse(
         """@article{key+?é,
   title = {Permissive Key}
 }
@@ -498,7 +498,7 @@ def test_raw_bib_document_preserves_preamble_expression(tmp_path: Path) -> None:
     source = tmp_path / "preamble-expression.bib"
     source.write_text('@preamble{"A" # "B"}\n')
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     assert raw.failed_blocks == []
     assert raw.preamble == '"A" # "B"'
@@ -512,7 +512,7 @@ def test_raw_bib_document_accepts_trailing_string_comment(tmp_path: Path) -> Non
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     assert raw.failed_blocks == []
     assert raw.strings["jcs"] == "Journal of Citation Systems"
@@ -530,7 +530,7 @@ def test_raw_bib_document_keeps_unmatched_quotes_inside_comment_blocks(tmp_path:
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     assert raw.failed_blocks == []
     assert raw.comments == ['@comment{reviewed by "anonymous}']
@@ -538,10 +538,10 @@ def test_raw_bib_document_keeps_unmatched_quotes_inside_comment_blocks(tmp_path:
 
 
 def test_raw_helper_classes_are_runtime_exports() -> None:
-    assert ck.BibEntry.__name__ == "BibEntry"
-    assert ck.BibEntryMap.__name__ == "BibEntryMap"
-    assert ck.BibField.__name__ == "BibField"
-    assert ck.BibFieldMap.__name__ == "BibFieldMap"
+    assert rk.BibEntry.__name__ == "BibEntry"
+    assert rk.BibEntryMap.__name__ == "BibEntryMap"
+    assert rk.BibField.__name__ == "BibField"
+    assert rk.BibFieldMap.__name__ == "BibFieldMap"
 
 
 def test_raw_bare_field_edit_wraps_unsafe_value(tmp_path: Path) -> None:
@@ -554,7 +554,7 @@ def test_raw_bare_field_edit_wraps_unsafe_value(tmp_path: Path) -> None:
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
     raw.entries["macro"].fields["journal"].value = "Journal of Citation Systems"
     output = tmp_path / "bare-out.bib"
     raw.write(output)
@@ -564,7 +564,7 @@ def test_raw_bare_field_edit_wraps_unsafe_value(tmp_path: Path) -> None:
 
 
 def test_raw_field_edit_allows_balanced_case_protection_braces(tmp_path: Path) -> None:
-    raw = ck.BibDocument.parse(
+    raw = rk.BibDocument.parse(
         """@article{braces,
   braced = {Old},
   quoted = "Old",
@@ -586,7 +586,7 @@ def test_raw_field_edit_allows_balanced_case_protection_braces(tmp_path: Path) -
 
 
 def test_raw_field_edit_allows_protected_quotes_in_quoted_values(tmp_path: Path) -> None:
-    raw = ck.BibDocument.parse(
+    raw = rk.BibDocument.parse(
         """@article{quoted,
   title = "Old",
   year = {2024}
@@ -600,7 +600,7 @@ def test_raw_field_edit_allows_protected_quotes_in_quoted_values(tmp_path: Path)
 
     text = output.read_text()
     assert 'title = {A {"quoted"} title}' in text
-    library = ck.Library.read(output)
+    library = rk.Library.read(output)
     assert library["quoted"].title == 'A "quoted" title'
 
 
@@ -614,7 +614,7 @@ def test_raw_field_edit_rejects_unsafe_delimiters(tmp_path: Path) -> None:
 }
 """,
     )
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     with pytest.raises(ValueError, match="unsafe braced delimiter"):
         raw.entries["unsafe"].fields["braced"].value = "Bad } value"
@@ -648,7 +648,7 @@ def test_raw_field_edit_replaces_whole_concatenated_expression(tmp_path: Path) -
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
     raw.entries["concat"].fields["title"].value = "New"
     output = tmp_path / "concat-out.bib"
     raw.write(output)
@@ -673,7 +673,7 @@ def test_raw_bib_document_preserves_duplicate_keys_on_write(tmp_path: Path) -> N
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
     raw.entries["same"].fields["title"].value = "Corrected second"
     output = tmp_path / "duplicates-out.bib"
     raw.write(output)
@@ -695,7 +695,7 @@ def test_raw_bib_document_ignores_comment_delimiters_inside_entries(tmp_path: Pa
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     assert raw.failed_blocks == []
     assert raw.entries["commented"].fields["title"].value == "Still Here"
@@ -716,7 +716,7 @@ def test_raw_bib_document_handles_escaped_and_nested_delimiters(tmp_path: Path) 
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     assert raw.failed_blocks == []
     assert raw.entries["escaped"].fields["year"].value == "2024"
@@ -733,7 +733,7 @@ def test_raw_bib_document_keeps_quotes_literal_inside_braced_values(tmp_path: Pa
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     assert raw.failed_blocks == []
     assert raw.entries["quoted"].fields["title"].value == 'A " quoted title'
@@ -749,7 +749,7 @@ def test_raw_bib_document_keeps_protected_quotes_inside_quoted_values(tmp_path: 
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     assert raw.failed_blocks == []
     assert raw.entries["quoted"].fields["title"].value == 'A {"quoted"} title'
@@ -765,7 +765,7 @@ def test_raw_bib_document_keeps_single_protected_quote_inside_quoted_values(tmp_
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     assert raw.failed_blocks == []
     assert raw.entries["quoted"].fields["title"].value == 'A {"} title'
@@ -780,7 +780,7 @@ def test_raw_bib_document_allows_inline_comment_after_final_field(tmp_path: Path
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     assert raw.failed_blocks == []
     assert raw.entries["commented"].fields["title"].value == "Kept"
@@ -795,7 +795,7 @@ def test_raw_bib_document_allows_no_space_comment_after_bare_value(tmp_path: Pat
 """,
     )
 
-    raw = ck.BibDocument.read(source)
+    raw = rk.BibDocument.read(source)
 
     assert raw.failed_blocks == []
     assert raw.entries["commented"].fields["year"].value == "2024"

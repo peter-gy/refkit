@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.11, <3.15"
 
 [[package]]
-name = "citecore"
+name = "refkit"
 version = "0.0.0"
 source = { editable = "." }
 

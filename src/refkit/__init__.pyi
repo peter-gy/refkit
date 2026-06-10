@@ -1,8 +1,10 @@
 from os import PathLike
 from typing import Any, Iterable
 
-class CitecoreError(Exception): ...
-class MissingReferenceError(CitecoreError): ...
+__version__: str
+
+class RefkitError(Exception): ...
+class MissingReferenceError(RefkitError): ...
 
 class Entry:
     @property
@@ -142,3 +144,17 @@ class BibDocument:
     @property
     def blocks(self) -> list[dict[str, Any]]: ...
     def write(self, path: str | PathLike[str] | None = None) -> None: ...
+
+def cite(
+    source: str | PathLike[str],
+    item: str | Cite | list[str | Cite],
+    *,
+    style: str | Style = "apa",
+    locale: str | Locale | None = "en-US",
+) -> Rendered: ...
+def bibliography(
+    source: str | PathLike[str],
+    *,
+    style: str | Style = "apa",
+    locale: str | Locale | None = "en-US",
+) -> Rendered: ...
