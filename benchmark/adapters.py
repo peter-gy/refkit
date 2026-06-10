@@ -1,0 +1,667 @@
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
+from time import perf_counter_ns
+from typing import Any, cast
+
+from benchmark.fixtures import Workload
+
+
+OutcomeValue = object
+
+
+class UnsupportedOperation(Exception):
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class OperationOutcome:
+    value: OutcomeValue
+    count: int
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class PreparedOperation:
+    phase: str
+    operation: Callable[[], OperationOutcome]
+    check: Callable[[OperationOutcome], None]
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+class PackageAdapter:
+    name: str
+    distribution: str
+
+    def prepare(self, case: str, workload: Workload, directory: Path) -> PreparedOperation:
+        method_name = f"prepare_{case}"
+        method = getattr(self, method_name, None)
+        if method is None:
+            raise UnsupportedOperation(f"{self.name} does not support {case}")
+        return method(workload, directory)
+
+
+class RefkitAdapter(PackageAdapter):
+    name = "refkit"
+    distribution = "refkit"
+
+    def prepare_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        def operation() -> OperationOutcome:
+            library = rk.Library.read(workload.bibtex_path)
+            return OperationOutcome(library, len(library))
+
+        return _prepared("parse", operation, _count_is(len(workload.records)))
+
+    def prepare_raw_bibtex_roundtrip(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        def operation() -> OperationOutcome:
+            document = rk.BibDocument.parse(workload.raw_bibtex)
+            field = document.entries[workload.keys[0]].fields["title"]
+            field.value = "Edited Benchmark Title"
+            path = directory / f"refkit-raw-{perf_counter_ns()}.bib"
+            document.write(path)
+            return OperationOutcome(path, len(document.entries), str(path.name))
+
+        return _prepared("raw-write", operation, _raw_roundtrip_check(workload.keys))
+
+    def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+        style = rk.Style.load("apa")
+        key = workload.keys[0]
+
+        def operation() -> OperationOutcome:
+            document = rk.Document(library, style, locale="en-US")
+            rendered = document.cite(key)
+            return OperationOutcome(rendered.text, 1)
+
+        return _prepared("render", operation, _text_contains(workload.records[0].family))
+
+    def prepare_bibliography_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+        style = rk.Style.load("apa")
+
+        def operation() -> OperationOutcome:
+            document = rk.Document(library, style, locale="en-US")
+            rendered = document.bibliography(all=True)
+            return OperationOutcome(rendered.text, len(workload.records))
+
+        return _prepared("render", operation, _text_contains_all([record.family for record in workload.records]))
+
+    def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+        style = rk.Style.load("apa")
+        keys = workload.keys[: min(8, len(workload.keys))]
+
+        def operation() -> OperationOutcome:
+            document = rk.Document(library, style, locale="en-US")
+            texts = [document.cite(key).text for key in keys]
+            return OperationOutcome("\n".join(texts), len(texts))
+
+        return _prepared(
+            "steady-render",
+            operation,
+            _all_checks(
+                _count_is(len(keys)),
+                _text_contains_all([record.family for record in workload.records[: len(keys)]]),
+            ),
+        )
+
+    def prepare_one_off_cite(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        key = workload.keys[0]
+
+        def operation() -> OperationOutcome:
+            rendered = rk.cite(workload.bibtex_path, key, style="apa")
+            return OperationOutcome(rendered.text, 1)
+
+        return _prepared("one-off-render", operation, _text_contains(workload.records[0].family))
+
+    def prepare_one_off_bibliography(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        def operation() -> OperationOutcome:
+            rendered = rk.bibliography(workload.bibtex_path, style="apa")
+            return OperationOutcome(rendered.text, len(workload.records))
+
+        return _prepared("one-off-render", operation, _text_contains_all([record.family for record in workload.records]))
+
+    def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+        style = rk.Style.load("apa")
+
+        def operation() -> OperationOutcome:
+            document = rk.Document(library, style, locale="en-US")
+            try:
+                document.cite("missing-reference")
+            except rk.MissingReferenceError as exc:
+                return OperationOutcome(str(exc), 1, "raised")
+            raise AssertionError("missing reference did not raise")  # pragma: no cover
+
+        return _prepared("error", operation, _text_contains("missing-reference"))
+
+    def prepare_bulk_materialization(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+
+        def operation() -> OperationOutcome:
+            rows = library.project(["key", "title"])
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            "materialize",
+            operation,
+            _projection_contains(workload.records, required_fields=("key", "title")),
+        )
+
+    def prepare_library_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+
+        def operation() -> OperationOutcome:
+            keys = library.keys()
+            return OperationOutcome(keys, len(keys))
+
+        return _prepared("inspect", operation, _keys_are(workload.keys))
+
+    def prepare_entry_lookup(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+        keys = _lookup_keys(workload)
+
+        def operation() -> OperationOutcome:
+            rows = library.get_many(keys)
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared("inspect", operation, _entries_match(workload.records[: len(keys)]))
+
+    def prepare_field_projection(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+
+        def operation() -> OperationOutcome:
+            rows = library.project(["key", "title", "doi", "volume"])
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            "inspect",
+            operation,
+            _projection_contains(
+                workload.records,
+                required_fields=("key", "title", "doi", "volume"),
+            ),
+        )
+
+
+class CiteprocPyAdapter(PackageAdapter):
+    name = "citeproc-py"
+    distribution = "citeproc-py"
+
+    def prepare_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
+        from citeproc.source.bibtex import BibTeX
+
+        def operation() -> OperationOutcome:
+            source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
+            return OperationOutcome(source, len(list(source.keys())))
+
+        return _prepared("parse", operation, _count_is(len(workload.records)))
+
+    def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+        source, style = _citeproc_source_and_style(workload)
+        citation = _citeproc_citation(workload.keys[:1])
+
+        def operation() -> OperationOutcome:
+            bibliography = _citeproc_processor(source, style)
+            bibliography.register(citation)
+            rendered = bibliography.cite(citation, lambda item: None)
+            return OperationOutcome(str(rendered), 1)
+
+        return _prepared("render", operation, _text_contains(workload.records[0].family))
+
+    def prepare_bibliography_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+        source, style = _citeproc_source_and_style(workload)
+        citation = _citeproc_citation(workload.keys)
+
+        def operation() -> OperationOutcome:
+            bibliography = _citeproc_processor(source, style)
+            bibliography.register(citation)
+            bibliography.sort()
+            rows = [str(item) for item in bibliography.bibliography()]
+            return OperationOutcome("\n".join(rows), len(rows))
+
+        return _prepared("render", operation, _text_contains_all([record.family for record in workload.records]))
+
+    def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+        count = min(8, len(workload.keys))
+        source, style = _citeproc_source_and_style(workload)
+        citations = [_citeproc_citation([key]) for key in workload.keys[:count]]
+
+        def operation() -> OperationOutcome:
+            bibliography = _citeproc_processor(source, style)
+            for citation in citations:
+                bibliography.register(citation)
+            rendered = [str(bibliography.cite(citation, lambda item: None)) for citation in citations]
+            return OperationOutcome("\n".join(rendered), len(rendered))
+
+        return _prepared(
+            "steady-render",
+            operation,
+            _all_checks(
+                _count_is(count),
+                _text_contains_all([record.family for record in workload.records[:count]]),
+            ),
+        )
+
+    def prepare_one_off_cite(self, workload: Workload, directory: Path) -> PreparedOperation:
+        key = workload.keys[0]
+
+        def operation() -> OperationOutcome:
+            from citeproc import CitationStylesStyle
+            from citeproc.source.bibtex import BibTeX
+
+            source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
+            style = CitationStylesStyle("apa", validate=False)
+            bibliography = _citeproc_processor(source, style)
+            citation = _citeproc_citation([key])
+            bibliography.register(citation)
+            rendered = bibliography.cite(citation, lambda item: None)
+            return OperationOutcome(str(rendered), 1)
+
+        return _prepared("one-off-render", operation, _text_contains(workload.records[0].family))
+
+    def prepare_one_off_bibliography(self, workload: Workload, directory: Path) -> PreparedOperation:
+        def operation() -> OperationOutcome:
+            from citeproc import CitationStylesStyle
+            from citeproc.source.bibtex import BibTeX
+
+            source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
+            style = CitationStylesStyle("apa", validate=False)
+            bibliography = _citeproc_processor(source, style)
+            citation = _citeproc_citation(workload.keys)
+            bibliography.register(citation)
+            bibliography.sort()
+            rows = [str(item) for item in bibliography.bibliography()]
+            return OperationOutcome("\n".join(rows), len(rows))
+
+        return _prepared("one-off-render", operation, _text_contains_all([record.family for record in workload.records]))
+
+    def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
+        source, style = _citeproc_source_and_style(workload)
+        citation = _citeproc_citation(["missing-reference"])
+
+        def operation() -> OperationOutcome:
+            bibliography = _citeproc_processor(source, style)
+            bibliography.register(citation)
+            missing: list[str] = []
+            rendered = bibliography.cite(citation, lambda item: missing.append(item.key))
+            return OperationOutcome(str(rendered), len(missing), ",".join(missing))
+
+        return _prepared("error", operation, _detail_contains("missing-reference"))
+
+    def prepare_bulk_materialization(self, workload: Workload, directory: Path) -> PreparedOperation:
+        from citeproc.source.bibtex import BibTeX
+
+        source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
+
+        def operation() -> OperationOutcome:
+            rows = [{"key": key, "title": _first(dict(reference).get("title"))} for key, reference in source.items()]
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            "materialize",
+            operation,
+            _projection_contains(workload.records, required_fields=("key", "title")),
+        )
+
+    def prepare_library_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
+        from citeproc.source.bibtex import BibTeX
+
+        source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
+
+        def operation() -> OperationOutcome:
+            keys = list(source.keys())
+            return OperationOutcome(keys, len(keys))
+
+        return _prepared("inspect", operation, _keys_are(workload.keys))
+
+    def prepare_entry_lookup(self, workload: Workload, directory: Path) -> PreparedOperation:
+        from citeproc.source.bibtex import BibTeX
+
+        source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
+        keys = _lookup_keys(workload)
+
+        def operation() -> OperationOutcome:
+            rows = [source[key] for key in keys]
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared("inspect", operation, _entries_match(workload.records[: len(keys)]))
+
+    def prepare_field_projection(self, workload: Workload, directory: Path) -> PreparedOperation:
+        from citeproc.source.bibtex import BibTeX
+
+        source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
+
+        def operation() -> OperationOutcome:
+            rows = []
+            for key, reference in source.items():
+                value = dict(reference)
+                rows.append(
+                    {
+                        "key": key,
+                        "title": _first(value.get("title")),
+                        "doi": _first(value.get("DOI")),
+                        "volume": str(_first(value.get("volume"))),
+                    }
+                )
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            "inspect",
+            operation,
+            _projection_contains(
+                workload.records,
+                required_fields=("key", "title", "doi", "volume"),
+            ),
+        )
+
+
+class BibtexparserAdapter(PackageAdapter):
+    name = "bibtexparser"
+    distribution = "bibtexparser"
+
+    def prepare_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        def operation() -> OperationOutcome:
+            with workload.bibtex_path.open(encoding="utf-8") as handle:
+                database = bibtexparser.load(handle)
+            return OperationOutcome(database, len(database.entries))
+
+        return _prepared("parse", operation, _count_is(len(workload.records)))
+
+    def prepare_raw_bibtex_roundtrip(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        def operation() -> OperationOutcome:
+            database = bibtexparser.loads(workload.raw_bibtex)
+            database.entries[0]["title"] = "Edited Benchmark Title"
+            text = bibtexparser.dumps(database)
+            path = directory / f"bibtexparser-raw-{perf_counter_ns()}.bib"
+            path.write_text(text, encoding="utf-8")
+            return OperationOutcome(path, len(database.entries), str(path.name))
+
+        return _prepared("raw-write", operation, _raw_roundtrip_check(workload.keys))
+
+    def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+        raise UnsupportedOperation("bibtexparser does not render CSL citations")
+
+    def prepare_bibliography_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+        raise UnsupportedOperation("bibtexparser does not render CSL bibliographies")
+
+    def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+        raise UnsupportedOperation("bibtexparser does not render CSL citations")
+
+    def prepare_one_off_cite(self, workload: Workload, directory: Path) -> PreparedOperation:
+        raise UnsupportedOperation("bibtexparser does not render CSL citations")
+
+    def prepare_one_off_bibliography(self, workload: Workload, directory: Path) -> PreparedOperation:
+        raise UnsupportedOperation("bibtexparser does not render CSL bibliographies")
+
+    def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
+        raise UnsupportedOperation("bibtexparser has no citation reference resolution step")
+
+    def prepare_bulk_materialization(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        database = bibtexparser.loads(workload.bibtex)
+
+        def operation() -> OperationOutcome:
+            rows = [{"key": entry["ID"], "title": entry.get("title")} for entry in database.entries]
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            "materialize",
+            operation,
+            _projection_contains(workload.records, required_fields=("key", "title")),
+        )
+
+    def prepare_library_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        database = bibtexparser.loads(workload.bibtex)
+
+        def operation() -> OperationOutcome:
+            keys = [entry["ID"] for entry in database.entries]
+            return OperationOutcome(keys, len(keys))
+
+        return _prepared("inspect", operation, _keys_are(workload.keys))
+
+    def prepare_entry_lookup(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        database = bibtexparser.loads(workload.bibtex)
+        entries = {entry["ID"]: entry for entry in database.entries}
+        keys = _lookup_keys(workload)
+
+        def operation() -> OperationOutcome:
+            rows = [entries[key] for key in keys]
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared("inspect", operation, _entries_match(workload.records[: len(keys)]))
+
+    def prepare_field_projection(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        database = bibtexparser.loads(workload.bibtex)
+
+        def operation() -> OperationOutcome:
+            rows = [
+                {
+                    "key": entry["ID"],
+                    "title": entry.get("title"),
+                    "doi": entry.get("doi"),
+                    "volume": entry.get("volume"),
+                }
+                for entry in database.entries
+            ]
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            "inspect",
+            operation,
+            _projection_contains(
+                workload.records,
+                required_fields=("key", "title", "doi", "volume"),
+            ),
+        )
+
+
+def adapters() -> list[PackageAdapter]:
+    return [RefkitAdapter(), CiteprocPyAdapter(), BibtexparserAdapter()]
+
+
+def _prepared(
+    phase: str,
+    operation: Callable[[], OperationOutcome],
+    check: Callable[[OperationOutcome], None],
+) -> PreparedOperation:
+    return PreparedOperation(phase=phase, operation=operation, check=check)
+
+
+def _count_is(expected: int) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        if outcome.count != expected:
+            raise AssertionError(f"expected count {expected}, got {outcome.count}")
+
+    return check
+
+
+def _keys_are(expected: list[str]) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        if outcome.value != expected:
+            raise AssertionError("expected keys to match fixture order")
+        if outcome.count != len(expected):
+            raise AssertionError(f"expected count {len(expected)}, got {outcome.count}")
+
+    return check
+
+
+def _all_checks(*checks: Callable[[OperationOutcome], None]) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        for item in checks:
+            item(outcome)
+
+    return check
+
+
+def _projection_contains(
+    records: tuple[Any, ...],
+    *,
+    required_fields: tuple[str, ...] = (),
+) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        rows = list(cast(Iterable[Mapping[str, Any]], outcome.value))
+        if len(rows) != len(records):
+            raise AssertionError(f"expected {len(records)} projected rows, got {len(rows)}")
+        by_key = {str(row["key"]): row for row in rows}
+        for record in records:
+            row = by_key.get(record.key)
+            if row is None:
+                raise AssertionError(f"expected projected rows to contain {record.key!r}")
+            for required_field in required_fields:
+                if required_field not in row:
+                    raise AssertionError(
+                        f"expected projected row for {record.key!r} to include {required_field!r}"
+                    )
+            if row.get("title") != record.title:
+                raise AssertionError(f"expected title for {record.key!r}")
+            doi = row.get("doi")
+            if ("doi" in required_fields and doi is None) or (
+                doi is not None and str(doi) != record.doi
+            ):
+                raise AssertionError(f"expected DOI for {record.key!r}")
+            volume = row.get("volume")
+            if ("volume" in required_fields and volume is None) or (
+                volume is not None and str(volume) != str(record.volume)
+            ):
+                raise AssertionError(f"expected volume for {record.key!r}")
+
+    return check
+
+
+def _entries_match(records: tuple[Any, ...]) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        rows = list(cast(Iterable[Any], outcome.value))
+        if len(rows) != len(records):
+            raise AssertionError(f"expected {len(records)} entries, got {len(rows)}")
+        for row, record in zip(rows, records, strict=True):
+            key = getattr(row, "key", None)
+            title = getattr(row, "title", None)
+            if key is None and isinstance(row, Mapping):
+                key = row.get("ID") or row.get("id") or row.get("key")
+            if title is None and isinstance(row, Mapping):
+                title = row.get("title")
+            if key != record.key:
+                raise AssertionError(f"expected entry key {record.key!r}")
+            if _first(title) != record.title:
+                raise AssertionError(f"expected title for {record.key!r}")
+
+    return check
+
+
+def _text_contains(needle: str) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        if needle not in str(outcome.value):
+            raise AssertionError(f"expected output to contain {needle!r}")
+
+    return check
+
+
+def _text_contains_all(needles: list[str]) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        text = str(outcome.value)
+        missing = [needle for needle in needles if needle not in text]
+        if missing:
+            raise AssertionError(f"expected output to contain {missing[0]!r}")
+
+    return check
+
+
+def _detail_contains(needle: str) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        if needle not in outcome.detail:
+            raise AssertionError(f"expected detail to contain {needle!r}")
+
+    return check
+
+
+def _raw_roundtrip_check(keys: list[str]) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        path = Path(str(outcome.value))
+        text = path.read_text(encoding="utf-8")
+        expected = [
+            "Edited Benchmark Title",
+            "benchmark fixture with raw BibTeX blocks",
+            "benchjournal",
+            "Reference benchmark fixture",
+            *keys,
+        ]
+        missing = [value for value in expected if value not in text]
+        if missing:
+            raise AssertionError(f"expected written file to contain {missing[0]!r}")
+        if text.lower().count("@article{") != len(keys):
+            raise AssertionError(f"expected {len(keys)} written entries")
+
+    return check
+
+
+def _lookup_keys(workload: Workload) -> list[str]:
+    return workload.keys[: min(16, len(workload.keys))]
+
+
+def _first(value: object) -> object:
+    if isinstance(value, list) and type(value) is list:
+        return value[0] if value else None
+    if isinstance(value, list):
+        return str(value)
+    return value
+
+
+def _citeproc_source_and_style(workload: Workload) -> tuple[Any, Any]:
+    from citeproc import CitationStylesStyle
+    from citeproc.source.json import CiteProcJSON
+
+    source = CiteProcJSON(workload.csl_json)
+    style = CitationStylesStyle("apa", validate=False)
+    return source, style
+
+
+def _citeproc_processor(source: Any, style: Any) -> Any:
+    from citeproc import CitationStylesBibliography, formatter
+
+    return CitationStylesBibliography(style, source, formatter.plain)
+
+
+def _citeproc_citation(keys: list[str]) -> Any:
+    from citeproc import Citation, CitationItem
+
+    return Citation([CitationItem(key) for key in keys])
