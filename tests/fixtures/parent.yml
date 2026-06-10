@@ -1,0 +1,9 @@
+doe2024:
+  type: Article
+  author: Doe, Jane
+  title: Citecore for Bibliographies
+  date: 2024
+  parent:
+    type: Periodical
+    title: Journal of Citation Systems
+    volume: 12
