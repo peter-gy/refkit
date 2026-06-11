@@ -5,6 +5,7 @@ import importlib
 import importlib.metadata as metadata_module
 import json
 import os
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -59,11 +60,15 @@ def test_materialize_workload_writes_bibtex_and_raw_inputs(tmp_path: Path) -> No
     assert workload.record_count == 3
     assert workload.bibtex_path.read_text(encoding="utf-8") == workload.bibtex
     assert workload.raw_bibtex_path.read_text(encoding="utf-8") == workload.raw_bibtex
+    assert workload.dirty_bibtex_path.read_text(encoding="utf-8") == workload.dirty_bibtex
     assert workload.csl_json[0]["id"] == "item0001"
     assert "preamble" in workload.raw_bibtex.lower()
+    assert "No close" in workload.dirty_bibtex
     assert workload.source_byte_count("bibtex") == len(workload.bibtex.encode("utf-8"))
     assert workload.source_text("raw_bibtex") == workload.raw_bibtex
     assert workload.source_byte_count("raw_bibtex") == len(workload.raw_bibtex.encode("utf-8"))
+    assert workload.source_text("dirty_bibtex") == workload.dirty_bibtex
+    assert workload.source_byte_count("dirty_bibtex") == len(workload.dirty_bibtex.encode("utf-8"))
     assert workload.source_text("csl_json").startswith("[")
     assert len(workload.source_sha256("bibtex")) == 64
     assert workload.source_text("unknown") == ""
@@ -87,12 +92,20 @@ def test_fixture_sizes_are_ordered_slices_of_largest_records() -> None:
     assert fixtures.records_for_size("large") == largest
 
 
+def test_dirty_bibtex_for_empty_records_contains_only_malformed_block() -> None:
+    dirty = fixtures.dirty_bibtex_for_records(())
+
+    assert "No close" in dirty
+    assert "Duplicate benchmark record" not in dirty
+
+
 def test_select_cases_uses_explicit_cases_before_group() -> None:
     assert runner.select_cases(["bibtex_parse"], "render") == ["bibtex_parse"]
     assert runner.select_cases(None, "all") == list(runner.CASES)
     assert runner.select_cases(None, "render") == [
         "citation_render",
         "bibliography_render",
+        "bibliography_seen_render",
         "repeated_render",
     ]
 
@@ -122,10 +135,19 @@ def test_list_command_prints_cases(capsys: pytest.CaptureFixture[str]) -> None:
     listed_cases = [line.split("\t", maxsplit=1)[0] for line in out.splitlines()]
     assert listed_cases == [
         "bibtex_parse",
+        "bibtex_recovery_parse",
+        "raw_bibtex_parse",
+        "raw_bibtex_write",
         "raw_bibtex_roundtrip",
+        "style_load",
+        "processor_setup",
         "citation_render",
         "bibliography_render",
+        "bibliography_seen_render",
         "repeated_render",
+        "rendered_text_access",
+        "rendered_html_access",
+        "rendered_tree_access",
         "one_off_cite",
         "one_off_bibliography",
         "missing_reference",
@@ -136,6 +158,7 @@ def test_list_command_prints_cases(capsys: pytest.CaptureFixture[str]) -> None:
     ]
     assert "missing_reference\terror" in out
     assert "field_projection\tinspect" in out
+    assert "style_load\tsetup" in out
 
 
 def test_package_version_reports_missing_distribution() -> None:
@@ -279,6 +302,13 @@ def test_check_helpers_reject_bad_outcomes(tmp_path: Path) -> None:
 
     with pytest.raises(AssertionError, match="expected count"):
         adapters._count_is(2)(adapters.OperationOutcome("", 1))
+    adapters._count_at_least(1)(adapters.OperationOutcome("", 1))
+    with pytest.raises(AssertionError, match="at least 2"):
+        adapters._count_at_least(2)(adapters.OperationOutcome("", 1))
+    adapters._recovery_parse_result(2)(adapters.OperationOutcome("", 2))
+    adapters._recovery_parse_result(2)(adapters.OperationOutcome("", 0, "error=Parser: bad"))
+    with pytest.raises(AssertionError, match="recovered entries"):
+        adapters._recovery_parse_result(2)(adapters.OperationOutcome("", 1))
     with pytest.raises(AssertionError, match="expected keys"):
         adapters._keys_are(["item0001"])(adapters.OperationOutcome(["item0002"], 1))
     with pytest.raises(AssertionError, match="expected count"):
@@ -426,10 +456,19 @@ def test_each_comparable_workflow_has_correctness_check(tmp_path: Path) -> None:
     cases_by_adapter = {
         adapters.RefkitAdapter(): [
             "bibtex_parse",
+            "bibtex_recovery_parse",
+            "raw_bibtex_parse",
+            "raw_bibtex_write",
             "raw_bibtex_roundtrip",
+            "style_load",
+            "processor_setup",
             "citation_render",
             "bibliography_render",
+            "bibliography_seen_render",
             "repeated_render",
+            "rendered_text_access",
+            "rendered_html_access",
+            "rendered_tree_access",
             "one_off_cite",
             "one_off_bibliography",
             "missing_reference",
@@ -440,8 +479,11 @@ def test_each_comparable_workflow_has_correctness_check(tmp_path: Path) -> None:
         ],
         adapters.CiteprocPyAdapter(): [
             "bibtex_parse",
+            "style_load",
+            "processor_setup",
             "citation_render",
             "bibliography_render",
+            "bibliography_seen_render",
             "repeated_render",
             "one_off_cite",
             "one_off_bibliography",
@@ -453,6 +495,8 @@ def test_each_comparable_workflow_has_correctness_check(tmp_path: Path) -> None:
         ],
         adapters.BibtexparserAdapter(): [
             "bibtex_parse",
+            "raw_bibtex_parse",
+            "raw_bibtex_write",
             "raw_bibtex_roundtrip",
             "bulk_materialization",
             "library_keys",
@@ -475,18 +519,66 @@ def test_benchmark_render_metadata_describes_citation_requests(tmp_path: Path) -
         "bibliography_render", workload, tmp_path
     )
     refkit_one_off = adapters.RefkitAdapter().prepare("one_off_bibliography", workload, tmp_path)
+    refkit_seen = adapters.RefkitAdapter().prepare("bibliography_seen_render", workload, tmp_path)
     citeproc_bibliography = adapters.CiteprocPyAdapter().prepare(
         "bibliography_render", workload, tmp_path
+    )
+    citeproc_seen = adapters.CiteprocPyAdapter().prepare(
+        "bibliography_seen_render", workload, tmp_path
     )
     citeproc_missing = adapters.CiteprocPyAdapter().prepare("missing_reference", workload, tmp_path)
 
     assert refkit_bibliography.metadata["citation_count"] == 0
     assert refkit_one_off.metadata["citation_count"] == 0
+    assert refkit_seen.metadata["citation_count"] == len(workload.records)
     assert citeproc_bibliography.metadata["citation_count"] == len(workload.records)
+    assert citeproc_seen.metadata["citation_count"] == len(workload.records)
     with pytest.raises(AssertionError, match="expected count 1"):
         citeproc_missing.check(
             adapters.OperationOutcome("(missing-reference?)", 2, "missing-reference")
         )
+
+
+def test_recovery_parse_errors_are_recorded_in_row_detail(tmp_path: Path) -> None:
+    metadata = runner.machine_metadata("release")
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+
+    for adapter in (adapters.CiteprocPyAdapter(), adapters.BibtexparserAdapter()):
+        rows = runner.run_adapter_case(
+            adapter=adapter,
+            case=runner.CASES["bibtex_recovery_parse"],
+            workload=workload,
+            directory=tmp_path,
+            rounds=2,
+            warmups=0,
+            metadata=metadata,
+        )
+
+        assert len(rows) == 2
+        for row in rows:
+            assert row["status"] == "ok"
+            assert row["phase"] == "parse-recovery"
+            assert row["source_format"] == "dirty_bibtex"
+            assert row["operation_count"] == 0
+            assert "error=" in str(row["detail"])
+
+
+def test_recovery_parse_success_paths_cover_parser_return_values(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    recovery_path = tmp_path / "recoverable.bib"
+    recovery_path.write_text(workload.bibtex, encoding="utf-8")
+    recoverable = replace(
+        workload,
+        dirty_bibtex=workload.bibtex,
+        dirty_bibtex_path=recovery_path,
+    )
+
+    for adapter in (adapters.CiteprocPyAdapter(), adapters.BibtexparserAdapter()):
+        prepared = adapter.prepare("bibtex_recovery_parse", recoverable, tmp_path)
+        outcome = prepared.operation()
+
+        prepared.check(outcome)
+        assert outcome.count == len(workload.records)
 
 
 def test_repeated_render_uses_full_selected_input(tmp_path: Path) -> None:

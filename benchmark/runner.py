@@ -84,15 +84,56 @@ class CaseSpec:
 
 CASES: dict[str, CaseSpec] = {
     "bibtex_parse": CaseSpec("bibtex_parse", "parse", "Parse BibTeX into a package library model."),
+    "bibtex_recovery_parse": CaseSpec(
+        "bibtex_recovery_parse",
+        "parse",
+        "Parse dirty BibTeX and report whether valid records survive recovery.",
+    ),
+    "raw_bibtex_parse": CaseSpec(
+        "raw_bibtex_parse",
+        "raw",
+        "Parse raw BibTeX while preserving raw document structure.",
+    ),
+    "raw_bibtex_write": CaseSpec(
+        "raw_bibtex_write",
+        "raw",
+        "Write an already parsed raw BibTeX document after one field edit.",
+    ),
     "raw_bibtex_roundtrip": CaseSpec(
         "raw_bibtex_roundtrip",
         "raw",
         "Parse raw BibTeX, edit one title, and write BibTeX text.",
     ),
+    "style_load": CaseSpec("style_load", "setup", "Load the APA citation style."),
+    "processor_setup": CaseSpec(
+        "processor_setup",
+        "setup",
+        "Create a citation processor or document from prepared inputs.",
+    ),
     "citation_render": CaseSpec("citation_render", "render", "Render one APA citation."),
     "bibliography_render": CaseSpec("bibliography_render", "render", "Render an APA bibliography."),
+    "bibliography_seen_render": CaseSpec(
+        "bibliography_seen_render",
+        "render",
+        "Render a bibliography for entries cited during the operation.",
+    ),
     "repeated_render": CaseSpec(
         "repeated_render", "render", "Render repeated APA citations after setup."
+    ),
+    "rendered_text_access": CaseSpec(
+        "rendered_text_access",
+        "render-output",
+        "Access text from an already rendered refkit citation.",
+    ),
+    "rendered_html_access": CaseSpec(
+        "rendered_html_access",
+        "render-output",
+        "Access HTML from an already rendered refkit citation.",
+    ),
+    "rendered_tree_access": CaseSpec(
+        "rendered_tree_access",
+        "render-output",
+        "Materialize the Python tree for an already rendered refkit citation.",
     ),
     "one_off_cite": CaseSpec(
         "one_off_cite",

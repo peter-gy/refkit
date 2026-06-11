@@ -57,6 +57,59 @@ class RefkitAdapter(PackageAdapter):
 
         return _prepared("parse", operation, _count_is(len(workload.records)), setup_included=True)
 
+    def prepare_bibtex_recovery_parse(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        import refkit as rk
+
+        def operation() -> OperationOutcome:
+            library = rk.Library.read(workload.dirty_bibtex_path, diagnostics=True)
+            return OperationOutcome(
+                library, len(library), f"diagnostics={len(library.diagnostics)}"
+            )
+
+        return _prepared(
+            "parse-recovery",
+            operation,
+            _count_is(len(workload.records)),
+            source_format="dirty_bibtex",
+            setup_included=True,
+        )
+
+    def prepare_raw_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        def operation() -> OperationOutcome:
+            document = rk.BibDocument.parse(workload.raw_bibtex)
+            return OperationOutcome(document, len(document.entries))
+
+        return _prepared(
+            "raw-parse",
+            operation,
+            _count_is(len(workload.records)),
+            source_format="raw_bibtex",
+            setup_included=True,
+        )
+
+    def prepare_raw_bibtex_write(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        document = rk.BibDocument.parse(workload.raw_bibtex)
+        field = document.entries[workload.keys[0]].fields["title"]
+
+        def operation() -> OperationOutcome:
+            field.value = "Edited Benchmark Title"
+            path = directory / f"refkit-raw-write-{perf_counter_ns()}.bib"
+            document.write(path)
+            return OperationOutcome(path, len(document.entries), path.name)
+
+        return _prepared(
+            "raw-write",
+            operation,
+            _raw_roundtrip_check(workload.keys),
+            source_format="raw_bibtex",
+        )
+
     def prepare_raw_bibtex_roundtrip(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
@@ -77,6 +130,27 @@ class RefkitAdapter(PackageAdapter):
             source_format="raw_bibtex",
             setup_included=True,
         )
+
+    def prepare_style_load(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        def operation() -> OperationOutcome:
+            style = rk.Style.load("apa")
+            return OperationOutcome(style, 1)
+
+        return _prepared("style-load", operation, _count_is(1), source_format="none")
+
+    def prepare_processor_setup(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+        style = rk.Style.load("apa")
+
+        def operation() -> OperationOutcome:
+            document = rk.Document(library, style, locale="en-US")
+            return OperationOutcome(document, 1)
+
+        return _prepared("processor-setup", operation, _count_is(1))
 
     def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
@@ -118,6 +192,32 @@ class RefkitAdapter(PackageAdapter):
             citation_count=0,
         )
 
+    def prepare_bibliography_seen_render(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+        style = rk.Style.load("apa")
+        keys = workload.keys
+
+        def operation() -> OperationOutcome:
+            document = rk.Document(library, style, locale="en-US")
+            for key in keys:
+                document.cite(key)
+            rendered = document.bibliography()
+            return OperationOutcome(rendered.text, len(keys))
+
+        return _prepared(
+            "render-bibliography-seen",
+            operation,
+            _all_checks(
+                _count_is(len(workload.records)),
+                _bibliography_output_matches(workload.records),
+            ),
+            citation_count=len(workload.records),
+        )
+
     def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
@@ -139,6 +239,53 @@ class RefkitAdapter(PackageAdapter):
             ),
             citation_count=len(keys),
         )
+
+    def prepare_rendered_text_access(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        rendered = self._prepared_rendered_citation(workload)
+
+        def operation() -> OperationOutcome:
+            text = rendered.text
+            return OperationOutcome(text, 1)
+
+        return _prepared(
+            "render-output-text",
+            operation,
+            _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
+        )
+
+    def prepare_rendered_html_access(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        rendered = self._prepared_rendered_citation(workload)
+
+        def operation() -> OperationOutcome:
+            html = rendered.html
+            return OperationOutcome(html, 1)
+
+        return _prepared(
+            "render-output-html", operation, _text_contains(workload.records[0].family)
+        )
+
+    def prepare_rendered_tree_access(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        rendered = self._prepared_rendered_citation(workload)
+
+        def operation() -> OperationOutcome:
+            tree = rendered.tree
+            return OperationOutcome(tree, len(tree))
+
+        return _prepared("render-output-tree", operation, _count_at_least(1))
+
+    def _prepared_rendered_citation(self, workload: Workload) -> Any:
+        import refkit as rk
+
+        library = rk.Library.parse(workload.bibtex)
+        style = rk.Style.load("apa")
+        document = rk.Document(library, style, locale="en-US")
+        return document.cite(workload.keys[0])
 
     def prepare_one_off_cite(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
@@ -270,6 +417,44 @@ class CiteprocPyAdapter(PackageAdapter):
 
         return _prepared("parse", operation, _count_is(len(workload.records)), setup_included=True)
 
+    def prepare_bibtex_recovery_parse(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        from citeproc.source.bibtex import BibTeX
+
+        def operation() -> OperationOutcome:
+            try:
+                source = BibTeX(str(workload.dirty_bibtex_path), encoding="utf-8")
+            except Exception as exc:
+                return OperationOutcome("", 0, _error_detail(exc))
+            return OperationOutcome(source, len(list(source.keys())))
+
+        return _prepared(
+            "parse-recovery",
+            operation,
+            _recovery_parse_result(len(workload.records)),
+            source_format="dirty_bibtex",
+            setup_included=True,
+        )
+
+    def prepare_style_load(self, workload: Workload, directory: Path) -> PreparedOperation:
+        from citeproc import CitationStylesStyle
+
+        def operation() -> OperationOutcome:
+            style = CitationStylesStyle("apa", validate=False)
+            return OperationOutcome(style, 1)
+
+        return _prepared("style-load", operation, _count_is(1), source_format="none")
+
+    def prepare_processor_setup(self, workload: Workload, directory: Path) -> PreparedOperation:
+        source, style = _citeproc_source_and_style(workload)
+
+        def operation() -> OperationOutcome:
+            bibliography = _citeproc_processor(source, style)
+            return OperationOutcome(bibliography, 1)
+
+        return _prepared("processor-setup", operation, _count_is(1), source_format="csl_json")
+
     def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
         source, style = _citeproc_source_and_style(workload)
         citation = _citeproc_citation(workload.keys[:1])
@@ -301,6 +486,32 @@ class CiteprocPyAdapter(PackageAdapter):
 
         return _prepared(
             "render",
+            operation,
+            _all_checks(
+                _count_is(len(workload.records)),
+                _bibliography_output_matches(workload.records),
+            ),
+            source_format="csl_json",
+            citation_count=len(workload.records),
+        )
+
+    def prepare_bibliography_seen_render(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        source, style = _citeproc_source_and_style(workload)
+        citations = [_citeproc_citation([key]) for key in workload.keys]
+
+        def operation() -> OperationOutcome:
+            bibliography = _citeproc_processor(source, style)
+            for citation in citations:
+                bibliography.register(citation)
+                bibliography.cite(citation, lambda item: None)
+            bibliography.sort()
+            rows = [str(item) for item in bibliography.bibliography()]
+            return OperationOutcome("\n".join(rows), len(rows))
+
+        return _prepared(
+            "render-bibliography-seen",
             operation,
             _all_checks(
                 _count_is(len(workload.records)),
@@ -489,6 +700,61 @@ class BibtexparserAdapter(PackageAdapter):
 
         return _prepared("parse", operation, _count_is(len(workload.records)), setup_included=True)
 
+    def prepare_bibtex_recovery_parse(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        import bibtexparser
+
+        def operation() -> OperationOutcome:
+            try:
+                with workload.dirty_bibtex_path.open(encoding="utf-8") as handle:
+                    database = bibtexparser.load(handle)
+            except Exception as exc:
+                return OperationOutcome("", 0, _error_detail(exc))
+            return OperationOutcome(database, len(database.entries))
+
+        return _prepared(
+            "parse-recovery",
+            operation,
+            _recovery_parse_result(len(workload.records)),
+            source_format="dirty_bibtex",
+            setup_included=True,
+        )
+
+    def prepare_raw_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        def operation() -> OperationOutcome:
+            database = bibtexparser.loads(workload.raw_bibtex)
+            return OperationOutcome(database, len(database.entries))
+
+        return _prepared(
+            "raw-parse",
+            operation,
+            _count_is(len(workload.records)),
+            source_format="raw_bibtex",
+            setup_included=True,
+        )
+
+    def prepare_raw_bibtex_write(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        database = bibtexparser.loads(workload.raw_bibtex)
+        database.entries[0]["title"] = "Edited Benchmark Title"
+
+        def operation() -> OperationOutcome:
+            text = bibtexparser.dumps(database)
+            path = directory / f"bibtexparser-raw-write-{perf_counter_ns()}.bib"
+            path.write_text(text, encoding="utf-8")
+            return OperationOutcome(path, len(database.entries), path.name)
+
+        return _prepared(
+            "raw-write",
+            operation,
+            _raw_roundtrip_check(workload.keys),
+            source_format="raw_bibtex",
+        )
+
     def prepare_raw_bibtex_roundtrip(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
@@ -631,6 +897,25 @@ def _count_is(expected: int) -> Callable[[OperationOutcome], None]:
     return check
 
 
+def _count_at_least(minimum: int) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        if outcome.count < minimum:
+            raise AssertionError(f"expected count at least {minimum}, got {outcome.count}")
+
+    return check
+
+
+def _recovery_parse_result(expected: int) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        if outcome.count == expected:
+            return
+        if outcome.count == 0 and outcome.detail.startswith("error="):
+            return
+        raise AssertionError(f"expected {expected} recovered entries or recorded parse error")
+
+    return check
+
+
 def _keys_are(expected: list[str]) -> Callable[[OperationOutcome], None]:
     def check(outcome: OperationOutcome) -> None:
         if outcome.value != expected:
@@ -768,6 +1053,10 @@ def _detail_contains(needle: str) -> Callable[[OperationOutcome], None]:
             raise AssertionError(f"expected detail to contain {needle!r}")
 
     return check
+
+
+def _error_detail(exc: Exception) -> str:
+    return f"error={type(exc).__name__}: {exc!r}"
 
 
 def _raw_roundtrip_check(keys: list[str]) -> Callable[[OperationOutcome], None]:

@@ -35,9 +35,11 @@ class Workload:
     records: tuple[Record, ...]
     bibtex: str
     raw_bibtex: str
+    dirty_bibtex: str
     csl_json: list[dict[str, object]]
     bibtex_path: Path
     raw_bibtex_path: Path
+    dirty_bibtex_path: Path
 
     @property
     def keys(self) -> list[str]:
@@ -56,6 +58,8 @@ class Workload:
             return self.bibtex
         if source_format == "raw_bibtex":
             return self.raw_bibtex
+        if source_format == "dirty_bibtex":
+            return self.dirty_bibtex
         if source_format == "csl_json":
             return json.dumps(self.csl_json, sort_keys=True, separators=(",", ":"))
         return ""
@@ -87,18 +91,23 @@ def materialize_workload(size: str, directory: Path) -> Workload:
     records = records_for_size(size)
     bibtex = bibtex_for_records(records)
     raw_bibtex = raw_bibtex_for_records(records)
+    dirty_bibtex = dirty_bibtex_for_records(records)
     bibtex_path = directory / f"{size}.bib"
     raw_bibtex_path = directory / f"{size}-raw.bib"
+    dirty_bibtex_path = directory / f"{size}-dirty.bib"
     bibtex_path.write_text(bibtex, encoding="utf-8")
     raw_bibtex_path.write_text(raw_bibtex, encoding="utf-8")
+    dirty_bibtex_path.write_text(dirty_bibtex, encoding="utf-8")
     return Workload(
         size=size,
         records=records,
         bibtex=bibtex,
         raw_bibtex=raw_bibtex,
+        dirty_bibtex=dirty_bibtex,
         csl_json=csl_json_for_records(records),
         bibtex_path=bibtex_path,
         raw_bibtex_path=raw_bibtex_path,
+        dirty_bibtex_path=dirty_bibtex_path,
     )
 
 
@@ -114,6 +123,34 @@ def raw_bibtex_for_records(records: tuple[Record, ...]) -> str:
         "@preamble{Reference benchmark fixture}\n\n"
         f"{body}"
     )
+
+
+def dirty_bibtex_for_records(records: tuple[Record, ...]) -> str:
+    entries = [_bibtex_entry(record) for record in records]
+    if entries:
+        first = records[0]
+        entries[0] = (
+            f"@article{{{first.key},\n"
+            f"  author = {{{first.family}, {first.given}}},\n"
+            f"  title = {{{first.title}}},\n"
+            "  journal = JMLR # { Extra},\n"
+            f"  year = {{{first.year}}},\n"
+            "  month = {16},\n"
+            f"  volume = {{{first.volume}}},\n"
+            f"  pages = {{{first.page_start}-{first.page_end}}},\n"
+            f"  doi = {{{first.doi}}}\n"
+            "}"
+        )
+    duplicate = ""
+    if records:
+        duplicate = (
+            "\n\n"
+            f"@article{{{records[0].key},\n"
+            "  title = {Duplicate benchmark record},\n"
+            "  year = {2024}\n"
+            "}\n"
+        )
+    return "\n\n".join(entries) + "\n\n@broken{missing,\n  title = {No close}\n" + duplicate
 
 
 def csl_json_for_records(records: tuple[Record, ...]) -> list[dict[str, object]]:
