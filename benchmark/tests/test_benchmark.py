@@ -21,8 +21,9 @@ def test_refkit_public_helpers_are_covered_from_benchmark_subset(tmp_path: Path)
     assert rk.bibliography(path, style=style).text
     assert rk.__version__ == "0.0.0"
 
+    missing_attribute = "does_not_exist"
     with pytest.raises(AttributeError, match="does_not_exist"):
-        getattr(rk, "does_not_exist")
+        getattr(rk, missing_attribute)
 
 
 def test_audited_tiny_fixture_matches_generator() -> None:

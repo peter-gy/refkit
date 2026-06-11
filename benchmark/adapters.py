@@ -8,7 +8,6 @@ from typing import Any, cast
 
 from benchmark.fixtures import Workload
 
-
 OutcomeValue = object
 
 
@@ -58,7 +57,9 @@ class RefkitAdapter(PackageAdapter):
 
         return _prepared("parse", operation, _count_is(len(workload.records)))
 
-    def prepare_raw_bibtex_roundtrip(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_raw_bibtex_roundtrip(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import refkit as rk
 
         def operation() -> OperationOutcome:
@@ -96,7 +97,9 @@ class RefkitAdapter(PackageAdapter):
             rendered = document.bibliography(all=True)
             return OperationOutcome(rendered.text, len(workload.records))
 
-        return _prepared("render", operation, _text_contains_all([record.family for record in workload.records]))
+        return _prepared(
+            "render", operation, _text_contains_all([record.family for record in workload.records])
+        )
 
     def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
@@ -130,14 +133,20 @@ class RefkitAdapter(PackageAdapter):
 
         return _prepared("one-off-render", operation, _text_contains(workload.records[0].family))
 
-    def prepare_one_off_bibliography(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_one_off_bibliography(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import refkit as rk
 
         def operation() -> OperationOutcome:
             rendered = rk.bibliography(workload.bibtex_path, style="apa")
             return OperationOutcome(rendered.text, len(workload.records))
 
-        return _prepared("one-off-render", operation, _text_contains_all([record.family for record in workload.records]))
+        return _prepared(
+            "one-off-render",
+            operation,
+            _text_contains_all([record.family for record in workload.records]),
+        )
 
     def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
@@ -155,7 +164,9 @@ class RefkitAdapter(PackageAdapter):
 
         return _prepared("error", operation, _text_contains("missing-reference"))
 
-    def prepare_bulk_materialization(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_bulk_materialization(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import refkit as rk
 
         library = rk.Library.parse(workload.bibtex)
@@ -248,7 +259,9 @@ class CiteprocPyAdapter(PackageAdapter):
             rows = [str(item) for item in bibliography.bibliography()]
             return OperationOutcome("\n".join(rows), len(rows))
 
-        return _prepared("render", operation, _text_contains_all([record.family for record in workload.records]))
+        return _prepared(
+            "render", operation, _text_contains_all([record.family for record in workload.records])
+        )
 
     def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
         count = min(8, len(workload.keys))
@@ -259,7 +272,9 @@ class CiteprocPyAdapter(PackageAdapter):
             bibliography = _citeproc_processor(source, style)
             for citation in citations:
                 bibliography.register(citation)
-            rendered = [str(bibliography.cite(citation, lambda item: None)) for citation in citations]
+            rendered = [
+                str(bibliography.cite(citation, lambda item: None)) for citation in citations
+            ]
             return OperationOutcome("\n".join(rendered), len(rendered))
 
         return _prepared(
@@ -288,7 +303,9 @@ class CiteprocPyAdapter(PackageAdapter):
 
         return _prepared("one-off-render", operation, _text_contains(workload.records[0].family))
 
-    def prepare_one_off_bibliography(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_one_off_bibliography(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         def operation() -> OperationOutcome:
             from citeproc import CitationStylesStyle
             from citeproc.source.bibtex import BibTeX
@@ -302,7 +319,11 @@ class CiteprocPyAdapter(PackageAdapter):
             rows = [str(item) for item in bibliography.bibliography()]
             return OperationOutcome("\n".join(rows), len(rows))
 
-        return _prepared("one-off-render", operation, _text_contains_all([record.family for record in workload.records]))
+        return _prepared(
+            "one-off-render",
+            operation,
+            _text_contains_all([record.family for record in workload.records]),
+        )
 
     def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
         source, style = _citeproc_source_and_style(workload)
@@ -317,13 +338,18 @@ class CiteprocPyAdapter(PackageAdapter):
 
         return _prepared("error", operation, _detail_contains("missing-reference"))
 
-    def prepare_bulk_materialization(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_bulk_materialization(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         from citeproc.source.bibtex import BibTeX
 
         source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
 
         def operation() -> OperationOutcome:
-            rows = [{"key": key, "title": _first(dict(reference).get("title"))} for key, reference in source.items()]
+            rows = [
+                {"key": key, "title": _first(dict(reference).get("title"))}
+                for key, reference in source.items()
+            ]
             return OperationOutcome(rows, len(rows))
 
         return _prepared(
@@ -398,7 +424,9 @@ class BibtexparserAdapter(PackageAdapter):
 
         return _prepared("parse", operation, _count_is(len(workload.records)))
 
-    def prepare_raw_bibtex_roundtrip(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_raw_bibtex_roundtrip(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import bibtexparser
 
         def operation() -> OperationOutcome:
@@ -423,13 +451,17 @@ class BibtexparserAdapter(PackageAdapter):
     def prepare_one_off_cite(self, workload: Workload, directory: Path) -> PreparedOperation:
         raise UnsupportedOperation("bibtexparser does not render CSL citations")
 
-    def prepare_one_off_bibliography(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_one_off_bibliography(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         raise UnsupportedOperation("bibtexparser does not render CSL bibliographies")
 
     def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
         raise UnsupportedOperation("bibtexparser has no citation reference resolution step")
 
-    def prepare_bulk_materialization(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_bulk_materialization(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import bibtexparser
 
         database = bibtexparser.loads(workload.bibtex)

@@ -977,7 +977,7 @@ fn rendered_from_bibliography(
         }
         write_bibliography_item_text(item, &mut text)?;
 
-        render_bibliography_item_html(&item, &mut html)
+        render_bibliography_item_html(item, &mut html)
             .map_err(|err| RefkitError::new_err(err.to_string()))?;
     }
 

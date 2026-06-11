@@ -16,7 +16,6 @@ from typing import Any, TypedDict
 from benchmark.adapters import PackageAdapter, UnsupportedOperation, adapters
 from benchmark.fixtures import SIZES, materialize_workload
 
-
 NATIVE_ARTIFACT_NAMES = (
     "lib_native.dylib",
     "lib_native.so",
@@ -78,7 +77,9 @@ CASES: dict[str, CaseSpec] = {
     ),
     "citation_render": CaseSpec("citation_render", "render", "Render one APA citation."),
     "bibliography_render": CaseSpec("bibliography_render", "render", "Render an APA bibliography."),
-    "repeated_render": CaseSpec("repeated_render", "render", "Render repeated APA citations after setup."),
+    "repeated_render": CaseSpec(
+        "repeated_render", "render", "Render repeated APA citations after setup."
+    ),
     "one_off_cite": CaseSpec(
         "one_off_cite",
         "one-off",
@@ -89,14 +90,18 @@ CASES: dict[str, CaseSpec] = {
         "one-off",
         "Read a BibTeX file, load a style, and render an APA bibliography.",
     ),
-    "missing_reference": CaseSpec("missing_reference", "error", "Resolve one missing citation key."),
+    "missing_reference": CaseSpec(
+        "missing_reference", "error", "Resolve one missing citation key."
+    ),
     "bulk_materialization": CaseSpec(
         "bulk_materialization",
         "materialize",
         "Materialize parsed entries into Python-visible key and title rows.",
     ),
     "library_keys": CaseSpec("library_keys", "inspect", "Enumerate all citation keys after setup."),
-    "entry_lookup": CaseSpec("entry_lookup", "inspect", "Look up a fixed set of entries after setup."),
+    "entry_lookup": CaseSpec(
+        "entry_lookup", "inspect", "Look up a fixed set of entries after setup."
+    ),
     "field_projection": CaseSpec(
         "field_projection",
         "inspect",
@@ -134,10 +139,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run refkit citation benchmarks.")
     parser.add_argument("--list", action="store_true", help="List benchmark cases and exit.")
     parser.add_argument("--case", action="append", choices=sorted(CASES), help="Run one case.")
-    parser.add_argument("--group", default="all", help="Run cases from a group. Use all for every case.")
-    parser.add_argument("--input", action="append", choices=[*SIZES, "all"], help="Input size to run.")
+    parser.add_argument(
+        "--group", default="all", help="Run cases from a group. Use all for every case."
+    )
+    parser.add_argument(
+        "--input", action="append", choices=[*SIZES, "all"], help="Input size to run."
+    )
     parser.add_argument("--rounds", type=positive_int, default=5, help="Measured rounds per case.")
-    parser.add_argument("--warmups", type=non_negative_int, default=2, help="Warmup rounds per case.")
+    parser.add_argument(
+        "--warmups", type=non_negative_int, default=2, help="Warmup rounds per case."
+    )
     parser.add_argument("--json", help="Write JSON results to this path.")
     parser.add_argument("--csv", help="Write CSV result rows to this path.")
     parser.add_argument(
@@ -232,9 +243,27 @@ def run_adapter_case(
     try:
         prepared = adapter.prepare(case.name, workload, directory)
     except UnsupportedOperation as exc:
-        return [{**base, "phase": "unsupported", "round": 0, "seconds": 0.0, "status": "unsupported", "detail": exc.reason}]
+        return [
+            {
+                **base,
+                "phase": "unsupported",
+                "round": 0,
+                "seconds": 0.0,
+                "status": "unsupported",
+                "detail": exc.reason,
+            }
+        ]
     except Exception as exc:
-        return [{**base, "phase": "setup", "round": 0, "seconds": 0.0, "status": "failed", "detail": repr(exc)}]
+        return [
+            {
+                **base,
+                "phase": "setup",
+                "round": 0,
+                "seconds": 0.0,
+                "status": "failed",
+                "detail": repr(exc),
+            }
+        ]
 
     for _ in range(warmups):
         try:

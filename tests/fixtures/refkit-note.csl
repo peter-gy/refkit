@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0"
+  default-locale="en-US">
+  <info>
+    <title>Refkit Note Fixture</title>
+    <id>https://refkit.example/styles/refkit-note-fixture</id>
+    <link href="https://refkit.example/styles/refkit-note-fixture" rel="self" />
+    <category citation-format="note" />
+    <category field="generic-base" />
+    <summary>Minimal note style used by refkit's public loader tests.</summary>
+    <updated>2026-06-11T00:00:00+00:00</updated>
+  </info>
+  <macro name="author">
+    <names variable="author">
+      <name and="text" delimiter=", " />
+      <substitute>
+        <text variable="title" />
+      </substitute>
+    </names>
+  </macro>
+  <citation>
+    <layout suffix=".">
+      <group delimiter=", ">
+        <text macro="author" />
+        <text variable="title" quotes="true" />
+        <date variable="issued">
+          <date-part name="year" />
+        </date>
+      </group>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout suffix=".">
+      <group delimiter=", ">
+        <text macro="author" />
+        <text variable="title" />
+        <date variable="issued">
+          <date-part name="year" />
+        </date>
+      </group>
+    </layout>
+  </bibliography>
+</style>

@@ -3,6 +3,8 @@ name = "refkit"
 version = "0.0.0"
 description = "Fast Python citation parsing, rendering, and BibTeX editing backed by Rust"
 readme = "README.md"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-APACHE", "LICENSE-MIT"]
 authors = [
     { name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }
 ]
@@ -10,6 +12,7 @@ requires-python = ">=3.11,<3.15"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
@@ -37,6 +40,7 @@ strip = true
 dev = [
     { include-group = "benchmark" },
     "maturin>=1.9,<2",
+    "pyrefly>=1.0.0",
     "pytest>=9.0.3",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.16",
@@ -64,6 +68,41 @@ addopts = [
 [tool.coverage.run]
 omit = ["benchmark/tests/*"]
 
+[tool.pyrefly]
+project-includes = ["src/refkit", "tests", "benchmark"]
+project-excludes = [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "**/.venv",
+    "**/build",
+    "**/dist",
+    "**/target",
+]
+python-version = "3.11"
+search-path = ["src", "."]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "B",
+    "C4",
+    "E",
+    "F",
+    "I",
+    "PERF",
+    "PIE",
+    "PYI",
+    "T10",
+    "T20",
+    "UP",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["benchmark", "refkit", "tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"benchmark/runner.py" = ["T201"]

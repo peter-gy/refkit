@@ -2,12 +2,14 @@
 name = "refkit"
 version = "0.0.0"
 edition = "2024"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 readme = "README.md"
 description = "Python bindings for fast citation parsing, rendering, and BibTeX editing"
 repository = "https://github.com/petergy/refkit"
 include = [
     "/Cargo.toml",
+    "/LICENSE-APACHE",
+    "/LICENSE-MIT",
     "/pyproject.toml",
     "/README.md",
     "/src",

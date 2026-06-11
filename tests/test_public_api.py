@@ -7,7 +7,6 @@ import pytest
 
 import refkit as rk
 
-
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -129,8 +128,9 @@ def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
 def test_version_and_missing_module_attribute() -> None:
     assert rk.__version__ == "0.0.0"
 
+    missing_attribute = "does_not_exist"
     with pytest.raises(AttributeError, match="has no attribute"):
-        getattr(rk, "does_not_exist")
+        getattr(rk, missing_attribute)
 
 
 def test_rendered_html_escapes_bibliography_data(tmp_path: Path) -> None:
@@ -209,6 +209,101 @@ def test_library_reads_yml() -> None:
 
     assert "doe2024" in library
     assert library["doe2024"].title == "Refkit for Bibliographies"
+
+
+def test_library_reads_hayagriva_yaml_schema_and_selectors(tmp_path: Path) -> None:
+    source = (FIXTURES / "hayagriva-rich.yaml").read_text(encoding="utf-8")
+    library = rk.Library.read(FIXTURES / "hayagriva-rich.yaml")
+
+    assert library.keys() == ["zygos", "kinetics", "wwdc-network"]
+    assert [entry.key for entry in library.select("article > periodical[volume]")] == ["kinetics"]
+    assert [entry.key for entry in library.select("article > (conference & video)")] == [
+        "wwdc-network"
+    ]
+    projected = library.project(["key", "title", "doi", "volume"], keys=["kinetics"])
+    assert projected == [
+        {
+            "key": "kinetics",
+            "title": (
+                "Kinetics and luminescence of the excitations of a nonequilibrium "
+                "polariton condensate"
+            ),
+            "doi": "10.1103/PhysRevB.102.165126",
+            "volume": "102",
+        }
+    ]
+
+    exported = {entry["key"]: entry for entry in library.to_dicts()}
+    assert exported["zygos"]["parent"]["type"] == "proceedings"
+    assert exported["wwdc-network"]["parent"][1]["type"] == "video"
+    assert exported["wwdc-network"]["parent"][1]["url"]["date"] == "2020-09-17"
+
+    yml_path = tmp_path / "hayagriva-rich.yml"
+    yml_path.write_text(source, encoding="utf-8")
+    assert rk.Library.read(yml_path).keys() == library.keys()
+    assert rk.Library.parse(source, format="yaml").keys() == library.keys()
+    assert rk.Library.parse(source, format="yml").keys() == library.keys()
+
+
+def test_library_reads_bibtex_and_biblatex_aliases() -> None:
+    source = (FIXTURES / "typst-biblatex.bib").read_text(encoding="utf-8")
+    read_library = rk.Library.read(FIXTURES / "typst-biblatex.bib")
+
+    assert read_library["biblatex2023"].title == "The biblatex Package"
+    assert read_library["arrgh"].parent is not None
+    assert read_library["arrgh"].parent.title == "Journal of Political Economy"
+    assert read_library["arrgh"].volume == "115"
+    assert read_library["tolkien54"].parent is not None
+    assert read_library["tolkien54"].parent.title == "The Lord of the Rings"
+
+    for format_name in ["bib", "bibtex", "biblatex"]:
+        library = rk.Library.parse(source, format=format_name)
+        assert library["arrgh"].volume == "115"
+        assert library.project(["key", "title", "volume"], keys=["tolkien54"]) == [
+            {
+                "key": "tolkien54",
+                "title": "The Fellowship of the Ring",
+                "volume": "1",
+            }
+        ]
+
+
+def test_library_reports_unsupported_read_extension_and_parse_format(tmp_path: Path) -> None:
+    source = tmp_path / "refs.json"
+    source.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(rk.RefkitError, match='unsupported bibliography extension "json"'):
+        rk.Library.read(source)
+
+    with pytest.raises(rk.RefkitError, match='unsupported bibliography format "json"'):
+        rk.Library.parse("{}", format="json")
+
+
+def test_style_and_locale_loaders_cover_supported_sources() -> None:
+    xml = (FIXTURES / "refkit-note.csl").read_text(encoding="utf-8")
+
+    bundled = rk.Style.load("apa")
+    from_xml = rk.Style.from_xml(xml)
+    from_path = rk.Style.from_path(FIXTURES / "refkit-note.csl")
+    locale = rk.Locale.load("en-US")
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    document = rk.Document(library, bundled, locale=locale)
+
+    assert bundled.id == "apa"
+    assert bundled.title == "APA Style 7th edition"
+    assert from_xml.id == "xml"
+    assert from_xml.title == "Refkit Note Fixture"
+    assert from_path.id.endswith("refkit-note.csl")
+    assert from_path.title == "Refkit Note Fixture"
+    assert locale.code == "en-US"
+    assert "Doe" in document.cite("doe2024").text
+
+    with pytest.raises(ValueError, match="unknown bundled style"):
+        rk.Style.load("unknown-style")
+    with pytest.raises(ValueError, match="invalid CSL XML"):
+        rk.Style.from_xml("<style/>")
+    with pytest.raises(ValueError, match="unknown bundled locale"):
+        rk.Locale.load("zz-ZZ")
 
 
 def test_library_non_strict_keeps_valid_bibtex_entries_with_diagnostics(tmp_path: Path) -> None:
@@ -470,6 +565,33 @@ def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path)
     assert "Old Title" not in text
     assert "journal = jcs" in text
     assert "journal = {jcs}" not in text
+
+
+def test_raw_bib_document_preserves_typst_biblatex_blocks(tmp_path: Path) -> None:
+    raw = rk.BibDocument.read(FIXTURES / "typst-raw.bib")
+
+    assert raw.comments[0].startswith("@comment")
+    assert any(comment.startswith("% Comments before") for comment in raw.comments)
+    assert raw.strings["benchjournal"] == "Journal of Citation Benchmarks"
+    assert raw.preamble == '"Reference " # "fixture"'
+    assert raw.entries.keys() == ["fischer2022equivalence", "roes2003belief"]
+    assert raw.entries["roes2003belief"].span[0] < raw.entries["roes2003belief"].span[1]
+    assert raw.failed_blocks[0]["kind"] == "failed"
+    assert "field author is missing '='" in raw.failed_blocks[0]["error"]
+
+    raw.entries["roes2003belief"].fields["title"].value = "Edited belief title"
+    output = tmp_path / "typst-raw-out.bib"
+    raw.write(output)
+
+    text = output.read_text(encoding="utf-8")
+    assert "@comment{thisdoesntmatter" in text
+    assert "% Comments before the entry work" in text
+    assert "@string{benchjournal" in text
+    assert '@preamble{"Reference " # "fixture"}' in text
+    assert "Edited belief title" in text
+    assert "Belief in moralizing gods" not in text
+    assert "@inproceedings{conigliocorbalan" in text
+    assert "author    {Marcelo Coniglio and Maria Corbalan}" in text
 
 
 def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers() -> None:

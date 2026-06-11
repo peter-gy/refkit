@@ -31,6 +31,8 @@ enum RawValueMode {
     Quoted,
 }
 
+type ParsedValue = (String, usize, Option<Range<usize>>, RawValueMode);
+
 #[derive(Debug, Clone)]
 struct RawEntryData {
     key: String,
@@ -855,11 +857,7 @@ fn find_recovery_block_start(source: &str, start: usize) -> Option<usize> {
     None
 }
 
-fn parse_value(
-    body: &str,
-    start: usize,
-    body_offset: usize,
-) -> Result<(String, usize, Option<Range<usize>>, RawValueMode), String> {
+fn parse_value(body: &str, start: usize, body_offset: usize) -> Result<ParsedValue, String> {
     let first = parse_value_atom(body, start, body_offset)?;
     let mut cursor = first.1;
     let mut expression_cursor = cursor;
@@ -885,11 +883,7 @@ fn parse_value(
     ))
 }
 
-fn parse_value_atom(
-    body: &str,
-    start: usize,
-    body_offset: usize,
-) -> Result<(String, usize, Option<Range<usize>>, RawValueMode), String> {
+fn parse_value_atom(body: &str, start: usize, body_offset: usize) -> Result<ParsedValue, String> {
     let Some(ch) = body[start..].chars().next() else {
         return Err("field value is missing".to_string());
     };

@@ -12,12 +12,12 @@ from ._native import (
     BibField,
     BibFieldMap,
     Cite,
-    RefkitError,
     Document,
     Entry,
     Library,
     Locale,
     MissingReferenceError,
+    RefkitError,
     Rendered,
     Style,
 )
