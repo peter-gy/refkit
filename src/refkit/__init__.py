@@ -1,7 +1,10 @@
-"""Fast citation parsing, rendering, and BibTeX editing."""
+"""Citation parsing, rendering, and BibTeX editing."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _metadata_version
 from os import PathLike
 from typing import Any
 
@@ -21,6 +24,14 @@ from ._native import (
     Rendered,
     Style,
 )
+from ._native import (
+    __version__ as _native_version,
+)
+
+try:
+    __version__ = _metadata_version("refkit")
+except PackageNotFoundError:
+    __version__ = _native_version
 
 __all__ = [
     "BibDocument",
@@ -39,17 +50,18 @@ __all__ = [
     "Style",
     "bibliography",
     "cite",
+    "__version__",
 ]
 
 
 def cite(
     source: str | PathLike[str],
-    item: str | Cite | list[str | Cite],
+    item: str | Cite | Iterable[str | Cite],
     *,
     style: str | Style = "apa",
     locale: str | Locale | None = "en-US",
 ) -> Rendered:
-    """Render one citation from `source`."""
+    """Read `source` and render one citation group."""
 
     library = Library.read(source)
     loaded_style = Style.load(style) if isinstance(style, str) else style
@@ -62,7 +74,7 @@ def bibliography(
     style: str | Style = "apa",
     locale: str | Locale | None = "en-US",
 ) -> Rendered:
-    """Render a bibliography for every entry in `source`."""
+    """Read `source` and render every entry as a bibliography."""
 
     library = Library.read(source)
     loaded_style = Style.load(style) if isinstance(style, str) else style
@@ -71,6 +83,4 @@ def bibliography(
 
 
 def __getattr__(name: str) -> Any:
-    if name == "__version__":
-        return "0.0.0"
     raise AttributeError(f"module 'refkit' has no attribute {name!r}")

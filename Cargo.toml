@@ -2,6 +2,7 @@
 name = "refkit"
 version = "0.0.0"
 edition = "2024"
+rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 description = "Python bindings for fast citation parsing, rendering, and BibTeX editing"

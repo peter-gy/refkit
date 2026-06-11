@@ -63,8 +63,8 @@ Evidence paths are relative to the corresponding project root.
 | Failed parse blocks | No. | No. | Yes. `ParsingFailedBlock`, `MiddlewareErrorBlock`, and duplicate-key error blocks are exposed through `failed_blocks`. | Yes. `BibDocument.failed_blocks` reports malformed raw blocks with raw text, error, and byte span. |
 | Raw text access | No. | No. | Yes. Blocks expose `raw`, with a middleware caveat that it may become stale after transforms. | Partial. `BibDocument.blocks` includes raw text for comments, failed blocks, and other raw text. Entry field writes use the original entry raw span. |
 | Source position metadata | No. | Partial. lxml elements and BibTeX internals can carry source lines. No raw document API exposes spans. | Partial. Blocks and fields expose start line. | Yes. Blocks, entries, and fields expose byte spans. |
-| Duplicate key handling in raw document | No. | No raw document model. | Yes. Duplicates become `DuplicateBlockKeyBlock` unless configured to raise. | Partial. Raw blocks are preserved on write. The public entry map points to the later duplicate key and does not expose a duplicate-key block object. |
-| Duplicate field handling | No. | No raw document model. | Yes. Duplicate fields can become `DuplicateFieldKeyBlock`. | Partial. The parser stores one field per normalized field key. The raw block is still preserved unless a field is edited. |
+| Duplicate key handling in raw document | No. | No raw document model. | Yes. Duplicates become `DuplicateBlockKeyBlock` unless configured to raise. | Yes. Raw blocks are preserved on write. Direct `entries[key]` lookup raises when the key is ambiguous, and `entries.get_all(key)` exposes source-order occurrences. |
+| Duplicate field handling | No. | No raw document model. | Yes. Duplicate fields can become `DuplicateFieldKeyBlock`. | Yes. Direct `fields[name]` lookup raises when the field is ambiguous, and `fields.get_all(name)` exposes source-order occurrences for targeted edits. |
 | Field value edit | No. | No. | Yes through entry field mutation and writer output. | Yes. `BibField.value` updates a field and `BibDocument.write` rewrites only changed field spans. |
 | Add or remove fields | No. | No. | Yes. `Entry.set_field`, `pop`, item assignment, and deletion are available. | No current public API. |
 | Add, remove, replace, or reorder blocks | No. | No. | Yes. `Library.add`, `remove`, and `replace` exist. Sorting middleware can reorder blocks. | No current public API. |
@@ -160,7 +160,7 @@ Evidence paths are relative to the corresponding project root.
 | Custom output formatter | Yes by adding output format specs to `CSL.Output.Formats`. | Yes. Formatter modules define style wrappers and can be swapped. | Writer formatting only. | No current public formatter API. |
 | Type information for Python consumers | No. JavaScript package. | No type stubs found in inspected source. | Yes. `py.typed` is packaged. | Yes. `__init__.pyi` and typed package metadata are present. |
 | Rust-backed parsing and rendering | No. | No. | No. | Yes. Native module uses PyO3, maturin, Hayagriva, and BibLaTeX crates. |
-| GIL release for heavy work | Not applicable. | No. Pure Python and lxml. | No. Pure Python. | Partial. `Library.read` detaches while parsing. Other heavy operations can be expanded to the same pattern. |
+| GIL release for heavy work | Not applicable. | No. Pure Python and lxml. | No. Pure Python. | Yes for current heavy paths. `Library.read`, `Document.cite`, `Document.bibliography`, rendered tree serialization, and `BibDocument.write` detach after Python inputs are converted to Rust-owned state. |
 | Zero dependency Python runtime | No. JavaScript runtime. | No. Requires lxml. | No. Requires pylatexenc. | Yes for Python dependencies. Native wheel carries Rust code. |
 
 ## Errors, Diagnostics, And Validation
@@ -182,7 +182,7 @@ Evidence paths are relative to the corresponding project root.
 | Import name | `CSL` from bundled JS or CommonJS module. | `citeproc`. | `bibtexparser`. | `refkit`. |
 | Version from inspected metadata | 2.4.63. | Versioneer-managed. | 2.0.0b9. | 0.0.0. |
 | Python version support | Not applicable. | Python 3.9 and newer, classifiers through 3.13. | Python 3.9 and newer, classifiers through 3.12. | Python 3.11 to 3.14. |
-| License from inspected metadata | CPAL-1.0 or AGPL-1.0. | BSD-2-Clause-Views. | MIT. | MIT. |
+| License from inspected metadata | CPAL-1.0 or AGPL-1.0. | BSD-2-Clause-Views. | MIT. | MIT OR Apache-2.0. |
 | Build system | JavaScript package and repo build scripts. | setuptools with versioneer and schema conversion. | setuptools. | maturin with PyO3. |
 
 ## What refkit Unifies Today
@@ -197,19 +197,23 @@ refkit already covers the main overlap that requires two Python packages today:
 | Repair a `.bib` title while keeping comments and malformed blocks | python-bibtexparser can preserve and write blocks. citeproc-py does not expose raw editing. | `BibDocument.read`, field mutation through `BibField.value`, and `BibDocument.write`. |
 | Query normalized parent relationships | citeproc-py and python-bibtexparser expose Python iteration. No selector language was found. | `Library.select("article > periodical[volume]")`. |
 
+## Migration Paths
+
+The [migration guide](migration.md) gives concrete replacements for common citeproc-py rendering flows and python-bibtexparser raw repair flows. The [API contracts guide](api-contracts.md) defines one-off helper inputs, structured return shapes, raw block records, and public errors.
+
 ## Current refkit Gaps
 
-These gaps are current product boundaries, not hidden implementation details.
+Use the reference package named in the last column when a workflow needs one of these contracts.
 
 | Area | Gap | Reference package with broader coverage |
 | --- | --- | --- |
-| Dynamic word-processor workflows | refkit does not expose citation IDs, insert-before and insert-after context, preview without mutation, state rebuild, uncited item APIs, or paged bibliography output. | citeproc-js. |
-| CSL-M and legal citation extensions | refkit has no public jurisdiction module, abbreviation, multilingual preference, or CSL-M extension API. | citeproc-js. |
-| Full CSL compatibility claim | refkit relies on Hayagriva and has smoke and regression tests. It does not claim full citeproc-test-suite parity. | citeproc-js is the strongest reference from inspected docs. |
-| Raw BibTeX transform pipeline | refkit preserves raw blocks and edits existing field values. It does not expose add, remove, reorder, formatting presets, middleware, LaTeX transforms, month transforms, or name transforms. | python-bibtexparser. |
-| CSL JSON import and export | refkit does not currently expose `from_csl_json` or `to_csl_json`. | citeproc-py imports citeproc-js-like JSON. citeproc-js consumes host-supplied CSL item objects. |
-| Output formats | refkit exposes text, HTML, and tree. | citeproc-js adds RTF, AsciiDoc, and FO. citeproc-py adds RST. |
-| Prefix and suffix on cite items | refkit `Cite` currently supports key, locator, and label. | citeproc-js and citeproc-py. |
+| Dynamic word-processor workflows | Citation IDs, insert-before and insert-after context, preview without mutation, state rebuild, uncited item APIs, and paged bibliography output. | citeproc-js. |
+| CSL-M and legal citation extensions | Jurisdiction modules, abbreviation hooks, multilingual preferences, and CSL-M extension APIs. | citeproc-js. |
+| Full CSL compatibility claim | Full citeproc-test-suite parity. Refkit uses Hayagriva and covers smoke plus regression behavior. | citeproc-js is the strongest reference from inspected docs. |
+| Raw BibTeX transform pipeline | Add, remove, reorder, formatting presets, middleware, LaTeX transforms, month transforms, and name transforms. Refkit preserves raw blocks and edits existing field values. | python-bibtexparser. |
+| CSL JSON import and export | `from_csl_json` and `to_csl_json` style workflows. | citeproc-py imports citeproc-js-like JSON. citeproc-js consumes host-supplied CSL item objects. |
+| Output formats | RTF, AsciiDoc, Formatting Objects, and reStructuredText. Refkit exposes text, HTML, and tree. | citeproc-js for RTF, AsciiDoc, and FO. citeproc-py for RST. |
+| Prefix and suffix on cite items | Prefix and suffix fields on individual cite items. Refkit `Cite` supports key, locator, and label. | citeproc-js and citeproc-py. |
 
 ## Evidence Map
 

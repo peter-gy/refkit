@@ -28,8 +28,22 @@ RESULT_FIELDS = [
     "group",
     "package",
     "package_version",
+    "adapter_version",
     "phase",
+    "operation_phase",
     "input",
+    "input_size",
+    "workload_family",
+    "record_count",
+    "input_bytes",
+    "input_sha256",
+    "source_format",
+    "citation_count",
+    "setup_included",
+    "setup_seconds",
+    "operation_count",
+    "rounds",
+    "warmups",
     "round",
     "seconds",
     "status",
@@ -239,14 +253,24 @@ def run_adapter_case(
     warmups: int,
     metadata: Metadata,
 ) -> list[Row]:
-    base = base_row(adapter, case, workload.size, metadata)
+    base = base_row(adapter, case, workload, metadata, rounds, warmups)
+    setup_start = perf_counter()
     try:
         prepared = adapter.prepare(case.name, workload, directory)
     except UnsupportedOperation as exc:
+        setup_seconds = perf_counter() - setup_start
         return [
             {
                 **base,
                 "phase": "unsupported",
+                "operation_phase": "unsupported",
+                "source_format": "unsupported",
+                "input_bytes": 0,
+                "input_sha256": "",
+                "citation_count": 0,
+                "setup_included": False,
+                "setup_seconds": setup_seconds,
+                "operation_count": 0,
                 "round": 0,
                 "seconds": 0.0,
                 "status": "unsupported",
@@ -254,16 +278,27 @@ def run_adapter_case(
             }
         ]
     except Exception as exc:
+        setup_seconds = perf_counter() - setup_start
         return [
             {
                 **base,
                 "phase": "setup",
+                "operation_phase": "setup",
+                "source_format": "unknown",
+                "input_bytes": 0,
+                "input_sha256": "",
+                "citation_count": 0,
+                "setup_included": True,
+                "setup_seconds": setup_seconds,
+                "operation_count": 0,
                 "round": 0,
                 "seconds": 0.0,
                 "status": "failed",
                 "detail": repr(exc),
             }
         ]
+    setup_seconds = perf_counter() - setup_start
+    operation_fields = prepared_row_fields(prepared, workload, setup_seconds)
 
     for _ in range(warmups):
         try:
@@ -273,6 +308,7 @@ def run_adapter_case(
             return [
                 {
                     **base,
+                    **operation_fields,
                     "phase": prepared.phase,
                     "round": 0,
                     "seconds": 0.0,
@@ -291,11 +327,13 @@ def run_adapter_case(
             rows.append(
                 {
                     **base,
+                    **operation_fields,
                     "phase": prepared.phase,
                     "round": round_index,
                     "seconds": seconds,
                     "status": "ok",
                     "detail": outcome.detail,
+                    "operation_count": outcome.count,
                 }
             )
         except Exception as exc:
@@ -303,6 +341,7 @@ def run_adapter_case(
             rows.append(
                 {
                     **base,
+                    **operation_fields,
                     "phase": prepared.phase,
                     "round": round_index,
                     "seconds": seconds,
@@ -317,21 +356,48 @@ def run_adapter_case(
 def base_row(
     adapter: PackageAdapter,
     case: CaseSpec,
-    input_size: str,
+    workload: Any,
     metadata: Metadata,
+    rounds: int,
+    warmups: int,
 ) -> Row:
+    adapter_version = package_version(adapter.distribution)
     return {
         "case": case.name,
         "group": case.group,
         "package": adapter.name,
-        "package_version": package_version(adapter.distribution),
-        "input": input_size,
+        "package_version": adapter_version,
+        "adapter_version": adapter_version,
+        "input": workload.size,
+        "input_size": workload.size,
+        "workload_family": workload.family,
+        "record_count": workload.record_count,
+        "rounds": rounds,
+        "warmups": warmups,
         "python": metadata["python"],
         "os": metadata["os"],
         "cpu": metadata["cpu"],
         "refkit_version": metadata["packages"].get("refkit", "unknown"),
         "refkit_commit": metadata["refkit_commit"],
         "build_mode": metadata["build_mode"],
+    }
+
+
+def prepared_row_fields(
+    prepared: Any,
+    workload: Any,
+    setup_seconds: float,
+) -> Row:
+    source_format = str(prepared.metadata.get("source_format", "unknown"))
+    return {
+        "operation_phase": prepared.phase,
+        "input_bytes": workload.source_byte_count(source_format),
+        "input_sha256": workload.source_sha256(source_format),
+        "source_format": source_format,
+        "citation_count": int(prepared.metadata.get("citation_count", 0)),
+        "setup_included": bool(prepared.metadata.get("setup_included", False)),
+        "setup_seconds": setup_seconds,
+        "operation_count": 0,
     }
 
 
@@ -348,7 +414,6 @@ def machine_metadata(build_mode: str = "auto") -> Metadata:
             "citeproc-py": package_version("citeproc-py"),
             "bibtexparser": package_version("bibtexparser"),
             "citeproc-py-styles": package_version("citeproc-py-styles"),
-            "pyperf": package_version("pyperf"),
         },
     }
 

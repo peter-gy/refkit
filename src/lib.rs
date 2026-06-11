@@ -1,7 +1,9 @@
+mod public_strings;
 mod raw;
+mod rendered;
+mod style_analysis;
 
-use std::collections::HashMap;
-use std::fmt::{self, Write as _};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -9,13 +11,12 @@ use std::sync::{Arc, OnceLock};
 
 use hayagriva::citationberg::taxonomy::Locator as CslLocator;
 use hayagriva::citationberg::{
-    Display, FontStyle, FontVariant, FontWeight, IndependentStyle, Locale as CslLocale, LocaleCode,
-    Style as CslStyle, TextDecoration, VerticalAlign,
+    IndependentStyle, Locale as CslLocale, LocaleCode, Style as CslStyle,
 };
 use hayagriva::{
     BibliographyDriver, BibliographyRequest, BufWriteFormat, CitationItem, CitationRequest,
-    ElemChild, ElemChildren, Entry as HayEntry, Library as HayLibrary, LocatorPayload,
-    RenderedCitation, Selector, SpecificLocator, archive,
+    Entry as HayEntry, Library as HayLibrary, LocatorPayload, Selector, SpecificLocator, archive,
+    standalone_citation,
 };
 use pyo3::create_exception;
 use pyo3::exceptions::{PyException, PyKeyError, PyTypeError, PyValueError};
@@ -23,8 +24,17 @@ use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyAny, PyDict, PyDictMethods, PyList, PyListMethods, PyModule};
 use pyo3::{IntoPyObjectExt, intern};
-use serde::Serialize;
 use serde_json::{Value, json};
+
+use public_strings::{entry_type_name, option_quoted, quoted};
+use rendered::{
+    Rendered, RenderedTree, elem_children_to_html, elem_children_to_string,
+    rendered_from_bibliography, rendered_from_citation,
+};
+use style_analysis::{
+    can_fast_render_single_citations, citation_depends_on_subsequent_names, citation_only_style,
+    full_history_citation_style,
+};
 
 create_exception!(refkit, RefkitError, PyException);
 create_exception!(refkit, MissingReferenceError, RefkitError);
@@ -62,7 +72,7 @@ struct EntryData {
 impl EntryData {
     fn new(inner: HayEntry) -> Self {
         let key = inner.key().to_string();
-        let entry_type = format!("{:?}", inner.entry_type());
+        let entry_type = entry_type_name(inner.entry_type()).to_string();
         let title = inner.title().map(ToString::to_string);
         let volume = inner
             .volume()
@@ -359,8 +369,9 @@ impl Entry {
 
     fn __repr__(&self) -> String {
         format!(
-            "Entry(key={:?}, type={:?})",
-            self.data.key, self.data.entry_type
+            "Entry(key={}, type={})",
+            quoted(&self.data.key),
+            quoted(&self.data.entry_type)
         )
     }
 }
@@ -376,8 +387,10 @@ pub struct Style {
 impl Style {
     #[staticmethod]
     fn load(name: &str) -> PyResult<Self> {
-        let archived = archive::ArchivedStyle::by_name(&name.to_ascii_lowercase())
-            .ok_or_else(|| PyValueError::new_err(format!("unknown bundled style {name:?}")))?;
+        let archived =
+            archive::ArchivedStyle::by_name(&name.to_ascii_lowercase()).ok_or_else(|| {
+                PyValueError::new_err(format!("unknown bundled style {}", quoted(name)))
+            })?;
         let style = archived.get();
         independent_style(name.to_string(), style)
     }
@@ -409,7 +422,11 @@ impl Style {
     }
 
     fn __repr__(&self) -> String {
-        format!("Style(id={:?}, title={:?})", self.id, self.title())
+        format!(
+            "Style(id={}, title={})",
+            quoted(&self.id),
+            quoted(&self.title())
+        )
     }
 }
 
@@ -433,7 +450,9 @@ impl Locale {
                     .map(|lang| lang.0.clone())
                     .unwrap_or_else(|| code.to_string()),
             })
-            .ok_or_else(|| PyValueError::new_err(format!("unknown bundled locale {code:?}")))
+            .ok_or_else(|| {
+                PyValueError::new_err(format!("unknown bundled locale {}", quoted(code)))
+            })
     }
 
     #[getter]
@@ -442,7 +461,7 @@ impl Locale {
     }
 
     fn __repr__(&self) -> String {
-        format!("Locale(code={:?})", self.code)
+        format!("Locale(code={})", quoted(&self.code))
     }
 }
 
@@ -471,82 +490,11 @@ impl Cite {
 
     fn __repr__(&self) -> String {
         format!(
-            "Cite(key={:?}, locator={:?}, label={:?})",
-            self.key, self.locator, self.label
+            "Cite(key={}, locator={}, label={})",
+            quoted(&self.key),
+            option_quoted(self.locator.as_deref()),
+            option_quoted(self.label.as_deref())
         )
-    }
-}
-
-#[pyclass(module = "refkit", skip_from_py_object)]
-pub struct Rendered {
-    #[pyo3(get)]
-    text: String,
-    #[pyo3(get)]
-    html: String,
-    tree: RenderedTree,
-    tree_json: OnceLock<String>,
-}
-
-enum RenderedTree {
-    Empty,
-    Citation(ElemChildren),
-    Bibliography(Vec<hayagriva::BibliographyItem>),
-}
-
-#[pymethods]
-impl Rendered {
-    #[getter]
-    fn tree(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        json_to_py(py, self.tree_json())
-    }
-
-    fn to_text(&self) -> String {
-        self.text.clone()
-    }
-
-    fn to_html(&self) -> String {
-        self.html.clone()
-    }
-
-    fn to_tree(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.tree(py)
-    }
-
-    fn __repr__(&self) -> String {
-        format!("Rendered(text={:?})", preview(&self.text))
-    }
-}
-
-impl Rendered {
-    fn new(text: String, html: String, tree: RenderedTree) -> Self {
-        Self {
-            text,
-            html,
-            tree,
-            tree_json: OnceLock::new(),
-        }
-    }
-
-    fn tree_json(&self) -> &str {
-        self.tree_json
-            .get_or_init(|| rendered_tree_to_json(&self.tree))
-            .as_str()
-    }
-}
-
-fn rendered_tree_to_json(tree: &RenderedTree) -> String {
-    match tree {
-        RenderedTree::Empty => "[]".to_string(),
-        RenderedTree::Citation(children) => serde_json::to_string(&children_to_tree(children))
-            .expect("rendered citation tree is JSON serializable"),
-        RenderedTree::Bibliography(items) => {
-            let tree_items = items
-                .iter()
-                .map(bibliography_item_to_tree)
-                .collect::<Vec<_>>();
-            serde_json::to_string(&tree_items)
-                .expect("rendered bibliography tree is JSON serializable")
-        }
     }
 }
 
@@ -604,7 +552,8 @@ fn parse_project_field(field: &str) -> PyResult<ProjectField> {
         "doi" => Ok(ProjectField::Doi),
         "volume" => Ok(ProjectField::Volume),
         _ => Err(PyValueError::new_err(format!(
-            "unsupported projection field {field:?}"
+            "unsupported projection field {}",
+            quoted(field)
         ))),
     }
 }
@@ -691,8 +640,30 @@ fn project_common_entry(py: Python<'_>, entry: &EntryData) -> PyResult<Py<PyAny>
 pub struct Document {
     library: Arc<HayLibrary>,
     style: Arc<IndependentStyle>,
+    citation_style: Arc<IndependentStyle>,
+    standalone_style: Arc<IndependentStyle>,
     locale: Option<String>,
     citations: Vec<Vec<Cite>>,
+    fast_cite: FastCitationState,
+}
+
+#[derive(Clone)]
+struct FastCitationState {
+    enabled: bool,
+    key_by_text: HashMap<String, String>,
+    seen_keys: HashSet<String>,
+    subsequent_name_rules: bool,
+}
+
+impl FastCitationState {
+    fn new(style: &IndependentStyle) -> Self {
+        Self {
+            enabled: can_fast_render_single_citations(style),
+            key_by_text: HashMap::new(),
+            seen_keys: HashSet::new(),
+            subsequent_name_rules: citation_depends_on_subsequent_names(style),
+        }
+    }
 }
 
 #[pymethods]
@@ -700,37 +671,29 @@ impl Document {
     #[new]
     #[pyo3(signature = (library, style, locale = None))]
     fn new(library: &Library, style: &Style, locale: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let citation_style = full_history_citation_style(style.inner.as_ref())
+            .map(Arc::new)
+            .unwrap_or_else(|| Arc::clone(&style.inner));
+        let standalone_style = Arc::new(citation_only_style(style.inner.as_ref()));
         Ok(Self {
             library: Arc::clone(&library.inner),
             style: Arc::clone(&style.inner),
+            citation_style,
+            standalone_style,
             locale: extract_locale(locale)?,
             citations: Vec::new(),
+            fast_cite: FastCitationState::new(style.inner.as_ref()),
         })
     }
 
-    fn cite(&mut self, items: &Bound<'_, PyAny>) -> PyResult<Rendered> {
+    fn cite(&mut self, py: Python<'_>, items: &Bound<'_, PyAny>) -> PyResult<Rendered> {
         let group = parse_cite_group(items)?;
-        self.citations.push(group);
-        let rendered = match self.render_all(false) {
-            Ok(rendered) => rendered,
-            Err(err) => {
-                self.citations.pop();
-                return Err(err);
-            }
-        };
-        let Some(citation) = rendered.citations.last() else {
-            self.citations.pop();
-            return Err(RefkitError::new_err(
-                "citation renderer returned no citations",
-            ));
-        };
-        rendered_from_citation(citation)
+        py.detach(|| self.cite_group(group))
     }
 
     #[pyo3(signature = (all = false))]
-    fn bibliography(&self, all: bool) -> PyResult<Rendered> {
-        let rendered = self.render_all(all)?;
-        rendered_from_bibliography(rendered.bibliography)
+    fn bibliography(&self, py: Python<'_>, all: bool) -> PyResult<Rendered> {
+        py.detach(|| self.render_bibliography(all))
     }
 
     fn __repr__(&self) -> String {
@@ -743,6 +706,99 @@ impl Document {
 }
 
 impl Document {
+    fn cite_group(&mut self, group: Vec<Cite>) -> PyResult<Rendered> {
+        let fast_cite = self.fast_cite.clone();
+        self.citations.push(group);
+        match self.render_appended_citation() {
+            Ok(rendered) => Ok(rendered),
+            Err(err) => {
+                self.citations.pop();
+                self.fast_cite = fast_cite;
+                Err(err)
+            }
+        }
+    }
+
+    fn render_appended_citation(&mut self) -> PyResult<Rendered> {
+        if let Some(rendered) = self.try_render_fast_citation()? {
+            return Ok(rendered);
+        }
+        self.render_latest_citation()
+    }
+
+    fn try_render_fast_citation(&mut self) -> PyResult<Option<Rendered>> {
+        if !self.fast_cite.enabled {
+            return Ok(None);
+        }
+
+        let Some(group) = self.citations.last() else {
+            return Ok(None);
+        };
+        let [cite] = group.as_slice() else {
+            self.fast_cite.enabled = false;
+            return Ok(None);
+        };
+        if cite.locator.is_some() {
+            self.fast_cite.enabled = false;
+            return Ok(None);
+        }
+
+        let entry = self.library.get(&cite.key).ok_or_else(|| {
+            MissingReferenceError::new_err(format!("missing reference {}", cite.key))
+        })?;
+        if self.fast_cite.subsequent_name_rules && self.fast_cite.seen_keys.contains(&cite.key) {
+            return Ok(None);
+        }
+
+        let locale = self.locale.as_ref().map(|code| LocaleCode(code.clone()));
+        let children = standalone_citation(CitationRequest::new(
+            vec![citation_item(entry, cite)?],
+            self.standalone_style.as_ref(),
+            locale,
+            bundled_locales(),
+            None,
+        ));
+        let text = elem_children_to_string(&children, BufWriteFormat::Plain)?;
+
+        match self.fast_cite.key_by_text.get(&text) {
+            Some(existing_key) if existing_key != &cite.key => {
+                self.fast_cite.enabled = false;
+                Ok(None)
+            }
+            _ => {
+                self.fast_cite
+                    .key_by_text
+                    .insert(text.clone(), cite.key.clone());
+                self.fast_cite.seen_keys.insert(cite.key.clone());
+                let html = elem_children_to_html(&children)?;
+                Ok(Some(Rendered::new(
+                    text,
+                    html,
+                    RenderedTree::Citation(children),
+                )))
+            }
+        }
+    }
+
+    fn render_latest_citation(&self) -> PyResult<Rendered> {
+        let rendered = match self.render_with_style(false, self.citation_style.as_ref()) {
+            Ok(rendered) => rendered,
+            Err(err) => {
+                return Err(err);
+            }
+        };
+        let Some(citation) = rendered.citations.last() else {
+            return Err(RefkitError::new_err(
+                "citation renderer returned no citations",
+            ));
+        };
+        rendered_from_citation(citation)
+    }
+
+    fn render_bibliography(&self, all: bool) -> PyResult<Rendered> {
+        let rendered = self.render_all(all)?;
+        rendered_from_bibliography(rendered.bibliography)
+    }
     fn render_all(&self, all: bool) -> PyResult<hayagriva::Rendered> {
         self.render_with_style(all, self.style.as_ref())
     }
@@ -810,7 +866,10 @@ fn parse_library_path(
     {
         Some("bib") => parse_library_source(&source, "bibtex", strict, diagnostics),
         Some("yaml" | "yml") => parse_library_source(&source, "yaml", strict, diagnostics),
-        Some(ext) => Err(format!("unsupported bibliography extension {ext:?}")),
+        Some(ext) => Err(format!(
+            "unsupported bibliography extension {}",
+            quoted(ext)
+        )),
         None => Err("bibliography path has no extension".to_string()),
     }
 }
@@ -829,7 +888,7 @@ fn parse_library_source(
                 diagnostics: Vec::new(),
             })
             .map_err(|err| format!("yaml parse error: {err}")),
-        other => Err(format!("unsupported bibliography format {other:?}")),
+        other => Err(format!("unsupported bibliography format {}", quoted(other))),
     }
 }
 
@@ -938,333 +997,14 @@ fn citation_item<'a>(entry: &'a HayEntry, cite: &'a Cite) -> PyResult<CitationIt
     let locator = match cite.locator.as_deref() {
         Some(value) => {
             let label = cite.label.as_deref().unwrap_or("page");
-            let locator = CslLocator::from_str(label)
-                .map_err(|_| PyValueError::new_err(format!("unknown locator label {label:?}")))?;
+            let locator = CslLocator::from_str(label).map_err(|_| {
+                PyValueError::new_err(format!("unknown locator label {}", quoted(label)))
+            })?;
             Some(SpecificLocator(locator, LocatorPayload::Str(value)))
         }
         None => None,
     };
     Ok(CitationItem::with_locator(entry, locator))
-}
-
-fn rendered_from_citation(citation: &RenderedCitation) -> PyResult<Rendered> {
-    let text = elem_children_to_string(&citation.citation, BufWriteFormat::Plain)?;
-    let html = elem_children_to_html(&citation.citation)?;
-    Ok(Rendered::new(
-        text,
-        html,
-        RenderedTree::Citation(citation.citation.clone()),
-    ))
-}
-
-fn rendered_from_bibliography(
-    bibliography: Option<hayagriva::RenderedBibliography>,
-) -> PyResult<Rendered> {
-    let Some(bibliography) = bibliography else {
-        return Ok(Rendered::new(
-            String::new(),
-            String::new(),
-            RenderedTree::Empty,
-        ));
-    };
-
-    let items = bibliography.items;
-    let mut text = String::with_capacity(items.len() * 224);
-    let mut html = String::with_capacity(items.len() * 384);
-    for item in &items {
-        if !text.is_empty() {
-            text.push('\n');
-        }
-        write_bibliography_item_text(item, &mut text)?;
-
-        render_bibliography_item_html(item, &mut html)
-            .map_err(|err| RefkitError::new_err(err.to_string()))?;
-    }
-
-    Ok(Rendered::new(text, html, RenderedTree::Bibliography(items)))
-}
-
-fn elem_children_to_string(children: &ElemChildren, format: BufWriteFormat) -> PyResult<String> {
-    let mut output = String::new();
-    children
-        .write_buf(&mut output, format)
-        .map_err(|err| RefkitError::new_err(err.to_string()))?;
-    Ok(output)
-}
-
-fn write_bibliography_item_text(
-    item: &hayagriva::BibliographyItem,
-    output: &mut String,
-) -> PyResult<()> {
-    let item_start = output.len();
-    if let Some(first_field) = &item.first_field {
-        first_field
-            .write_buf(output, BufWriteFormat::Plain)
-            .map_err(|err| RefkitError::new_err(err.to_string()))?;
-    }
-
-    let content = elem_children_to_string(&item.content, BufWriteFormat::Plain)?;
-    if output.len() > item_start && !content.is_empty() {
-        output.push(' ');
-    }
-    output.push_str(&content);
-    Ok(())
-}
-
-fn elem_children_to_html(children: &ElemChildren) -> PyResult<String> {
-    let mut output = String::new();
-    render_children_html(children, &mut output)
-        .map_err(|err| RefkitError::new_err(err.to_string()))?;
-    Ok(output)
-}
-
-fn render_bibliography_item_html(
-    item: &hayagriva::BibliographyItem,
-    output: &mut String,
-) -> fmt::Result {
-    output.push_str("<div class=\"csl-entry\" data-key=\"");
-    write_html_escaped(output, &item.key);
-    output.push_str("\">");
-    if let Some(first_field) = &item.first_field {
-        output.push_str("<div class=\"csl-left-margin\">");
-        render_child_html(first_field, output)?;
-        output.push_str("</div><div class=\"csl-right-inline\">");
-        render_children_html(&item.content, output)?;
-        output.push_str("</div>");
-    } else {
-        render_children_html(&item.content, output)?;
-    }
-    output.push_str("</div>");
-    Ok(())
-}
-
-fn render_children_html(children: &ElemChildren, output: &mut String) -> fmt::Result {
-    for child in &children.0 {
-        render_child_html(child, output)?;
-    }
-    Ok(())
-}
-
-fn render_child_html(child: &ElemChild, output: &mut String) -> fmt::Result {
-    match child {
-        ElemChild::Text(text) => render_formatted_html(text, output),
-        ElemChild::Elem(elem) => render_elem_html(elem, output),
-        ElemChild::Markup(value) => {
-            write_html_escaped(output, value);
-            Ok(())
-        }
-        ElemChild::Link { text, url } => {
-            if let Some(href) = safe_href(url) {
-                output.push_str("<a href=\"");
-                write_html_escaped(output, href);
-                output.push_str("\">");
-                render_formatted_html(text, output)?;
-                output.push_str("</a>");
-            } else {
-                render_formatted_html(text, output)?;
-            }
-            Ok(())
-        }
-        ElemChild::Transparent { .. } => Ok(()),
-    }
-}
-
-fn render_elem_html(elem: &hayagriva::Elem, output: &mut String) -> fmt::Result {
-    if let Some(display) = elem.display {
-        let class_name = match display {
-            Display::Block => "csl-block",
-            Display::LeftMargin => "csl-left-margin",
-            Display::RightInline => "csl-right-inline",
-            Display::Indent => "csl-indent",
-        };
-        write!(output, "<div class=\"{class_name}\">")?;
-    }
-
-    render_children_html(&elem.children, output)?;
-
-    if elem.display.is_some() {
-        output.push_str("</div>");
-    }
-    Ok(())
-}
-
-fn render_formatted_html(text: &hayagriva::Formatted, output: &mut String) -> fmt::Result {
-    let formatting = text.formatting;
-    if formatting == hayagriva::Formatting::default() {
-        write_html_escaped(output, &text.text);
-        return Ok(());
-    }
-
-    let mut css = String::new();
-    let mut suffix = String::new();
-
-    match formatting.vertical_align {
-        VerticalAlign::Sub => push_html_wrapper(output, &mut suffix, "<sub>", "</sub>"),
-        VerticalAlign::Sup => push_html_wrapper(output, &mut suffix, "<sup>", "</sup>"),
-        VerticalAlign::Baseline => {
-            css.push_str("vertical-align: baseline;");
-        }
-        VerticalAlign::None => {}
-    }
-
-    match formatting.font_weight {
-        FontWeight::Bold => {
-            if text.text.chars().any(|c| !c.is_whitespace()) {
-                push_html_wrapper(output, &mut suffix, "<b>", "</b>");
-            }
-        }
-        FontWeight::Light => css.push_str("font-weight: lighter;"),
-        FontWeight::Normal => {}
-    }
-
-    if formatting.font_style == FontStyle::Italic {
-        push_html_wrapper(output, &mut suffix, "<i>", "</i>");
-    }
-
-    if formatting.font_variant == FontVariant::SmallCaps {
-        css.push_str("font-variant: small-caps;");
-    }
-
-    if formatting.text_decoration == TextDecoration::Underline {
-        push_html_wrapper(output, &mut suffix, "<u>", "</u>");
-    }
-
-    if !css.is_empty() {
-        push_html_wrapper(
-            output,
-            &mut suffix,
-            &format!("<span style=\"{css}\">"),
-            "</span>",
-        );
-    }
-
-    write_html_escaped(output, &text.text);
-    output.push_str(&suffix);
-    Ok(())
-}
-
-fn push_html_wrapper(output: &mut String, suffix: &mut String, start: &str, end: &str) {
-    output.push_str(start);
-    suffix.insert_str(0, end);
-}
-
-fn safe_href(value: &str) -> Option<&str> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    let scheme_end = trimmed.find(':')?;
-    let first_path_marker = trimmed.find(['/', '?', '#']).unwrap_or(usize::MAX);
-    if scheme_end > first_path_marker {
-        return None;
-    }
-
-    let scheme = trimmed[..scheme_end].to_ascii_lowercase();
-    match scheme.as_str() {
-        "http" | "https" | "mailto" => Some(trimmed),
-        _ => None,
-    }
-}
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "kind")]
-enum TreeNode {
-    Text {
-        text: String,
-        formatting: TreeFormatting,
-    },
-    Element {
-        display: Option<String>,
-        meta: Option<String>,
-        children: Vec<TreeNode>,
-    },
-    Markup {
-        value: String,
-    },
-    Link {
-        text: String,
-        url: String,
-        formatting: TreeFormatting,
-    },
-    Transparent {
-        cite_idx: usize,
-        format: String,
-    },
-}
-
-#[derive(Debug, Serialize)]
-struct TreeFormatting {
-    font_style: String,
-    font_variant: String,
-    font_weight: String,
-    text_decoration: String,
-    vertical_align: String,
-}
-
-fn children_to_tree(children: &ElemChildren) -> Vec<TreeNode> {
-    children.0.iter().map(child_to_tree).collect()
-}
-
-fn bibliography_item_children_to_tree(item: &hayagriva::BibliographyItem) -> Vec<TreeNode> {
-    let mut children = Vec::new();
-    if let Some(first_field) = &item.first_field {
-        children.push(child_to_tree(first_field));
-    }
-    children.extend(children_to_tree(&item.content));
-    children
-}
-
-fn bibliography_item_to_tree(item: &hayagriva::BibliographyItem) -> serde_json::Value {
-    let first_field = item.first_field.as_ref().map(child_to_tree);
-    json!({
-        "kind": "bibliography-entry",
-        "key": &item.key,
-        "first_field": first_field,
-        "children": bibliography_item_children_to_tree(item),
-    })
-}
-
-fn child_to_tree(child: &ElemChild) -> TreeNode {
-    match child {
-        ElemChild::Text(text) => TreeNode::Text {
-            text: text.text.clone(),
-            formatting: formatting_to_tree(text.formatting),
-        },
-        ElemChild::Elem(elem) => TreeNode::Element {
-            display: elem.display.map(|display| format!("{display:?}")),
-            meta: elem.meta.as_ref().map(|meta| format!("{meta:?}")),
-            children: children_to_tree(&elem.children),
-        },
-        ElemChild::Markup(value) => TreeNode::Markup {
-            value: value.clone(),
-        },
-        ElemChild::Link { text, url } => match safe_href(url) {
-            Some(href) => TreeNode::Link {
-                text: text.text.clone(),
-                url: href.to_string(),
-                formatting: formatting_to_tree(text.formatting),
-            },
-            None => TreeNode::Text {
-                text: text.text.clone(),
-                formatting: formatting_to_tree(text.formatting),
-            },
-        },
-        ElemChild::Transparent { cite_idx, format } => TreeNode::Transparent {
-            cite_idx: *cite_idx,
-            format: format!("{format:?}"),
-        },
-    }
-}
-
-fn formatting_to_tree(formatting: hayagriva::Formatting) -> TreeFormatting {
-    TreeFormatting {
-        font_style: format!("{:?}", formatting.font_style),
-        font_variant: format!("{:?}", formatting.font_variant),
-        font_weight: format!("{:?}", formatting.font_weight),
-        text_decoration: format!("{:?}", formatting.text_decoration),
-        vertical_align: format!("{:?}", formatting.vertical_align),
-    }
 }
 
 fn json_to_py(py: Python<'_>, value: &str) -> PyResult<Py<PyAny>> {
@@ -1305,29 +1045,6 @@ fn json_value_to_py(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
     }
 }
 
-fn preview(value: &str) -> String {
-    const LIMIT: usize = 60;
-    if value.chars().count() <= LIMIT {
-        return value.to_string();
-    }
-    let mut output: String = value.chars().take(LIMIT).collect();
-    output.push_str("...");
-    output
-}
-
-fn write_html_escaped(output: &mut String, value: &str) {
-    for ch in value.chars() {
-        match ch {
-            '&' => output.push_str("&amp;"),
-            '<' => output.push_str("&lt;"),
-            '>' => output.push_str("&gt;"),
-            '"' => output.push_str("&quot;"),
-            '\'' => output.push_str("&#39;"),
-            _ => output.push(ch),
-        }
-    }
-}
-
 #[pymodule(gil_used = true)]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
@@ -1346,4 +1063,65 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Rendered>()?;
     raw::register(m)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_group_citation_restores_fast_cite_state() {
+        let mut document = test_document(
+            "apa",
+            "@article{valid, author = {Doe, Jane}, title = {Valid}, year = {2024}}",
+        );
+
+        assert!(document.fast_cite.enabled);
+        assert!(
+            document
+                .cite_group(vec![test_cite("valid"), test_cite("missing")])
+                .is_err()
+        );
+
+        assert!(document.citations.is_empty());
+        assert!(document.fast_cite.enabled);
+
+        let rendered = document.cite_group(vec![test_cite("valid")]).unwrap();
+        assert!(rendered.text.contains("Doe"));
+    }
+
+    fn archived_independent_style(name: &str) -> IndependentStyle {
+        let style = archive::ArchivedStyle::by_name(name)
+            .unwrap_or_else(|| panic!("missing archived style {name}"))
+            .get();
+        match style {
+            CslStyle::Independent(style) => style,
+            CslStyle::Dependent(_) => panic!("expected independent style {name}"),
+        }
+    }
+
+    fn test_document(style_name: &str, source: &str) -> Document {
+        let parsed = parse_library_source(source, "bibtex", true, false).unwrap();
+        let style = Arc::new(archived_independent_style(style_name));
+        let citation_style = full_history_citation_style(style.as_ref())
+            .map(Arc::new)
+            .unwrap_or_else(|| Arc::clone(&style));
+        Document {
+            library: Arc::new(parsed.inner),
+            style: Arc::clone(&style),
+            citation_style,
+            standalone_style: Arc::new(citation_only_style(style.as_ref())),
+            locale: Some("en-US".to_string()),
+            citations: Vec::new(),
+            fast_cite: FastCitationState::new(style.as_ref()),
+        }
+    }
+
+    fn test_cite(key: &str) -> Cite {
+        Cite {
+            key: key.to_string(),
+            locator: None,
+            label: None,
+        }
+    }
 }

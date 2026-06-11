@@ -55,7 +55,7 @@ class RefkitAdapter(PackageAdapter):
             library = rk.Library.read(workload.bibtex_path)
             return OperationOutcome(library, len(library))
 
-        return _prepared("parse", operation, _count_is(len(workload.records)))
+        return _prepared("parse", operation, _count_is(len(workload.records)), setup_included=True)
 
     def prepare_raw_bibtex_roundtrip(
         self, workload: Workload, directory: Path
@@ -68,9 +68,15 @@ class RefkitAdapter(PackageAdapter):
             field.value = "Edited Benchmark Title"
             path = directory / f"refkit-raw-{perf_counter_ns()}.bib"
             document.write(path)
-            return OperationOutcome(path, len(document.entries), str(path.name))
+            return OperationOutcome(path, len(document.entries), path.name)
 
-        return _prepared("raw-write", operation, _raw_roundtrip_check(workload.keys))
+        return _prepared(
+            "raw-write",
+            operation,
+            _raw_roundtrip_check(workload.keys),
+            source_format="raw_bibtex",
+            setup_included=True,
+        )
 
     def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
@@ -84,7 +90,12 @@ class RefkitAdapter(PackageAdapter):
             rendered = document.cite(key)
             return OperationOutcome(rendered.text, 1)
 
-        return _prepared("render", operation, _text_contains(workload.records[0].family))
+        return _prepared(
+            "render",
+            operation,
+            _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
+            citation_count=1,
+        )
 
     def prepare_bibliography_render(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
@@ -98,7 +109,13 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(rendered.text, len(workload.records))
 
         return _prepared(
-            "render", operation, _text_contains_all([record.family for record in workload.records])
+            "render",
+            operation,
+            _all_checks(
+                _count_is(len(workload.records)),
+                _bibliography_output_matches(workload.records),
+            ),
+            citation_count=0,
         )
 
     def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
@@ -106,7 +123,7 @@ class RefkitAdapter(PackageAdapter):
 
         library = rk.Library.parse(workload.bibtex)
         style = rk.Style.load("apa")
-        keys = workload.keys[: min(8, len(workload.keys))]
+        keys = workload.keys
 
         def operation() -> OperationOutcome:
             document = rk.Document(library, style, locale="en-US")
@@ -118,8 +135,9 @@ class RefkitAdapter(PackageAdapter):
             operation,
             _all_checks(
                 _count_is(len(keys)),
-                _text_contains_all([record.family for record in workload.records[: len(keys)]]),
+                _citation_output_matches(workload.records[: len(keys)]),
             ),
+            citation_count=len(keys),
         )
 
     def prepare_one_off_cite(self, workload: Workload, directory: Path) -> PreparedOperation:
@@ -131,7 +149,13 @@ class RefkitAdapter(PackageAdapter):
             rendered = rk.cite(workload.bibtex_path, key, style="apa")
             return OperationOutcome(rendered.text, 1)
 
-        return _prepared("one-off-render", operation, _text_contains(workload.records[0].family))
+        return _prepared(
+            "one-off-render",
+            operation,
+            _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
+            setup_included=True,
+            citation_count=1,
+        )
 
     def prepare_one_off_bibliography(
         self, workload: Workload, directory: Path
@@ -145,7 +169,12 @@ class RefkitAdapter(PackageAdapter):
         return _prepared(
             "one-off-render",
             operation,
-            _text_contains_all([record.family for record in workload.records]),
+            _all_checks(
+                _count_is(len(workload.records)),
+                _bibliography_output_matches(workload.records),
+            ),
+            setup_included=True,
+            citation_count=0,
         )
 
     def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
@@ -162,7 +191,12 @@ class RefkitAdapter(PackageAdapter):
                 return OperationOutcome(str(exc), 1, "raised")
             raise AssertionError("missing reference did not raise")  # pragma: no cover
 
-        return _prepared("error", operation, _text_contains("missing-reference"))
+        return _prepared(
+            "error",
+            operation,
+            _all_checks(_count_is(1), _text_contains("missing-reference")),
+            citation_count=1,
+        )
 
     def prepare_bulk_materialization(
         self, workload: Workload, directory: Path
@@ -234,7 +268,7 @@ class CiteprocPyAdapter(PackageAdapter):
             source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
             return OperationOutcome(source, len(list(source.keys())))
 
-        return _prepared("parse", operation, _count_is(len(workload.records)))
+        return _prepared("parse", operation, _count_is(len(workload.records)), setup_included=True)
 
     def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
         source, style = _citeproc_source_and_style(workload)
@@ -246,7 +280,13 @@ class CiteprocPyAdapter(PackageAdapter):
             rendered = bibliography.cite(citation, lambda item: None)
             return OperationOutcome(str(rendered), 1)
 
-        return _prepared("render", operation, _text_contains(workload.records[0].family))
+        return _prepared(
+            "render",
+            operation,
+            _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
+            source_format="csl_json",
+            citation_count=1,
+        )
 
     def prepare_bibliography_render(self, workload: Workload, directory: Path) -> PreparedOperation:
         source, style = _citeproc_source_and_style(workload)
@@ -260,13 +300,19 @@ class CiteprocPyAdapter(PackageAdapter):
             return OperationOutcome("\n".join(rows), len(rows))
 
         return _prepared(
-            "render", operation, _text_contains_all([record.family for record in workload.records])
+            "render",
+            operation,
+            _all_checks(
+                _count_is(len(workload.records)),
+                _bibliography_output_matches(workload.records),
+            ),
+            source_format="csl_json",
+            citation_count=len(workload.records),
         )
 
     def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
-        count = min(8, len(workload.keys))
         source, style = _citeproc_source_and_style(workload)
-        citations = [_citeproc_citation([key]) for key in workload.keys[:count]]
+        citations = [_citeproc_citation([key]) for key in workload.keys]
 
         def operation() -> OperationOutcome:
             bibliography = _citeproc_processor(source, style)
@@ -281,9 +327,11 @@ class CiteprocPyAdapter(PackageAdapter):
             "steady-render",
             operation,
             _all_checks(
-                _count_is(count),
-                _text_contains_all([record.family for record in workload.records[:count]]),
+                _count_is(len(workload.records)),
+                _citation_output_matches(workload.records),
             ),
+            source_format="csl_json",
+            citation_count=len(workload.records),
         )
 
     def prepare_one_off_cite(self, workload: Workload, directory: Path) -> PreparedOperation:
@@ -301,7 +349,13 @@ class CiteprocPyAdapter(PackageAdapter):
             rendered = bibliography.cite(citation, lambda item: None)
             return OperationOutcome(str(rendered), 1)
 
-        return _prepared("one-off-render", operation, _text_contains(workload.records[0].family))
+        return _prepared(
+            "one-off-render",
+            operation,
+            _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
+            setup_included=True,
+            citation_count=1,
+        )
 
     def prepare_one_off_bibliography(
         self, workload: Workload, directory: Path
@@ -322,7 +376,12 @@ class CiteprocPyAdapter(PackageAdapter):
         return _prepared(
             "one-off-render",
             operation,
-            _text_contains_all([record.family for record in workload.records]),
+            _all_checks(
+                _count_is(len(workload.records)),
+                _bibliography_output_matches(workload.records),
+            ),
+            setup_included=True,
+            citation_count=len(workload.records),
         )
 
     def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
@@ -336,7 +395,13 @@ class CiteprocPyAdapter(PackageAdapter):
             rendered = bibliography.cite(citation, lambda item: missing.append(item.key))
             return OperationOutcome(str(rendered), len(missing), ",".join(missing))
 
-        return _prepared("error", operation, _detail_contains("missing-reference"))
+        return _prepared(
+            "error",
+            operation,
+            _all_checks(_count_is(1), _detail_contains("missing-reference")),
+            source_format="csl_json",
+            citation_count=1,
+        )
 
     def prepare_bulk_materialization(
         self, workload: Workload, directory: Path
@@ -411,7 +476,7 @@ class CiteprocPyAdapter(PackageAdapter):
 
 
 class BibtexparserAdapter(PackageAdapter):
-    name = "bibtexparser"
+    name = "bibtexparser-1.x"
     distribution = "bibtexparser"
 
     def prepare_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
@@ -422,7 +487,7 @@ class BibtexparserAdapter(PackageAdapter):
                 database = bibtexparser.load(handle)
             return OperationOutcome(database, len(database.entries))
 
-        return _prepared("parse", operation, _count_is(len(workload.records)))
+        return _prepared("parse", operation, _count_is(len(workload.records)), setup_included=True)
 
     def prepare_raw_bibtex_roundtrip(
         self, workload: Workload, directory: Path
@@ -435,9 +500,15 @@ class BibtexparserAdapter(PackageAdapter):
             text = bibtexparser.dumps(database)
             path = directory / f"bibtexparser-raw-{perf_counter_ns()}.bib"
             path.write_text(text, encoding="utf-8")
-            return OperationOutcome(path, len(database.entries), str(path.name))
+            return OperationOutcome(path, len(database.entries), path.name)
 
-        return _prepared("raw-write", operation, _raw_roundtrip_check(workload.keys))
+        return _prepared(
+            "raw-write",
+            operation,
+            _raw_roundtrip_check(workload.keys),
+            source_format="raw_bibtex",
+            setup_included=True,
+        )
 
     def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
         raise UnsupportedOperation("bibtexparser does not render CSL citations")
@@ -535,8 +606,21 @@ def _prepared(
     phase: str,
     operation: Callable[[], OperationOutcome],
     check: Callable[[OperationOutcome], None],
+    *,
+    source_format: str = "bibtex",
+    setup_included: bool = False,
+    citation_count: int = 0,
 ) -> PreparedOperation:
-    return PreparedOperation(phase=phase, operation=operation, check=check)
+    return PreparedOperation(
+        phase=phase,
+        operation=operation,
+        check=check,
+        metadata={
+            "source_format": source_format,
+            "setup_included": setup_included,
+            "citation_count": citation_count,
+        },
+    )
 
 
 def _count_is(expected: int) -> Callable[[OperationOutcome], None]:
@@ -636,6 +720,46 @@ def _text_contains_all(needles: list[str]) -> Callable[[OperationOutcome], None]
             raise AssertionError(f"expected output to contain {missing[0]!r}")
 
     return check
+
+
+def _citation_output_matches(records: tuple[Any, ...]) -> Callable[[OperationOutcome], None]:
+    expected = [f"({record.family}, {record.year})" for record in records]
+
+    def check(outcome: OperationOutcome) -> None:
+        lines = _non_empty_lines(str(outcome.value))
+        if lines != expected:
+            raise AssertionError("expected rendered citations to match fixture order and APA shape")
+
+    return check
+
+
+def _bibliography_output_matches(records: tuple[Any, ...]) -> Callable[[OperationOutcome], None]:
+    def check(outcome: OperationOutcome) -> None:
+        rows = _non_empty_lines(str(outcome.value))
+        if len(rows) != len(records):
+            raise AssertionError(f"expected {len(records)} bibliography rows, got {len(rows)}")
+        for row, record in zip(rows, records, strict=True):
+            normalized = row.replace("\u2013", "-")
+            expected_values = [
+                record.family,
+                str(record.year),
+                record.title,
+                "Journal of Citation Benchmarks",
+                str(record.volume),
+                f"{record.page_start}-{record.page_end}",
+                record.doi,
+            ]
+            missing = [value for value in expected_values if value not in normalized]
+            if missing:
+                raise AssertionError(
+                    f"expected bibliography row for {record.key!r} to contain {missing[0]!r}"
+                )
+
+    return check
+
+
+def _non_empty_lines(value: str) -> list[str]:
+    return [line.strip() for line in value.splitlines() if line.strip()]
 
 
 def _detail_contains(needle: str) -> Callable[[OperationOutcome], None]:

@@ -20,12 +20,14 @@ print(doc.bibliography().html)
 
 Use `doc.bibliography(all=True)` to render every entry in the library, including entries that were not cited.
 
-One-off calls parse the library, load the style, render, and return a `Rendered` object.
+One-off calls read a bibliography path, load the style, render, and return a `Rendered` object. Use `Library.parse` and `Document` for in-memory sources.
 
 ```python
 rk.cite("refs.bib", "doe2024", style="ieee").text
 rk.bibliography("refs.bib", style="chicago-author-date").html
 ```
+
+`rk.cite` accepts the same citation group shapes as `Document.cite`: a key string, a `Cite`, or an iterable of keys and `Cite` objects.
 
 ## Supported Formats
 
@@ -114,6 +116,15 @@ raw.entries["doe2024"].fields["title"].value = "Corrected title"
 raw.write("refs.bib")
 ```
 
+Direct map lookup requires a unique entry key and a unique field name inside that entry. When a `.bib` file contains duplicate entry keys or duplicate fields, choose the source-order occurrence explicitly.
+
+```python
+raw = rk.BibDocument.read("refs.bib")
+
+second_entry = raw.entries.get_all("doe2024")[1]
+second_entry.fields.get_all("title")[0].value = "Corrected title"
+```
+
 Use `BibDocument.parse` for in-memory repair flows. Call `write(path)` because parsed documents do not have a source path.
 
 ```python
@@ -121,6 +132,15 @@ raw = rk.BibDocument.parse("% note\n@article{doe2024, title={Old}}\n")
 raw.entries["doe2024"].fields["title"].value = "Corrected title"
 raw.write("refs.bib")
 ```
+
+## API Contracts And Migration
+
+The repository docs include focused guides for the public shapes that matter during integration:
+
+| Guide | Scope |
+| --- | --- |
+| [API contracts](https://github.com/petergy/refkit/blob/main/docs/api-contracts.md) | One-off helper inputs, `Rendered.tree`, raw block dictionaries, and public error behavior. |
+| [Migration guide](https://github.com/petergy/refkit/blob/main/docs/migration.md) | Replacing common citeproc-py render flows and python-bibtexparser raw repair flows. |
 
 ## Styles And Locales
 
@@ -158,10 +178,22 @@ make lint
 make typecheck
 make test
 make rust
-make build
+make rust-floor
+make package-check
 ```
 
-`make all` runs the local lint, type-check, test, Rust, and package-build gates.
+`make all` runs the local lint, type-check, test, Rust, Rust floor, and package-content gates.
+
+Release checks:
+
+```bash
+make release-smoke
+make dependency-provenance
+make rust-floor
+make advisory
+```
+
+`make release-smoke` builds the wheel, inspects the sdist and wheel contents, and imports the built wheel in fresh Python 3.11, 3.12, 3.13, and 3.14 environments. `make dependency-provenance` checks the locked Typst crate paths and the YAML parser dependency path. `make rust-floor` checks the declared Rust 1.85 floor. `make advisory` is opt-in because it may download advisory databases and audit tools. See the [release validation guide](https://github.com/petergy/refkit/blob/main/docs/release.md) in the repository for the full contract.
 
 ## Acknowledgements
 

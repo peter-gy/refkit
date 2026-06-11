@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 
 SIZES: dict[str, int] = {
@@ -9,6 +11,7 @@ SIZES: dict[str, int] = {
     "large": 192,
 }
 LARGEST_SIZE = "large"
+WORKLOAD_FAMILY = "synthetic_scale"
 
 JOURNAL = "Journal of Citation Benchmarks"
 
@@ -39,6 +42,32 @@ class Workload:
     @property
     def keys(self) -> list[str]:
         return [record.key for record in self.records]
+
+    @property
+    def family(self) -> str:
+        return WORKLOAD_FAMILY
+
+    @property
+    def record_count(self) -> int:
+        return len(self.records)
+
+    def source_text(self, source_format: str) -> str:
+        if source_format == "bibtex":
+            return self.bibtex
+        if source_format == "raw_bibtex":
+            return self.raw_bibtex
+        if source_format == "csl_json":
+            return json.dumps(self.csl_json, sort_keys=True, separators=(",", ":"))
+        return ""
+
+    def source_byte_count(self, source_format: str) -> int:
+        return len(self.source_text(source_format).encode("utf-8"))
+
+    def source_sha256(self, source_format: str) -> str:
+        text = self.source_text(source_format)
+        if not text:
+            return ""
+        return sha256(text.encode("utf-8")).hexdigest()
 
 
 def records_for_size(size: str) -> tuple[Record, ...]:

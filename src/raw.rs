@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
@@ -11,6 +11,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyModule;
 use serde_json::json;
 
+use crate::public_strings::quoted;
 use crate::{RefkitError, json_to_py};
 
 #[derive(Debug, Clone)]
@@ -37,7 +38,8 @@ type ParsedValue = (String, usize, Option<Range<usize>>, RawValueMode);
 struct RawEntryData {
     key: String,
     kind: String,
-    fields: IndexMap<String, RawFieldData>,
+    fields: IndexMap<String, Vec<usize>>,
+    field_blocks: Vec<RawFieldData>,
     span: Range<usize>,
     raw: String,
 }
@@ -97,7 +99,7 @@ impl RawBlock {
 struct RawDocumentData {
     path: Option<PathBuf>,
     blocks: Vec<RawBlock>,
-    entries: IndexMap<String, usize>,
+    entries: IndexMap<String, Vec<usize>>,
     entry_blocks: Vec<RawEntryData>,
 }
 
@@ -217,14 +219,21 @@ impl BibDocument {
     }
 
     #[pyo3(signature = (path = None))]
-    fn write(&self, path: Option<PathBuf>) -> PyResult<()> {
-        let target = path
-            .or_else(|| self.doc.borrow().path.clone())
-            .ok_or_else(|| PyValueError::new_err("write path is required"))?;
-        let rendered = render_document(&self.doc.borrow())?;
-        fs::write(&target, rendered)
-            .map_err(|err| RefkitError::new_err(format!("failed to write BibTeX: {err}")))?;
-        Ok(())
+    fn write(&self, py: Python<'_>, path: Option<PathBuf>) -> PyResult<()> {
+        let (target, data) = {
+            let doc = self.doc.borrow();
+            let target = path
+                .or_else(|| doc.path.clone())
+                .ok_or_else(|| PyValueError::new_err("write path is required"))?;
+            (target, doc.clone())
+        };
+
+        py.detach(move || {
+            let rendered = render_document(&data)?;
+            fs::write(&target, rendered)
+                .map_err(|err| RefkitError::new_err(format!("failed to write BibTeX: {err}")))?;
+            Ok(())
+        })
     }
 
     fn __repr__(&self) -> String {
@@ -248,19 +257,50 @@ impl BibEntryMap {
         self.doc.borrow().entries.keys().cloned().collect()
     }
 
+    fn occurrences(&self) -> Vec<BibEntry> {
+        self.doc
+            .borrow()
+            .entry_blocks
+            .iter()
+            .enumerate()
+            .map(|(entry_id, entry)| BibEntry {
+                doc: Rc::clone(&self.doc),
+                entry_id,
+                key: entry.key.clone(),
+            })
+            .collect()
+    }
+
+    fn get_all(&self, key: &str) -> Vec<BibEntry> {
+        let doc = self.doc.borrow();
+        doc.entries
+            .get(key)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry_id| {
+                doc.entry_blocks.get(*entry_id).map(|entry| BibEntry {
+                    doc: Rc::clone(&self.doc),
+                    entry_id: *entry_id,
+                    key: entry.key.clone(),
+                })
+            })
+            .collect()
+    }
+
     fn is_empty(&self) -> bool {
         self.doc.borrow().entries.is_empty()
     }
 
-    fn get(&self, key: &str) -> Option<BibEntry> {
-        if self.doc.borrow().entries.contains_key(key) {
-            Some(BibEntry {
-                doc: Rc::clone(&self.doc),
-                key: key.to_string(),
-            })
-        } else {
-            None
-        }
+    fn get(&self, key: &str) -> PyResult<Option<BibEntry>> {
+        let entry_id = {
+            let doc = self.doc.borrow();
+            unique_entry_id(&doc, key)?
+        };
+        Ok(entry_id.map(|entry_id| BibEntry {
+            doc: Rc::clone(&self.doc),
+            entry_id,
+            key: key.to_string(),
+        }))
     }
 
     fn __len__(&self) -> usize {
@@ -276,9 +316,14 @@ impl BibEntryMap {
     }
 
     fn __getitem__(&self, key: &str) -> PyResult<BibEntry> {
-        if self.doc.borrow().entries.contains_key(key) {
+        let entry_id = {
+            let doc = self.doc.borrow();
+            unique_entry_id(&doc, key)?
+        };
+        if let Some(entry_id) = entry_id {
             Ok(BibEntry {
                 doc: Rc::clone(&self.doc),
+                entry_id,
                 key: key.to_string(),
             })
         } else {
@@ -290,6 +335,7 @@ impl BibEntryMap {
 #[pyclass(module = "refkit", unsendable)]
 pub struct BibEntry {
     doc: SharedDocument,
+    entry_id: usize,
     key: String,
 }
 
@@ -309,6 +355,7 @@ impl BibEntry {
     fn fields(&self) -> BibFieldMap {
         BibFieldMap {
             doc: Rc::clone(&self.doc),
+            entry_id: self.entry_id,
             entry_key: self.key.clone(),
         }
     }
@@ -319,14 +366,21 @@ impl BibEntry {
     }
 
     fn __repr__(&self) -> PyResult<String> {
-        self.with_entry(|entry| format!("BibEntry(key={:?}, kind={:?})", entry.key, entry.kind))
+        self.with_entry(|entry| {
+            format!(
+                "BibEntry(key={}, kind={})",
+                quoted(&entry.key),
+                quoted(&entry.kind)
+            )
+        })
     }
 }
 
 impl BibEntry {
     fn with_entry<T>(&self, f: impl FnOnce(&RawEntryData) -> T) -> PyResult<T> {
         let doc = self.doc.borrow();
-        entry_by_key(&doc, &self.key)
+        doc.entry_blocks
+            .get(self.entry_id)
             .map(f)
             .ok_or_else(|| PyKeyError::new_err(self.key.clone()))
     }
@@ -335,6 +389,7 @@ impl BibEntry {
 #[pyclass(module = "refkit", unsendable)]
 pub struct BibFieldMap {
     doc: SharedDocument,
+    entry_id: usize,
     entry_key: String,
 }
 
@@ -344,21 +399,55 @@ impl BibFieldMap {
         self.with_entry(|entry| entry.fields.keys().cloned().collect())
     }
 
+    fn occurrences(&self) -> PyResult<Vec<BibField>> {
+        self.with_entry(|entry| {
+            entry
+                .field_blocks
+                .iter()
+                .enumerate()
+                .map(|(field_id, field)| BibField {
+                    doc: Rc::clone(&self.doc),
+                    entry_id: self.entry_id,
+                    field_id,
+                    field_key: field.name.clone(),
+                })
+                .collect()
+        })
+    }
+
+    fn get_all(&self, key: &str) -> PyResult<Vec<BibField>> {
+        let key = key.to_ascii_lowercase();
+        self.with_entry(|entry| {
+            entry
+                .fields
+                .get(&key)
+                .into_iter()
+                .flatten()
+                .filter_map(|field_id| {
+                    entry.field_blocks.get(*field_id).map(|field| BibField {
+                        doc: Rc::clone(&self.doc),
+                        entry_id: self.entry_id,
+                        field_id: *field_id,
+                        field_key: field.name.clone(),
+                    })
+                })
+                .collect()
+        })
+    }
+
     fn is_empty(&self) -> PyResult<bool> {
         self.with_entry(|entry| entry.fields.is_empty())
     }
 
     fn get(&self, key: &str) -> PyResult<Option<BibField>> {
         let key = key.to_ascii_lowercase();
-        if self.with_entry(|entry| entry.fields.contains_key(&key))? {
-            Ok(Some(BibField {
-                doc: Rc::clone(&self.doc),
-                entry_key: self.entry_key.clone(),
-                field_key: key,
-            }))
-        } else {
-            Ok(None)
-        }
+        let field_id = self.with_entry(|entry| unique_field_id(entry, &self.entry_key, &key))??;
+        Ok(field_id.map(|field_id| BibField {
+            doc: Rc::clone(&self.doc),
+            entry_id: self.entry_id,
+            field_id,
+            field_key: key,
+        }))
     }
 
     fn __len__(&self) -> PyResult<usize> {
@@ -375,10 +464,12 @@ impl BibFieldMap {
 
     fn __getitem__(&self, key: &str) -> PyResult<BibField> {
         let key = key.to_ascii_lowercase();
-        if self.with_entry(|entry| entry.fields.contains_key(&key))? {
+        let field_id = self.with_entry(|entry| unique_field_id(entry, &self.entry_key, &key))??;
+        if let Some(field_id) = field_id {
             Ok(BibField {
                 doc: Rc::clone(&self.doc),
-                entry_key: self.entry_key.clone(),
+                entry_id: self.entry_id,
+                field_id,
                 field_key: key,
             })
         } else {
@@ -390,7 +481,8 @@ impl BibFieldMap {
 impl BibFieldMap {
     fn with_entry<T>(&self, f: impl FnOnce(&RawEntryData) -> T) -> PyResult<T> {
         let doc = self.doc.borrow();
-        entry_by_key(&doc, &self.entry_key)
+        doc.entry_blocks
+            .get(self.entry_id)
             .map(f)
             .ok_or_else(|| PyKeyError::new_err(self.entry_key.clone()))
     }
@@ -399,7 +491,8 @@ impl BibFieldMap {
 #[pyclass(module = "refkit", unsendable)]
 pub struct BibField {
     doc: SharedDocument,
-    entry_key: String,
+    entry_id: usize,
+    field_id: usize,
     field_key: String,
 }
 
@@ -418,13 +511,10 @@ impl BibField {
     #[setter]
     fn set_value(&self, value: String) -> PyResult<()> {
         let mut doc = self.doc.borrow_mut();
-        let Some(entry_id) = doc.entries.get(&self.entry_key).copied() else {
-            return Err(PyKeyError::new_err(self.entry_key.clone()));
-        };
         let field = doc
             .entry_blocks
-            .get_mut(entry_id)
-            .and_then(|entry| entry.fields.get_mut(&self.field_key))
+            .get_mut(self.entry_id)
+            .and_then(|entry| entry.field_blocks.get_mut(self.field_id))
             .ok_or_else(|| PyKeyError::new_err(self.field_key.clone()))?;
         validate_field_value(&value, field.value_mode)?;
         field.value = value;
@@ -438,24 +528,54 @@ impl BibField {
     }
 
     fn __repr__(&self) -> PyResult<String> {
-        self.with_field(|field| format!("BibField(name={:?}, value={:?})", field.name, field.value))
+        self.with_field(|field| {
+            format!(
+                "BibField(name={}, value={})",
+                quoted(&field.name),
+                quoted(&field.value)
+            )
+        })
     }
 }
 
 impl BibField {
     fn with_field<T>(&self, f: impl FnOnce(&RawFieldData) -> T) -> PyResult<T> {
         let doc = self.doc.borrow();
-        entry_by_key(&doc, &self.entry_key)
-            .and_then(|entry| entry.fields.get(&self.field_key))
+        doc.entry_blocks
+            .get(self.entry_id)
+            .and_then(|entry| entry.field_blocks.get(self.field_id))
             .map(f)
             .ok_or_else(|| PyKeyError::new_err(self.field_key.clone()))
     }
 }
 
-fn entry_by_key<'a>(doc: &'a RawDocumentData, key: &str) -> Option<&'a RawEntryData> {
-    doc.entries
-        .get(key)
-        .and_then(|entry_id| doc.entry_blocks.get(*entry_id))
+fn unique_entry_id(doc: &RawDocumentData, key: &str) -> PyResult<Option<usize>> {
+    let Some(entry_ids) = doc.entries.get(key) else {
+        return Ok(None);
+    };
+    if entry_ids.len() == 1 {
+        return Ok(entry_ids.first().copied());
+    }
+    Err(RefkitError::new_err(format!(
+        "BibTeX entry key {} is ambiguous across {} occurrences; use entries.get_all(key) or entries.occurrences()",
+        quoted(key),
+        entry_ids.len()
+    )))
+}
+
+fn unique_field_id(entry: &RawEntryData, entry_key: &str, key: &str) -> PyResult<Option<usize>> {
+    let Some(field_ids) = entry.fields.get(key) else {
+        return Ok(None);
+    };
+    if field_ids.len() == 1 {
+        return Ok(field_ids.first().copied());
+    }
+    Err(RefkitError::new_err(format!(
+        "BibTeX field {} in entry {} is ambiguous across {} occurrences; use fields.get_all(key) or fields.occurrences()",
+        quoted(key),
+        quoted(entry_key),
+        field_ids.len()
+    )))
 }
 
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -471,6 +591,7 @@ pub(crate) fn sanitize_biblatex_for_library(source: &str) -> (String, Vec<String
     let data = parse_raw_document(source);
     let mut output = String::with_capacity(source.len());
     let mut diagnostics = Vec::new();
+    let mut seen_entries = BTreeSet::new();
     for block in &data.blocks {
         match block {
             RawBlock::Whitespace { raw, .. }
@@ -479,7 +600,16 @@ pub(crate) fn sanitize_biblatex_for_library(source: &str) -> (String, Vec<String
             | RawBlock::StringDef { raw, .. } => output.push_str(raw),
             RawBlock::Entry { id, .. } => {
                 if let Some(entry) = data.entry_blocks.get(*id) {
-                    output.push_str(&entry.raw);
+                    if seen_entries.insert(entry.key.clone()) {
+                        output.push_str(&entry.raw);
+                    } else {
+                        diagnostics.push(format!(
+                            "ignored duplicate BibTeX entry key {} at {}..{}",
+                            quoted(&entry.key),
+                            entry.span.start,
+                            entry.span.end
+                        ));
+                    }
                 }
             }
             RawBlock::Failed { error, span, .. } => {
@@ -503,7 +633,7 @@ pub(crate) fn sanitize_biblatex_for_library(source: &str) -> (String, Vec<String
 
 fn parse_raw_document(source: &str) -> RawDocumentData {
     let mut blocks = Vec::new();
-    let mut entries = IndexMap::new();
+    let mut entries: IndexMap<String, Vec<usize>> = IndexMap::new();
     let mut entry_blocks = Vec::new();
     let mut pos = 0;
     while pos < source.len() {
@@ -550,7 +680,7 @@ fn parse_raw_document(source: &str) -> RawDocumentData {
             if let RawBlock::Entry { id: block_id, .. } = &mut block {
                 *block_id = id;
             }
-            entries.insert(entry.key.clone(), id);
+            entries.entry(entry.key.clone()).or_default().push(id);
             entry_blocks.push(entry);
         }
         blocks.push(block);
@@ -596,7 +726,7 @@ fn parse_complete_at_block(
         return (
             RawBlock::Failed {
                 raw: raw.to_string(),
-                error: format!("entry type {kind:?} is invalid"),
+                error: format!("entry type {} is invalid", quoted(&kind)),
                 span: start..end,
             },
             None,
@@ -688,10 +818,11 @@ fn parse_entry(
         return Err("entry key is empty".to_string());
     }
     if !is_valid_entry_key(&key) {
-        return Err(format!("entry key {key:?} is invalid"));
+        return Err(format!("entry key {} is invalid", quoted(&key)));
     }
 
-    let mut fields = IndexMap::new();
+    let mut fields: IndexMap<String, Vec<usize>> = IndexMap::new();
+    let mut field_blocks = Vec::new();
     let mut cursor = comma + 1;
     while cursor < body.len() {
         skip_field_gap(body, &mut cursor);
@@ -712,7 +843,7 @@ fn parse_entry(
             return Err("field name is empty".to_string());
         }
         if !is_valid_identifier(&name) {
-            return Err(format!("field name {name:?} is invalid"));
+            return Err(format!("field name {} is invalid", quoted(&name)));
         }
 
         while cursor < body.len() && body[cursor..].chars().next().unwrap().is_whitespace() {
@@ -729,17 +860,16 @@ fn parse_entry(
         let value_start = cursor;
         let (value, value_end, inner_span, value_mode) = parse_value(body, cursor, body_start)?;
         cursor = value_end;
-        fields.insert(
-            name.clone(),
-            RawFieldData {
-                name: name.clone(),
-                value,
-                value_mode,
-                span: inner_span.unwrap_or((body_start + value_start)..(body_start + value_end)),
-                patch_span: (body_start + value_start)..(body_start + value_end),
-                changed: false,
-            },
-        );
+        let field_id = field_blocks.len();
+        fields.entry(name.clone()).or_default().push(field_id);
+        field_blocks.push(RawFieldData {
+            name: name.clone(),
+            value,
+            value_mode,
+            span: inner_span.unwrap_or((body_start + value_start)..(body_start + value_end)),
+            patch_span: (body_start + value_start)..(body_start + value_end),
+            changed: false,
+        });
 
         skip_field_trivia(body, &mut cursor);
         if cursor < body.len() {
@@ -755,6 +885,7 @@ fn parse_entry(
         key,
         kind: kind.to_string(),
         fields,
+        field_blocks,
         span: start..end,
         raw: source[start..end].to_string(),
     })
@@ -923,7 +1054,7 @@ fn parse_value_atom(body: &str, start: usize, body_offset: usize) -> Result<Pars
     }
     let value = body[start..cursor].trim().to_string();
     if !is_safe_bare_value(&value) {
-        return Err(format!("bare field value {value:?} is invalid"));
+        return Err(format!("bare field value {} is invalid", quoted(&value)));
     }
     Ok((value, cursor, None, RawValueMode::Bare))
 }
@@ -1069,7 +1200,7 @@ fn render_document(data: &RawDocumentData) -> PyResult<String> {
                     .entry_blocks
                     .get(*id)
                     .ok_or_else(|| PyKeyError::new_err(key.clone()))?;
-                if entry.fields.values().any(|field| field.changed) {
+                if entry.field_blocks.iter().any(|field| field.changed) {
                     output.push_str(&patch_entry(entry)?);
                 } else {
                     output.push_str(&entry.raw);
@@ -1082,8 +1213,8 @@ fn render_document(data: &RawDocumentData) -> PyResult<String> {
 
 fn patch_entry(entry: &RawEntryData) -> PyResult<String> {
     let mut fields = entry
-        .fields
-        .values()
+        .field_blocks
+        .iter()
         .filter(|field| field.changed)
         .collect::<Vec<_>>();
     fields.sort_by_key(|field| patch_field_value(field).0.start);
@@ -1326,4 +1457,209 @@ fn take_line(source: &str, start: usize) -> usize {
         .find('\n')
         .map(|offset| start + offset + 1)
         .unwrap_or(source.len())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn field<'a>(entry: &'a RawEntryData, key: &str) -> &'a RawFieldData {
+        let field_id = unique_field_id(entry, &entry.key, key).unwrap().unwrap();
+        &entry.field_blocks[field_id]
+    }
+
+    fn field_mut<'a>(entry: &'a mut RawEntryData, key: &str) -> &'a mut RawFieldData {
+        let field_id = unique_field_id(entry, &entry.key, key).unwrap().unwrap();
+        &mut entry.field_blocks[field_id]
+    }
+
+    #[test]
+    fn parse_raw_document_preserves_blocks_and_recovers_entries() {
+        let source = concat!(
+            "% file comment\n",
+            "@string{jcs = \"Journal of Citation Systems\"}\n",
+            "@preamble{\"A\" # \"B\"}\n",
+            "@article{kept,\n",
+            "  title = {Kept Title},\n",
+            "  journal = jcs # \" Extra\",\n",
+            "  year = 2024\n",
+            "}\n",
+            "@broken{missing,\n",
+            "  title = {No close}\n",
+            "@article{after,\n",
+            "  title = \"After Title\"\n",
+            "}\n",
+            "trailing text\n",
+        );
+
+        let data = parse_raw_document(source);
+
+        assert_eq!(data.entries.len(), 2);
+        assert_eq!(data.entries.get("kept").cloned(), Some(vec![0]));
+        assert_eq!(data.entries.get("after").cloned(), Some(vec![1]));
+        assert!(data.blocks.iter().any(
+            |block| matches!(block, RawBlock::Comment { raw, .. } if raw == "% file comment\n")
+        ));
+        assert!(
+            data.blocks
+                .iter()
+                .any(|block| matches!(block, RawBlock::StringDef { key, value, .. } if key == "jcs" && value == "Journal of Citation Systems"))
+        );
+        assert!(data.blocks.iter().any(
+            |block| matches!(block, RawBlock::Preamble { value, .. } if value == "\"A\" # \"B\"")
+        ));
+        assert!(
+            data.blocks
+                .iter()
+                .any(|block| matches!(block, RawBlock::Failed { error, .. } if error.contains("closing delimiter")))
+        );
+        assert!(
+            data.blocks.iter().any(
+                |block| matches!(block, RawBlock::Other { raw, .. } if raw == "trailing text\n")
+            )
+        );
+        assert_eq!(
+            field(&data.entry_blocks[0], "journal").value_mode,
+            RawValueMode::Expression
+        );
+    }
+
+    #[test]
+    fn parse_value_covers_braced_quoted_bare_and_expression_modes() {
+        let (value, end, span, mode) = parse_value("{A {B}}", 0, 10).unwrap();
+        assert_eq!(value, "A {B}");
+        assert_eq!(end, 7);
+        assert_eq!(span, Some(11..16));
+        assert_eq!(mode, RawValueMode::Braced);
+
+        let (value, _, _, mode) = parse_value("\"A {B}\"", 0, 20).unwrap();
+        assert_eq!(value, "A {B}");
+        assert_eq!(mode, RawValueMode::Quoted);
+
+        let (value, _, span, mode) = parse_value("jcs", 0, 30).unwrap();
+        assert_eq!(value, "jcs");
+        assert_eq!(span, None);
+        assert_eq!(mode, RawValueMode::Bare);
+
+        let (value, end, span, mode) = parse_value("jcs # \" Extra\"", 0, 40).unwrap();
+        assert_eq!(value, "jcs # \" Extra\"");
+        assert_eq!(end, 14);
+        assert_eq!(span, Some(40..54));
+        assert_eq!(mode, RawValueMode::Expression);
+
+        assert!(parse_value("Bad{Thing}", 0, 0).is_err());
+        assert!(parse_value("{No close", 0, 0).is_err());
+        assert!(parse_value("\"No close", 0, 0).is_err());
+    }
+
+    #[test]
+    fn sanitizer_keeps_valid_entries_and_reports_failed_or_other_blocks() {
+        let source = concat!(
+            "prefix text\n",
+            "@article{valid,\n",
+            "  title = {Valid}\n",
+            "}\n",
+            "@broken{missing,\n",
+            "  title = {No close}\n",
+            "@article{after,\n",
+            "  title = {After}\n",
+            "}\n",
+        );
+
+        let (sanitized, diagnostics) = sanitize_biblatex_for_library(source);
+
+        assert!(sanitized.contains("@article{valid"));
+        assert!(sanitized.contains("@article{after"));
+        assert!(!sanitized.contains("@broken"));
+        assert_eq!(diagnostics.len(), 2);
+        assert!(diagnostics[0].contains("ignored raw BibTeX text"));
+        assert!(diagnostics[1].contains("ignored malformed BibTeX block"));
+    }
+
+    #[test]
+    fn sanitizer_drops_later_duplicate_entries_with_diagnostics() {
+        let source = concat!(
+            "@article{same,\n",
+            "  title = {First}\n",
+            "}\n",
+            "@article{same,\n",
+            "  title = {Second}\n",
+            "}\n",
+        );
+
+        let (sanitized, diagnostics) = sanitize_biblatex_for_library(source);
+
+        assert!(sanitized.contains("title = {First}"));
+        assert!(!sanitized.contains("title = {Second}"));
+        assert_eq!(diagnostics.len(), 1);
+        assert!(diagnostics[0].contains("ignored duplicate BibTeX entry key \"same\""));
+    }
+
+    #[test]
+    fn render_document_patches_only_changed_fields() {
+        let mut data = parse_raw_document(concat!(
+            "@article{patch,\n",
+            "  braced = {Old},\n",
+            "  quoted = \"Old\",\n",
+            "  bare = old,\n",
+            "  expr = macro # \"Old\"\n",
+            "}\n",
+        ));
+        let entry = data.entry_blocks.get_mut(0).unwrap();
+        field_mut(entry, "braced").value = "New".to_string();
+        field_mut(entry, "braced").changed = true;
+        field_mut(entry, "quoted").value = "Quoted".to_string();
+        field_mut(entry, "quoted").changed = true;
+        field_mut(entry, "bare").value = "Bare Value".to_string();
+        field_mut(entry, "bare").changed = true;
+        field_mut(entry, "expr").value = "macro # \"New\"".to_string();
+        field_mut(entry, "expr").changed = true;
+
+        let rendered = render_document(&data).unwrap();
+
+        assert!(rendered.contains("braced = {New}"));
+        assert!(rendered.contains("quoted = \"Quoted\""));
+        assert!(rendered.contains("bare = {Bare Value}"));
+        assert!(rendered.contains("expr = {macro # \"New\"}"));
+    }
+
+    #[test]
+    fn duplicate_field_parse_preserves_ordered_occurrences() {
+        let mut data = parse_raw_document(concat!(
+            "@article{duplicate,\n",
+            "  title = {First},\n",
+            "  TITLE = {Second},\n",
+            "  year = {2024}\n",
+            "}\n",
+        ));
+
+        let entry = data.entry_blocks.get_mut(0).unwrap();
+        assert_eq!(entry.fields.len(), 2);
+        assert_eq!(entry.fields["title"], vec![0, 1]);
+        assert_eq!(entry.field_blocks[0].value, "First");
+        assert_eq!(entry.field_blocks[1].value, "Second");
+        assert!(unique_field_id(entry, "duplicate", "title").is_err());
+        entry.field_blocks[1].value = "Edited".to_string();
+        entry.field_blocks[1].changed = true;
+
+        let rendered = render_document(&data).unwrap();
+
+        assert!(rendered.contains("title = {First}"));
+        assert!(rendered.contains("TITLE = {Edited}"));
+        assert!(!rendered.contains("TITLE = {Second}"));
+    }
+
+    #[test]
+    fn validation_rejects_unsafe_delimiters_by_value_mode() {
+        assert!(validate_field_value("safe-token", RawValueMode::Bare).is_ok());
+        assert!(validate_field_value("safe value", RawValueMode::Bare).is_ok());
+        assert!(validate_field_value("{NASA} Mission", RawValueMode::Braced).is_ok());
+        assert!(validate_field_value("{quoted\"}", RawValueMode::Quoted).is_ok());
+        assert!(validate_field_value("bad%value", RawValueMode::Braced).is_err());
+        assert!(validate_field_value("bad\nvalue", RawValueMode::Braced).is_err());
+        assert!(validate_field_value("bad\\", RawValueMode::Braced).is_err());
+        assert!(validate_field_value("bad\"value", RawValueMode::Quoted).is_err());
+        assert!(validate_field_value("bad%value", RawValueMode::Quoted).is_err());
+        assert!(validate_field_value("{unbalanced", RawValueMode::Expression).is_err());
+    }
 }

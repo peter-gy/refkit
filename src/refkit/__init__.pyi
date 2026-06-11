@@ -1,6 +1,105 @@
 from collections.abc import Iterable
 from os import PathLike
-from typing import Any
+from typing import Any, Literal, TypeAlias, TypedDict
+
+class _ProjectionRow(TypedDict, total=False):
+    key: str
+    entry_type: str
+    type: str
+    title: str | None
+    doi: str | None
+    volume: str | None
+
+class _TreeFormatting(TypedDict):
+    font_style: str
+    font_variant: str
+    font_weight: str
+    text_decoration: str
+    vertical_align: str
+
+class _TreeText(TypedDict):
+    kind: Literal["Text"]
+    text: str
+    formatting: _TreeFormatting
+
+class _TreeElement(TypedDict):
+    kind: Literal["Element"]
+    display: str | None
+    meta: str | None
+    children: list[_TreeNode]
+
+class _TreeMarkup(TypedDict):
+    kind: Literal["Markup"]
+    value: str
+
+class _TreeLink(TypedDict):
+    kind: Literal["Link"]
+    text: str
+    url: str
+    formatting: _TreeFormatting
+
+class _TreeTransparent(TypedDict):
+    kind: Literal["Transparent"]
+    cite_idx: int
+    format: str
+
+_TreeNode: TypeAlias = _TreeText | _TreeElement | _TreeMarkup | _TreeLink | _TreeTransparent
+
+class _BibliographyEntry(TypedDict):
+    kind: Literal["bibliography-entry"]
+    key: str
+    first_field: _TreeNode | None
+    children: list[_TreeNode]
+
+_RenderedTree: TypeAlias = list[_TreeNode | _BibliographyEntry]
+_RawSpan: TypeAlias = list[int]
+
+class _RawWhitespaceBlock(TypedDict):
+    kind: Literal["whitespace"]
+    span: _RawSpan
+
+class _RawCommentBlock(TypedDict):
+    kind: Literal["comment"]
+    raw: str
+    span: _RawSpan
+
+class _RawPreambleBlock(TypedDict):
+    kind: Literal["preamble"]
+    value: str
+    span: _RawSpan
+
+class _RawStringBlock(TypedDict):
+    kind: Literal["string"]
+    key: str
+    value: str
+    span: _RawSpan
+
+class _RawEntryBlock(TypedDict):
+    kind: Literal["entry"]
+    id: int
+    key: str
+    span: _RawSpan
+
+class _RawFailedBlock(TypedDict):
+    kind: Literal["failed"]
+    raw: str
+    error: str
+    span: _RawSpan
+
+class _RawOtherBlock(TypedDict):
+    kind: Literal["other"]
+    raw: str
+    span: _RawSpan
+
+_RawBlock: TypeAlias = (
+    _RawWhitespaceBlock
+    | _RawCommentBlock
+    | _RawPreambleBlock
+    | _RawStringBlock
+    | _RawEntryBlock
+    | _RawFailedBlock
+    | _RawOtherBlock
+)
 
 __version__: str
 
@@ -43,10 +142,10 @@ class Library:
     def get(self, key: str) -> Entry | None: ...
     def is_empty(self) -> bool: ...
     def select(self, selector: str) -> list[Entry]: ...
-    def to_dicts(self) -> Any: ...
+    def to_dicts(self) -> list[dict[str, Any]]: ...
     def project(
-        self, fields: list[str] | None = None, keys: list[str] | None = None
-    ) -> list[dict[str, Any]]: ...
+        self, fields: Iterable[str] | None = None, keys: Iterable[str] | None = None
+    ) -> list[_ProjectionRow]: ...
     def __len__(self) -> int: ...
     def __bool__(self) -> bool: ...
     def __contains__(self, key: str) -> bool: ...
@@ -85,10 +184,10 @@ class Rendered:
     @property
     def html(self) -> str: ...
     @property
-    def tree(self) -> Any: ...
+    def tree(self) -> _RenderedTree: ...
     def to_text(self) -> str: ...
     def to_html(self) -> str: ...
-    def to_tree(self) -> Any: ...
+    def to_tree(self) -> _RenderedTree: ...
 
 class Document:
     def __init__(
@@ -109,6 +208,8 @@ class BibField:
 
 class BibFieldMap:
     def keys(self) -> list[str]: ...
+    def occurrences(self) -> list[BibField]: ...
+    def get_all(self, key: str) -> list[BibField]: ...
     def is_empty(self) -> bool: ...
     def get(self, key: str) -> BibField | None: ...
     def __len__(self) -> int: ...
@@ -128,6 +229,8 @@ class BibEntry:
 
 class BibEntryMap:
     def keys(self) -> list[str]: ...
+    def occurrences(self) -> list[BibEntry]: ...
+    def get_all(self, key: str) -> list[BibEntry]: ...
     def is_empty(self) -> bool: ...
     def get(self, key: str) -> BibEntry | None: ...
     def __len__(self) -> int: ...
@@ -149,14 +252,14 @@ class BibDocument:
     @property
     def strings(self) -> dict[str, str]: ...
     @property
-    def failed_blocks(self) -> list[dict[str, Any]]: ...
+    def failed_blocks(self) -> list[_RawFailedBlock]: ...
     @property
-    def blocks(self) -> list[dict[str, Any]]: ...
+    def blocks(self) -> list[_RawBlock]: ...
     def write(self, path: str | PathLike[str] | None = None) -> None: ...
 
 def cite(
     source: str | PathLike[str],
-    item: str | Cite | list[str | Cite],
+    item: str | Cite | Iterable[str | Cite],
     *,
     style: str | Style = "apa",
     locale: str | Locale | None = "en-US",

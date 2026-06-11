@@ -1,13 +1,37 @@
 from __future__ import annotations
 
+import importlib
+import importlib.metadata as metadata_module
 import json
+import sys
+import threading
+import tomllib
+from importlib import metadata
 from pathlib import Path
+from time import perf_counter, sleep
+from typing import Any, cast
 
 import pytest
 
 import refkit as rk
+import refkit._native as native
 
+ROOT = Path(__file__).parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _many_bibtex_records(count: int) -> str:
+    return "\n\n".join(
+        f"""@article{{item{index:04d},
+  author = {{Family{index:04d}, Given{index:04d}}},
+  title = {{Reference Work {index:04d}}},
+  journal = {{Journal of Citation Tests}},
+  year = {{2024}},
+  volume = {{1}},
+  pages = {{1-2}}
+}}"""
+        for index in range(count)
+    )
 
 
 def test_public_document_example_renders_text_html_and_tree() -> None:
@@ -53,6 +77,19 @@ def test_one_off_helpers_render_citation_and_bibliography() -> None:
     assert "Roe" in bibliography.text
 
 
+def test_one_off_cite_accepts_iterable_citation_groups() -> None:
+    tuple_group = rk.cite(FIXTURES / "basic.bib", ("doe2024", "roe2022"), style="apa")
+    generator_group = rk.cite(
+        FIXTURES / "basic.bib",
+        (key for key in ["doe2024", "roe2022"]),
+        style="apa",
+    )
+
+    assert "Doe" in tuple_group.text
+    assert "Roe" in tuple_group.text
+    assert generator_group.text == tuple_group.text
+
+
 def test_one_off_helpers_accept_loaded_style_objects() -> None:
     style = rk.Style.load("apa")
 
@@ -74,6 +111,70 @@ def test_document_bibliography_all_renders_uncited_library_entries() -> None:
     assert cited.html == ""
     assert "Doe" in full.text
     assert "Roe" in full.text
+
+
+def test_bibliography_render_releases_gil_for_worker_thread() -> None:
+    library = rk.Library.parse(_many_bibtex_records(2000))
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+    started = threading.Event()
+    done = threading.Event()
+    ticks: list[float] = []
+
+    def ticker() -> None:
+        started.set()
+        while not done.is_set():
+            ticks.append(perf_counter())
+            sleep(0)
+
+    thread = threading.Thread(target=ticker)
+    switch_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1.0)
+    try:
+        thread.start()
+        assert started.wait(timeout=2)
+        render_start = perf_counter()
+        rendered = doc.bibliography(all=True)
+        render_end = perf_counter()
+    finally:
+        done.set()
+        sys.setswitchinterval(switch_interval)
+        thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert rendered.text
+    assert any(render_start + 0.001 <= tick <= render_end for tick in ticks)
+
+
+def test_raw_bib_document_write_releases_gil_for_worker_thread(tmp_path: Path) -> None:
+    raw = rk.BibDocument.parse(_many_bibtex_records(10_000))
+    output = tmp_path / "large.bib"
+    started = threading.Event()
+    done = threading.Event()
+    ticks: list[float] = []
+
+    def ticker() -> None:
+        started.set()
+        while not done.is_set():
+            ticks.append(perf_counter())
+            sleep(0)
+
+    thread = threading.Thread(target=ticker)
+    switch_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1.0)
+    try:
+        thread.start()
+        assert started.wait(timeout=2)
+        write_start = perf_counter()
+        raw.write(output)
+        write_end = perf_counter()
+    finally:
+        done.set()
+        sys.setswitchinterval(switch_interval)
+        thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert output.read_text(encoding="utf-8").count("@article") == 10_000
+    assert any(write_start + 0.001 <= tick <= write_end for tick in ticks)
 
 
 def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
@@ -105,6 +206,12 @@ def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
     assert library.project(["key", "title"], keys=["inline"]) == [
         {"key": "inline", "title": "Inline Source"}
     ]
+    assert library.project(["key", "entry_type", "type"]) == [
+        {"key": "inline", "entry_type": "Article", "type": "Article"}
+    ]
+    assert library.project(("key", "title"), keys=("inline",)) == [
+        {"key": "inline", "title": "Inline Source"}
+    ]
 
     with pytest.raises(KeyError):
         library.project(["key"], keys=["missing"])
@@ -125,12 +232,43 @@ def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
     ]
 
 
+def test_library_values_entry_types_and_parent_lists_are_public_contracts() -> None:
+    library = rk.Library.read(FIXTURES / "parent.yaml")
+    entry = library["doe2024"]
+
+    assert [value.key for value in library.values()] == ["doe2024"]
+    assert entry.entry_type == "Article"
+    assert [parent.entry_type for parent in entry.parents] == ["Periodical"]
+    assert entry.parents[0].title == "Journal of Citation Systems"
+
+
 def test_version_and_missing_module_attribute() -> None:
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    cargo = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+
     assert rk.__version__ == "0.0.0"
+    assert rk.__version__ == native.__version__ == metadata.version("refkit")
+    assert pyproject["project"]["version"] == rk.__version__
+    assert cargo["package"]["version"] == rk.__version__
+    assert pyproject["project"]["requires-python"] == ">=3.11,<3.15"
+    assert cargo["package"]["rust-version"] == "1.85"
 
     missing_attribute = "does_not_exist"
     with pytest.raises(AttributeError, match="has no attribute"):
         getattr(rk, missing_attribute)
+
+
+def test_source_tree_import_falls_back_to_native_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    def missing_version(name: str) -> str:
+        raise metadata_module.PackageNotFoundError(name)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(metadata_module, "version", missing_version)
+        reloaded = importlib.reload(rk)
+
+    assert reloaded.__version__ == native.__version__
+    importlib.reload(rk)
+    assert rk.__version__ == metadata.version("refkit")
 
 
 def test_rendered_html_escapes_bibliography_data(tmp_path: Path) -> None:
@@ -166,9 +304,24 @@ def test_rendered_html_does_not_emit_unsafe_link_schemes(tmp_path: Path) -> None
 
     assert 'href="javascript:alert(1)"' not in rendered.html
     assert "javascript:alert(1)" in rendered.html
-    tree_json = json.dumps(rendered.tree)
-    assert '"kind": "Link"' not in tree_json
-    assert "javascript:alert(1)" in tree_json
+    bibliography_entry = cast(dict[str, Any], rendered.tree[0])
+    children = cast(list[dict[str, Any]], bibliography_entry["children"])
+    url_node = children[-1]
+    assert url_node["kind"] == "Element"
+    assert url_node["meta"] == "Text"
+    assert url_node["children"] == [
+        {
+            "formatting": {
+                "font_style": "Normal",
+                "font_variant": "Normal",
+                "font_weight": "Normal",
+                "text_decoration": "None",
+                "vertical_align": "None",
+            },
+            "kind": "Text",
+            "text": "javascript:alert(1)",
+        }
+    ]
 
 
 def test_rendered_html_preserves_csl_formatting() -> None:
@@ -191,6 +344,40 @@ def test_bibliography_text_and_tree_include_second_field_labels() -> None:
 
     assert rendered.text.startswith("[1]")
     assert "[1]" in json.dumps(rendered.tree)
+
+
+def test_rendered_tree_exposes_documented_structured_keys() -> None:
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("ieee"), locale="en-US")
+    citation_tree = doc.cite("doe2024").tree
+    bibliography_tree = doc.bibliography().tree
+
+    assert citation_tree[0]["kind"] == "Element"
+    assert "children" in citation_tree[0]
+    assert bibliography_tree[0]["kind"] == "bibliography-entry"
+    assert bibliography_tree[0]["key"] == "doe2024"
+    assert bibliography_tree[0]["first_field"] is not None
+    assert bibliography_tree[0]["children"][0]["kind"] == "Element"
+
+
+def test_rendered_tree_uses_stable_public_strings() -> None:
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("ieee"), locale="en-US")
+
+    citation_tree = doc.cite("doe2024").tree
+    entry_node = cast(dict[str, Any], citation_tree[0])
+    first_child = cast(dict[str, Any], entry_node["children"][0])
+    citation_number = cast(dict[str, Any], entry_node["children"][1])
+
+    assert entry_node["meta"] == "Entry"
+    assert citation_number["meta"] == "CitationNumber"
+    assert first_child["formatting"] == {
+        "font_style": "Normal",
+        "font_variant": "Normal",
+        "font_weight": "Normal",
+        "text_decoration": "None",
+        "vertical_align": "None",
+    }
 
 
 def test_library_reads_yaml_and_selects_parent_periodical() -> None:
@@ -541,12 +728,282 @@ def test_missing_reference_raises_structured_error() -> None:
     assert "Doe" in doc.cite("doe2024").text
 
 
+def test_invalid_locator_label_raises_value_error() -> None:
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+
+    with pytest.raises(ValueError, match='unknown locator label "nonsense"'):
+        doc.cite(rk.Cite("doe2024", locator="12", label="nonsense"))
+
+
+def test_valid_locator_label_renders_locator_text() -> None:
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+
+    rendered = doc.cite(rk.Cite("doe2024", locator="12", label="page"))
+
+    assert rendered.text == "(Doe, 2024, p. 12)"
+
+
+def test_ambiguous_author_date_citations_fall_back_to_disambiguation() -> None:
+    library = rk.Library.parse(
+        """@article{first,
+  author = {Doe, Jane},
+  title = {First},
+  journal = {Journal},
+  year = {2024}
+}
+
+@article{second,
+  author = {Doe, Jane},
+  title = {Second},
+  journal = {Journal},
+  year = {2024}
+}
+""",
+    )
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+
+    assert doc.cite("first").text == "(Doe, 2024)"
+    assert doc.cite("second").text == "(Doe, 2024b)"
+    assert "2024a" in doc.bibliography().text
+
+
+def test_bibliography_only_year_suffix_does_not_change_citation_text() -> None:
+    style = rk.Style.from_xml(
+        """<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">
+  <info>
+    <title>Bibliography Suffix Test</title>
+    <id>https://example.com/bibliography-suffix-test</id>
+    <updated>2024-01-01T00:00:00+00:00</updated>
+  </info>
+  <citation disambiguate-add-year-suffix="true">
+    <layout prefix="(" suffix=")">
+      <names variable="author"/>
+      <date variable="issued" prefix=", ">
+        <date-part name="year"/>
+      </date>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout>
+      <names variable="author"/>
+      <date variable="issued" prefix=" (" suffix=")">
+        <date-part name="year"/>
+      </date>
+      <text variable="year-suffix"/>
+      <text variable="title" prefix=". "/>
+    </layout>
+  </bibliography>
+</style>
+""",
+    )
+    library = rk.Library.parse(
+        """@article{first,
+  author = {Doe, Jane},
+  title = {First},
+  journal = {Journal},
+  year = {2024}
+}
+
+@article{second,
+  author = {Doe, Jane},
+  title = {Second},
+  journal = {Journal},
+  year = {2024}
+}
+""",
+    )
+    doc = rk.Document(library, style, locale="en-US")
+
+    first = doc.cite("first").text
+    second = doc.cite("second").text
+    bibliography = doc.bibliography().text
+
+    assert first == "(Jane Doe, 2024)"
+    assert second == "(Jane Doe, 2024)"
+    assert "(2024)a" in bibliography
+    assert "(2024)b" in bibliography
+
+
+def test_slow_path_citation_disables_later_fast_disambiguation() -> None:
+    library = rk.Library.parse(
+        """@article{first,
+  author = {Doe, Jane},
+  title = {First},
+  journal = {Journal},
+  year = {2024}
+}
+
+@article{second,
+  author = {Doe, Jane},
+  title = {Second},
+  journal = {Journal},
+  year = {2024}
+}
+""",
+    )
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+
+    assert doc.cite(rk.Cite("first", locator="12", label="page")).text == ("(Doe, 2024, p. 12)")
+    assert doc.cite("second").text == "(Doe, 2024b)"
+
+
+def test_repeated_key_respects_subsequent_name_rules() -> None:
+    style = rk.Style.from_xml(
+        """<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">
+  <info>
+    <title>Subsequent Names Test</title>
+    <id>https://example.com/subsequent-names-test</id>
+    <updated>2024-01-01T00:00:00+00:00</updated>
+  </info>
+  <citation
+    et-al-min="10"
+    et-al-use-first="10"
+    et-al-subsequent-min="3"
+    et-al-subsequent-use-first="1"
+  >
+    <layout prefix="(" suffix=")">
+      <names variable="author">
+        <name and="text" delimiter=", "/>
+        <et-al term="et-al"/>
+      </names>
+      <date variable="issued" prefix=", ">
+        <date-part name="year"/>
+      </date>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout>
+      <text variable="title"/>
+    </layout>
+  </bibliography>
+</style>
+""",
+    )
+    library = rk.Library.parse(
+        """team:
+  type: Article
+  author: ["Alpha, Ann", "Beta, Bob", "Gamma, Gus"]
+  title: Team Work
+  date: 2024
+  parent:
+    type: Periodical
+    title: Journal
+""",
+        format="yaml",
+    )
+    doc = rk.Document(library, style, locale="en-US")
+
+    first = doc.cite("team").text
+    second = doc.cite("team").text
+
+    assert first != second
+    assert "et al" in second
+
+
+def test_names_substitute_citation_number_uses_bibliography_sort() -> None:
+    style = rk.Style.from_xml(
+        """<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">
+  <info>
+    <title>Substitute Citation Number Test</title>
+    <id>https://example.com/substitute-citation-number-test</id>
+    <updated>2024-01-01T00:00:00+00:00</updated>
+  </info>
+  <citation>
+    <layout prefix="[" suffix="]">
+      <names variable="author">
+        <substitute>
+          <number variable="citation-number"/>
+        </substitute>
+      </names>
+    </layout>
+  </citation>
+  <bibliography>
+    <sort>
+      <key variable="title"/>
+    </sort>
+    <layout>
+      <text variable="title"/>
+    </layout>
+  </bibliography>
+</style>
+""",
+    )
+    library = rk.Library.parse(
+        """a:
+  type: Article
+  title: Alpha
+  date: 2024
+b:
+  type: Article
+  title: Beta
+  date: 2024
+""",
+        format="yaml",
+    )
+    doc = rk.Document(library, style, locale="en-US")
+
+    assert doc.cite("b").text == "[1]"
+    assert doc.cite("a").text == "[1]"
+
+
+def test_names_substitute_position_condition_uses_full_history() -> None:
+    style = rk.Style.from_xml(
+        """<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">
+  <info>
+    <title>Substitute Position Test</title>
+    <id>https://example.com/substitute-position-test</id>
+    <updated>2024-01-01T00:00:00+00:00</updated>
+  </info>
+  <citation>
+    <layout prefix="(" suffix=")">
+      <names variable="author">
+        <substitute>
+          <choose>
+            <if position="first">
+              <text value="first"/>
+            </if>
+            <else>
+              <text value="later"/>
+            </else>
+          </choose>
+        </substitute>
+      </names>
+    </layout>
+  </citation>
+  <bibliography>
+    <layout>
+      <text variable="title"/>
+    </layout>
+  </bibliography>
+</style>
+""",
+    )
+    library = rk.Library.parse(
+        """item:
+  type: Article
+  title: Position Work
+  date: 2024
+""",
+        format="yaml",
+    )
+    doc = rk.Document(library, style, locale="en-US")
+
+    assert doc.cite("item").text == "(first)"
+
+
 def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path) -> None:
     raw = rk.BibDocument.read(FIXTURES / "raw.bib")
+    blocks = raw.blocks
 
     assert raw.comments[0].startswith("% library comment")
     assert raw.preamble == "BibTeX preamble"
     assert raw.strings["jcs"] == "Journal of Citation Systems"
+    assert blocks[0]["kind"] == "comment"
+    assert blocks[0]["raw"] == "% library comment\n"
+    assert blocks[1]["kind"] == "preamble"
+    assert blocks[1]["span"] == [18, 46]
     failed_blocks = raw.failed_blocks
     assert failed_blocks[0]["kind"] == "failed"
     assert "closing delimiter" in failed_blocks[0]["error"]
@@ -562,9 +1019,10 @@ def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path)
     assert "@string" in text
     assert "@broken" in text
     assert "Corrected title" in text
-    assert "Old Title" not in text
     assert "journal = jcs" in text
-    assert "journal = {jcs}" not in text
+    written = rk.BibDocument.read(output)
+    assert written.entries["doe2024"].fields["title"].value == "Corrected title"
+    assert written.entries["doe2024"].fields["journal"].value == "jcs"
 
 
 def test_raw_bib_document_preserves_typst_biblatex_blocks(tmp_path: Path) -> None:
@@ -589,9 +1047,10 @@ def test_raw_bib_document_preserves_typst_biblatex_blocks(tmp_path: Path) -> Non
     assert "@string{benchjournal" in text
     assert '@preamble{"Reference " # "fixture"}' in text
     assert "Edited belief title" in text
-    assert "Belief in moralizing gods" not in text
     assert "@inproceedings{conigliocorbalan" in text
     assert "author    {Marcelo Coniglio and Maria Corbalan}" in text
+    written = rk.BibDocument.read(output)
+    assert written.entries["roes2003belief"].fields["title"].value == "Edited belief title"
 
 
 def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers() -> None:
@@ -608,15 +1067,26 @@ def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers() -> 
     assert raw.comments == ["% inline comment\n"]
     assert raw.entries
     assert not raw.entries.is_empty()
+    assert "inline" in raw.entries
+    assert "missing" not in raw.entries
     entry = raw.entries.get("inline")
     assert entry is not None
     assert entry.key == "inline"
     assert raw.entries.get("missing") is None
+    assert [entry.key for entry in raw.entries.occurrences()] == ["inline"]
+    assert [entry.key for entry in raw.entries.get_all("inline")] == ["inline"]
     assert raw.entries["inline"].fields
     assert not raw.entries["inline"].fields.is_empty()
     title = raw.entries["inline"].fields.get("title")
     assert title is not None
+    assert title.name == "title"
     assert title.value == "Inline Raw"
+    assert [field.name for field in raw.entries["inline"].fields.occurrences()] == ["title"]
+    assert [field.value for field in raw.entries["inline"].fields.get_all("title")] == [
+        "Inline Raw"
+    ]
+    assert "title" in raw.entries["inline"].fields
+    assert "missing" not in raw.entries["inline"].fields
     assert raw.entries["inline"].fields.get("missing") is None
     assert raw.failed_blocks
 
@@ -802,7 +1272,8 @@ def test_raw_field_edit_replaces_whole_concatenated_expression(tmp_path: Path) -
 
     text = output.read_text()
     assert "title = {New}," in text
-    assert "Subtitle" not in text
+    written = rk.BibDocument.read(output)
+    assert written.entries["concat"].fields["title"].value == "New"
 
 
 def test_raw_bib_document_preserves_duplicate_keys_on_write(tmp_path: Path) -> None:
@@ -821,7 +1292,16 @@ def test_raw_bib_document_preserves_duplicate_keys_on_write(tmp_path: Path) -> N
     )
 
     raw = rk.BibDocument.read(source)
-    raw.entries["same"].fields["title"].value = "Corrected second"
+    assert [entry.key for entry in raw.entries.occurrences()] == ["same", "same"]
+    duplicates = raw.entries.get_all("same")
+    assert [entry.fields["title"].value for entry in duplicates] == ["First", "Second"]
+
+    with pytest.raises(rk.RefkitError, match='entry key "same" is ambiguous'):
+        raw.entries["same"]
+    with pytest.raises(rk.RefkitError, match='entry key "same" is ambiguous'):
+        raw.entries.get("same")
+
+    duplicates[1].fields["title"].value = "Corrected second"
     output = tmp_path / "duplicates-out.bib"
     raw.write(output)
 
@@ -829,6 +1309,41 @@ def test_raw_bib_document_preserves_duplicate_keys_on_write(tmp_path: Path) -> N
     assert "title = {First}" in text
     assert "title = {Corrected second}" in text
     assert text.count("@article{same") == 2
+
+    recovered = rk.Library.read(output, strict=False, diagnostics=True)
+    assert recovered["same"].title == "First"
+    assert 'ignored duplicate BibTeX entry key "same"' in recovered.diagnostics[0]
+
+
+def test_raw_bib_document_duplicate_fields_are_addressable_by_occurrence(tmp_path: Path) -> None:
+    raw = rk.BibDocument.parse(
+        """@article{duplicate,
+  title = {First},
+  TITLE = {Second},
+  year = {2024}
+}
+"""
+    )
+
+    entry = raw.entries["duplicate"]
+    assert entry.fields.keys() == ["title", "year"]
+    assert [field.name for field in entry.fields.occurrences()] == ["title", "title", "year"]
+    titles = entry.fields.get_all("title")
+    assert [field.value for field in titles] == ["First", "Second"]
+
+    with pytest.raises(rk.RefkitError, match='field "title" in entry "duplicate" is ambiguous'):
+        entry.fields["title"]
+    with pytest.raises(rk.RefkitError, match='field "title" in entry "duplicate" is ambiguous'):
+        entry.fields.get("title")
+
+    titles[0].value = "Corrected first"
+    output = tmp_path / "duplicate-fields-out.bib"
+    raw.write(output)
+
+    text = output.read_text()
+    assert "title = {Corrected first}" in text
+    assert "TITLE = {Second}" in text
+    assert "year = {2024}" in text
 
 
 def test_raw_bib_document_ignores_comment_delimiters_inside_entries(tmp_path: Path) -> None:

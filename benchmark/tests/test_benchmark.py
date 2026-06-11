@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+import importlib
+import importlib.metadata as metadata_module
 import json
 import os
 from pathlib import Path
@@ -26,6 +28,23 @@ def test_refkit_public_helpers_are_covered_from_benchmark_subset(tmp_path: Path)
         getattr(rk, missing_attribute)
 
 
+def test_refkit_version_fallback_is_covered_from_benchmark_subset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import refkit as rk
+    import refkit._native as native
+
+    def missing_version(name: str) -> str:
+        raise metadata_module.PackageNotFoundError(name)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(metadata_module, "version", missing_version)
+        reloaded = importlib.reload(rk)
+
+    assert reloaded.__version__ == native.__version__
+    importlib.reload(rk)
+
+
 def test_audited_tiny_fixture_matches_generator() -> None:
     assert fixtures.audited_tiny_bibtex() == fixtures.bibtex_for_records(
         fixtures.records_for_size("tiny")
@@ -36,10 +55,20 @@ def test_materialize_workload_writes_bibtex_and_raw_inputs(tmp_path: Path) -> No
     workload = fixtures.materialize_workload("tiny", tmp_path)
 
     assert workload.keys == ["item0001", "item0002", "item0003"]
+    assert workload.family == "synthetic_scale"
+    assert workload.record_count == 3
     assert workload.bibtex_path.read_text(encoding="utf-8") == workload.bibtex
     assert workload.raw_bibtex_path.read_text(encoding="utf-8") == workload.raw_bibtex
     assert workload.csl_json[0]["id"] == "item0001"
     assert "preamble" in workload.raw_bibtex.lower()
+    assert workload.source_byte_count("bibtex") == len(workload.bibtex.encode("utf-8"))
+    assert workload.source_text("raw_bibtex") == workload.raw_bibtex
+    assert workload.source_byte_count("raw_bibtex") == len(workload.raw_bibtex.encode("utf-8"))
+    assert workload.source_text("csl_json").startswith("[")
+    assert len(workload.source_sha256("bibtex")) == 64
+    assert workload.source_text("unknown") == ""
+    assert workload.source_byte_count("unknown") == 0
+    assert workload.source_sha256("unknown") == ""
 
 
 def test_records_for_size_rejects_unknown_size() -> None:
@@ -90,10 +119,23 @@ def test_positive_integer_parsers_reject_invalid_values() -> None:
 def test_list_command_prints_cases(capsys: pytest.CaptureFixture[str]) -> None:
     assert runner.main(["--list"]) == 0
     out = capsys.readouterr().out
-    assert "bibtex_parse\tparse" in out
+    listed_cases = [line.split("\t", maxsplit=1)[0] for line in out.splitlines()]
+    assert listed_cases == [
+        "bibtex_parse",
+        "raw_bibtex_roundtrip",
+        "citation_render",
+        "bibliography_render",
+        "repeated_render",
+        "one_off_cite",
+        "one_off_bibliography",
+        "missing_reference",
+        "bulk_materialization",
+        "library_keys",
+        "entry_lookup",
+        "field_projection",
+    ]
     assert "missing_reference\terror" in out
     assert "field_projection\tinspect" in out
-    assert "csl_json_export" not in out
 
 
 def test_package_version_reports_missing_distribution() -> None:
@@ -233,6 +275,8 @@ def test_explicit_unsupported_methods_report_reasons(tmp_path: Path) -> None:
 
 
 def test_check_helpers_reject_bad_outcomes(tmp_path: Path) -> None:
+    tiny_records = fixtures.records_for_size("tiny")
+
     with pytest.raises(AssertionError, match="expected count"):
         adapters._count_is(2)(adapters.OperationOutcome("", 1))
     with pytest.raises(AssertionError, match="expected keys"):
@@ -243,8 +287,30 @@ def test_check_helpers_reject_bad_outcomes(tmp_path: Path) -> None:
         adapters._all_checks(adapters._count_is(2))(adapters.OperationOutcome("", 1))
     with pytest.raises(AssertionError, match="expected output"):
         adapters._text_contains("needle")(adapters.OperationOutcome("haystack", 1))
+    adapters._text_contains_all(["hay", "stack"])(adapters.OperationOutcome("haystack", 1))
     with pytest.raises(AssertionError, match="expected output"):
         adapters._text_contains_all(["needle"])(adapters.OperationOutcome("haystack", 1))
+    adapters._citation_output_matches(tiny_records[:1])(
+        adapters.OperationOutcome("(Family0001, 2001)", 1)
+    )
+    with pytest.raises(AssertionError, match="rendered citations"):
+        adapters._citation_output_matches(tiny_records[:2])(
+            adapters.OperationOutcome("(Family0002, 2002)\n(Family0001, 2001)", 2)
+        )
+    bibliography_row = (
+        "Family0001, G. (2001). Reference Work 0001. "
+        "Journal of Citation Benchmarks, 2, 3-11. "
+        "https://doi.org/10.5555/refkit.bench.0001"
+    )
+    adapters._bibliography_output_matches(tiny_records[:1])(
+        adapters.OperationOutcome(bibliography_row, 1)
+    )
+    with pytest.raises(AssertionError, match="bibliography rows"):
+        adapters._bibliography_output_matches(tiny_records[:1])(adapters.OperationOutcome("", 0))
+    with pytest.raises(AssertionError, match="Reference Work 0001"):
+        adapters._bibliography_output_matches(tiny_records[:1])(
+            adapters.OperationOutcome("Family0001, G. (2001).", 1)
+        )
     with pytest.raises(AssertionError, match="expected detail"):
         adapters._detail_contains("needle")(adapters.OperationOutcome("", 1, "haystack"))
     path = Path("missing-output.bib")
@@ -403,6 +469,38 @@ def test_each_comparable_workflow_has_correctness_check(tmp_path: Path) -> None:
             assert outcome.count >= 1
 
 
+def test_benchmark_render_metadata_describes_citation_requests(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    refkit_bibliography = adapters.RefkitAdapter().prepare(
+        "bibliography_render", workload, tmp_path
+    )
+    refkit_one_off = adapters.RefkitAdapter().prepare("one_off_bibliography", workload, tmp_path)
+    citeproc_bibliography = adapters.CiteprocPyAdapter().prepare(
+        "bibliography_render", workload, tmp_path
+    )
+    citeproc_missing = adapters.CiteprocPyAdapter().prepare("missing_reference", workload, tmp_path)
+
+    assert refkit_bibliography.metadata["citation_count"] == 0
+    assert refkit_one_off.metadata["citation_count"] == 0
+    assert citeproc_bibliography.metadata["citation_count"] == len(workload.records)
+    with pytest.raises(AssertionError, match="expected count 1"):
+        citeproc_missing.check(
+            adapters.OperationOutcome("(missing-reference?)", 2, "missing-reference")
+        )
+
+
+def test_repeated_render_uses_full_selected_input(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("medium", tmp_path)
+
+    for adapter in (adapters.RefkitAdapter(), adapters.CiteprocPyAdapter()):
+        prepared = adapter.prepare("repeated_render", workload, tmp_path)
+        outcome = prepared.operation()
+
+        prepared.check(outcome)
+        assert outcome.count == len(workload.records)
+        assert prepared.metadata["citation_count"] == len(workload.records)
+
+
 def test_citeproc_bulk_materialization_uses_bibtex_source(tmp_path: Path) -> None:
     workload = fixtures.materialize_workload("tiny", tmp_path)
     prepared = adapters.CiteprocPyAdapter().prepare("bulk_materialization", workload, tmp_path)
@@ -521,21 +619,16 @@ def test_run_adapter_case_emits_failed_warmup_rows(
         metadata=metadata,
     )
 
-    assert rows == [
-        {
-            **runner.base_row(
-                WarmupFailingAdapter(),
-                runner.CASES["bibtex_parse"],
-                "tiny",
-                metadata,
-            ),
-            "phase": "parse",
-            "round": 0,
-            "seconds": 0.0,
-            "status": "failed",
-            "detail": "AssertionError('warmup failed')",
-        }
-    ]
+    assert len(rows) == 1
+    assert rows[0]["phase"] == "parse"
+    assert rows[0]["operation_phase"] == "parse"
+    assert rows[0]["round"] == 0
+    assert rows[0]["seconds"] == 0.0
+    assert rows[0]["status"] == "failed"
+    assert rows[0]["detail"] == "AssertionError('warmup failed')"
+    assert isinstance(rows[0]["setup_seconds"], float)
+    assert rows[0]["setup_seconds"] >= 0.0
+    assert rows[0]["source_format"] == "unknown"
 
 
 def test_run_suite_writes_ok_and_unsupported_rows() -> None:
@@ -552,6 +645,16 @@ def test_run_suite_writes_ok_and_unsupported_rows() -> None:
     assert any(row["status"] == "ok" for row in rows)
     assert any(row["status"] == "unsupported" for row in rows)
     assert all(row["input"] == "tiny" for row in rows)
+    for row in rows:
+        assert set(runner.RESULT_FIELDS) <= set(row)
+        assert row["input_size"] == "tiny"
+        assert row["workload_family"] == "synthetic_scale"
+        assert row["record_count"] == 3
+        assert row["rounds"] == 1
+        assert row["warmups"] == 1
+        assert isinstance(row["setup_seconds"], float)
+        assert row["setup_seconds"] >= 0.0
+        assert row["adapter_version"] == row["package_version"]
 
 
 def test_write_json_and_csv_outputs(tmp_path: Path) -> None:
@@ -574,6 +677,10 @@ def test_write_json_and_csv_outputs(tmp_path: Path) -> None:
 
     assert len(loaded["rows"]) == len(result["rows"])
     assert csv_rows[0]["case"] == "bibtex_parse"
+    assert csv_rows[0]["workload_family"] == "synthetic_scale"
+    assert csv_rows[0]["record_count"] == "3"
+    assert csv_rows[0]["source_format"] == "bibtex"
+    assert csv_rows[0]["input_sha256"]
 
 
 def test_main_runs_case_and_writes_outputs(
