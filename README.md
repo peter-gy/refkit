@@ -99,6 +99,7 @@ assert library.get("doe2024").title == "Refkit for Bibliographies"
 ## BibTeX And BibLaTeX
 
 `Library.read("refs.bib")` and `Library.parse(..., format="biblatex")` normalize BibTeX or BibLaTeX records for rendering and selection.
+Malformed blocks are skipped during normalization by default. Pass `diagnostics=True` to inspect recovery decisions, or `strict=True` when a parse failure should stop the call.
 
 ```python
 library = rk.Library.parse(

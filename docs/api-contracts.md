@@ -95,8 +95,10 @@ Use `fields.get_all(name)` when an entry contains duplicate field names.
 
 | API | Error | Trigger |
 | --- | --- | --- |
-| `Library.read(path)` | `RefkitError` | Unsupported file extension or strict parse failure. |
-| `Library.parse(source, format=...)` | `RefkitError` | Unsupported format or strict parse failure. |
+| `Library.read(path)` | `RefkitError` | Unsupported file extension. |
+| `Library.read(path, strict=True)` | `RefkitError` | Exact BibTeX parse failure. |
+| `Library.parse(source, format=...)` | `RefkitError` | Unsupported format. |
+| `Library.parse(source, format=..., strict=True)` | `RefkitError` | Exact BibTeX parse failure. |
 | `Library.project(fields=..., keys=...)` | `TypeError` | `fields` or `keys` is a string or is not iterable. |
 | `Library.project(fields=...)` | `ValueError` | A projection field is not one of `key`, `entry_type`, `type`, `title`, `doi`, or `volume`. |
 | `Library.project(keys=...)` | `KeyError` | A requested entry key is absent from the `Library`. |

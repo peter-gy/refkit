@@ -493,7 +493,9 @@ def test_style_and_locale_loaders_cover_supported_sources() -> None:
         rk.Locale.load("zz-ZZ")
 
 
-def test_library_non_strict_keeps_valid_bibtex_entries_with_diagnostics(tmp_path: Path) -> None:
+def test_library_default_recovery_keeps_valid_bibtex_entries_with_diagnostics(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "mixed.bib"
     source.write_text(
         """@article{valid,
@@ -508,14 +510,30 @@ def test_library_non_strict_keeps_valid_bibtex_entries_with_diagnostics(tmp_path
     )
 
     with pytest.raises(rk.RefkitError):
-        rk.Library.read(source)
+        rk.Library.read(source, strict=True)
 
-    library = rk.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, diagnostics=True)
 
     assert library.keys() == ["valid"]
     assert library["valid"].title == "Kept Entry"
     assert library.diagnostics
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
+
+
+def test_library_parse_default_recovery_keeps_valid_bibtex_entries() -> None:
+    library = rk.Library.parse(
+        """@article{valid,
+  author = {Doe, Jane},
+  title = {Kept Entry},
+  year = {2024}
+}
+
+@broken{missing,
+  title = {No close}
+"""
+    )
+
+    assert library.keys() == ["valid"]
 
 
 def test_library_non_strict_recovers_entries_after_unclosed_block(tmp_path: Path) -> None:
@@ -716,6 +734,59 @@ def test_library_non_strict_drops_malformed_string_definitions(tmp_path: Path) -
     assert library.keys() == ["valid"]
     assert len(library.diagnostics) == 3
     assert all("ignored malformed BibTeX block" in item for item in library.diagnostics)
+
+
+def test_library_recovery_ignores_invalid_typed_fields() -> None:
+    library = rk.Library.parse(
+        """@article{badmonth,
+  author = {Doe, Jane},
+  title = {Bad Month},
+  year = {2024},
+  month = {16}
+}
+""",
+        diagnostics=True,
+    )
+
+    assert library.keys() == ["badmonth"]
+    assert library["badmonth"].title == "Bad Month"
+    assert 'ignored BibTeX field "month"' in library.diagnostics[0]
+
+
+def test_library_recovery_literalizes_unknown_bibtex_abbreviations() -> None:
+    library = rk.Library.parse(
+        """@article{macro,
+  author = {Doe, Jane},
+  title = {Macro Journal},
+  year = {2024},
+  journal = JMLR # { Extra}
+}
+""",
+        diagnostics=True,
+    )
+
+    assert library.keys() == ["macro"]
+    assert library["macro"].title == "Macro Journal"
+    assert "unknown abbreviation" in library.diagnostics[0]
+
+
+def test_library_read_decodes_windows_1252_bibtex(tmp_path: Path) -> None:
+    source = tmp_path / "windows-1252.bib"
+    source.write_bytes(
+        b"""@article{encoded,
+  author = {Doe, Jane},
+  title = {Smart \x92 Quote},
+  year = {2024}
+}
+"""
+    )
+
+    raw = rk.BibDocument.read(source)
+    library = rk.Library.read(source, diagnostics=True)
+
+    assert raw.entries["encoded"].fields["title"].value == "Smart ’ Quote"
+    assert library["encoded"].title == "Smart ’ Quote"
+    assert "decoded" in library.diagnostics[0]
 
 
 def test_missing_reference_raises_structured_error() -> None:
@@ -1361,6 +1432,39 @@ def test_raw_bib_document_ignores_comment_delimiters_inside_entries(tmp_path: Pa
 
     assert raw.failed_blocks == []
     assert raw.entries["commented"].fields["title"].value == "Still Here"
+
+
+def test_raw_bib_document_keeps_percent_encoded_urls_inside_braced_values(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "percent-url.bib"
+    source.write_text(
+        """@article{encoded,
+  title = {Percent Encoded URL},
+  url = {https://example.test/path%2Fpaper?partnerID=40&md5=abc},
+  year = {2024}
+}
+""",
+    )
+
+    raw = rk.BibDocument.read(source)
+
+    assert raw.failed_blocks == []
+    assert raw.entries["encoded"].fields["url"].value == (
+        "https://example.test/path%2Fpaper?partnerID=40&md5=abc"
+    )
+
+    output = tmp_path / "percent-url-out.bib"
+    raw.entries["encoded"].fields["title"].value = "Edited title"
+    raw.write(output)
+
+    written = rk.BibDocument.read(output)
+    library = rk.Library.read(output)
+    assert written.failed_blocks == []
+    assert written.entries["encoded"].fields["url"].value == (
+        "https://example.test/path%2Fpaper?partnerID=40&md5=abc"
+    )
+    assert library["encoded"].title == "Edited title"
 
 
 def test_raw_bib_document_handles_escaped_and_nested_delimiters(tmp_path: Path) -> None:

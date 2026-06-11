@@ -73,7 +73,7 @@ Evidence paths are relative to the corresponding project root.
 | String interpolation | No. | Partial inside the BibTeX source adapter. | Yes through `ResolveStringReferencesMiddleware`. | Partial. Normalized `Library` delegates to Hayagriva parsing. Raw `BibDocument` preserves definitions without interpolation. |
 | Month normalization | No. | Partial inside the BibTeX source adapter. | Yes through month middleware. | Partial through normalized parser behavior. No raw transform API. |
 | Name splitting and merging middleware | No. | Partial. The BibTeX adapter has BibTeX name parsing for CSL references. | Yes through `SeparateCoAuthors`, `MergeCoAuthors`, `SplitNameParts`, and `MergeNameParts`. | Partial. Normalized entries expose Hayagriva name handling through rendering. No raw name transform API. |
-| Fault-tolerant parsing | No. | Partial. README lists many failing CSL cases. The BibTeX adapter is not a raw recovery parser. | Yes. The splitter recovers and records failed blocks. | Yes. `Library.read(strict=False, diagnostics=True)` drops malformed blocks for normalized parsing and `BibDocument.read` preserves failed blocks. |
+| Fault-tolerant parsing | No. | Partial. README lists many failing CSL cases. The BibTeX adapter is not a raw recovery parser. | Yes. The splitter recovers and records failed blocks. | Yes. `Library.read(diagnostics=True)` drops malformed blocks for normalized parsing by default, `strict=True` keeps exact parsing, and `BibDocument.read` preserves failed blocks. |
 
 ## CSL Styles And Locales
 
@@ -168,7 +168,7 @@ Evidence paths are relative to the corresponding project root.
 | Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit 0.0.0 |
 | --- | --- | --- | --- | --- |
 | Structured missing-reference error | External or processor error depending on host behavior. | Partial. Missing items can be passed to a callback during registration. | No citation references. | Yes. `MissingReferenceError`. |
-| Parser diagnostics | Yes for processor style errors and test runner output. | Partial. CSL validation warnings and Python exceptions. | Yes. Failed blocks carry exceptions and raw block data. | Yes. Non-strict `Library.read` can return diagnostics, and `BibDocument.failed_blocks` preserves raw errors. |
+| Parser diagnostics | Yes for processor style errors and test runner output. | Partial. CSL validation warnings and Python exceptions. | Yes. Failed blocks carry exceptions and raw block data. | Yes. `Library.read(diagnostics=True)` returns recovery diagnostics, and `BibDocument.failed_blocks` preserves raw errors. |
 | Test suite against CSL fixtures | Yes. README reports more than 1,300 integration tests. | Yes. README reports almost 60 percent of relevant citeproc tests and tracks expected failures. | No CSL tests. It has parser, writer, and middleware tests. | Partial. Public examples and regression tests exist. Full CSL suite parity is not claimed. |
 | Raw BibTeX parser tests | No. | Partial through examples and source adapter tests. | Yes. Splitter, model, library, writer, and middleware tests exist. | Yes. Public tests cover raw preservation, malformed blocks, spans, duplicate keys, field edits, and delimiter safety. |
 | Coverage gate | No coverage gate found in inspected metadata. | Coveralls badge exists in README. | Test extras include pytest-cov. No hard coverage gate was found in setup metadata. | Yes. `pytest` is configured with branch coverage and `--cov-fail-under=100`. |

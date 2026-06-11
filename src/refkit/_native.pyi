@@ -125,13 +125,13 @@ class Entry:
 class Library:
     @staticmethod
     def read(
-        path: str | PathLike[str], strict: bool = True, diagnostics: bool = False
+        path: str | PathLike[str], strict: bool = False, diagnostics: bool = False
     ) -> Library: ...
     @staticmethod
     def parse(
         source: str,
         format: str = "bibtex",
-        strict: bool = True,
+        strict: bool = False,
         diagnostics: bool = False,
     ) -> Library: ...
     @property
