@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter_ns
 from typing import Any, cast
 
-from benchmark.fixtures import Workload
+from benchmark.fixtures import Workload, bibtex_for_records
 
 OutcomeValue = object
 
@@ -864,8 +865,142 @@ class BibtexparserAdapter(PackageAdapter):
         )
 
 
+class PolarsRefkitAdapter(PackageAdapter):
+    name = "polars-refkit"
+    distribution = "polars-refkit"
+
+    def prepare_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import polars as pl
+
+        import polars_refkit as prk
+
+        def operation() -> OperationOutcome:
+            source = workload.bibtex_path.read_text(encoding="utf-8")
+            frame = pl.DataFrame({"bibtex": [source]})
+            count = frame.select(prk.bibtex_entry_count("bibtex")).item()
+            return OperationOutcome(count, int(count or 0))
+
+        return _prepared(
+            "parse",
+            operation,
+            _count_is(len(workload.records)),
+            setup_included=True,
+        )
+
+    def prepare_bulk_materialization(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        import polars_refkit as prk
+
+        frame = _polars_entry_frame(workload.records)
+
+        def operation() -> OperationOutcome:
+            rows = _polars_json_rows(
+                frame.select(prk.bibtex_to_csl_json("bibtex"))["bibtex_to_csl_json"].to_list()
+            )
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            "materialize",
+            operation,
+            _projection_contains(workload.records, required_fields=("key", "title")),
+            source_format="bibtex_rows",
+        )
+
+    def prepare_library_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import polars_refkit as prk
+
+        frame = _polars_entry_frame(workload.records)
+
+        def operation() -> OperationOutcome:
+            key_rows = frame.select(prk.bibtex_keys("bibtex"))["bibtex_keys"].to_list()
+            keys = [key for row in key_rows for key in (row or [])]
+            return OperationOutcome(keys, len(keys))
+
+        return _prepared(
+            "inspect",
+            operation,
+            _keys_are(workload.keys),
+            source_format="bibtex_rows",
+        )
+
+    def prepare_entry_lookup(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import polars_refkit as prk
+
+        keys = _lookup_keys(workload)
+        frame = _polars_entry_frame(workload.records)
+
+        def operation() -> OperationOutcome:
+            payloads = frame.select(prk.bibtex_to_csl_json("bibtex"))[
+                "bibtex_to_csl_json"
+            ].to_list()
+            rows = [row for row in _polars_json_rows(payloads) if row["key"] in keys]
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            "inspect",
+            operation,
+            _entries_match(workload.records[: len(keys)]),
+            source_format="bibtex_rows",
+        )
+
+    def prepare_field_projection(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import polars_refkit as prk
+
+        frame = _polars_entry_frame(workload.records)
+
+        def operation() -> OperationOutcome:
+            rows = _polars_json_rows(
+                frame.select(prk.bibtex_to_csl_json("bibtex"))["bibtex_to_csl_json"].to_list()
+            )
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            "inspect",
+            operation,
+            _projection_contains(
+                workload.records,
+                required_fields=("key", "title", "doi", "volume"),
+            ),
+            source_format="bibtex_rows",
+        )
+
+
 def adapters() -> list[PackageAdapter]:
-    return [RefkitAdapter(), CiteprocPyAdapter(), BibtexparserAdapter()]
+    return [RefkitAdapter(), PolarsRefkitAdapter(), CiteprocPyAdapter(), BibtexparserAdapter()]
+
+
+def _polars_entry_frame(records: tuple[Any, ...]) -> Any:
+    import polars as pl
+
+    return pl.DataFrame({"bibtex": [bibtex_for_records((record,)) for record in records]})
+
+
+def _polars_json_rows(payloads: Iterable[str | None]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for payload in payloads:
+        if payload is None:
+            continue
+        for row in cast(list[dict[str, Any]], json.loads(payload)):
+            _fill_common_projection_fields(row)
+            rows.append(row)
+    return rows
+
+
+def _fill_common_projection_fields(row: dict[str, Any]) -> None:
+    serial = row.get("serial-number")
+    if isinstance(serial, Mapping) and row.get("doi") is None:
+        row["doi"] = serial.get("doi")
+
+    if row.get("volume") is not None:
+        return
+
+    parent = row.get("parent")
+    parents = parent if isinstance(parent, list) else [parent]
+    for item in parents:
+        if isinstance(item, Mapping) and item.get("volume") is not None:
+            row["volume"] = item["volume"]
+            return
 
 
 def _prepared(

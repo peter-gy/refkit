@@ -12,8 +12,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyModule;
 use serde_json::json;
 
-use crate::public_strings::quoted;
-use crate::{RefkitError, json_to_py, read_bibliography_text};
+use crate::{RefkitError, json_to_py};
+use refkit_core::{quoted, read_bibliography_text};
 
 #[derive(Debug, Clone)]
 struct RawFieldData {

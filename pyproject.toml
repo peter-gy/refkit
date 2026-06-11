@@ -1,40 +1,24 @@
 [project]
-name = "refkit"
-version = "0.0.0"
-description = "Fast Python citation parsing, rendering, and BibTeX editing backed by Rust"
-readme = "README.md"
-license = "MIT OR Apache-2.0"
-license-files = ["LICENSE-APACHE", "LICENSE-MIT"]
-authors = [
-    { name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }
-]
+name = "refkit-workspace"
+version = "0.0.1"
 requires-python = ">=3.11,<3.15"
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Programming Language :: Rust",
-    "Typing :: Typed",
+dependencies = [
+    "polars-refkit",
+    "refkit",
 ]
-dependencies = []
 
-[build-system]
-requires = ["maturin>=1.9,<2"]
-build-backend = "maturin"
+[tool.uv]
+package = false
 
-[tool.maturin]
-python-source = "src"
-module-name = "refkit._native"
-bindings = "pyo3"
-features = ["extension-module"]
-editable-profile = "dev"
-strip = true
+[tool.uv.sources]
+polars-refkit = { workspace = true }
+refkit = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    "packages/refkit",
+    "packages/polars-refkit",
+]
 
 [dependency-groups]
 dev = [
@@ -50,14 +34,20 @@ benchmark = [
     "bibtexparser>=1.4.4,<2",
     "citeproc-py>=0.9.3",
     "citeproc-py-styles>=0.1.5",
+    "polars>=1.41,<1.42",
     "pytest>=9.0.3",
     "pytest-cov>=7.0.0",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "benchmark/tests"]
+testpaths = [
+    "packages/refkit/tests",
+    "packages/polars-refkit/tests",
+    "benchmark/tests",
+]
 addopts = [
     "--cov=refkit",
+    "--cov=polars_refkit",
     "--cov=benchmark",
     "--cov-branch",
     "--cov-report=term-missing",
@@ -65,10 +55,20 @@ addopts = [
 ]
 
 [tool.coverage.run]
-omit = ["benchmark/tests/*"]
+omit = [
+    "benchmark/tests/*",
+    "packages/refkit/tests/*",
+    "packages/polars-refkit/tests/*",
+]
 
 [tool.pyrefly]
-project-includes = ["src/refkit", "tests", "benchmark"]
+project-includes = [
+    "packages/refkit/src/refkit",
+    "packages/refkit/tests",
+    "packages/polars-refkit/polars_refkit",
+    "packages/polars-refkit/tests",
+    "benchmark",
+]
 project-excludes = [
     "**/__pycache__",
     "**/.pytest_cache",
@@ -79,7 +79,11 @@ project-excludes = [
     "**/target",
 ]
 python-version = "3.11"
-search-path = ["src", "."]
+search-path = [
+    "packages/refkit/src",
+    "packages/polars-refkit",
+    ".",
+]
 
 [tool.ruff]
 line-length = 100
@@ -101,7 +105,12 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["benchmark", "refkit", "tests"]
+known-first-party = [
+    "benchmark",
+    "polars_refkit",
+    "refkit",
+    "tests",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "benchmark/runner.py" = ["T201"]

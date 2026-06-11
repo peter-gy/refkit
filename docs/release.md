@@ -1,6 +1,6 @@
 # Release Validation
 
-Refkit releases use local gates for metadata, artifact contents, supported Python versions, registry dependency provenance, and dependency advisories.
+Refkit workspace releases use local gates for metadata, artifact contents, supported Python versions, registry dependency provenance, and dependency advisories.
 
 Run the package gate:
 
@@ -8,13 +8,15 @@ Run the package gate:
 make package-check
 ```
 
-This builds the sdist and wheel, then verifies that:
+This builds the `refkit` and `polars-refkit` sdists and wheels, then verifies that:
 
-- the sdist excludes benchmark tooling and local-only artifacts
-- the wheel excludes benchmark tooling and local-only artifacts
-- licenses, stubs, `py.typed`, Rust sources, and package metadata are present
-- wheel metadata reports version `0.0.0`
-- wheel metadata supports Python `>=3.11, <3.15`
+- each sdist excludes benchmark tooling and local-only artifacts
+- each wheel excludes benchmark tooling and local-only artifacts
+- each sdist includes the shared `crates/refkit-core` Rust sources needed for a source build
+- licenses, stubs, `py.typed`, Rust sources, and package metadata are present for each package
+- wheel metadata reports version `0.0.1` for each package
+- wheel metadata supports Python `>=3.11, <3.15` for each package
+- `polars-refkit` wheel metadata requires the validated Polars `>=1.41, <1.42` line
 
 The target builds into a clean temporary output directory and passes exact artifact paths to the inspector, so stale files in `dist/` cannot satisfy the check.
 
@@ -24,9 +26,13 @@ Run the Python matrix smoke:
 make release-smoke
 ```
 
-This installs the built wheel into fresh Python 3.11, 3.12, 3.13, and 3.14 environments through `uv`. Each environment imports `refkit`, imports `refkit._native`, and checks that `refkit.__version__`, `refkit._native.__version__`, and installed package metadata all equal `0.0.0`.
+This installs each built wheel into fresh Python 3.11, 3.12, 3.13, and 3.14 environments through `uv`.
 
-The smoke command clears Python source-path environment variables, runs from a temporary directory, and checks that `refkit.__file__` and `refkit._native.__file__` point inside the fresh smoke environment.
+The `refkit` smoke imports `refkit`, imports `refkit._native`, and checks that `refkit.__version__`, `refkit._native.__version__`, and installed package metadata all equal `0.0.1`.
+
+The `polars-refkit` smoke imports `polars`, imports `polars_refkit`, imports `polars_refkit._internal`, checks the same version contract, and runs a tiny Polars expression through the installed plugin.
+
+The smoke command clears Python source-path environment variables, runs from a temporary directory, and checks that Python package files and native extension files point inside the fresh smoke environment.
 
 Run dependency provenance:
 
@@ -50,7 +56,7 @@ Run the Rust floor check:
 make rust-floor
 ```
 
-This target runs `rustup run 1.85 cargo check --locked` against the declared Rust floor in `Cargo.toml`. If rustup does not have Rust 1.85 installed, the target installs the minimal 1.85 toolchain before running the check.
+This target runs `rustup run 1.85 cargo check --locked --workspace` against the declared Rust floor in `Cargo.toml`. If rustup does not have Rust 1.85 installed, the target installs the minimal 1.85 toolchain before running the check.
 
 Run advisory checks:
 

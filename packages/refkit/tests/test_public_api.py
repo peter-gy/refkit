@@ -17,6 +17,7 @@ import refkit as rk
 import refkit._native as native
 
 ROOT = Path(__file__).parent.parent
+WORKSPACE = ROOT.parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
@@ -245,13 +246,16 @@ def test_library_values_entry_types_and_parent_lists_are_public_contracts() -> N
 def test_version_and_missing_module_attribute() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     cargo = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    workspace_cargo = tomllib.loads((WORKSPACE / "Cargo.toml").read_text(encoding="utf-8"))
 
-    assert rk.__version__ == "0.0.0"
+    assert rk.__version__ == "0.0.1"
     assert rk.__version__ == native.__version__ == metadata.version("refkit")
     assert pyproject["project"]["version"] == rk.__version__
-    assert cargo["package"]["version"] == rk.__version__
+    assert cargo["package"]["version"]["workspace"] is True
+    assert workspace_cargo["workspace"]["package"]["version"] == rk.__version__
     assert pyproject["project"]["requires-python"] == ">=3.11,<3.15"
-    assert cargo["package"]["rust-version"] == "1.85"
+    assert cargo["package"]["rust-version"]["workspace"] is True
+    assert workspace_cargo["workspace"]["package"]["rust-version"] == "1.85"
 
     missing_attribute = "does_not_exist"
     with pytest.raises(AttributeError, match="has no attribute"):

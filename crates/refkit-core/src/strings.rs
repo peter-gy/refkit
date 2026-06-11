@@ -4,7 +4,7 @@ use hayagriva::citationberg::{
 use hayagriva::types::EntryType;
 use hayagriva::{ElemMeta, Formatting};
 
-pub(crate) fn quoted(value: &str) -> String {
+pub fn quoted(value: &str) -> String {
     let mut output = String::with_capacity(value.len() + 2);
     output.push('"');
     for ch in value.chars() {
@@ -22,11 +22,11 @@ pub(crate) fn quoted(value: &str) -> String {
     output
 }
 
-pub(crate) fn option_quoted(value: Option<&str>) -> String {
+pub fn option_quoted(value: Option<&str>) -> String {
     value.map_or_else(|| "None".to_string(), quoted)
 }
 
-pub(crate) fn entry_type_name(entry_type: &EntryType) -> &'static str {
+pub fn entry_type_name(entry_type: &EntryType) -> &'static str {
     match entry_type {
         EntryType::Article => "Article",
         EntryType::Chapter => "Chapter",
@@ -62,7 +62,7 @@ pub(crate) fn entry_type_name(entry_type: &EntryType) -> &'static str {
     }
 }
 
-pub(crate) fn display_name(display: Display) -> &'static str {
+pub fn display_name(display: Display) -> &'static str {
     match display {
         Display::Block => "Block",
         Display::LeftMargin => "LeftMargin",
@@ -71,7 +71,7 @@ pub(crate) fn display_name(display: Display) -> &'static str {
     }
 }
 
-pub(crate) fn elem_meta_name(meta: &ElemMeta) -> &'static str {
+pub fn elem_meta_name(meta: &ElemMeta) -> &'static str {
     match meta {
         ElemMeta::Names(_) => "Names",
         ElemMeta::Date => "Date",
@@ -85,21 +85,21 @@ pub(crate) fn elem_meta_name(meta: &ElemMeta) -> &'static str {
     }
 }
 
-pub(crate) fn font_style_name(font_style: FontStyle) -> &'static str {
+pub fn font_style_name(font_style: FontStyle) -> &'static str {
     match font_style {
         FontStyle::Normal => "Normal",
         FontStyle::Italic => "Italic",
     }
 }
 
-pub(crate) fn font_variant_name(font_variant: FontVariant) -> &'static str {
+pub fn font_variant_name(font_variant: FontVariant) -> &'static str {
     match font_variant {
         FontVariant::Normal => "Normal",
         FontVariant::SmallCaps => "SmallCaps",
     }
 }
 
-pub(crate) fn font_weight_name(font_weight: FontWeight) -> &'static str {
+pub fn font_weight_name(font_weight: FontWeight) -> &'static str {
     match font_weight {
         FontWeight::Normal => "Normal",
         FontWeight::Bold => "Bold",
@@ -107,14 +107,14 @@ pub(crate) fn font_weight_name(font_weight: FontWeight) -> &'static str {
     }
 }
 
-pub(crate) fn text_decoration_name(text_decoration: TextDecoration) -> &'static str {
+pub fn text_decoration_name(text_decoration: TextDecoration) -> &'static str {
     match text_decoration {
         TextDecoration::None => "None",
         TextDecoration::Underline => "Underline",
     }
 }
 
-pub(crate) fn vertical_align_name(vertical_align: VerticalAlign) -> &'static str {
+pub fn vertical_align_name(vertical_align: VerticalAlign) -> &'static str {
     match vertical_align {
         VerticalAlign::None => "None",
         VerticalAlign::Baseline => "Baseline",
@@ -123,7 +123,7 @@ pub(crate) fn vertical_align_name(vertical_align: VerticalAlign) -> &'static str
     }
 }
 
-pub(crate) fn formatting_summary(formatting: Formatting) -> String {
+pub fn formatting_summary(formatting: Formatting) -> String {
     if formatting == Formatting::default() {
         return "Normal".to_string();
     }

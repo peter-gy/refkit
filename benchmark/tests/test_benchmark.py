@@ -22,7 +22,7 @@ def test_refkit_public_helpers_are_covered_from_benchmark_subset(tmp_path: Path)
 
     assert rk.cite(path, "item0001", style=style).text
     assert rk.bibliography(path, style=style).text
-    assert rk.__version__ == "0.0.0"
+    assert rk.__version__ == metadata_module.version("refkit")
 
     missing_attribute = "does_not_exist"
     with pytest.raises(AttributeError, match="does_not_exist"):
@@ -69,6 +69,10 @@ def test_materialize_workload_writes_bibtex_and_raw_inputs(tmp_path: Path) -> No
     assert workload.source_byte_count("raw_bibtex") == len(workload.raw_bibtex.encode("utf-8"))
     assert workload.source_text("dirty_bibtex") == workload.dirty_bibtex
     assert workload.source_byte_count("dirty_bibtex") == len(workload.dirty_bibtex.encode("utf-8"))
+    assert workload.source_text("bibtex_rows").count("@article{") == 3
+    assert workload.source_byte_count("bibtex_rows") == len(
+        workload.source_text("bibtex_rows").encode("utf-8")
+    )
     assert workload.source_text("csl_json").startswith("[")
     assert len(workload.source_sha256("bibtex")) == 64
     assert workload.source_text("unknown") == ""
@@ -256,7 +260,8 @@ def test_machine_metadata_contains_versions() -> None:
     metadata = runner.machine_metadata("release")
 
     assert metadata["build_mode"] == "release"
-    assert metadata["packages"]["refkit"] == "0.0.0"
+    assert metadata["packages"]["refkit"] == metadata_module.version("refkit")
+    assert metadata["packages"]["polars-refkit"] == metadata_module.version("polars-refkit")
     assert metadata["packages"]["citeproc-py"] != "not-installed"
     assert metadata["packages"]["bibtexparser"] != "not-installed"
 
@@ -264,9 +269,15 @@ def test_machine_metadata_contains_versions() -> None:
 def test_adapters_prepare_supported_and_unsupported_cases(tmp_path: Path) -> None:
     workload = fixtures.materialize_workload("tiny", tmp_path)
     refkit = adapters.RefkitAdapter()
+    polars_refkit = adapters.PolarsRefkitAdapter()
     bibtexparser = adapters.BibtexparserAdapter()
 
     prepared = refkit.prepare("bibtex_parse", workload, tmp_path)
+    outcome = prepared.operation()
+    prepared.check(outcome)
+    assert outcome.count == 3
+
+    prepared = polars_refkit.prepare("field_projection", workload, tmp_path)
     outcome = prepared.operation()
     prepared.check(outcome)
     assert outcome.count == 3
@@ -276,6 +287,58 @@ def test_adapters_prepare_supported_and_unsupported_cases(tmp_path: Path) -> Non
 
     with pytest.raises(adapters.UnsupportedOperation, match="does not support"):
         refkit.prepare("unknown_case", workload, tmp_path)
+
+
+def test_polars_json_rows_normalize_projection_fields() -> None:
+    rows = adapters._polars_json_rows(
+        [
+            None,
+            json.dumps(
+                [
+                    {
+                        "key": "direct",
+                        "serial-number": {"doi": "10.5555/direct"},
+                        "volume": "9",
+                        "parent": {"volume": "ignored"},
+                    }
+                ]
+            ),
+            json.dumps(
+                [
+                    {
+                        "key": "nested",
+                        "serial-number": {"doi": "10.5555/nested"},
+                        "parent": [{"title": "Series"}, {"volume": "12"}],
+                    },
+                    {
+                        "key": "missing",
+                        "serial-number": "plain",
+                    },
+                ]
+            ),
+        ]
+    )
+
+    assert rows == [
+        {
+            "key": "direct",
+            "serial-number": {"doi": "10.5555/direct"},
+            "doi": "10.5555/direct",
+            "volume": "9",
+            "parent": {"volume": "ignored"},
+        },
+        {
+            "key": "nested",
+            "serial-number": {"doi": "10.5555/nested"},
+            "doi": "10.5555/nested",
+            "parent": [{"title": "Series"}, {"volume": "12"}],
+            "volume": "12",
+        },
+        {
+            "key": "missing",
+            "serial-number": "plain",
+        },
+    ]
 
 
 def test_explicit_unsupported_methods_report_reasons(tmp_path: Path) -> None:
@@ -288,6 +351,13 @@ def test_explicit_unsupported_methods_report_reasons(tmp_path: Path) -> None:
             "one_off_cite",
             "one_off_bibliography",
             "missing_reference",
+        ],
+        adapters.PolarsRefkitAdapter(): [
+            "citation_render",
+            "bibliography_render",
+            "raw_bibtex_parse",
+            "raw_bibtex_write",
+            "style_load",
         ],
     }
 
@@ -493,6 +563,13 @@ def test_each_comparable_workflow_has_correctness_check(tmp_path: Path) -> None:
             "entry_lookup",
             "field_projection",
         ],
+        adapters.PolarsRefkitAdapter(): [
+            "bibtex_parse",
+            "bulk_materialization",
+            "library_keys",
+            "entry_lookup",
+            "field_projection",
+        ],
         adapters.BibtexparserAdapter(): [
             "bibtex_parse",
             "raw_bibtex_parse",
@@ -601,6 +678,39 @@ def test_citeproc_bulk_materialization_uses_bibtex_source(tmp_path: Path) -> Non
     outcome = prepared.operation()
 
     assert outcome.count == 3
+
+
+def test_polars_parse_includes_file_and_dataframe_setup(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    prepared = adapters.PolarsRefkitAdapter().prepare("bibtex_parse", workload, tmp_path)
+
+    assert prepared.metadata["setup_included"] is True
+    workload.bibtex_path.write_text("", encoding="utf-8")
+    outcome = prepared.operation()
+
+    assert outcome.count == 0
+
+
+def test_polars_entry_lookup_prepares_full_input(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workload = fixtures.materialize_workload("medium", tmp_path)
+    lengths: list[int] = []
+    original = adapters._polars_entry_frame
+
+    def tracking_frame(records: tuple[object, ...]) -> object:
+        lengths.append(len(records))
+        return original(records)
+
+    monkeypatch.setattr(adapters, "_polars_entry_frame", tracking_frame)
+
+    prepared = adapters.PolarsRefkitAdapter().prepare("entry_lookup", workload, tmp_path)
+    outcome = prepared.operation()
+
+    prepared.check(outcome)
+    assert lengths == [len(workload.records)]
+    assert outcome.count == 16
 
 
 def test_run_adapter_case_emits_unsupported_rows(tmp_path: Path) -> None:
@@ -804,7 +914,7 @@ def test_main_runs_case_and_writes_outputs(
     assert exit_code == 0
     assert json_path.exists()
     assert csv_path.exists()
-    assert '"rows": 3' in capsys.readouterr().out
+    assert '"rows": 4' in capsys.readouterr().out
 
 
 def test_main_returns_failure_for_failed_rows(
@@ -829,7 +939,7 @@ def test_main_returns_failure_for_failed_rows(
                     "python": "3",
                     "os": "test",
                     "cpu": "test",
-                    "refkit_version": "0.0.0",
+                    "refkit_version": "0.0.1",
                     "refkit_commit": "test",
                     "build_mode": "release",
                 }

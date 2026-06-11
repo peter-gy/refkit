@@ -1,6 +1,6 @@
 .PHONY: sync
 sync:
-	uv sync --group benchmark
+	uv sync --all-packages --group benchmark
 
 .PHONY: format
 format:
@@ -13,7 +13,7 @@ lint:
 	uv run ruff check .
 	uv run ruff format --check .
 	cargo fmt --check
-	cargo clippy --all-targets --all-features -- -D warnings
+	cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 .PHONY: typecheck
 typecheck:
@@ -30,8 +30,8 @@ benchmark-test:
 
 .PHONY: rust
 rust:
-	cargo check
-	cargo test
+	cargo check --workspace
+	cargo test --workspace
 
 .PHONY: rust-floor
 rust-floor:
@@ -39,18 +39,18 @@ rust-floor:
 		echo "Network access: installing Rust 1.85 with rustup."; \
 		rustup toolchain install 1.85 --profile minimal; \
 	fi
-	rustup run 1.85 cargo check --locked
+	rustup run 1.85 cargo check --locked --workspace
 
 .PHONY: build
 build:
-	uv build
+	uv build --all-packages
 
 .PHONY: package-check
 package-check:
 	@tmp=$$(mktemp -d); \
 	trap 'rm -rf "$$tmp"' EXIT; \
 	set -e; \
-	uv build --out-dir "$$tmp"; \
+	uv build --all-packages --out-dir "$$tmp"; \
 	uv run python scripts/inspect_package.py "$$tmp"
 
 .PHONY: release-smoke
@@ -58,7 +58,7 @@ release-smoke:
 	@tmp=$$(mktemp -d); \
 	trap 'rm -rf "$$tmp"' EXIT; \
 	set -e; \
-	uv build --out-dir "$$tmp"; \
+	uv build --all-packages --out-dir "$$tmp"; \
 	uv run python scripts/inspect_package.py "$$tmp"; \
 	uv run python scripts/release_smoke.py --dist-dir "$$tmp" --pythons 3.11 3.12 3.13 3.14
 

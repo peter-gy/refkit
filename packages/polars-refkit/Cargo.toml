@@ -1,0 +1,34 @@
+[package]
+name = "polars_refkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+readme = "README.md"
+description = "Polars expression plugin for refkit citation and BibTeX workflows"
+repository.workspace = true
+include = [
+    "/Cargo.toml",
+    "/LICENSE-APACHE",
+    "/LICENSE-MIT",
+    "/README.md",
+    "/polars_refkit",
+    "/src",
+    "/tests",
+]
+
+[lib]
+name = "polars_refkit"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+extension-module = ["pyo3/extension-module", "pyo3/abi3-py311"]
+
+[dependencies]
+polars = { version = "0.54.4", default-features = false }
+polars-core = { version = "0.54.4", default-features = false, features = ["dtype-struct"] }
+pyo3 = "0.28.2"
+pyo3-polars = { version = "0.27.0", features = ["derive"] }
+refkit-core = { path = "../../crates/refkit-core" }
+serde = { version = "1.0.228", features = ["derive"] }

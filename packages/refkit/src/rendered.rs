@@ -1,20 +1,17 @@
-use std::fmt::{self, Write as _};
 use std::sync::OnceLock;
 
-use hayagriva::citationberg::{
-    Display, FontStyle, FontVariant, FontWeight, TextDecoration, VerticalAlign,
-};
 use hayagriva::{BufWriteFormat, ElemChild, ElemChildren, RenderedCitation};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use serde::Serialize;
 use serde_json::json;
 
-use crate::public_strings::{
-    display_name, elem_meta_name, font_style_name, font_variant_name, font_weight_name,
-    formatting_summary, quoted, text_decoration_name, vertical_align_name,
-};
 use crate::{RefkitError, json_to_py};
+use refkit_core::{
+    bibliography_to_text_html, display_name, elem_meta_name, font_style_name, font_variant_name,
+    font_weight_name, formatting_summary, quoted, safe_href, text_decoration_name,
+    vertical_align_name,
+};
 
 #[pyclass(module = "refkit", skip_from_py_object)]
 pub struct Rendered {
@@ -96,17 +93,8 @@ pub(crate) fn rendered_from_bibliography(
     };
 
     let items = bibliography.items;
-    let mut text = String::with_capacity(items.len() * 224);
-    let mut html = String::with_capacity(items.len() * 384);
-    for item in &items {
-        if !text.is_empty() {
-            text.push('\n');
-        }
-        write_bibliography_item_text(item, &mut text)?;
-
-        render_bibliography_item_html(item, &mut html)
-            .map_err(|err| RefkitError::new_err(err.to_string()))?;
-    }
+    let (text, html) =
+        bibliography_to_text_html(&items).map_err(|err| RefkitError::new_err(err.to_string()))?;
 
     Ok(Rendered::new(text, html, RenderedTree::Bibliography(items)))
 }
@@ -115,186 +103,13 @@ pub(crate) fn elem_children_to_string(
     children: &ElemChildren,
     format: BufWriteFormat,
 ) -> PyResult<String> {
-    let mut output = String::new();
-    children
-        .write_buf(&mut output, format)
-        .map_err(|err| RefkitError::new_err(err.to_string()))?;
-    Ok(output)
+    refkit_core::elem_children_to_string(children, format)
+        .map_err(|err| RefkitError::new_err(err.to_string()))
 }
 
 pub(crate) fn elem_children_to_html(children: &ElemChildren) -> PyResult<String> {
-    let mut output = String::new();
-    render_children_html(children, &mut output)
-        .map_err(|err| RefkitError::new_err(err.to_string()))?;
-    Ok(output)
-}
-
-fn write_bibliography_item_text(
-    item: &hayagriva::BibliographyItem,
-    output: &mut String,
-) -> PyResult<()> {
-    let item_start = output.len();
-    if let Some(first_field) = &item.first_field {
-        first_field
-            .write_buf(output, BufWriteFormat::Plain)
-            .map_err(|err| RefkitError::new_err(err.to_string()))?;
-    }
-
-    let content = elem_children_to_string(&item.content, BufWriteFormat::Plain)?;
-    if output.len() > item_start && !content.is_empty() {
-        output.push(' ');
-    }
-    output.push_str(&content);
-    Ok(())
-}
-
-fn render_bibliography_item_html(
-    item: &hayagriva::BibliographyItem,
-    output: &mut String,
-) -> fmt::Result {
-    output.push_str("<div class=\"csl-entry\" data-key=\"");
-    write_html_escaped(output, &item.key);
-    output.push_str("\">");
-    if let Some(first_field) = &item.first_field {
-        output.push_str("<div class=\"csl-left-margin\">");
-        render_child_html(first_field, output)?;
-        output.push_str("</div><div class=\"csl-right-inline\">");
-        render_children_html(&item.content, output)?;
-        output.push_str("</div>");
-    } else {
-        render_children_html(&item.content, output)?;
-    }
-    output.push_str("</div>");
-    Ok(())
-}
-
-fn render_children_html(children: &ElemChildren, output: &mut String) -> fmt::Result {
-    for child in &children.0 {
-        render_child_html(child, output)?;
-    }
-    Ok(())
-}
-
-fn render_child_html(child: &ElemChild, output: &mut String) -> fmt::Result {
-    match child {
-        ElemChild::Text(text) => render_formatted_html(text, output),
-        ElemChild::Elem(elem) => render_elem_html(elem, output),
-        ElemChild::Markup(value) => {
-            write_html_escaped(output, value);
-            Ok(())
-        }
-        ElemChild::Link { text, url } => {
-            if let Some(href) = safe_href(url) {
-                output.push_str("<a href=\"");
-                write_html_escaped(output, href);
-                output.push_str("\">");
-                render_formatted_html(text, output)?;
-                output.push_str("</a>");
-            } else {
-                render_formatted_html(text, output)?;
-            }
-            Ok(())
-        }
-        ElemChild::Transparent { .. } => Ok(()),
-    }
-}
-
-fn render_elem_html(elem: &hayagriva::Elem, output: &mut String) -> fmt::Result {
-    if let Some(display) = elem.display {
-        let class_name = match display {
-            Display::Block => "csl-block",
-            Display::LeftMargin => "csl-left-margin",
-            Display::RightInline => "csl-right-inline",
-            Display::Indent => "csl-indent",
-        };
-        write!(output, "<div class=\"{class_name}\">")?;
-    }
-
-    render_children_html(&elem.children, output)?;
-
-    if elem.display.is_some() {
-        output.push_str("</div>");
-    }
-    Ok(())
-}
-
-fn render_formatted_html(text: &hayagriva::Formatted, output: &mut String) -> fmt::Result {
-    let formatting = text.formatting;
-    if formatting == hayagriva::Formatting::default() {
-        write_html_escaped(output, &text.text);
-        return Ok(());
-    }
-
-    let mut css = String::new();
-    let mut suffix = String::new();
-
-    match formatting.vertical_align {
-        VerticalAlign::Sub => push_html_wrapper(output, &mut suffix, "<sub>", "</sub>"),
-        VerticalAlign::Sup => push_html_wrapper(output, &mut suffix, "<sup>", "</sup>"),
-        VerticalAlign::Baseline => {
-            css.push_str("vertical-align: baseline;");
-        }
-        VerticalAlign::None => {}
-    }
-
-    match formatting.font_weight {
-        FontWeight::Bold => {
-            if text.text.chars().any(|c| !c.is_whitespace()) {
-                push_html_wrapper(output, &mut suffix, "<b>", "</b>");
-            }
-        }
-        FontWeight::Light => css.push_str("font-weight: lighter;"),
-        FontWeight::Normal => {}
-    }
-
-    if formatting.font_style == FontStyle::Italic {
-        push_html_wrapper(output, &mut suffix, "<i>", "</i>");
-    }
-
-    if formatting.font_variant == FontVariant::SmallCaps {
-        css.push_str("font-variant: small-caps;");
-    }
-
-    if formatting.text_decoration == TextDecoration::Underline {
-        push_html_wrapper(output, &mut suffix, "<u>", "</u>");
-    }
-
-    if !css.is_empty() {
-        push_html_wrapper(
-            output,
-            &mut suffix,
-            &format!("<span style=\"{css}\">"),
-            "</span>",
-        );
-    }
-
-    write_html_escaped(output, &text.text);
-    output.push_str(&suffix);
-    Ok(())
-}
-
-fn push_html_wrapper(output: &mut String, suffix: &mut String, start: &str, end: &str) {
-    output.push_str(start);
-    suffix.insert_str(0, end);
-}
-
-fn safe_href(value: &str) -> Option<&str> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    let scheme_end = trimmed.find(':')?;
-    let first_path_marker = trimmed.find(['/', '?', '#']).unwrap_or(usize::MAX);
-    if scheme_end > first_path_marker {
-        return None;
-    }
-
-    let scheme = trimmed[..scheme_end].to_ascii_lowercase();
-    match scheme.as_str() {
-        "http" | "https" | "mailto" => Some(trimmed),
-        _ => None,
-    }
+    refkit_core::elem_children_to_html(children)
+        .map_err(|err| RefkitError::new_err(err.to_string()))
 }
 
 fn rendered_tree_to_json(tree: &RenderedTree) -> String {
@@ -423,19 +238,6 @@ fn preview(value: &str) -> String {
     output
 }
 
-fn write_html_escaped(output: &mut String, value: &str) {
-    for ch in value.chars() {
-        match ch {
-            '&' => output.push_str("&amp;"),
-            '<' => output.push_str("&lt;"),
-            '>' => output.push_str("&gt;"),
-            '"' => output.push_str("&quot;"),
-            '\'' => output.push_str("&#39;"),
-            _ => output.push(ch),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use hayagriva::citationberg::Display;
@@ -443,35 +245,6 @@ mod tests {
     use serde_json::Value;
 
     use super::*;
-
-    #[test]
-    fn safe_href_allows_only_link_schemes() {
-        assert_eq!(
-            safe_href(" https://example.com/path "),
-            Some("https://example.com/path")
-        );
-        assert_eq!(safe_href("http://example.com"), Some("http://example.com"));
-        assert_eq!(
-            safe_href("mailto:dev@example.com"),
-            Some("mailto:dev@example.com")
-        );
-        assert_eq!(safe_href("javascript:alert(1)"), None);
-        assert_eq!(safe_href("data:text/html,hello"), None);
-        assert_eq!(safe_href("/relative:with-colon"), None);
-        assert_eq!(safe_href(""), None);
-    }
-
-    #[test]
-    fn write_html_escaped_covers_special_characters() {
-        let mut output = String::new();
-
-        write_html_escaped(&mut output, "A&B <tag> \"quote\" 'apostrophe'");
-
-        assert_eq!(
-            output,
-            "A&amp;B &lt;tag&gt; &quot;quote&quot; &#39;apostrophe&#39;"
-        );
-    }
 
     #[test]
     fn preview_preserves_short_text_and_truncates_long_text() {

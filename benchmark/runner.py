@@ -452,6 +452,7 @@ def machine_metadata(build_mode: str = "auto") -> Metadata:
         "build_mode": detect_build_mode() if build_mode == "auto" else build_mode,
         "packages": {
             "refkit": package_version("refkit"),
+            "polars-refkit": package_version("polars-refkit"),
             "citeproc-py": package_version("citeproc-py"),
             "bibtexparser": package_version("bibtexparser"),
             "citeproc-py-styles": package_version("citeproc-py-styles"),

@@ -6,16 +6,19 @@ import sys
 import tarfile
 import tomllib
 import zipfile
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
-PACKAGE = "refkit"
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL_ONLY_GOAL_PART = "no" + "git"
 NATIVE_EXTENSION_SUFFIXES = {".pyd", ".so"}
 FORBIDDEN_PARTS = {
+    ".DS_Store",
     ".pytest_cache",
     ".ruff_cache",
     ".venv",
+    "Thumbs.db",
     "__pycache__",
     "benchmark",
     "dist",
@@ -24,78 +27,180 @@ FORBIDDEN_PARTS = {
 }
 
 
+@dataclass(frozen=True)
+class PackageSpec:
+    distribution: str
+    package_dir: str
+    import_package: str
+    native_prefix: str
+    requires_dist: Mapping[str, frozenset[str]]
+    sdist_required: frozenset[str]
+    wheel_required: frozenset[str]
+
+    @property
+    def stem(self) -> str:
+        return self.distribution.replace("-", "_")
+
+
+SPECS = {
+    "refkit": PackageSpec(
+        distribution="refkit",
+        package_dir="packages/refkit",
+        import_package="refkit",
+        native_prefix="_native",
+        requires_dist={},
+        sdist_required=frozenset(
+            {
+                "Cargo.lock",
+                "Cargo.toml",
+                "LICENSE-APACHE",
+                "LICENSE-MIT",
+                "README.md",
+                "crates/refkit-core/Cargo.toml",
+                "crates/refkit-core/src/lib.rs",
+                "crates/refkit-core/src/library.rs",
+                "crates/refkit-core/src/render.rs",
+                "crates/refkit-core/src/strings.rs",
+                "packages/refkit/Cargo.toml",
+                "packages/refkit/src/lib.rs",
+                "packages/refkit/src/raw.rs",
+                "packages/refkit/src/rendered.rs",
+                "packages/refkit/src/style_analysis.rs",
+                "pyproject.toml",
+                "src/refkit/__init__.py",
+                "src/refkit/__init__.pyi",
+                "src/refkit/_native.pyi",
+                "src/refkit/py.typed",
+            }
+        ),
+        wheel_required=frozenset(
+            {
+                "refkit/__init__.py",
+                "refkit/__init__.pyi",
+                "refkit/_native.pyi",
+                "refkit/py.typed",
+            }
+        ),
+    ),
+    "polars-refkit": PackageSpec(
+        distribution="polars-refkit",
+        package_dir="packages/polars-refkit",
+        import_package="polars_refkit",
+        native_prefix="_internal",
+        requires_dist={"polars": frozenset({">=1.41", "<1.42"})},
+        sdist_required=frozenset(
+            {
+                "Cargo.lock",
+                "Cargo.toml",
+                "LICENSE-APACHE",
+                "LICENSE-MIT",
+                "README.md",
+                "crates/refkit-core/Cargo.toml",
+                "crates/refkit-core/src/lib.rs",
+                "crates/refkit-core/src/library.rs",
+                "crates/refkit-core/src/render.rs",
+                "crates/refkit-core/src/strings.rs",
+                "packages/polars-refkit/Cargo.toml",
+                "packages/polars-refkit/src/expressions.rs",
+                "packages/polars-refkit/src/lib.rs",
+                "polars_refkit/__init__.py",
+                "polars_refkit/__init__.pyi",
+                "polars_refkit/_internal.pyi",
+                "polars_refkit/py.typed",
+                "pyproject.toml",
+            }
+        ),
+        wheel_required=frozenset(
+            {
+                "polars_refkit/__init__.py",
+                "polars_refkit/__init__.pyi",
+                "polars_refkit/_internal.pyi",
+                "polars_refkit/py.typed",
+            }
+        ),
+    ),
+}
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Inspect refkit package artifacts.")
+    parser = argparse.ArgumentParser(description="Inspect refkit workspace package artifacts.")
+    parser.add_argument("--package", choices=[*sorted(SPECS), "all"], default="all")
     parser.add_argument("--sdist", type=Path)
     parser.add_argument("--wheel", type=Path)
     parser.add_argument("dist_dir", nargs="?", default="dist")
     args = parser.parse_args()
 
-    version = project_version()
+    if args.package == "all" and (args.sdist or args.wheel):
+        raise SystemExit("--sdist and --wheel require --package")
+
     dist_dir = Path(args.dist_dir)
-    sdist = args.sdist or dist_dir / f"{PACKAGE}-{version}.tar.gz"
-    wheels = [args.wheel] if args.wheel else sorted(dist_dir.glob(f"{PACKAGE}-{version}-*.whl"))
+    specs = SPECS.values() if args.package == "all" else [SPECS[args.package]]
+    payload = [inspect_package(spec, dist_dir, args.sdist, args.wheel) for spec in specs]
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def inspect_package(
+    spec: PackageSpec,
+    dist_dir: Path,
+    sdist_arg: Path | None,
+    wheel_arg: Path | None,
+) -> dict[str, object]:
+    version = project_version(spec)
+    sdist = sdist_arg or dist_dir / f"{spec.stem}-{version}.tar.gz"
+    wheels = [wheel_arg] if wheel_arg else sorted(dist_dir.glob(f"{spec.stem}-{version}-*.whl"))
     if not sdist.exists():
         raise SystemExit(f"missing sdist: {sdist}")
     if not wheels:
-        raise SystemExit(f"missing wheel: {dist_dir}/{PACKAGE}-{version}-*.whl")
+        raise SystemExit(f"missing wheel: {dist_dir}/{spec.stem}-{version}-*.whl")
 
+    wheel = wheels[-1]
+    sdist_prefix = f"{spec.stem}-{version}/"
+    dist_info = f"{spec.stem}-{version}.dist-info"
     sdist_names = read_sdist_names(sdist)
-    wheel_names = read_wheel_names(wheels[-1])
+    wheel_names = read_wheel_names(wheel)
+
     assert_no_forbidden_paths(sdist_names, "sdist")
     assert_no_forbidden_paths(wheel_names, "wheel")
     assert_no_forbidden_payloads_in_sdist(sdist)
-    assert_no_forbidden_payloads_in_wheel(wheels[-1])
+    assert_no_forbidden_payloads_in_wheel(wheel)
     assert_required(
         sdist_names,
         "sdist",
-        {
-            f"{PACKAGE}-{version}/Cargo.lock",
-            f"{PACKAGE}-{version}/Cargo.toml",
-            f"{PACKAGE}-{version}/LICENSE-APACHE",
-            f"{PACKAGE}-{version}/LICENSE-MIT",
-            f"{PACKAGE}-{version}/README.md",
-            f"{PACKAGE}-{version}/pyproject.toml",
-            f"{PACKAGE}-{version}/src/lib.rs",
-            f"{PACKAGE}-{version}/src/raw.rs",
-            f"{PACKAGE}-{version}/src/refkit/__init__.py",
-            f"{PACKAGE}-{version}/src/refkit/__init__.pyi",
-            f"{PACKAGE}-{version}/src/refkit/_native.pyi",
-            f"{PACKAGE}-{version}/src/refkit/py.typed",
-        },
+        {sdist_prefix + name for name in spec.sdist_required},
     )
     assert_required(
         wheel_names,
         "wheel",
         {
-            "refkit/__init__.py",
-            "refkit/__init__.pyi",
-            "refkit/_native.pyi",
-            "refkit/py.typed",
-            f"{PACKAGE}-{version}.dist-info/METADATA",
-            f"{PACKAGE}-{version}.dist-info/WHEEL",
-            f"{PACKAGE}-{version}.dist-info/licenses/LICENSE-APACHE",
-            f"{PACKAGE}-{version}.dist-info/licenses/LICENSE-MIT",
+            *spec.wheel_required,
+            f"{dist_info}/METADATA",
+            f"{dist_info}/WHEEL",
+            f"{dist_info}/licenses/LICENSE-APACHE",
+            f"{dist_info}/licenses/LICENSE-MIT",
         },
     )
-    if not any(is_native_extension(name) for name in wheel_names):
-        raise SystemExit("wheel is missing native extension")
+    if not any(is_native_extension(spec, name) for name in wheel_names):
+        raise SystemExit(f"{spec.distribution} wheel is missing native extension")
 
-    metadata = read_wheel_text(wheels[-1], f"{PACKAGE}-{version}.dist-info/METADATA")
+    metadata = read_wheel_text(wheel, f"{dist_info}/METADATA")
+    assert_metadata_line(metadata, f"Name: {spec.distribution}")
     assert_metadata_line(metadata, f"Version: {version}")
     assert_metadata_field(metadata, "Requires-Python", {">=3.11", "<3.15"})
+    for requirement, expected_parts in spec.requires_dist.items():
+        assert_metadata_requirement(metadata, requirement, expected_parts)
     if "](docs/" in metadata:
         raise SystemExit("wheel metadata contains a relative docs/ link")
 
-    payload = {
+    return {
+        "package": spec.distribution,
         "sdist": str(sdist),
         "sdist_files": len(sdist_names),
-        "wheel": str(wheels[-1]),
-        "wheel_files": len(wheel_names),
         "status": "ok",
+        "version": version,
+        "wheel": str(wheel),
+        "wheel_files": len(wheel_names),
     }
-    print(json.dumps(payload, indent=2, sort_keys=True))
-    return 0
 
 
 def read_sdist_names(path: Path) -> set[str]:
@@ -103,16 +208,18 @@ def read_sdist_names(path: Path) -> set[str]:
         return set(archive.getnames())
 
 
-def project_version() -> str:
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+def project_version(spec: PackageSpec) -> str:
+    pyproject = tomllib.loads(
+        (ROOT / spec.package_dir / "pyproject.toml").read_text(encoding="utf-8")
+    )
     return pyproject["project"]["version"]
 
 
-def is_native_extension(name: str) -> bool:
+def is_native_extension(spec: PackageSpec, name: str) -> bool:
     path = Path(name)
     return (
-        path.parent == Path("refkit")
-        and path.name.startswith("_native.")
+        path.parent == Path(spec.import_package)
+        and path.name.startswith(f"{spec.native_prefix}.")
         and path.suffix in NATIVE_EXTENSION_SUFFIXES
     )
 
@@ -182,6 +289,24 @@ def assert_metadata_field(metadata: str, field: str, expected_parts: set[str]) -
     if actual_parts != expected_parts:
         raise SystemExit(
             f"wheel metadata field {field!r} is {values[0]!r}, expected {sorted(expected_parts)}"
+        )
+
+
+def assert_metadata_requirement(
+    metadata: str,
+    requirement: str,
+    expected_parts: frozenset[str],
+) -> None:
+    prefix = f"Requires-Dist: {requirement}"
+    values = [line for line in metadata.splitlines() if line.startswith(prefix)]
+    if not values:
+        raise SystemExit(f"wheel metadata is missing dependency {requirement!r}")
+    actual = values[0].removeprefix(prefix).strip()
+    actual = actual.removeprefix("(").removesuffix(")")
+    actual_parts = {part.strip() for part in actual.split(",") if part.strip()}
+    if actual_parts != set(expected_parts):
+        raise SystemExit(
+            f"wheel dependency {requirement!r} is {actual!r}, expected {sorted(expected_parts)}"
         )
 
 
