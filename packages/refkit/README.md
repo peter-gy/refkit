@@ -174,7 +174,7 @@ make lint
 make typecheck
 make test
 make rust
-make package-check
+make build
 ```
 
 ## License
