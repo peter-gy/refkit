@@ -1,13 +1,27 @@
 # refkit workspace
 
-This workspace contains two Python packages backed by Rust:
+The refkit workspace exposes bibliography capabilities through two Python interfaces backed by Rust.
 
 | Package | Import | Purpose |
 | --- | --- | --- |
 | `refkit` | `import refkit as rk` | Citation parsing, CSL rendering, normalized library access, and raw BibTeX editing. |
 | `polars-refkit` | `import polars_refkit as prk` | Polars expressions for BibTeX columns. |
+| `refkit-bench` | `python -m refkit_bench.runner` | Repository benchmark runner for capability lanes and comparison packages. |
 
 Both packages are versioned as `0.0.1`. `refkit` supports CPython 3.11 through 3.14, and the wheels use the Python 3.11 stable ABI.
+
+## Capabilities
+
+| Capability | `refkit` | `polars-refkit` |
+| --- | --- | --- |
+| Normalized bibliography input | `Library.read`, `Library.parse` | `entry_count`, `keys`, `entries`, `parse_report` |
+| Raw BibTeX document editing | `BibDocument` | Use `refkit` for block-level edits |
+| Citation style input | `Style.load`, `Style.from_path`, `Style.from_xml` | `style=` arguments on render expressions |
+| Citation rendering | `Document.cite`, `cite` | `cite`, `cite_html`, `cite_sequence` |
+| Bibliography rendering | `Document.bibliography`, `bibliography` | `bibliography_text`, `bibliography_html` |
+| Rendered output access | `Rendered.text`, `Rendered.html`, `Rendered.tree` | text, HTML, and rendered struct expressions |
+| Entry inspection | keys, lookup, selectors, projection, dictionaries | key and entry projection expressions |
+| Bulk tabular processing | Use Python loops over `Library` objects | eager and lazy Polars expressions |
 
 ## refkit
 
@@ -69,7 +83,7 @@ See [packages/polars-refkit/README.md](packages/polars-refkit/README.md) for the
 ## Development
 
 ```bash
-uv sync --all-packages --group benchmark
+uv sync --all-packages --group dev
 uv run maturin develop --manifest-path packages/refkit/Cargo.toml
 uv run maturin develop --manifest-path packages/polars-refkit/Cargo.toml
 uv run pytest

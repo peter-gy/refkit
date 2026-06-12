@@ -20,6 +20,19 @@ Use `doc.bibliography(all=True)` to render every entry in the library. Without `
 
 `refkit` supports CPython 3.11 through 3.14. Wheels use the Python 3.11 stable ABI.
 
+## Capabilities
+
+| Capability | Python surface |
+| --- | --- |
+| Normalized bibliography input | `Library.read` and `Library.parse` |
+| Raw BibTeX document editing | `BibDocument.read`, `BibDocument.parse`, field assignment, and `write` |
+| Citation style input | `Style.load`, `Style.from_path`, `Style.from_xml`, and `Locale.load` |
+| Citation rendering | `Document.cite` and `cite` |
+| Bibliography rendering | `Document.bibliography` and `bibliography` |
+| Rendered output access | `Rendered.text`, `Rendered.html`, and `Rendered.tree` |
+| Entry inspection | `keys`, `get`, `get_many`, `select`, `project`, and `to_dicts` |
+| Error contracts | `MissingReferenceError`, `RefkitError`, `ValueError`, `KeyError`, and `TypeError` at the public call site |
+
 ## One-Off Rendering
 
 One-off helpers read a bibliography path, load the style, render, and return a `Rendered` object.
@@ -149,7 +162,7 @@ out = df.select(
 ## Development
 
 ```bash
-uv sync --all-packages --group benchmark
+uv sync --all-packages --group dev
 uv run maturin develop --manifest-path packages/refkit/Cargo.toml
 uv run pytest packages/refkit/tests --no-cov
 ```

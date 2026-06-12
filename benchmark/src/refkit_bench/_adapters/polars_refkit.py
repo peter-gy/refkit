@@ -4,7 +4,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any, Literal
 
-from benchmark._adapters.common import (
+from refkit_bench._adapters.common import (
     OperationOutcome,
     PackageAdapter,
     PreparedOperation,
@@ -18,7 +18,7 @@ from benchmark._adapters.common import (
     _prepared,
     _projection_contains,
 )
-from benchmark.fixtures import Workload
+from refkit_bench.fixtures import Workload
 
 ExecutionMode = Literal["eager", "lazy"]
 
@@ -27,67 +27,75 @@ class PolarsRefkitAdapter(PackageAdapter):
     name = "polars-refkit"
     distribution = "polars-refkit"
 
-    def prepare_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
-        return self._prepare_bibtex_parse(workload, lazy=False)
+    def prepare_parse_bibtex(self, workload: Workload, directory: Path) -> PreparedOperation:
+        return self._prepare_parse_bibtex(workload, lazy=False)
 
-    def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
-        return self._prepare_citation_render(workload, lazy=False)
-
-    def prepare_bibliography_render(self, workload: Workload, directory: Path) -> PreparedOperation:
-        return self._prepare_bibliography_render(workload, lazy=False)
-
-    def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
-        return self._prepare_repeated_render(workload, lazy=False)
-
-    def prepare_bulk_materialization(
+    def prepare_render_citation_expression_eager(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
-        return self._prepare_bulk_materialization(workload, lazy=False)
+        return self._prepare_render_citation_expression(workload, lazy=False)
 
-    def prepare_library_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
-        return self._prepare_library_keys(workload, lazy=False)
-
-    def prepare_entry_lookup(self, workload: Workload, directory: Path) -> PreparedOperation:
-        return self._prepare_entry_lookup(workload, lazy=False)
-
-    def prepare_field_projection(self, workload: Workload, directory: Path) -> PreparedOperation:
-        return self._prepare_field_projection(workload, lazy=False)
-
-    def prepare_lazy_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
-        return self._prepare_bibtex_parse(workload, lazy=True)
-
-    def prepare_lazy_citation_render(
+    def prepare_render_bibliography_expression_eager(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
-        return self._prepare_citation_render(workload, lazy=True)
+        return self._prepare_render_bibliography_expression(workload, lazy=False)
 
-    def prepare_lazy_bibliography_render(
+    def prepare_render_citation_sequence_eager(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
-        return self._prepare_bibliography_render(workload, lazy=True)
+        return self._prepare_render_repeated_citations(workload, lazy=False)
 
-    def prepare_lazy_repeated_render(
+    def prepare_materialize_entry_rows_eager(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
-        return self._prepare_repeated_render(workload, lazy=True)
+        return self._prepare_materialize_entry_rows(workload, lazy=False)
 
-    def prepare_lazy_bulk_materialization(
+    def prepare_list_keys_eager(self, workload: Workload, directory: Path) -> PreparedOperation:
+        return self._prepare_list_keys(workload, lazy=False)
+
+    def prepare_lookup_entries_eager(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
-        return self._prepare_bulk_materialization(workload, lazy=True)
+        return self._prepare_lookup_entries(workload, lazy=False)
 
-    def prepare_lazy_library_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
-        return self._prepare_library_keys(workload, lazy=True)
-
-    def prepare_lazy_entry_lookup(self, workload: Workload, directory: Path) -> PreparedOperation:
-        return self._prepare_entry_lookup(workload, lazy=True)
-
-    def prepare_lazy_field_projection(
+    def prepare_project_fields_eager(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
-        return self._prepare_field_projection(workload, lazy=True)
+        return self._prepare_project_fields(workload, lazy=False)
 
-    def _prepare_bibtex_parse(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
+    def prepare_parse_bibtex_lazy(self, workload: Workload, directory: Path) -> PreparedOperation:
+        return self._prepare_parse_bibtex(workload, lazy=True)
+
+    def prepare_render_citation_expression_lazy(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        return self._prepare_render_citation_expression(workload, lazy=True)
+
+    def prepare_render_bibliography_expression_lazy(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        return self._prepare_render_bibliography_expression(workload, lazy=True)
+
+    def prepare_render_citation_sequence_lazy(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        return self._prepare_render_repeated_citations(workload, lazy=True)
+
+    def prepare_materialize_entry_rows_lazy(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        return self._prepare_materialize_entry_rows(workload, lazy=True)
+
+    def prepare_list_keys_lazy(self, workload: Workload, directory: Path) -> PreparedOperation:
+        return self._prepare_list_keys(workload, lazy=True)
+
+    def prepare_lookup_entries_lazy(self, workload: Workload, directory: Path) -> PreparedOperation:
+        return self._prepare_lookup_entries(workload, lazy=True)
+
+    def prepare_project_fields_lazy(self, workload: Workload, directory: Path) -> PreparedOperation:
+        return self._prepare_project_fields(workload, lazy=True)
+
+    def _prepare_parse_bibtex(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
         import polars_refkit as prk
 
         def operation() -> OperationOutcome:
@@ -97,14 +105,15 @@ class PolarsRefkitAdapter(PackageAdapter):
             return OperationOutcome(count, int(count or 0))
 
         return _prepared(
-            "parse",
             operation,
             _count_is(len(workload.records)),
             setup_included=True,
             execution_mode=_execution_mode(lazy),
         )
 
-    def _prepare_citation_render(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
+    def _prepare_render_citation_expression(
+        self, workload: Workload, *, lazy: bool
+    ) -> PreparedOperation:
         import polars_refkit as prk
 
         frame = _frame({"bibtex": [workload.bibtex], "key": [workload.keys[0]]}, lazy=lazy)
@@ -115,7 +124,6 @@ class PolarsRefkitAdapter(PackageAdapter):
             return OperationOutcome(citation, 1)
 
         return _prepared(
-            "render",
             operation,
             _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
             setup_included=True,
@@ -123,7 +131,9 @@ class PolarsRefkitAdapter(PackageAdapter):
             execution_mode=_execution_mode(lazy),
         )
 
-    def _prepare_bibliography_render(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
+    def _prepare_render_bibliography_expression(
+        self, workload: Workload, *, lazy: bool
+    ) -> PreparedOperation:
         import polars_refkit as prk
 
         frame = _frame({"bibtex": [workload.bibtex]}, lazy=lazy)
@@ -138,7 +148,6 @@ class PolarsRefkitAdapter(PackageAdapter):
             return OperationOutcome(bibliography, len(workload.records))
 
         return _prepared(
-            "render",
             operation,
             _all_checks(
                 _count_is(len(workload.records)),
@@ -149,7 +158,9 @@ class PolarsRefkitAdapter(PackageAdapter):
             execution_mode=_execution_mode(lazy),
         )
 
-    def _prepare_repeated_render(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
+    def _prepare_render_repeated_citations(
+        self, workload: Workload, *, lazy: bool
+    ) -> PreparedOperation:
         import polars_refkit as prk
 
         frame = _frame({"bibtex": [workload.bibtex], "keys": [workload.keys]}, lazy=lazy)
@@ -160,7 +171,6 @@ class PolarsRefkitAdapter(PackageAdapter):
             return OperationOutcome("\n".join(texts), len(texts))
 
         return _prepared(
-            "steady-render",
             operation,
             _all_checks(
                 _count_is(len(workload.keys)),
@@ -172,7 +182,9 @@ class PolarsRefkitAdapter(PackageAdapter):
             execution_mode=_execution_mode(lazy),
         )
 
-    def _prepare_bulk_materialization(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
+    def _prepare_materialize_entry_rows(
+        self, workload: Workload, *, lazy: bool
+    ) -> PreparedOperation:
         frame = _frame({"bibtex": [workload.bibtex]}, lazy=lazy)
 
         def operation() -> OperationOutcome:
@@ -186,7 +198,6 @@ class PolarsRefkitAdapter(PackageAdapter):
             return OperationOutcome(rows, len(rows))
 
         return _prepared(
-            "materialize",
             operation,
             _projection_contains(workload.records, required_fields=("key", "title")),
             source_format="bibtex",
@@ -194,7 +205,7 @@ class PolarsRefkitAdapter(PackageAdapter):
             execution_mode=_execution_mode(lazy),
         )
 
-    def _prepare_library_keys(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
+    def _prepare_list_keys(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
         import polars_refkit as prk
 
         frame = _frame({"bibtex": [workload.bibtex]}, lazy=lazy)
@@ -205,7 +216,6 @@ class PolarsRefkitAdapter(PackageAdapter):
             return OperationOutcome(keys, len(keys))
 
         return _prepared(
-            "inspect",
             operation,
             _keys_are(workload.keys),
             source_format="bibtex",
@@ -213,7 +223,7 @@ class PolarsRefkitAdapter(PackageAdapter):
             execution_mode=_execution_mode(lazy),
         )
 
-    def _prepare_entry_lookup(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
+    def _prepare_lookup_entries(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
         keys = _lookup_keys(workload)
         frame = _frame({"bibtex": [workload.bibtex]}, lazy=lazy)
 
@@ -229,7 +239,6 @@ class PolarsRefkitAdapter(PackageAdapter):
             return OperationOutcome(rows, len(rows))
 
         return _prepared(
-            "inspect",
             operation,
             _entries_match(workload.records[: len(keys)]),
             source_format="bibtex",
@@ -237,7 +246,7 @@ class PolarsRefkitAdapter(PackageAdapter):
             execution_mode=_execution_mode(lazy),
         )
 
-    def _prepare_field_projection(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
+    def _prepare_project_fields(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
         frame = _frame({"bibtex": [workload.bibtex]}, lazy=lazy)
 
         def operation() -> OperationOutcome:
@@ -251,7 +260,6 @@ class PolarsRefkitAdapter(PackageAdapter):
             return OperationOutcome(rows, len(rows))
 
         return _prepared(
-            "inspect",
             operation,
             _projection_contains(
                 workload.records,

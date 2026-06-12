@@ -65,7 +65,7 @@ Run advisory checks:
 make advisory
 ```
 
-This target may download advisory databases and audit tools. It runs `cargo audit` for `Cargo.lock` and `pip-audit` for the locked Python dev and benchmark dependency groups.
+This target may download advisory databases and audit tools. It runs `cargo audit` for `Cargo.lock` and `pip-audit` for the locked Python workspace dependencies.
 
 The Rust advisory gate currently ignores `RUSTSEC-2024-0436` for `paste 1.0.15`. `paste` is pulled transitively by the published `hayagriva 0.10.0` and `biblatex 0.12.0` crates. The advisory is an unmaintained warning, not a reported vulnerability. New Rust advisory warnings still fail the target.
 

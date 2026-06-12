@@ -46,6 +46,17 @@ out = batch.select(citations=prk.cite_sequence(pl.lit(df["bibtex"][0]), "keys"))
 
 `polars-refkit` requires Polars `>=1.41,<1.42`.
 
+## Capabilities
+
+| Capability | Polars surface |
+| --- | --- |
+| Normalized bibliography input | `entry_count`, `keys`, `entries`, `parse_report`, and `diagnostics` |
+| Citation rendering | `cite`, `cite_html`, `cite_rendered`, `cite_sequence`, and sequence variants |
+| Bibliography rendering | `bibliography_text`, `bibliography_html`, and `bibliography_rendered` |
+| Entry inspection | `keys`, `entries`, and `entries_json` |
+| Bulk tabular processing | eager `DataFrame.select` and lazy `LazyFrame.select(...).collect()` |
+| Expression namespace | `pl.Expr.refkit` methods with the same capability set |
+
 ## Expressions
 
 | Function | Return | Behavior |
@@ -101,7 +112,7 @@ Use `polars-refkit` when BibTeX source lives in a dataframe and the result shoul
 ## Development
 
 ```bash
-uv sync --all-packages --group benchmark
+uv sync --all-packages --group dev
 uv run maturin develop --manifest-path packages/polars-refkit/Cargo.toml
 uv run pytest packages/polars-refkit/tests --no-cov
 ```

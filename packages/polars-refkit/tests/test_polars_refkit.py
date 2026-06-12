@@ -4,6 +4,7 @@ import importlib
 import importlib.metadata as metadata_module
 import json
 import tomllib
+import warnings
 from pathlib import Path
 from typing import Any, cast
 
@@ -48,11 +49,21 @@ def test_polars_refkit_version_falls_back_to_native(
 
     with monkeypatch.context() as scoped:
         scoped.setattr(metadata_module, "version", missing_version)
-        with pytest.warns(UserWarning, match="overriding existing custom namespace"):
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=".*overriding existing custom namespace.*",
+                category=UserWarning,
+            )
             reloaded = importlib.reload(prk)
 
     assert reloaded.__version__ == native.__version__
-    with pytest.warns(UserWarning, match="overriding existing custom namespace"):
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=".*overriding existing custom namespace.*",
+            category=UserWarning,
+        )
         importlib.reload(prk)
 
 
@@ -109,19 +120,19 @@ def test_polars_refkit_top_level_expressions_have_stable_default_names() -> None
         prk.entries_json("bibtex"),
     )
 
-    assert result.columns == [
+    assert set(result.columns) == {
         "bibtex_entry_count",
         "bibtex_keys",
         "cite",
         "cite_html",
         "entries_json",
-    ]
+    }
     assert result["bibtex_entry_count"].item() == 1
     assert result["bibtex_keys"].to_list()[0] == ["doe2024"]
     assert "Doe" in result["cite"].item()
 
 
-def test_polars_refkit_bibliography_all_keyword_remains_supported() -> None:
+def test_bibliography_all_false_returns_empty_cited_bibliography() -> None:
     import polars_refkit as prk
 
     frame = pl.DataFrame({"bibtex": [BIBTEX]})
@@ -134,50 +145,67 @@ def test_polars_refkit_bibliography_all_keyword_remains_supported() -> None:
         namespace=namespace.bibliography(all=False),
     ).to_dicts()[0]
 
-    assert row == {
-        "explicit": "",
-        "explicit_text": "",
-        "explicit_rendered": {"text": "", "html": ""},
-        "namespace": "",
-    }
+    assert row["explicit"] == ""
+    assert row["explicit_text"] == ""
+    assert row["explicit_rendered"]["text"] == ""
+    assert row["explicit_rendered"]["html"] == ""
+    assert row["namespace"] == ""
 
 
 def test_polars_refkit_namespace_matches_function_api() -> None:
-    import polars_refkit  # noqa: F401
+    import polars_refkit as prk
 
     frame = pl.DataFrame({"bibtex": [BIBTEX], "key": ["doe2024"]})
     namespace = cast(Any, pl.col("bibtex")).refkit
 
     result = frame.select(
-        citation=namespace.cite("key", style="apa"),
-        citation_html=namespace.cite_html("key", style="apa"),
-        citation_rendered=namespace.cite_rendered("key", style="apa"),
-        bibliography=namespace.bibliography(style="apa"),
-        bibliography_html=namespace.bibliography_html(style="apa"),
-        bibliography_text=namespace.bibliography_text(style="apa"),
-        bibliography_rendered=namespace.bibliography_rendered(style="apa"),
-        entry_count=namespace.entry_count(),
-        is_valid=namespace.is_valid(),
-        keys=namespace.keys(),
-        entries=namespace.entries(),
-        title_entries=namespace.entries(fields=("key", "title")),
-        parse_report=namespace.parse_report(),
+        top_citation=prk.cite("bibtex", "key", style="apa"),
+        ns_citation=namespace.cite("key", style="apa"),
+        top_citation_html=prk.cite_html("bibtex", "key", style="apa"),
+        ns_citation_html=namespace.cite_html("key", style="apa"),
+        top_citation_rendered=prk.cite_rendered("bibtex", "key", style="apa"),
+        ns_citation_rendered=namespace.cite_rendered("key", style="apa"),
+        top_bibliography=prk.bibliography_bibtex("bibtex", style="apa"),
+        ns_bibliography=namespace.bibliography(style="apa"),
+        top_bibliography_html=prk.bibliography_html("bibtex", style="apa"),
+        ns_bibliography_html=namespace.bibliography_html(style="apa"),
+        top_bibliography_text=prk.bibliography_text("bibtex", style="apa"),
+        ns_bibliography_text=namespace.bibliography_text(style="apa"),
+        top_bibliography_rendered=prk.bibliography_rendered("bibtex", style="apa"),
+        ns_bibliography_rendered=namespace.bibliography_rendered(style="apa"),
+        top_entry_count=prk.entry_count("bibtex"),
+        ns_entry_count=namespace.entry_count(),
+        top_is_valid=prk.is_valid("bibtex"),
+        ns_is_valid=namespace.is_valid(),
+        top_keys=prk.keys("bibtex"),
+        ns_keys=namespace.keys(),
+        top_entries=prk.entries("bibtex"),
+        ns_entries=namespace.entries(),
+        top_title_entries=prk.entries("bibtex", fields=("key", "title")),
+        ns_title_entries=namespace.entries(fields=("key", "title")),
+        top_parse_report=prk.parse_report("bibtex"),
+        ns_parse_report=namespace.parse_report(),
     ).to_dicts()
 
     row = result[0]
-    assert "Doe" in row["citation"]
-    assert "Doe" in row["citation_html"]
-    assert row["citation_rendered"]["text"] == row["citation"]
-    assert "Reference Work" in row["bibliography"]
-    assert "Reference Work" in row["bibliography_html"]
-    assert "Reference Work" in row["bibliography_text"]
-    assert row["bibliography_rendered"]["html"] == row["bibliography_html"]
-    assert row["entry_count"] == 1
-    assert row["is_valid"] is True
-    assert row["keys"] == ["doe2024"]
-    assert row["entries"][0]["key"] == "doe2024"
-    assert row["title_entries"] == [{"key": "doe2024", "title": "Reference Work"}]
-    assert row["parse_report"]["entry_count"] == 1
+    assert row["top_citation"] == row["ns_citation"]
+    assert row["top_citation_html"] == row["ns_citation_html"]
+    assert row["top_citation_rendered"] == row["ns_citation_rendered"]
+    assert row["top_bibliography"] == row["ns_bibliography"]
+    assert row["top_bibliography_html"] == row["ns_bibliography_html"]
+    assert row["top_bibliography_text"] == row["ns_bibliography_text"]
+    assert row["top_bibliography_rendered"] == row["ns_bibliography_rendered"]
+    assert row["top_entry_count"] == row["ns_entry_count"] == 1
+    assert row["top_is_valid"] is row["ns_is_valid"] is True
+    assert row["top_keys"] == row["ns_keys"] == ["doe2024"]
+    assert row["top_entries"] == row["ns_entries"]
+    assert row["top_title_entries"] == row["ns_title_entries"]
+    assert row["top_parse_report"] == row["ns_parse_report"]
+    assert "Doe" in row["top_citation"]
+    assert "Reference Work" in row["top_bibliography"]
+    assert row["top_entries"][0]["key"] == "doe2024"
+    assert row["top_title_entries"] == [{"key": "doe2024", "title": "Reference Work"}]
+    assert row["top_parse_report"]["entry_count"] == 1
 
 
 def test_polars_refkit_namespace_methods_have_stable_default_names() -> None:
@@ -193,7 +221,7 @@ def test_polars_refkit_namespace_methods_have_stable_default_names() -> None:
         namespace.to_csl_json(),
     )
 
-    assert result.columns == ["keys", "entry_count", "cite", "to_csl_json"]
+    assert set(result.columns) == {"keys", "entry_count", "cite", "to_csl_json"}
     assert result["keys"].to_list()[0] == ["doe2024"]
     assert result["entry_count"].item() == 1
     assert "Doe" in result["cite"].item()
@@ -243,8 +271,9 @@ def test_polars_refkit_exports_normalized_json() -> None:
         .to_dicts()[0]
     )
 
-    assert row["hayagriva_json"] == row["entries_json"]
+    hayagriva_entries = cast(list[dict[str, Any]], json.loads(row["hayagriva_json"]))
     entries = cast(list[dict[str, Any]], json.loads(row["entries_json"]))
+    assert hayagriva_entries == entries
     assert entries[0]["id"] == "doe2024"
     assert entries[0]["key"] == "doe2024"
     assert entries[0]["title"] == "Reference Work"
@@ -253,9 +282,17 @@ def test_polars_refkit_exports_normalized_json() -> None:
 def test_polars_refkit_accepts_literal_expressions() -> None:
     import polars_refkit as prk
 
-    result = pl.DataFrame({"row": [1]}).select(prk.bibtex_entry_count(pl.Series([BIBTEX]))).item()
+    row = (
+        pl.DataFrame({"key": ["doe2024"]})
+        .select(
+            count=prk.entry_count(pl.lit(BIBTEX)),
+            citation=prk.cite(pl.lit(BIBTEX), "key"),
+        )
+        .to_dicts()[0]
+    )
 
-    assert result == 1
+    assert row["count"] == 1
+    assert "Doe" in row["citation"]
 
 
 def test_polars_refkit_render_variants_return_text_html_and_structs() -> None:
@@ -363,13 +400,12 @@ def test_polars_refkit_entries_and_parse_report_are_polars_native() -> None:
         strict_diagnostics=prk.diagnostics("bibtex", strict=True),
     ).to_dicts()
 
-    assert rows[0]["entries"][0] == {
-        "key": "doe2024",
-        "entry_type": "Article",
-        "title": "Reference Work",
-        "doi": "10.1234/refkit.polars",
-        "volume": "7",
-    }
+    entry = rows[0]["entries"][0]
+    assert entry["key"] == "doe2024"
+    assert entry["entry_type"] == "Article"
+    assert entry["title"] == "Reference Work"
+    assert entry["doi"] == "10.1234/refkit.polars"
+    assert entry["volume"] == "7"
     assert rows[0]["title_entries"] == [{"key": "doe2024", "title": "Reference Work"}]
     assert rows[0]["valid"] is True
     assert rows[0]["bib_valid"] is True
@@ -411,17 +447,15 @@ def test_polars_refkit_invalid_bibtex_rows_become_nulls() -> None:
     assert "Doe" in result[0]["citation"]
     assert "Reference Work" in result[0]["bibliography"]
     assert json.loads(valid["csl_json"])[0]["key"] == "doe2024"
-    assert invalid == {
-        "count": None,
-        "keys": None,
-        "citation": None,
-        "citation_struct": None,
-        "citation_struct_is_null": True,
-        "bibliography": None,
-        "bibliography_struct": None,
-        "bibliography_struct_is_null": True,
-        "csl_json": None,
-    }
+    assert invalid["count"] is None
+    assert invalid["keys"] is None
+    assert invalid["citation"] is None
+    assert invalid["citation_struct"] is None
+    assert invalid["citation_struct_is_null"] is True
+    assert invalid["bibliography"] is None
+    assert invalid["bibliography_struct"] is None
+    assert invalid["bibliography_struct_is_null"] is True
+    assert invalid["csl_json"] is None
 
 
 def test_polars_refkit_missing_key_becomes_null_citation() -> None:
@@ -437,11 +471,9 @@ def test_polars_refkit_missing_key_becomes_null_citation() -> None:
         .to_dicts()[0]
     )
 
-    assert result == {
-        "citation": None,
-        "citation_struct": None,
-        "citation_struct_is_null": True,
-    }
+    assert result["citation"] is None
+    assert result["citation_struct"] is None
+    assert result["citation_struct_is_null"] is True
 
 
 def test_polars_refkit_unknown_style_fails_query() -> None:

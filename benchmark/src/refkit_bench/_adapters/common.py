@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from benchmark.fixtures import Workload
+from refkit_bench.fixtures import Workload
 
 OutcomeValue = object
 
@@ -14,7 +14,7 @@ def _noop_cleanup() -> None:
     return None
 
 
-class UnsupportedOperation(Exception):
+class MissingBenchmarkOperation(Exception):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
@@ -30,7 +30,6 @@ class OperationOutcome:
 
 @dataclass(frozen=True)
 class PreparedOperation:
-    phase: str
     operation: Callable[[], OperationOutcome]
     check: Callable[[OperationOutcome], None]
     metadata: dict[str, object] = field(default_factory=dict)
@@ -41,11 +40,11 @@ class PackageAdapter:
     name: str
     distribution: str
 
-    def prepare(self, case: str, workload: Workload, directory: Path) -> PreparedOperation:
-        method_name = f"prepare_{case}"
+    def prepare(self, operation: str, workload: Workload, directory: Path) -> PreparedOperation:
+        method_name = f"prepare_{operation}"
         method = getattr(self, method_name, None)
         if method is None:
-            raise UnsupportedOperation(f"{self.name} does not support {case}")
+            raise MissingBenchmarkOperation(f"{self.name} has no benchmark operation {operation}")
         return method(workload, directory)
 
     def version(self) -> str | None:
@@ -53,7 +52,6 @@ class PackageAdapter:
 
 
 def _prepared(
-    phase: str,
     operation: Callable[[], OperationOutcome],
     check: Callable[[OperationOutcome], None],
     *,
@@ -64,7 +62,6 @@ def _prepared(
     cleanup: Callable[[], None] = _noop_cleanup,
 ) -> PreparedOperation:
     return PreparedOperation(
-        phase=phase,
         operation=operation,
         check=check,
         metadata={
@@ -89,15 +86,6 @@ def _count_at_least(minimum: int) -> Callable[[OperationOutcome], None]:
     def check(outcome: OperationOutcome) -> None:
         if outcome.count < minimum:
             raise AssertionError(f"expected count at least {minimum}, got {outcome.count}")
-
-    return check
-
-
-def _recovery_parse_result(expected: int) -> Callable[[OperationOutcome], None]:
-    def check(outcome: OperationOutcome) -> None:
-        if outcome.count == expected:
-            return
-        raise AssertionError(f"expected {expected} recovered entries, got {outcome.count}")
 
     return check
 
@@ -183,16 +171,6 @@ def _text_contains(needle: str) -> Callable[[OperationOutcome], None]:
     return check
 
 
-def _text_contains_all(needles: list[str]) -> Callable[[OperationOutcome], None]:
-    def check(outcome: OperationOutcome) -> None:
-        text = str(outcome.value)
-        missing = [needle for needle in needles if needle not in text]
-        if missing:
-            raise AssertionError(f"expected output to contain {missing[0]!r}")
-
-    return check
-
-
 def _citation_output_matches(records: tuple[Any, ...]) -> Callable[[OperationOutcome], None]:
     expected = [f"({record.family}, {record.year})" for record in records]
 
@@ -239,10 +217,6 @@ def _detail_contains(needle: str) -> Callable[[OperationOutcome], None]:
             raise AssertionError(f"expected detail to contain {needle!r}")
 
     return check
-
-
-def _error_detail(exc: Exception) -> str:
-    return f"error={type(exc).__name__}: {exc!r}"
 
 
 def _raw_roundtrip_check(keys: list[str]) -> Callable[[OperationOutcome], None]:

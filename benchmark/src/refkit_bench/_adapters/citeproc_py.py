@@ -3,65 +3,45 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from benchmark._adapters.common import (
+from refkit_bench._adapters.common import (
     OperationOutcome,
     PackageAdapter,
     PreparedOperation,
-    UnsupportedOperation,
     _all_checks,
     _bibliography_output_matches,
     _citation_output_matches,
     _count_is,
     _detail_contains,
-    _entries_match,
-    _first,
-    _keys_are,
-    _lookup_keys,
     _prepared,
-    _projection_contains,
 )
-from benchmark.fixtures import Workload
+from refkit_bench.fixtures import Workload
 
 
 class CiteprocPyAdapter(PackageAdapter):
     name = "citeproc-py"
     distribution = "citeproc-py"
 
-    def prepare_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
-        from citeproc.source.bibtex import BibTeX
-
-        def operation() -> OperationOutcome:
-            source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
-            return OperationOutcome(source, len(list(source.keys())))
-
-        return _prepared("parse", operation, _count_is(len(workload.records)), setup_included=True)
-
-    def prepare_bibtex_recovery_parse(
-        self, workload: Workload, directory: Path
-    ) -> PreparedOperation:
-        raise UnsupportedOperation(
-            "citeproc-py aborts dirty BibTeX instead of recovering valid entries"
-        )
-
-    def prepare_style_load(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_load_bundled_style(self, workload: Workload, directory: Path) -> PreparedOperation:
         from citeproc import CitationStylesStyle
 
         def operation() -> OperationOutcome:
             style = CitationStylesStyle("apa", validate=False)
             return OperationOutcome(style, 1)
 
-        return _prepared("style-load", operation, _count_is(1), source_format="none")
+        return _prepared(operation, _count_is(1), source_format="none")
 
-    def prepare_processor_setup(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_create_processor(self, workload: Workload, directory: Path) -> PreparedOperation:
         source, style = _citeproc_source_and_style(workload)
 
         def operation() -> OperationOutcome:
             bibliography = _citeproc_processor(source, style)
             return OperationOutcome(bibliography, 1)
 
-        return _prepared("processor-setup", operation, _count_is(1), source_format="csl_json")
+        return _prepared(operation, _count_is(1), source_format="csl_json")
 
-    def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_render_one_prepared_citation(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         source, style = _citeproc_source_and_style(workload)
         citation = _citeproc_citation(workload.keys[:1])
 
@@ -72,14 +52,15 @@ class CiteprocPyAdapter(PackageAdapter):
             return OperationOutcome(str(rendered), 1)
 
         return _prepared(
-            "render",
             operation,
             _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
             source_format="csl_json",
             citation_count=1,
         )
 
-    def prepare_bibliography_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_render_prepared_bibliography(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         source, style = _citeproc_source_and_style(workload)
         citation = _citeproc_citation(workload.keys)
 
@@ -91,7 +72,6 @@ class CiteprocPyAdapter(PackageAdapter):
             return OperationOutcome("\n".join(rows), len(rows))
 
         return _prepared(
-            "render",
             operation,
             _all_checks(
                 _count_is(len(workload.records)),
@@ -101,7 +81,7 @@ class CiteprocPyAdapter(PackageAdapter):
             citation_count=len(workload.records),
         )
 
-    def prepare_bibliography_seen_render(
+    def prepare_render_cited_bibliography(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         source, style = _citeproc_source_and_style(workload)
@@ -117,7 +97,6 @@ class CiteprocPyAdapter(PackageAdapter):
             return OperationOutcome("\n".join(rows), len(rows))
 
         return _prepared(
-            "render-bibliography-seen",
             operation,
             _all_checks(
                 _count_is(len(workload.records)),
@@ -127,7 +106,9 @@ class CiteprocPyAdapter(PackageAdapter):
             citation_count=len(workload.records),
         )
 
-    def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_render_repeated_citations(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         source, style = _citeproc_source_and_style(workload)
         citations = [_citeproc_citation([key]) for key in workload.keys]
 
@@ -141,7 +122,6 @@ class CiteprocPyAdapter(PackageAdapter):
             return OperationOutcome("\n".join(rendered), len(rendered))
 
         return _prepared(
-            "steady-render",
             operation,
             _all_checks(
                 _count_is(len(workload.records)),
@@ -151,7 +131,9 @@ class CiteprocPyAdapter(PackageAdapter):
             citation_count=len(workload.records),
         )
 
-    def prepare_one_off_cite(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_render_path_citation(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         key = workload.keys[0]
 
         def operation() -> OperationOutcome:
@@ -167,14 +149,13 @@ class CiteprocPyAdapter(PackageAdapter):
             return OperationOutcome(str(rendered), 1)
 
         return _prepared(
-            "one-off-render",
             operation,
             _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
             setup_included=True,
             citation_count=1,
         )
 
-    def prepare_one_off_bibliography(
+    def prepare_render_path_bibliography(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         def operation() -> OperationOutcome:
@@ -191,7 +172,6 @@ class CiteprocPyAdapter(PackageAdapter):
             return OperationOutcome("\n".join(rows), len(rows))
 
         return _prepared(
-            "one-off-render",
             operation,
             _all_checks(
                 _count_is(len(workload.records)),
@@ -201,7 +181,9 @@ class CiteprocPyAdapter(PackageAdapter):
             citation_count=len(workload.records),
         )
 
-    def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_resolve_missing_reference(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         source, style = _citeproc_source_and_style(workload)
         citation = _citeproc_citation(["missing-reference"])
 
@@ -213,82 +195,10 @@ class CiteprocPyAdapter(PackageAdapter):
             return OperationOutcome(str(rendered), len(missing), ",".join(missing))
 
         return _prepared(
-            "error",
             operation,
             _all_checks(_count_is(1), _detail_contains("missing-reference")),
             source_format="csl_json",
             citation_count=1,
-        )
-
-    def prepare_bulk_materialization(
-        self, workload: Workload, directory: Path
-    ) -> PreparedOperation:
-        from citeproc.source.bibtex import BibTeX
-
-        source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
-
-        def operation() -> OperationOutcome:
-            rows = [
-                {"key": key, "title": _first(dict(reference).get("title"))}
-                for key, reference in source.items()
-            ]
-            return OperationOutcome(rows, len(rows))
-
-        return _prepared(
-            "materialize",
-            operation,
-            _projection_contains(workload.records, required_fields=("key", "title")),
-        )
-
-    def prepare_library_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
-        from citeproc.source.bibtex import BibTeX
-
-        source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
-
-        def operation() -> OperationOutcome:
-            keys = list(source.keys())
-            return OperationOutcome(keys, len(keys))
-
-        return _prepared("inspect", operation, _keys_are(workload.keys))
-
-    def prepare_entry_lookup(self, workload: Workload, directory: Path) -> PreparedOperation:
-        from citeproc.source.bibtex import BibTeX
-
-        source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
-        keys = _lookup_keys(workload)
-
-        def operation() -> OperationOutcome:
-            rows = [source[key] for key in keys]
-            return OperationOutcome(rows, len(rows))
-
-        return _prepared("inspect", operation, _entries_match(workload.records[: len(keys)]))
-
-    def prepare_field_projection(self, workload: Workload, directory: Path) -> PreparedOperation:
-        from citeproc.source.bibtex import BibTeX
-
-        source = BibTeX(str(workload.bibtex_path), encoding="utf-8")
-
-        def operation() -> OperationOutcome:
-            rows = []
-            for key, reference in source.items():
-                value = dict(reference)
-                rows.append(
-                    {
-                        "key": key,
-                        "title": _first(value.get("title")),
-                        "doi": _first(value.get("DOI")),
-                        "volume": str(_first(value.get("volume"))),
-                    }
-                )
-            return OperationOutcome(rows, len(rows))
-
-        return _prepared(
-            "inspect",
-            operation,
-            _projection_contains(
-                workload.records,
-                required_fields=("key", "title", "doi", "volume"),
-            ),
         )
 
 

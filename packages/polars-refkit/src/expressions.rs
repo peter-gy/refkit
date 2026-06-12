@@ -313,7 +313,7 @@ fn bibtex_parse_report(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<S
         }
     }
 
-    let fields = vec![
+    let fields = [
         BooleanChunked::from_iter_options("ok".into(), ok.into_iter()).into_series(),
         UInt32Chunked::from_iter_options("entry_count".into(), entry_count.into_iter())
             .into_series(),
@@ -580,7 +580,7 @@ fn rendered_outputs_to_struct_series(
             .map(|value| value.as_ref().map(|output| output.html.as_str())),
     )
     .into_series();
-    let fields = vec![text, html];
+    let fields = [text, html];
     let chunked = StructChunked::from_series(name.into(), rendered.len(), fields.iter())?;
     if rendered.iter().all(Option::is_some) {
         return Ok(chunked.into_series());

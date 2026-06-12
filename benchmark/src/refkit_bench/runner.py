@@ -14,12 +14,11 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, TypedDict
 
-from benchmark.adapters import (
+from refkit_bench.adapters import (
     PackageAdapter,
-    UnsupportedOperation,
     adapters,
 )
-from benchmark.fixtures import SIZES, materialize_workload
+from refkit_bench.fixtures import SIZES, materialize_workload
 
 NATIVE_ARTIFACT_NAMES = (
     "lib_native.dylib",
@@ -29,8 +28,10 @@ NATIVE_ARTIFACT_NAMES = (
 )
 
 RESULT_FIELDS = [
-    "case",
+    "lane",
     "group",
+    "capability",
+    "workflow",
     "package",
     "package_version",
     "adapter_version",
@@ -82,135 +83,314 @@ class SuiteResult(TypedDict):
 
 
 @dataclass(frozen=True)
-class CaseSpec:
+class LaneParticipant:
+    package: str
+    adapter_operation: str
+
+
+@dataclass(frozen=True)
+class LaneSpec:
     name: str
     group: str
+    capability: str
+    workflow: str
+    phase: str
+    participants: tuple[LaneParticipant, ...]
     description: str
 
 
-CASES: dict[str, CaseSpec] = {
-    "bibtex_parse": CaseSpec("bibtex_parse", "parse", "Parse BibTeX into a package library model."),
-    "bibtex_recovery_parse": CaseSpec(
-        "bibtex_recovery_parse",
-        "parse",
-        "Parse dirty BibTeX and report whether valid records survive recovery.",
+REFKIT = "refkit"
+POLARS_REFKIT = "polars-refkit"
+CITEPROC_PY = "citeproc-py"
+BIBTEXPARSER_V2 = "bibtexparser-2.x"
+
+
+def participant(package: str, adapter_operation: str) -> LaneParticipant:
+    return LaneParticipant(package, adapter_operation)
+
+
+def participants(adapter_operation: str, *packages: str) -> tuple[LaneParticipant, ...]:
+    return tuple(participant(package, adapter_operation) for package in packages)
+
+
+LANES: dict[str, LaneSpec] = {
+    "input.bibtex": LaneSpec(
+        "input.bibtex",
+        "input.normalized",
+        "normalized_bibliography_input",
+        "bibtex_input",
+        "input",
+        (
+            participant(REFKIT, "parse_bibtex"),
+            participant(POLARS_REFKIT, "parse_bibtex"),
+            participant(POLARS_REFKIT, "parse_bibtex_lazy"),
+            participant(BIBTEXPARSER_V2, "parse_bibtex"),
+        ),
+        "Parse clean BibTeX into the interface's normalized or queryable model.",
     ),
-    "raw_bibtex_parse": CaseSpec(
-        "raw_bibtex_parse",
-        "raw",
-        "Parse raw BibTeX while preserving raw document structure.",
+    "input.dirty-bibtex": LaneSpec(
+        "input.dirty-bibtex",
+        "input.normalized",
+        "normalized_bibliography_input",
+        "dirty_bibtex_recovery",
+        "input-recovery",
+        participants("recover_dirty_bibtex", REFKIT, BIBTEXPARSER_V2),
+        "Recover valid entries from dirty BibTeX and report parse diagnostics.",
     ),
-    "raw_bibtex_write": CaseSpec(
-        "raw_bibtex_write",
-        "raw",
+    "raw-bibtex.parse": LaneSpec(
+        "raw-bibtex.parse",
+        "raw-bibtex",
+        "raw_bibtex_document",
+        "raw_document_read",
+        "raw-read",
+        participants("parse_raw_bibtex", REFKIT, BIBTEXPARSER_V2),
+        "Parse raw BibTeX while preserving document structure.",
+    ),
+    "raw-bibtex.write": LaneSpec(
+        "raw-bibtex.write",
+        "raw-bibtex",
+        "raw_bibtex_document",
+        "raw_document_write",
+        "raw-write",
+        participants("write_edited_raw_bibtex", REFKIT, BIBTEXPARSER_V2),
         "Write an already parsed raw BibTeX document after one field edit.",
     ),
-    "raw_bibtex_roundtrip": CaseSpec(
-        "raw_bibtex_roundtrip",
-        "raw",
+    "raw-bibtex.roundtrip": LaneSpec(
+        "raw-bibtex.roundtrip",
+        "raw-bibtex",
+        "raw_bibtex_document",
+        "raw_document_edit_roundtrip",
+        "raw-roundtrip",
+        participants("roundtrip_raw_bibtex_edit", REFKIT, BIBTEXPARSER_V2),
         "Parse raw BibTeX, edit one title, and write BibTeX text.",
     ),
-    "style_load": CaseSpec(
-        "style_load",
-        "setup",
-        "Resolve the APA citation style after benchmark warmup. Public process caches count.",
+    "style.load": LaneSpec(
+        "style.load",
+        "style",
+        "citation_style_input",
+        "style_resolution",
+        "style-resolution",
+        participants("load_bundled_style", REFKIT, CITEPROC_PY),
+        "Resolve the APA citation style after benchmark warmup.",
     ),
-    "processor_setup": CaseSpec(
-        "processor_setup",
-        "setup",
+    "style.processor-setup": LaneSpec(
+        "style.processor-setup",
+        "style",
+        "citation_style_input",
+        "processor_creation",
+        "processor-setup",
+        participants("create_processor", REFKIT, CITEPROC_PY),
         "Create a citation processor or document from prepared inputs.",
     ),
-    "citation_render": CaseSpec("citation_render", "render", "Render one APA citation."),
-    "bibliography_render": CaseSpec("bibliography_render", "render", "Render an APA bibliography."),
-    "bibliography_seen_render": CaseSpec(
-        "bibliography_seen_render",
+    "render.prepared-citation": LaneSpec(
+        "render.prepared-citation",
+        "render.prepared",
+        "citation_rendering",
+        "prepared_citation",
         "render",
-        "Render a bibliography for entries cited during the operation.",
+        participants("render_one_prepared_citation", REFKIT, CITEPROC_PY),
+        "Render one APA citation from prepared citation data.",
     ),
-    "repeated_render": CaseSpec(
-        "repeated_render", "render", "Render repeated APA citations after setup."
+    "render.prepared-bibliography": LaneSpec(
+        "render.prepared-bibliography",
+        "render.prepared",
+        "bibliography_rendering",
+        "prepared_bibliography",
+        "render",
+        participants("render_prepared_bibliography", REFKIT, CITEPROC_PY),
+        "Render one APA bibliography from prepared citation data.",
     ),
-    "rendered_text_access": CaseSpec(
+    "render.cited-bibliography": LaneSpec(
+        "render.cited-bibliography",
+        "render.prepared",
+        "bibliography_rendering",
+        "cited_bibliography",
+        "render",
+        participants("render_cited_bibliography", REFKIT, CITEPROC_PY),
+        "Cite every entry during the operation, then render the cited bibliography.",
+    ),
+    "render.repeated-citations": LaneSpec(
+        "render.repeated-citations",
+        "render.prepared",
+        "citation_rendering",
+        "citation_sequence",
+        "render",
+        participants("render_repeated_citations", REFKIT, CITEPROC_PY),
+        "Render repeated APA citations from prepared citation data.",
+    ),
+    "render.output-text": LaneSpec(
+        "render.output-text",
+        "render.output",
+        "rendered_output",
         "rendered_text_access",
-        "render-output",
+        "output-access",
+        participants("access_rendered_text", REFKIT),
         "Access text from an already rendered refkit citation.",
     ),
-    "rendered_html_access": CaseSpec(
+    "render.output-html": LaneSpec(
+        "render.output-html",
+        "render.output",
+        "rendered_output",
         "rendered_html_access",
-        "render-output",
+        "output-access",
+        participants("access_rendered_html", REFKIT),
         "Access HTML from an already rendered refkit citation.",
     ),
-    "rendered_tree_access": CaseSpec(
+    "render.output-tree": LaneSpec(
+        "render.output-tree",
+        "render.output",
+        "rendered_output",
         "rendered_tree_access",
-        "render-output",
+        "output-access",
+        participants("access_rendered_tree", REFKIT),
         "Materialize the Python tree for an already rendered refkit citation.",
     ),
-    "one_off_cite": CaseSpec(
-        "one_off_cite",
-        "one-off",
-        "Run the one-off citation helper after benchmark warmup.",
+    "render.one-off-cite": LaneSpec(
+        "render.one-off-cite",
+        "render.one-off",
+        "citation_rendering",
+        "path_citation",
+        "path-render",
+        participants("render_path_citation", REFKIT, CITEPROC_PY),
+        "Read BibTeX, resolve APA, and render one citation inside the operation.",
     ),
-    "one_off_bibliography": CaseSpec(
-        "one_off_bibliography",
-        "one-off",
-        "Run the one-off bibliography helper after benchmark warmup.",
+    "render.one-off-bibliography": LaneSpec(
+        "render.one-off-bibliography",
+        "render.one-off",
+        "bibliography_rendering",
+        "path_bibliography",
+        "path-render",
+        participants("render_path_bibliography", REFKIT, CITEPROC_PY),
+        "Read BibTeX, resolve APA, and render a bibliography inside the operation.",
     ),
-    "missing_reference": CaseSpec(
-        "missing_reference", "error", "Resolve one missing citation key."
+    "errors.missing-reference": LaneSpec(
+        "errors.missing-reference",
+        "errors",
+        "error_contracts",
+        "missing_reference",
+        "error-resolution",
+        participants("resolve_missing_reference", REFKIT, CITEPROC_PY),
+        "Resolve one missing citation key through each renderer's public behavior.",
     ),
-    "bulk_materialization": CaseSpec(
-        "bulk_materialization",
-        "materialize",
-        "Materialize parsed entries into Python-visible key and title rows.",
+    "inspect.materialize": LaneSpec(
+        "inspect.materialize",
+        "inspect.entries",
+        "entry_inspection",
+        "entry_rows",
+        "inspect",
+        participants("materialize_entry_rows", REFKIT, BIBTEXPARSER_V2),
+        "Materialize parsed entries into key and title rows after setup.",
     ),
-    "library_keys": CaseSpec("library_keys", "inspect", "Enumerate all citation keys after setup."),
-    "entry_lookup": CaseSpec(
-        "entry_lookup", "inspect", "Look up a fixed set of entries after setup."
+    "inspect.keys": LaneSpec(
+        "inspect.keys",
+        "inspect.entries",
+        "entry_inspection",
+        "entry_keys",
+        "inspect",
+        participants("list_keys", REFKIT, BIBTEXPARSER_V2),
+        "Enumerate citation keys after setup.",
     ),
-    "field_projection": CaseSpec(
+    "inspect.lookup": LaneSpec(
+        "inspect.lookup",
+        "inspect.entries",
+        "entry_inspection",
+        "entry_lookup",
+        "inspect",
+        participants("lookup_entries", REFKIT, BIBTEXPARSER_V2),
+        "Look up a fixed set of entries after setup.",
+    ),
+    "inspect.fields": LaneSpec(
+        "inspect.fields",
+        "inspect.entries",
+        "entry_inspection",
         "field_projection",
         "inspect",
+        participants("project_fields", REFKIT, BIBTEXPARSER_V2),
         "Project common scalar fields from all entries after setup.",
     ),
-    "lazy_bibtex_parse": CaseSpec(
-        "lazy_bibtex_parse",
-        "polars-lazy",
-        "Parse BibTeX through a Polars lazy expression and collect.",
+    "bulk.polars.materialize": LaneSpec(
+        "bulk.polars.materialize",
+        "bulk.polars",
+        "bulk_tabular_processing",
+        "tabular_entry_rows",
+        "tabular",
+        (
+            participant(POLARS_REFKIT, "materialize_entry_rows_eager"),
+            participant(POLARS_REFKIT, "materialize_entry_rows_lazy"),
+        ),
+        "Materialize entry rows through a Polars expression.",
     ),
-    "lazy_citation_render": CaseSpec(
-        "lazy_citation_render",
-        "polars-lazy",
-        "Render one citation through a Polars lazy expression and collect.",
+    "bulk.polars.keys": LaneSpec(
+        "bulk.polars.keys",
+        "bulk.polars",
+        "bulk_tabular_processing",
+        "tabular_entry_keys",
+        "tabular",
+        (
+            participant(POLARS_REFKIT, "list_keys_eager"),
+            participant(POLARS_REFKIT, "list_keys_lazy"),
+        ),
+        "Enumerate citation keys through a Polars expression.",
     ),
-    "lazy_bibliography_render": CaseSpec(
-        "lazy_bibliography_render",
-        "polars-lazy",
-        "Render a bibliography through a Polars lazy expression and collect.",
+    "bulk.polars.lookup": LaneSpec(
+        "bulk.polars.lookup",
+        "bulk.polars",
+        "bulk_tabular_processing",
+        "tabular_entry_lookup",
+        "tabular",
+        (
+            participant(POLARS_REFKIT, "lookup_entries_eager"),
+            participant(POLARS_REFKIT, "lookup_entries_lazy"),
+        ),
+        "Project and filter entries through a Polars expression.",
     ),
-    "lazy_repeated_render": CaseSpec(
-        "lazy_repeated_render",
-        "polars-lazy",
-        "Render ordered citation batches through a Polars lazy expression and collect.",
+    "bulk.polars.fields": LaneSpec(
+        "bulk.polars.fields",
+        "bulk.polars",
+        "bulk_tabular_processing",
+        "tabular_field_projection",
+        "tabular",
+        (
+            participant(POLARS_REFKIT, "project_fields_eager"),
+            participant(POLARS_REFKIT, "project_fields_lazy"),
+        ),
+        "Project common scalar fields through a Polars expression.",
     ),
-    "lazy_bulk_materialization": CaseSpec(
-        "lazy_bulk_materialization",
-        "polars-lazy",
-        "Materialize entries through a Polars lazy expression and collect.",
+    "bulk.polars.citation": LaneSpec(
+        "bulk.polars.citation",
+        "bulk.polars",
+        "bulk_tabular_processing",
+        "tabular_citation",
+        "tabular",
+        (
+            participant(POLARS_REFKIT, "render_citation_expression_eager"),
+            participant(POLARS_REFKIT, "render_citation_expression_lazy"),
+        ),
+        "Render one citation through a Polars expression.",
     ),
-    "lazy_library_keys": CaseSpec(
-        "lazy_library_keys",
-        "polars-lazy",
-        "Enumerate citation keys through a Polars lazy expression and collect.",
+    "bulk.polars.bibliography": LaneSpec(
+        "bulk.polars.bibliography",
+        "bulk.polars",
+        "bulk_tabular_processing",
+        "tabular_bibliography",
+        "tabular",
+        (
+            participant(POLARS_REFKIT, "render_bibliography_expression_eager"),
+            participant(POLARS_REFKIT, "render_bibliography_expression_lazy"),
+        ),
+        "Render a bibliography through a Polars expression.",
     ),
-    "lazy_entry_lookup": CaseSpec(
-        "lazy_entry_lookup",
-        "polars-lazy",
-        "Project and filter entries through a Polars lazy expression and collect.",
-    ),
-    "lazy_field_projection": CaseSpec(
-        "lazy_field_projection",
-        "polars-lazy",
-        "Project common scalar fields through a Polars lazy expression and collect.",
+    "bulk.polars.repeated-citations": LaneSpec(
+        "bulk.polars.repeated-citations",
+        "bulk.polars",
+        "bulk_tabular_processing",
+        "tabular_citation_sequence",
+        "tabular",
+        (
+            participant(POLARS_REFKIT, "render_citation_sequence_eager"),
+            participant(POLARS_REFKIT, "render_citation_sequence_lazy"),
+        ),
+        "Render ordered citation batches through a Polars expression.",
     ),
 }
 
@@ -218,13 +398,13 @@ CASES: dict[str, CaseSpec] = {
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.list:
-        print_case_list()
+        print_lane_list()
         return 0
 
-    selected_cases = select_cases(args.case, args.group)
+    selected_lanes = select_lanes(args.lane, args.group)
     selected_inputs = select_inputs(args.input)
     result = run_suite(
-        case_names=selected_cases,
+        lane_names=selected_lanes,
         input_sizes=selected_inputs,
         rounds=args.rounds,
         warmups=args.warmups,
@@ -242,17 +422,17 @@ def main(argv: list[str] | None = None) -> int:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run refkit citation benchmarks.")
-    parser.add_argument("--list", action="store_true", help="List benchmark cases and exit.")
-    parser.add_argument("--case", action="append", choices=sorted(CASES), help="Run one case.")
+    parser.add_argument("--list", action="store_true", help="List benchmark lanes and exit.")
+    parser.add_argument("--lane", action="append", choices=sorted(LANES), help="Run one lane.")
     parser.add_argument(
-        "--group", default="all", help="Run cases from a group. Use all for every case."
+        "--group", default="all", help="Run lanes from a group. Use all for every lane."
     )
     parser.add_argument(
         "--input", action="append", choices=[*SIZES, "all"], help="Input size to run."
     )
-    parser.add_argument("--rounds", type=positive_int, default=5, help="Measured rounds per case.")
+    parser.add_argument("--rounds", type=positive_int, default=5, help="Measured rounds per lane.")
     parser.add_argument(
-        "--warmups", type=non_negative_int, default=2, help="Warmup rounds per case."
+        "--warmups", type=non_negative_int, default=2, help="Warmup rounds per lane."
     )
     parser.add_argument("--json", help="Write JSON results to this path.")
     parser.add_argument("--csv", help="Write CSV result rows to this path.")
@@ -279,14 +459,14 @@ def non_negative_int(value: str) -> int:
     return parsed
 
 
-def select_cases(case_names: list[str] | None, group: str) -> list[str]:
-    if case_names:
-        return case_names
+def select_lanes(lane_names: list[str] | None, group: str) -> list[str]:
+    if lane_names:
+        return lane_names
     if group == "all":
-        return list(CASES)
-    selected = [case.name for case in CASES.values() if case.group == group]
+        return list(LANES)
+    selected = [lane.name for lane in LANES.values() if lane.group == group]
     if not selected:
-        raise SystemExit(f"unknown benchmark group: {group}")
+        raise SystemExit(f"unknown benchmark lane group: {group}")
     return selected
 
 
@@ -301,7 +481,7 @@ def select_inputs(input_names: list[str] | None) -> list[str]:
 
 def run_suite(
     *,
-    case_names: list[str],
+    lane_names: list[str],
     input_sizes: list[str],
     rounds: int,
     warmups: int,
@@ -309,6 +489,7 @@ def run_suite(
     package_adapters: list[PackageAdapter] | None = None,
 ) -> SuiteResult:
     suite_adapters = package_adapters if package_adapters is not None else adapters()
+    adapters_by_name = {adapter.name: adapter for adapter in suite_adapters}
     metadata = machine_metadata(build_mode)
     rows: list[Row] = []
 
@@ -316,13 +497,17 @@ def run_suite(
         root = Path(tmp)
         for input_size in input_sizes:
             workload = materialize_workload(input_size, root)
-            for case_name in case_names:
-                case = CASES[case_name]
-                for adapter in suite_adapters:
+            for lane_name in lane_names:
+                lane = LANES[lane_name]
+                for participant in lane.participants:
+                    adapter = adapters_by_name.get(participant.package)
+                    if adapter is None:
+                        continue
                     rows.extend(
-                        run_adapter_case(
+                        run_adapter_lane(
                             adapter=adapter,
-                            case=case,
+                            lane=lane,
+                            participant=participant,
                             workload=workload,
                             directory=root,
                             rounds=rounds,
@@ -334,41 +519,21 @@ def run_suite(
     return {"metadata": metadata, "rows": rows}
 
 
-def run_adapter_case(
+def run_adapter_lane(
     *,
     adapter: PackageAdapter,
-    case: CaseSpec,
+    lane: LaneSpec,
+    participant: LaneParticipant,
     workload: Any,
     directory: Path,
     rounds: int,
     warmups: int,
     metadata: Metadata,
 ) -> list[Row]:
-    base = base_row(adapter, case, workload, metadata, rounds, warmups)
+    base = base_row(adapter, lane, workload, metadata, rounds, warmups)
     setup_start = perf_counter()
     try:
-        prepared = adapter.prepare(case.name, workload, directory)
-    except UnsupportedOperation as exc:
-        setup_seconds = perf_counter() - setup_start
-        return [
-            {
-                **base,
-                "phase": "unsupported",
-                "operation_phase": "unsupported",
-                "source_format": "unsupported",
-                "input_bytes": 0,
-                "input_sha256": "",
-                "citation_count": 0,
-                "execution_mode": "",
-                "setup_included": False,
-                "setup_seconds": setup_seconds,
-                "operation_count": 0,
-                "round": 0,
-                "seconds": 0.0,
-                "status": "unsupported",
-                "detail": exc.reason,
-            }
-        ]
+        prepared = adapter.prepare(participant.adapter_operation, workload, directory)
     except Exception as exc:
         setup_seconds = perf_counter() - setup_start
         return [
@@ -391,7 +556,7 @@ def run_adapter_case(
             }
         ]
     setup_seconds = perf_counter() - setup_start
-    operation_fields = prepared_row_fields(prepared, workload, setup_seconds)
+    operation_fields = prepared_row_fields(prepared, workload, setup_seconds, lane)
 
     try:
         for _ in range(warmups):
@@ -403,7 +568,7 @@ def run_adapter_case(
                     {
                         **base,
                         **operation_fields,
-                        "phase": prepared.phase,
+                        "phase": lane.phase,
                         "round": 0,
                         "seconds": 0.0,
                         "status": "failed",
@@ -423,7 +588,7 @@ def run_adapter_case(
                     {
                         **base,
                         **operation_fields,
-                        "phase": prepared.phase,
+                        "phase": lane.phase,
                         "round": round_index,
                         "seconds": seconds,
                         "status": "ok",
@@ -437,7 +602,7 @@ def run_adapter_case(
                     {
                         **base,
                         **operation_fields,
-                        "phase": prepared.phase,
+                        "phase": lane.phase,
                         "round": round_index,
                         "seconds": seconds,
                         "status": "failed",
@@ -455,7 +620,7 @@ def run_adapter_case(
 
 def base_row(
     adapter: PackageAdapter,
-    case: CaseSpec,
+    lane: LaneSpec,
     workload: Any,
     metadata: Metadata,
     rounds: int,
@@ -463,8 +628,10 @@ def base_row(
 ) -> Row:
     adapter_version = adapter.version() or package_version(adapter.distribution)
     return {
-        "case": case.name,
-        "group": case.group,
+        "lane": lane.name,
+        "group": lane.group,
+        "capability": lane.capability,
+        "workflow": lane.workflow,
         "package": adapter.name,
         "package_version": adapter_version,
         "adapter_version": adapter_version,
@@ -487,10 +654,11 @@ def prepared_row_fields(
     prepared: Any,
     workload: Any,
     setup_seconds: float,
+    lane: LaneSpec,
 ) -> Row:
     source_format = str(prepared.metadata.get("source_format", "unknown"))
     return {
-        "operation_phase": prepared.phase,
+        "operation_phase": lane.phase,
         "input_bytes": workload.source_byte_count(source_format),
         "input_sha256": workload.source_sha256(source_format),
         "source_format": source_format,
@@ -579,9 +747,15 @@ def _same_artifact(left: Path, right: Path) -> bool:
     return left_stat.st_size == right_stat.st_size and left_stat.st_mtime == right_stat.st_mtime
 
 
-def print_case_list() -> None:
-    for case in CASES.values():
-        print(f"{case.name}\t{case.group}\t{case.description}")
+def print_lane_list() -> None:
+    for lane in LANES.values():
+        participants = ",".join(
+            dict.fromkeys(participant.package for participant in lane.participants)
+        )
+        print(
+            f"{lane.name}\t{lane.group}\t{lane.capability}\t"
+            f"{lane.workflow}\t{participants}\t{lane.description}"
+        )
 
 
 def write_json(path: Path, result: SuiteResult) -> None:

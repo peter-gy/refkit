@@ -4,7 +4,7 @@ from pathlib import Path
 from time import perf_counter_ns
 from typing import Any
 
-from benchmark._adapters.common import (
+from refkit_bench._adapters.common import (
     OperationOutcome,
     PackageAdapter,
     PreparedOperation,
@@ -21,23 +21,23 @@ from benchmark._adapters.common import (
     _raw_roundtrip_check,
     _text_contains,
 )
-from benchmark.fixtures import Workload
+from refkit_bench.fixtures import Workload
 
 
 class RefkitAdapter(PackageAdapter):
     name = "refkit"
     distribution = "refkit"
 
-    def prepare_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_parse_bibtex(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
         def operation() -> OperationOutcome:
             library = rk.Library.read(workload.bibtex_path)
             return OperationOutcome(library, len(library))
 
-        return _prepared("parse", operation, _count_is(len(workload.records)), setup_included=True)
+        return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
 
-    def prepare_bibtex_recovery_parse(
+    def prepare_recover_dirty_bibtex(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         import refkit as rk
@@ -49,14 +49,13 @@ class RefkitAdapter(PackageAdapter):
             )
 
         return _prepared(
-            "parse-recovery",
             operation,
             _count_is(len(workload.records)),
             source_format="dirty_bibtex",
             setup_included=True,
         )
 
-    def prepare_raw_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_parse_raw_bibtex(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
         def operation() -> OperationOutcome:
@@ -64,14 +63,15 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(document, len(document.entries))
 
         return _prepared(
-            "raw-parse",
             operation,
             _count_is(len(workload.records)),
             source_format="raw_bibtex",
             setup_included=True,
         )
 
-    def prepare_raw_bibtex_write(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_write_edited_raw_bibtex(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import refkit as rk
 
         document = rk.BibDocument.parse(workload.raw_bibtex)
@@ -84,13 +84,12 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(path, len(document.entries), path.name)
 
         return _prepared(
-            "raw-write",
             operation,
             _raw_roundtrip_check(workload.keys),
             source_format="raw_bibtex",
         )
 
-    def prepare_raw_bibtex_roundtrip(
+    def prepare_roundtrip_raw_bibtex_edit(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         import refkit as rk
@@ -104,23 +103,22 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(path, len(document.entries), path.name)
 
         return _prepared(
-            "raw-write",
             operation,
             _raw_roundtrip_check(workload.keys),
             source_format="raw_bibtex",
             setup_included=True,
         )
 
-    def prepare_style_load(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_load_bundled_style(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
         def operation() -> OperationOutcome:
             style = rk.Style.load("apa")
             return OperationOutcome(style, 1)
 
-        return _prepared("style-load", operation, _count_is(1), source_format="none")
+        return _prepared(operation, _count_is(1), source_format="none")
 
-    def prepare_processor_setup(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_create_processor(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
         library = rk.Library.parse(workload.bibtex)
@@ -130,9 +128,11 @@ class RefkitAdapter(PackageAdapter):
             document = rk.Document(library, style, locale="en-US")
             return OperationOutcome(document, 1)
 
-        return _prepared("processor-setup", operation, _count_is(1))
+        return _prepared(operation, _count_is(1))
 
-    def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_render_one_prepared_citation(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import refkit as rk
 
         library = rk.Library.parse(workload.bibtex)
@@ -145,13 +145,14 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(rendered.text, 1)
 
         return _prepared(
-            "render",
             operation,
             _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
             citation_count=1,
         )
 
-    def prepare_bibliography_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_render_prepared_bibliography(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import refkit as rk
 
         library = rk.Library.parse(workload.bibtex)
@@ -163,7 +164,6 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(rendered.text, len(workload.records))
 
         return _prepared(
-            "render",
             operation,
             _all_checks(
                 _count_is(len(workload.records)),
@@ -172,7 +172,7 @@ class RefkitAdapter(PackageAdapter):
             citation_count=0,
         )
 
-    def prepare_bibliography_seen_render(
+    def prepare_render_cited_bibliography(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         import refkit as rk
@@ -189,7 +189,6 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(rendered.text, len(keys))
 
         return _prepared(
-            "render-bibliography-seen",
             operation,
             _all_checks(
                 _count_is(len(workload.records)),
@@ -198,7 +197,9 @@ class RefkitAdapter(PackageAdapter):
             citation_count=len(workload.records),
         )
 
-    def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_render_repeated_citations(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import refkit as rk
 
         library = rk.Library.parse(workload.bibtex)
@@ -211,7 +212,6 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome("\n".join(texts), len(texts))
 
         return _prepared(
-            "steady-render",
             operation,
             _all_checks(
                 _count_is(len(keys)),
@@ -220,7 +220,7 @@ class RefkitAdapter(PackageAdapter):
             citation_count=len(keys),
         )
 
-    def prepare_rendered_text_access(
+    def prepare_access_rendered_text(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         rendered = self._prepared_rendered_citation(workload)
@@ -230,12 +230,11 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(text, 1)
 
         return _prepared(
-            "render-output-text",
             operation,
             _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
         )
 
-    def prepare_rendered_html_access(
+    def prepare_access_rendered_html(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         rendered = self._prepared_rendered_citation(workload)
@@ -244,11 +243,9 @@ class RefkitAdapter(PackageAdapter):
             html = rendered.html
             return OperationOutcome(html, 1)
 
-        return _prepared(
-            "render-output-html", operation, _text_contains(workload.records[0].family)
-        )
+        return _prepared(operation, _text_contains(workload.records[0].family))
 
-    def prepare_rendered_tree_access(
+    def prepare_access_rendered_tree(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         rendered = self._prepared_rendered_citation(workload)
@@ -257,7 +254,7 @@ class RefkitAdapter(PackageAdapter):
             tree = rendered.tree
             return OperationOutcome(tree, len(tree))
 
-        return _prepared("render-output-tree", operation, _count_at_least(1))
+        return _prepared(operation, _count_at_least(1))
 
     def _prepared_rendered_citation(self, workload: Workload) -> Any:
         import refkit as rk
@@ -267,7 +264,9 @@ class RefkitAdapter(PackageAdapter):
         document = rk.Document(library, style, locale="en-US")
         return document.cite(workload.keys[0])
 
-    def prepare_one_off_cite(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_render_path_citation(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import refkit as rk
 
         key = workload.keys[0]
@@ -277,14 +276,13 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(rendered.text, 1)
 
         return _prepared(
-            "one-off-render",
             operation,
             _all_checks(_count_is(1), _citation_output_matches(workload.records[:1])),
             setup_included=True,
             citation_count=1,
         )
 
-    def prepare_one_off_bibliography(
+    def prepare_render_path_bibliography(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         import refkit as rk
@@ -294,7 +292,6 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(rendered.text, len(workload.records))
 
         return _prepared(
-            "one-off-render",
             operation,
             _all_checks(
                 _count_is(len(workload.records)),
@@ -304,7 +301,9 @@ class RefkitAdapter(PackageAdapter):
             citation_count=0,
         )
 
-    def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_resolve_missing_reference(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import refkit as rk
 
         library = rk.Library.parse(workload.bibtex)
@@ -319,13 +318,12 @@ class RefkitAdapter(PackageAdapter):
             raise AssertionError("missing reference did not raise")  # pragma: no cover
 
         return _prepared(
-            "error",
             operation,
             _all_checks(_count_is(1), _text_contains("missing-reference")),
             citation_count=1,
         )
 
-    def prepare_bulk_materialization(
+    def prepare_materialize_entry_rows(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         import refkit as rk
@@ -337,12 +335,11 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(rows, len(rows))
 
         return _prepared(
-            "materialize",
             operation,
             _projection_contains(workload.records, required_fields=("key", "title")),
         )
 
-    def prepare_library_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_list_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
         library = rk.Library.parse(workload.bibtex)
@@ -351,9 +348,9 @@ class RefkitAdapter(PackageAdapter):
             keys = library.keys()
             return OperationOutcome(keys, len(keys))
 
-        return _prepared("inspect", operation, _keys_are(workload.keys))
+        return _prepared(operation, _keys_are(workload.keys))
 
-    def prepare_entry_lookup(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_lookup_entries(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
         library = rk.Library.parse(workload.bibtex)
@@ -363,9 +360,9 @@ class RefkitAdapter(PackageAdapter):
             rows = library.get_many(keys)
             return OperationOutcome(rows, len(rows))
 
-        return _prepared("inspect", operation, _entries_match(workload.records[: len(keys)]))
+        return _prepared(operation, _entries_match(workload.records[: len(keys)]))
 
-    def prepare_field_projection(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_project_fields(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
         library = rk.Library.parse(workload.bibtex)
@@ -375,7 +372,6 @@ class RefkitAdapter(PackageAdapter):
             return OperationOutcome(rows, len(rows))
 
         return _prepared(
-            "inspect",
             operation,
             _projection_contains(
                 workload.records,

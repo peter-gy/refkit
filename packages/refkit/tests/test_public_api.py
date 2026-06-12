@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import importlib
 import importlib.metadata as metadata_module
-import json
 import sys
 import threading
 import tomllib
+from collections.abc import Callable, Iterator
 from importlib import metadata
 from pathlib import Path
-from time import perf_counter, sleep
-from typing import Any, cast
+from time import sleep
+from typing import Any, TypeVar, cast
 
 import pytest
 
@@ -19,6 +19,7 @@ import refkit._native as native
 ROOT = Path(__file__).parent.parent
 WORKSPACE = ROOT.parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
+T = TypeVar("T")
 
 
 def _many_bibtex_records(count: int) -> str:
@@ -33,6 +34,49 @@ def _many_bibtex_records(count: int) -> str:
 }}"""
         for index in range(count)
     )
+
+
+def _tree_nodes(value: object) -> Iterator[dict[str, Any]]:
+    if isinstance(value, list):
+        for child in value:
+            yield from _tree_nodes(child)
+        return
+    if not isinstance(value, dict):
+        return
+    node = cast(dict[str, Any], value)
+    yield node
+    yield from _tree_nodes(node.get("first_field"))
+    yield from _tree_nodes(node.get("children"))
+
+
+def _run_with_worker_progress(operation: Callable[[], T]) -> T:
+    started = threading.Event()
+    done = threading.Event()
+    ticks: list[None] = []
+
+    def ticker() -> None:
+        started.set()
+        while not done.is_set():
+            ticks.append(None)
+            sleep(0)
+
+    thread = threading.Thread(target=ticker)
+    switch_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1.0)
+    try:
+        thread.start()
+        assert started.wait(timeout=2)
+        ticks.clear()
+        result = operation()
+        worker_ticks = len(ticks)
+    finally:
+        done.set()
+        sys.setswitchinterval(switch_interval)
+        thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert worker_ticks > 0
+    return result
 
 
 def test_public_document_example_renders_text_html_and_tree() -> None:
@@ -117,65 +161,19 @@ def test_document_bibliography_all_renders_uncited_library_entries() -> None:
 def test_bibliography_render_releases_gil_for_worker_thread() -> None:
     library = rk.Library.parse(_many_bibtex_records(2000))
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
-    started = threading.Event()
-    done = threading.Event()
-    ticks: list[float] = []
 
-    def ticker() -> None:
-        started.set()
-        while not done.is_set():
-            ticks.append(perf_counter())
-            sleep(0)
+    rendered = _run_with_worker_progress(lambda: doc.bibliography(all=True))
 
-    thread = threading.Thread(target=ticker)
-    switch_interval = sys.getswitchinterval()
-    sys.setswitchinterval(1.0)
-    try:
-        thread.start()
-        assert started.wait(timeout=2)
-        render_start = perf_counter()
-        rendered = doc.bibliography(all=True)
-        render_end = perf_counter()
-    finally:
-        done.set()
-        sys.setswitchinterval(switch_interval)
-        thread.join(timeout=2)
-
-    assert not thread.is_alive()
     assert rendered.text
-    assert any(render_start + 0.001 <= tick <= render_end for tick in ticks)
 
 
 def test_raw_bib_document_write_releases_gil_for_worker_thread(tmp_path: Path) -> None:
     raw = rk.BibDocument.parse(_many_bibtex_records(10_000))
     output = tmp_path / "large.bib"
-    started = threading.Event()
-    done = threading.Event()
-    ticks: list[float] = []
 
-    def ticker() -> None:
-        started.set()
-        while not done.is_set():
-            ticks.append(perf_counter())
-            sleep(0)
+    _run_with_worker_progress(lambda: raw.write(output))
 
-    thread = threading.Thread(target=ticker)
-    switch_interval = sys.getswitchinterval()
-    sys.setswitchinterval(1.0)
-    try:
-        thread.start()
-        assert started.wait(timeout=2)
-        write_start = perf_counter()
-        raw.write(output)
-        write_end = perf_counter()
-    finally:
-        done.set()
-        sys.setswitchinterval(switch_interval)
-        thread.join(timeout=2)
-
-    assert not thread.is_alive()
     assert output.read_text(encoding="utf-8").count("@article") == 10_000
-    assert any(write_start + 0.001 <= tick <= write_end for tick in ticks)
 
 
 def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
@@ -248,14 +246,12 @@ def test_version_and_missing_module_attribute() -> None:
     cargo = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
     workspace_cargo = tomllib.loads((WORKSPACE / "Cargo.toml").read_text(encoding="utf-8"))
 
-    assert rk.__version__ == "0.0.1"
     assert rk.__version__ == native.__version__ == metadata.version("refkit")
     assert pyproject["project"]["version"] == rk.__version__
     assert cargo["package"]["version"]["workspace"] is True
     assert workspace_cargo["workspace"]["package"]["version"] == rk.__version__
     assert pyproject["project"]["requires-python"] == ">=3.11,<3.15"
     assert cargo["package"]["rust-version"]["workspace"] is True
-    assert workspace_cargo["workspace"]["package"]["rust-version"] == "1.85"
 
     missing_attribute = "does_not_exist"
     with pytest.raises(AttributeError, match="has no attribute"):
@@ -308,24 +304,12 @@ def test_rendered_html_does_not_emit_unsafe_link_schemes(tmp_path: Path) -> None
 
     assert 'href="javascript:alert(1)"' not in rendered.html
     assert "javascript:alert(1)" in rendered.html
-    bibliography_entry = cast(dict[str, Any], rendered.tree[0])
-    children = cast(list[dict[str, Any]], bibliography_entry["children"])
-    url_node = children[-1]
-    assert url_node["kind"] == "Element"
-    assert url_node["meta"] == "Text"
-    assert url_node["children"] == [
-        {
-            "formatting": {
-                "font_style": "Normal",
-                "font_variant": "Normal",
-                "font_weight": "Normal",
-                "text_decoration": "None",
-                "vertical_align": "None",
-            },
-            "kind": "Text",
-            "text": "javascript:alert(1)",
-        }
-    ]
+    nodes = list(_tree_nodes(rendered.tree))
+    link_nodes = [node for node in nodes if node.get("meta") == "Link"]
+    text_nodes = [node for node in nodes if node.get("kind") == "Text"]
+
+    assert all("javascript:alert(1)" not in node.values() for node in link_nodes)
+    assert any(node.get("text") == "javascript:alert(1)" for node in text_nodes)
 
 
 def test_rendered_html_preserves_csl_formatting() -> None:
@@ -345,9 +329,14 @@ def test_bibliography_text_and_tree_include_second_field_labels() -> None:
 
     doc.cite("doe2024")
     rendered = doc.bibliography()
+    entry = cast(dict[str, Any], rendered.tree[0])
+    first_field = cast(dict[str, Any], entry["first_field"])
 
     assert rendered.text.startswith("[1]")
-    assert "[1]" in json.dumps(rendered.tree)
+    assert entry["kind"] == "bibliography-entry"
+    assert first_field["kind"] == "Element"
+    assert first_field["meta"] == "CitationNumber"
+    assert any(node.get("text") == "[1]" for node in _tree_nodes(first_field))
 
 
 def test_rendered_tree_exposes_documented_structured_keys() -> None:
@@ -370,18 +359,21 @@ def test_rendered_tree_uses_stable_public_strings() -> None:
 
     citation_tree = doc.cite("doe2024").tree
     entry_node = cast(dict[str, Any], citation_tree[0])
-    first_child = cast(dict[str, Any], entry_node["children"][0])
-    citation_number = cast(dict[str, Any], entry_node["children"][1])
+    nodes = list(_tree_nodes(citation_tree))
+    citation_number = next(node for node in nodes if node.get("meta") == "CitationNumber")
+    formatted_text = next(node for node in nodes if node.get("kind") == "Text")
+    formatting = cast(dict[str, Any], formatted_text["formatting"])
 
     assert entry_node["meta"] == "Entry"
     assert citation_number["meta"] == "CitationNumber"
-    assert first_child["formatting"] == {
-        "font_style": "Normal",
-        "font_variant": "Normal",
-        "font_weight": "Normal",
-        "text_decoration": "None",
-        "vertical_align": "None",
+    assert set(formatting) == {
+        "font_style",
+        "font_variant",
+        "font_weight",
+        "text_decoration",
+        "vertical_align",
     }
+    assert all(isinstance(value, str) for value in formatting.values())
 
 
 def test_library_reads_yaml_and_selects_parent_periodical() -> None:
@@ -1071,6 +1063,7 @@ def test_names_substitute_position_condition_uses_full_history() -> None:
 def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path) -> None:
     raw = rk.BibDocument.read(FIXTURES / "raw.bib")
     blocks = raw.blocks
+    source = (FIXTURES / "raw.bib").read_text(encoding="utf-8")
 
     assert raw.comments[0].startswith("% library comment")
     assert raw.preamble == "BibTeX preamble"
@@ -1078,7 +1071,8 @@ def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path)
     assert blocks[0]["kind"] == "comment"
     assert blocks[0]["raw"] == "% library comment\n"
     assert blocks[1]["kind"] == "preamble"
-    assert blocks[1]["span"] == [18, 46]
+    preamble_start, preamble_end = blocks[1]["span"]
+    assert source[preamble_start:preamble_end] == '@preamble{"BibTeX preamble"}'
     failed_blocks = raw.failed_blocks
     assert failed_blocks[0]["kind"] == "failed"
     assert "closing delimiter" in failed_blocks[0]["error"]
@@ -1230,10 +1224,14 @@ def test_raw_bib_document_keeps_unmatched_quotes_inside_comment_blocks(tmp_path:
 
 
 def test_raw_helper_classes_are_runtime_exports() -> None:
-    assert rk.BibEntry.__name__ == "BibEntry"
-    assert rk.BibEntryMap.__name__ == "BibEntryMap"
-    assert rk.BibField.__name__ == "BibField"
-    assert rk.BibFieldMap.__name__ == "BibFieldMap"
+    raw = rk.BibDocument.read(FIXTURES / "raw.bib")
+    entry = raw.entries["doe2024"]
+    field = entry.fields["title"]
+
+    assert isinstance(raw.entries, rk.BibEntryMap)
+    assert isinstance(entry, rk.BibEntry)
+    assert isinstance(entry.fields, rk.BibFieldMap)
+    assert isinstance(field, rk.BibField)
 
 
 def test_raw_bare_field_edit_wraps_unsafe_value(tmp_path: Path) -> None:

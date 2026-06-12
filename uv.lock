@@ -6,6 +6,7 @@ requires-python = ">=3.11, <3.15"
 members = [
     "polars-refkit",
     "refkit",
+    "refkit-bench",
     "refkit-workspace",
 ]
 
@@ -416,6 +417,33 @@ version = "0.0.1"
 source = { editable = "packages/refkit" }
 
 [[package]]
+name = "refkit-bench"
+version = "0.0.1"
+source = { editable = "benchmark" }
+dependencies = [
+    { name = "bibtexparser" },
+    { name = "citeproc-py" },
+    { name = "citeproc-py-styles" },
+    { name = "polars" },
+    { name = "polars-refkit" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "refkit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "bibtexparser", specifier = "==2.0.0b9" },
+    { name = "citeproc-py", specifier = ">=0.9.3" },
+    { name = "citeproc-py-styles", specifier = ">=0.1.5" },
+    { name = "polars", specifier = ">=1.41,<1.42" },
+    { name = "polars-refkit", editable = "packages/polars-refkit" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "refkit", editable = "packages/refkit" },
+]
+
+[[package]]
 name = "refkit-workspace"
 version = "0.0.1"
 source = { virtual = "." }
@@ -425,20 +453,8 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
-benchmark = [
-    { name = "bibtexparser" },
-    { name = "citeproc-py" },
-    { name = "citeproc-py-styles" },
-    { name = "polars" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-]
 dev = [
-    { name = "bibtexparser" },
-    { name = "citeproc-py" },
-    { name = "citeproc-py-styles" },
     { name = "maturin" },
-    { name = "polars" },
     { name = "pyrefly" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -453,20 +469,8 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-benchmark = [
-    { name = "bibtexparser", specifier = "==2.0.0b9" },
-    { name = "citeproc-py", specifier = ">=0.9.3" },
-    { name = "citeproc-py-styles", specifier = ">=0.1.5" },
-    { name = "polars", specifier = ">=1.41,<1.42" },
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-]
 dev = [
-    { name = "bibtexparser", specifier = "==2.0.0b9" },
-    { name = "citeproc-py", specifier = ">=0.9.3" },
-    { name = "citeproc-py-styles", specifier = ">=0.1.5" },
     { name = "maturin", specifier = ">=1.9,<2" },
-    { name = "polars", specifier = ">=1.41,<1.42" },
     { name = "pyrefly", specifier = ">=1.0.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.0.0" },

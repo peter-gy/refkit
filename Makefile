@@ -1,6 +1,6 @@
 .PHONY: sync
 sync:
-	uv sync --all-packages --group benchmark
+	uv sync --all-packages --group dev
 
 .PHONY: format
 format:
@@ -26,7 +26,7 @@ test:
 
 .PHONY: benchmark-test
 benchmark-test:
-	uv run pytest benchmark
+	uv run --package refkit-bench pytest benchmark/tests
 
 .PHONY: rust
 rust:

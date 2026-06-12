@@ -8,11 +8,10 @@ from pathlib import Path
 from time import perf_counter_ns
 from typing import Any
 
-from benchmark._adapters.common import (
+from refkit_bench._adapters.common import (
     OperationOutcome,
     PackageAdapter,
     PreparedOperation,
-    UnsupportedOperation,
     _all_checks,
     _count_is,
     _entries_match,
@@ -22,7 +21,7 @@ from benchmark._adapters.common import (
     _projection_contains,
     _raw_roundtrip_check,
 )
-from benchmark.fixtures import Workload
+from refkit_bench.fixtures import Workload
 
 BIBTEXPARSER_V2_VERSION = "2.0.0b9"
 
@@ -31,7 +30,7 @@ class BibtexparserV2Adapter(PackageAdapter):
     name = "bibtexparser-2.x"
     distribution = "bibtexparser"
 
-    def prepare_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_parse_bibtex(self, workload: Workload, directory: Path) -> PreparedOperation:
         import bibtexparser
 
         _require_bibtexparser_v2()
@@ -40,9 +39,9 @@ class BibtexparserV2Adapter(PackageAdapter):
             database = bibtexparser.parse_file(str(workload.bibtex_path))
             return OperationOutcome(database, len(database.entries))
 
-        return _prepared("parse", operation, _count_is(len(workload.records)), setup_included=True)
+        return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
 
-    def prepare_bibtex_recovery_parse(
+    def prepare_recover_dirty_bibtex(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         import bibtexparser
@@ -71,7 +70,6 @@ class BibtexparserV2Adapter(PackageAdapter):
             )
 
         return _prepared(
-            "parse-recovery",
             operation,
             _all_checks(
                 _count_is(len(workload.records)),
@@ -81,7 +79,7 @@ class BibtexparserV2Adapter(PackageAdapter):
             setup_included=True,
         )
 
-    def prepare_raw_bibtex_parse(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_parse_raw_bibtex(self, workload: Workload, directory: Path) -> PreparedOperation:
         import bibtexparser
 
         _require_bibtexparser_v2()
@@ -91,14 +89,15 @@ class BibtexparserV2Adapter(PackageAdapter):
             return OperationOutcome(database, len(database.entries))
 
         return _prepared(
-            "raw-parse",
             operation,
             _count_is(len(workload.records)),
             source_format="raw_bibtex",
             setup_included=True,
         )
 
-    def prepare_raw_bibtex_write(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_write_edited_raw_bibtex(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
         import bibtexparser
 
         _require_bibtexparser_v2()
@@ -112,13 +111,12 @@ class BibtexparserV2Adapter(PackageAdapter):
             return OperationOutcome(path, len(database.entries), path.name)
 
         return _prepared(
-            "raw-write",
             operation,
             _raw_roundtrip_check(workload.keys),
             source_format="raw_bibtex",
         )
 
-    def prepare_raw_bibtex_roundtrip(
+    def prepare_roundtrip_raw_bibtex_edit(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         import bibtexparser
@@ -134,34 +132,13 @@ class BibtexparserV2Adapter(PackageAdapter):
             return OperationOutcome(path, len(database.entries), path.name)
 
         return _prepared(
-            "raw-write",
             operation,
             _raw_roundtrip_check(workload.keys),
             source_format="raw_bibtex",
             setup_included=True,
         )
 
-    def prepare_citation_render(self, workload: Workload, directory: Path) -> PreparedOperation:
-        raise UnsupportedOperation("bibtexparser does not render CSL citations")
-
-    def prepare_bibliography_render(self, workload: Workload, directory: Path) -> PreparedOperation:
-        raise UnsupportedOperation("bibtexparser does not render CSL bibliographies")
-
-    def prepare_repeated_render(self, workload: Workload, directory: Path) -> PreparedOperation:
-        raise UnsupportedOperation("bibtexparser does not render CSL citations")
-
-    def prepare_one_off_cite(self, workload: Workload, directory: Path) -> PreparedOperation:
-        raise UnsupportedOperation("bibtexparser does not render CSL citations")
-
-    def prepare_one_off_bibliography(
-        self, workload: Workload, directory: Path
-    ) -> PreparedOperation:
-        raise UnsupportedOperation("bibtexparser does not render CSL bibliographies")
-
-    def prepare_missing_reference(self, workload: Workload, directory: Path) -> PreparedOperation:
-        raise UnsupportedOperation("bibtexparser has no citation reference resolution step")
-
-    def prepare_bulk_materialization(
+    def prepare_materialize_entry_rows(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         import bibtexparser
@@ -177,12 +154,11 @@ class BibtexparserV2Adapter(PackageAdapter):
             return OperationOutcome(rows, len(rows))
 
         return _prepared(
-            "materialize",
             operation,
             _projection_contains(workload.records, required_fields=("key", "title")),
         )
 
-    def prepare_library_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_list_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
         import bibtexparser
 
         _require_bibtexparser_v2()
@@ -192,9 +168,9 @@ class BibtexparserV2Adapter(PackageAdapter):
             keys = [entry.key for entry in database.entries]
             return OperationOutcome(keys, len(keys))
 
-        return _prepared("inspect", operation, _keys_are(workload.keys))
+        return _prepared(operation, _keys_are(workload.keys))
 
-    def prepare_entry_lookup(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_lookup_entries(self, workload: Workload, directory: Path) -> PreparedOperation:
         import bibtexparser
 
         _require_bibtexparser_v2()
@@ -212,9 +188,9 @@ class BibtexparserV2Adapter(PackageAdapter):
             ]
             return OperationOutcome(rows, len(rows))
 
-        return _prepared("inspect", operation, _entries_match(workload.records[: len(keys)]))
+        return _prepared(operation, _entries_match(workload.records[: len(keys)]))
 
-    def prepare_field_projection(self, workload: Workload, directory: Path) -> PreparedOperation:
+    def prepare_project_fields(self, workload: Workload, directory: Path) -> PreparedOperation:
         import bibtexparser
 
         _require_bibtexparser_v2()
@@ -233,7 +209,6 @@ class BibtexparserV2Adapter(PackageAdapter):
             return OperationOutcome(rows, len(rows))
 
         return _prepared(
-            "inspect",
             operation,
             _projection_contains(
                 workload.records,
@@ -287,16 +262,12 @@ def _bibtexparser_v2_recovery_matches(
         actual = [] if signatures == "" else signatures.split(",")
         if actual != expected_signatures:
             raise AssertionError(
-                "expected failed block signatures "
-                f"{expected_signatures!r}, got {actual!r}"
+                f"expected failed block signatures {expected_signatures!r}, got {actual!r}"
             )
 
     return check
 
 
 def _bibtexparser_block_key(raw: object) -> str | None:
-    text = str(raw)
-    if "{" not in text:
-        return None
-    after_open = text.split("{", 1)[1]
+    after_open = str(raw).partition("{")[2]
     return after_open.split(",", 1)[0].strip() or None

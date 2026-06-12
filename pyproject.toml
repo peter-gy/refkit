@@ -12,32 +12,25 @@ dependencies = [
 package = false
 
 [tool.uv.sources]
+refkit-bench = { workspace = true }
 polars-refkit = { workspace = true }
 refkit = { workspace = true }
 
 [tool.uv.workspace]
 members = [
+    "benchmark",
     "packages/refkit",
     "packages/polars-refkit",
 ]
 
 [dependency-groups]
 dev = [
-    { include-group = "benchmark" },
     "maturin>=1.9,<2",
     "pyrefly>=1.0.0",
     "pytest>=9.0.3",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.16",
     "ty>=0.0.46",
-]
-benchmark = [
-    "bibtexparser==2.0.0b9",
-    "citeproc-py>=0.9.3",
-    "citeproc-py-styles>=0.1.5",
-    "polars>=1.41,<1.42",
-    "pytest>=9.0.3",
-    "pytest-cov>=7.0.0",
 ]
 
 [tool.pytest.ini_options]
@@ -49,7 +42,7 @@ testpaths = [
 addopts = [
     "--cov=refkit",
     "--cov=polars_refkit",
-    "--cov=benchmark",
+    "--cov=refkit_bench",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-fail-under=100",
@@ -68,7 +61,8 @@ project-includes = [
     "packages/refkit/tests",
     "packages/polars-refkit/polars_refkit",
     "packages/polars-refkit/tests",
-    "benchmark",
+    "benchmark/src/refkit_bench",
+    "benchmark/tests",
 ]
 project-excludes = [
     "**/__pycache__",
@@ -81,9 +75,9 @@ project-excludes = [
 ]
 python-version = "3.11"
 search-path = [
+    "benchmark/src",
     "packages/refkit/src",
     "packages/polars-refkit",
-    ".",
 ]
 
 [tool.ruff]
@@ -107,12 +101,12 @@ select = [
 
 [tool.ruff.lint.isort]
 known-first-party = [
-    "benchmark",
+    "refkit_bench",
     "polars_refkit",
     "refkit",
     "tests",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"benchmark/runner.py" = ["T201"]
+"benchmark/src/refkit_bench/runner.py" = ["T201"]
 "scripts/*.py" = ["T201"]
