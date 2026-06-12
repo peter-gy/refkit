@@ -81,9 +81,15 @@ def test_materialize_workload_writes_bibtex_and_raw_inputs(tmp_path: Path) -> No
     assert workload.source_byte_count("raw_bibtex") == len(workload.raw_bibtex.encode("utf-8"))
     assert workload.source_text("dirty_bibtex") == workload.dirty_bibtex
     assert workload.source_byte_count("dirty_bibtex") == len(workload.dirty_bibtex.encode("utf-8"))
+    assert workload.source_name("bibtex") == "synthetic_scale:tiny:bibtex"
+    assert workload.source_path("bibtex") == str(workload.bibtex_path)
+    assert workload.source_license("bibtex") == "Apache-2.0"
     assert workload.source_text("csl_json").startswith("[")
     assert len(workload.source_sha256("bibtex")) == 64
     assert workload.source_text("unknown") == ""
+    assert workload.source_name("unknown") == ""
+    assert workload.source_path("unknown") == ""
+    assert workload.source_license("unknown") == ""
     assert workload.source_byte_count("unknown") == 0
     assert workload.source_sha256("unknown") == ""
 
@@ -115,6 +121,7 @@ def test_dirty_bibtex_for_empty_records_contains_only_malformed_block() -> None:
 def test_select_lanes_uses_explicit_lanes_before_group() -> None:
     assert runner.select_lanes(["input.bibtex"], "render.prepared") == ["input.bibtex"]
     all_lanes = runner.select_lanes(None, "all")
+    assert "input.bibtex-text" in all_lanes
     assert "input.bibtex" in all_lanes
     assert "render.prepared-citation" in all_lanes
     assert len(all_lanes) == len(set(all_lanes))
@@ -155,7 +162,13 @@ def test_list_command_prints_lanes(capsys: pytest.CaptureFixture[str]) -> None:
         "input.normalized",
         "normalized_bibliography_input",
         "bibtex_input",
-        "refkit,polars-refkit,bibtexparser-2.x",
+        "refkit,polars-refkit,bibtexparser-2.x,pybtex",
+    ]
+    assert rows["input.bibtex-text"][1:5] == [
+        "input.normalized",
+        "normalized_bibliography_input",
+        "bibtex_text_input",
+        "refkit,bibtexparser-2.x,pybtex",
     ]
     assert rows["style.load"][1:5] == [
         "style",
@@ -173,7 +186,7 @@ def test_list_command_prints_lanes(capsys: pytest.CaptureFixture[str]) -> None:
         "inspect.entries",
         "entry_inspection",
         "field_projection",
-        "refkit,bibtexparser-2.x",
+        "refkit,bibtexparser-2.x,pybtex",
     ]
     assert rows["bulk.polars.fields"][1:5] == [
         "bulk.polars",
@@ -275,12 +288,19 @@ def test_machine_metadata_contains_versions() -> None:
     assert metadata["packages"]["citeproc-py"] != "not-installed"
     assert metadata["packages"]["bibtexparser"] != "not-installed"
     assert metadata["packages"]["bibtexparser-v2"] == metadata["packages"]["bibtexparser"]
+    assert metadata["packages"]["pybtex"] != "not-installed"
 
 
 def test_adapter_registry_contains_current_benchmark_packages() -> None:
     names = [adapter.name for adapter in adapters.adapters()]
 
-    assert set(names) == {"refkit", "polars-refkit", "citeproc-py", "bibtexparser-2.x"}
+    assert set(names) == {
+        "refkit",
+        "polars-refkit",
+        "citeproc-py",
+        "bibtexparser-2.x",
+        "pybtex",
+    }
 
 
 def test_adapters_prepare_supported_lane_operations(tmp_path: Path) -> None:
@@ -288,8 +308,13 @@ def test_adapters_prepare_supported_lane_operations(tmp_path: Path) -> None:
     refkit = adapters.RefkitAdapter()
     polars_refkit = adapters.PolarsRefkitAdapter()
     bibtexparser_v2 = adapters.BibtexparserV2Adapter()
+    pybtex = adapters.PybtexAdapter()
 
     prepared = refkit.prepare("parse_bibtex", workload, tmp_path)
+    outcome = run_prepared(prepared)
+    assert outcome.count == 3
+
+    prepared = pybtex.prepare("parse_bibtex_text", workload, tmp_path)
     outcome = run_prepared(prepared)
     assert outcome.count == 3
 
@@ -311,6 +336,9 @@ def test_adapters_prepare_supported_lane_operations(tmp_path: Path) -> None:
 
     with pytest.raises(adapters.MissingBenchmarkOperation, match="no benchmark operation"):
         bibtexparser_v2.prepare("render_one_prepared_citation", workload, tmp_path)
+
+    with pytest.raises(adapters.MissingBenchmarkOperation, match="no benchmark operation"):
+        pybtex.prepare("render_one_prepared_citation", workload, tmp_path)
 
     with pytest.raises(adapters.MissingBenchmarkOperation, match="no benchmark operation"):
         refkit.prepare("unknown_operation", workload, tmp_path)
@@ -363,6 +391,45 @@ def test_bibtexparser_v2_adapter_handles_missing_optional_fields(tmp_path: Path)
         missing_optional,
         tmp_path,
     )
+
+    outcome = prepared.operation()
+    rows = list(cast(list[dict[str, Any]], outcome.value))
+
+    assert rows[0]["key"] == "item0001"
+    assert rows[0]["title"] == "Reference Work 0001"
+    assert rows[0]["doi"] is None
+    assert rows[0]["volume"] is None
+
+
+def test_pybtex_adapter_parse_and_inspection_contracts(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    adapter = adapters.PybtexAdapter()
+
+    for operation in ("parse_bibtex", "parse_bibtex_text", "list_keys"):
+        outcome = run_prepared(adapter.prepare(operation, workload, tmp_path))
+        assert outcome.count == len(workload.records)
+
+    lookup = run_prepared(adapter.prepare("lookup_entries", workload, tmp_path))
+    fields = run_prepared(adapter.prepare("project_fields", workload, tmp_path))
+
+    lookup_rows = cast(list[dict[str, Any]], lookup.value)
+    field_rows = {str(row["key"]): row for row in cast(list[dict[str, Any]], fields.value)}
+
+    assert lookup_rows[0] == {"key": "item0001", "title": "Reference Work 0001"}
+    assert field_rows["item0001"]["doi"] == "10.5555/refkit.bench.0001"
+    assert field_rows["item0001"]["volume"] == "2"
+
+
+def test_pybtex_adapter_projects_missing_optional_fields(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    bibtex = """@article{item0001,
+  author = {Family0001, Given0001},
+  title = {Reference Work 0001},
+  year = {2001}
+}
+"""
+    missing_optional = replace(workload, bibtex=bibtex)
+    prepared = adapters.PybtexAdapter().prepare("project_fields", missing_optional, tmp_path)
 
     outcome = prepared.operation()
     rows = list(cast(list[dict[str, Any]], outcome.value))
@@ -571,6 +638,7 @@ def test_each_lane_participant_has_correctness_check(tmp_path: Path) -> None:
             adapters.CiteprocPyAdapter(),
             adapters.PolarsRefkitAdapter(),
             adapters.BibtexparserV2Adapter(),
+            adapters.PybtexAdapter(),
         )
     }
 
@@ -630,6 +698,9 @@ def test_recovery_lane_schedules_only_recovery_adapters(tmp_path: Path) -> None:
     assert {row["status"] for row in rows} == {"ok"}
     assert {row["lane"] for row in rows} == {"input.dirty-bibtex"}
     assert all(row["capability"] == "normalized_bibliography_input" for row in rows)
+    diagnostic_counts = {str(row["package"]): row["diagnostic_count"] for row in rows}
+    assert diagnostic_counts["refkit"] == 4
+    assert diagnostic_counts["bibtexparser-2.x"] == 2
 
     rows = runner.run_adapter_lane(
         adapter=adapters.BibtexparserV2Adapter(),
@@ -648,6 +719,8 @@ def test_recovery_lane_schedules_only_recovery_adapters(tmp_path: Path) -> None:
         assert row["phase"] == "input-recovery"
         assert row["operation_phase"] == "input-recovery"
         assert row["source_format"] == "dirty_bibtex"
+        assert row["failed_block_count"] == 2
+        assert row["diagnostic_count"] == 2
         assert row["operation_count"] == len(workload.records)
         assert "failed_blocks=2" in str(row["detail"])
         assert "ParsingFailedBlock:missing" in str(row["detail"])
@@ -915,6 +988,7 @@ def test_run_suite_writes_only_scheduled_lane_rows() -> None:
         "refkit",
         "polars-refkit",
         "bibtexparser-2.x",
+        "pybtex",
     }
     assert sorted(
         row_string(row, "execution_mode")
@@ -936,7 +1010,11 @@ def test_run_suite_writes_only_scheduled_lane_rows() -> None:
         assert (row["capability"], row["workflow"]) == expected_lanes[str(row["lane"])]
         assert row["input_size"] == "tiny"
         assert row["workload_family"] == "synthetic_scale"
+        assert str(row["source_name"]).startswith("synthetic_scale:tiny:")
+        assert row["source_license"] == "Apache-2.0"
         assert row["record_count"] == 3
+        assert row["failed_block_count"] == 0
+        assert row["diagnostic_count"] == 0
         assert row["rounds"] == 1
         assert row["warmups"] == 1
         assert isinstance(row["setup_seconds"], float)
@@ -986,8 +1064,12 @@ def test_write_json_and_csv_outputs(tmp_path: Path) -> None:
     assert csv_rows[0]["capability"] == "normalized_bibliography_input"
     assert csv_rows[0]["workflow"] == "bibtex_input"
     assert csv_rows[0]["workload_family"] == "synthetic_scale"
+    assert csv_rows[0]["source_name"] == "synthetic_scale:tiny:bibtex"
+    assert csv_rows[0]["source_license"] == "Apache-2.0"
     assert csv_rows[0]["record_count"] == "3"
     assert csv_rows[0]["source_format"] == "bibtex"
+    assert csv_rows[0]["failed_block_count"] == "0"
+    assert csv_rows[0]["diagnostic_count"] == "0"
     assert csv_rows[0]["input_sha256"]
 
 
@@ -1020,7 +1102,7 @@ def test_main_runs_lane_and_writes_outputs(
     assert exit_code == 0
     assert json_path.exists()
     assert csv_path.exists()
-    assert '"rows": 4' in capsys.readouterr().out
+    assert '"rows": 5' in capsys.readouterr().out
 
 
 def test_main_returns_failure_for_failed_rows(

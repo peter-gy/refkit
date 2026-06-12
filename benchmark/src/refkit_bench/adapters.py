@@ -26,6 +26,7 @@ from refkit_bench._adapters.common import (
     _text_contains,
 )
 from refkit_bench._adapters.polars_refkit import PolarsRefkitAdapter
+from refkit_bench._adapters.pybtex import PybtexAdapter
 from refkit_bench._adapters.refkit import RefkitAdapter
 
 
@@ -35,6 +36,7 @@ def adapters() -> list[PackageAdapter]:
         PolarsRefkitAdapter(),
         CiteprocPyAdapter(),
         BibtexparserV2Adapter(),
+        PybtexAdapter(),
     ]
 
 
@@ -46,6 +48,7 @@ __all__ = [
     "PackageAdapter",
     "PolarsRefkitAdapter",
     "PreparedOperation",
+    "PybtexAdapter",
     "RefkitAdapter",
     "_all_checks",
     "_bibliography_output_matches",

@@ -37,6 +37,15 @@ class RefkitAdapter(PackageAdapter):
 
         return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
 
+    def prepare_parse_bibtex_text(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        def operation() -> OperationOutcome:
+            library = rk.Library.parse(workload.bibtex)
+            return OperationOutcome(library, len(library))
+
+        return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
+
     def prepare_recover_dirty_bibtex(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
@@ -45,7 +54,10 @@ class RefkitAdapter(PackageAdapter):
         def operation() -> OperationOutcome:
             library = rk.Library.read(workload.dirty_bibtex_path, diagnostics=True)
             return OperationOutcome(
-                library, len(library), f"diagnostics={len(library.diagnostics)}"
+                library,
+                len(library),
+                f"diagnostics={len(library.diagnostics)}",
+                metadata={"diagnostic_count": len(library.diagnostics)},
             )
 
         return _prepared(

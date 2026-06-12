@@ -26,6 +26,7 @@ class OperationOutcome:
     count: int
     detail: str = ""
     seconds: float | None = None
+    metadata: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

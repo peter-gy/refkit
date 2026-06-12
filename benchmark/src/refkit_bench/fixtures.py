@@ -12,6 +12,7 @@ SIZES: dict[str, int] = {
 }
 LARGEST_SIZE = "large"
 WORKLOAD_FAMILY = "synthetic_scale"
+WORKLOAD_SOURCE_LICENSE = "Apache-2.0"
 
 JOURNAL = "Journal of Citation Benchmarks"
 
@@ -63,6 +64,25 @@ class Workload:
         if source_format == "csl_json":
             return json.dumps(self.csl_json, sort_keys=True, separators=(",", ":"))
         return ""
+
+    def source_name(self, source_format: str) -> str:
+        if not self.source_text(source_format):
+            return ""
+        return f"{self.family}:{self.size}:{source_format}"
+
+    def source_path(self, source_format: str) -> str:
+        if source_format == "bibtex":
+            return str(self.bibtex_path)
+        if source_format == "raw_bibtex":
+            return str(self.raw_bibtex_path)
+        if source_format == "dirty_bibtex":
+            return str(self.dirty_bibtex_path)
+        return ""
+
+    def source_license(self, source_format: str) -> str:
+        if not self.source_text(source_format):
+            return ""
+        return WORKLOAD_SOURCE_LICENSE
 
     def source_byte_count(self, source_format: str) -> int:
         return len(self.source_text(source_format).encode("utf-8"))

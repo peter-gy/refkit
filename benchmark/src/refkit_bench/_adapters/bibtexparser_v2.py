@@ -41,6 +41,17 @@ class BibtexparserV2Adapter(PackageAdapter):
 
         return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
 
+    def prepare_parse_bibtex_text(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        _require_bibtexparser_v2()
+
+        def operation() -> OperationOutcome:
+            database = bibtexparser.parse_string(workload.bibtex)
+            return OperationOutcome(database, len(database.entries))
+
+        return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
+
     def prepare_recover_dirty_bibtex(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
@@ -67,6 +78,7 @@ class BibtexparserV2Adapter(PackageAdapter):
                 database,
                 len(database.entries),
                 f"failed_blocks={failed};failed_signatures={signatures}",
+                metadata={"failed_block_count": failed, "diagnostic_count": failed},
             )
 
         return _prepared(

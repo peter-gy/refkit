@@ -40,9 +40,14 @@ RESULT_FIELDS = [
     "input",
     "input_size",
     "workload_family",
+    "source_name",
+    "source_path",
+    "source_license",
     "record_count",
     "input_bytes",
     "input_sha256",
+    "failed_block_count",
+    "diagnostic_count",
     "source_format",
     "citation_count",
     "execution_mode",
@@ -103,6 +108,7 @@ REFKIT = "refkit"
 POLARS_REFKIT = "polars-refkit"
 CITEPROC_PY = "citeproc-py"
 BIBTEXPARSER_V2 = "bibtexparser-2.x"
+PYBTEX = "pybtex"
 
 
 def participant(package: str, adapter_operation: str) -> LaneParticipant:
@@ -114,6 +120,15 @@ def participants(adapter_operation: str, *packages: str) -> tuple[LaneParticipan
 
 
 LANES: dict[str, LaneSpec] = {
+    "input.bibtex-text": LaneSpec(
+        "input.bibtex-text",
+        "input.normalized",
+        "normalized_bibliography_input",
+        "bibtex_text_input",
+        "input",
+        participants("parse_bibtex_text", REFKIT, BIBTEXPARSER_V2, PYBTEX),
+        "Parse clean BibTeX text into the interface's normalized or queryable model.",
+    ),
     "input.bibtex": LaneSpec(
         "input.bibtex",
         "input.normalized",
@@ -125,6 +140,7 @@ LANES: dict[str, LaneSpec] = {
             participant(POLARS_REFKIT, "parse_bibtex"),
             participant(POLARS_REFKIT, "parse_bibtex_lazy"),
             participant(BIBTEXPARSER_V2, "parse_bibtex"),
+            participant(PYBTEX, "parse_bibtex"),
         ),
         "Parse clean BibTeX into the interface's normalized or queryable model.",
     ),
@@ -278,7 +294,7 @@ LANES: dict[str, LaneSpec] = {
         "entry_inspection",
         "entry_rows",
         "inspect",
-        participants("materialize_entry_rows", REFKIT, BIBTEXPARSER_V2),
+        participants("materialize_entry_rows", REFKIT, BIBTEXPARSER_V2, PYBTEX),
         "Materialize parsed entries into key and title rows after setup.",
     ),
     "inspect.keys": LaneSpec(
@@ -287,7 +303,7 @@ LANES: dict[str, LaneSpec] = {
         "entry_inspection",
         "entry_keys",
         "inspect",
-        participants("list_keys", REFKIT, BIBTEXPARSER_V2),
+        participants("list_keys", REFKIT, BIBTEXPARSER_V2, PYBTEX),
         "Enumerate citation keys after setup.",
     ),
     "inspect.lookup": LaneSpec(
@@ -296,7 +312,7 @@ LANES: dict[str, LaneSpec] = {
         "entry_inspection",
         "entry_lookup",
         "inspect",
-        participants("lookup_entries", REFKIT, BIBTEXPARSER_V2),
+        participants("lookup_entries", REFKIT, BIBTEXPARSER_V2, PYBTEX),
         "Look up a fixed set of entries after setup.",
     ),
     "inspect.fields": LaneSpec(
@@ -305,7 +321,7 @@ LANES: dict[str, LaneSpec] = {
         "entry_inspection",
         "field_projection",
         "inspect",
-        participants("project_fields", REFKIT, BIBTEXPARSER_V2),
+        participants("project_fields", REFKIT, BIBTEXPARSER_V2, PYBTEX),
         "Project common scalar fields from all entries after setup.",
     ),
     "bulk.polars.materialize": LaneSpec(
@@ -542,8 +558,13 @@ def run_adapter_lane(
                 "phase": "setup",
                 "operation_phase": "setup",
                 "source_format": "unknown",
+                "source_name": "",
+                "source_path": "",
+                "source_license": "",
                 "input_bytes": 0,
                 "input_sha256": "",
+                "failed_block_count": 0,
+                "diagnostic_count": 0,
                 "citation_count": 0,
                 "execution_mode": "",
                 "setup_included": True,
@@ -588,6 +609,7 @@ def run_adapter_lane(
                     {
                         **base,
                         **operation_fields,
+                        **outcome_row_fields(outcome),
                         "phase": lane.phase,
                         "round": round_index,
                         "seconds": seconds,
@@ -659,14 +681,27 @@ def prepared_row_fields(
     source_format = str(prepared.metadata.get("source_format", "unknown"))
     return {
         "operation_phase": lane.phase,
+        "source_name": workload.source_name(source_format),
+        "source_path": workload.source_path(source_format),
+        "source_license": workload.source_license(source_format),
         "input_bytes": workload.source_byte_count(source_format),
         "input_sha256": workload.source_sha256(source_format),
         "source_format": source_format,
+        "failed_block_count": int(prepared.metadata.get("failed_block_count", 0)),
+        "diagnostic_count": int(prepared.metadata.get("diagnostic_count", 0)),
         "citation_count": int(prepared.metadata.get("citation_count", 0)),
         "execution_mode": str(prepared.metadata.get("execution_mode", "")),
         "setup_included": bool(prepared.metadata.get("setup_included", False)),
         "setup_seconds": setup_seconds,
         "operation_count": 0,
+    }
+
+
+def outcome_row_fields(outcome: Any) -> Row:
+    metadata = getattr(outcome, "metadata", {})
+    return {
+        "failed_block_count": int(metadata.get("failed_block_count", 0)),
+        "diagnostic_count": int(metadata.get("diagnostic_count", 0)),
     }
 
 
@@ -685,6 +720,7 @@ def machine_metadata(build_mode: str = "auto") -> Metadata:
             "bibtexparser": package_version("bibtexparser"),
             "bibtexparser-v2": package_version("bibtexparser"),
             "citeproc-py-styles": package_version("citeproc-py-styles"),
+            "pybtex": package_version("pybtex"),
         },
     }
 
