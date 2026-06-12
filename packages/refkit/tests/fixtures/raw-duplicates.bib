@@ -1,0 +1,25 @@
+% duplicate raw fixture
+@preamble{"Duplicate fixture"}
+@string{j = {Journal of Duplicate Contracts}}
+
+raw prose outside entries
+
+@article{dup,
+  title = {First Title},
+  title = {Second Title},
+  journal = j,
+  year = {2024}
+}
+
+@article{dup,
+  title = {Duplicate Entry},
+  year = {2025}
+}
+
+@broken{bad,
+  title = {No close}
+
+@article{later,
+  title = {Later Entry},
+  year = {2026}
+}

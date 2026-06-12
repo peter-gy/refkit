@@ -57,17 +57,18 @@ Saved rows are self-describing. A row includes:
 - `rounds`, `warmups`, `round`, `seconds`, `status`, and `operation_count`: run settings and measured output.
 - `python`, `os`, `cpu`, `refkit_version`, `refkit_commit`, and `build_mode`: runtime and source context.
 
-`status` has two values:
+`status` has three values:
 
 - `ok`: the operation ran and its correctness check passed.
 - `failed`: setup, execution, or correctness failed.
+- `unsupported`: the adapter declared that the workload or phase is outside its supported public contract.
 
 ## Lane Families
 
 | Group              | Lanes                                                                                                                                                                           | Participants                                                                                      |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `input.normalized` | `input.bibtex-text`, `input.bibtex`, `input.dirty-bibtex`                                                                                                                       | `refkit`, `bibtexparser-2.x`, and `pybtex` for clean BibTeX text, `polars-refkit` for clean BibTeX rows, `refkit` and `bibtexparser-2.x` for recovery |
-| `raw-bibtex`       | `raw-bibtex.parse`, `raw-bibtex.write`, `raw-bibtex.roundtrip`                                                                                                                  | `refkit`, `bibtexparser-2.x`                                                                      |
+| `input.normalized` | `input.bibtex-text`, `input.bibtex`, `input.dirty-bibtex`, `input.diagnostics`                                                                                                  | `refkit`, `bibtexparser-2.x`, and `pybtex` for clean BibTeX text, `polars-refkit` for clean BibTeX rows, `refkit` and `bibtexparser-2.x` for recovery and diagnostics |
+| `raw-bibtex`       | `raw-bibtex.parse`, `raw-bibtex.blocks`, `raw-bibtex.duplicates`, `raw-bibtex.write`, `raw-bibtex.roundtrip`                                                                    | `refkit`, `bibtexparser-2.x`                                                                      |
 | `style`            | `style.load`, `style.processor-setup`                                                                                                                                           | `refkit`, `citeproc-py`                                                                           |
 | `render.prepared`  | prepared citation, bibliography, cited bibliography, repeated citations                                                                                                         | `refkit`, `citeproc-py`                                                                           |
 | `render.one-off`   | `render.one-off-cite`, `render.one-off-bibliography`                                                                                                                            | `refkit`, `citeproc-py`                                                                           |
@@ -84,17 +85,22 @@ Use lane identity before declaring a winner. Rows with different `lane`, `source
 
 Prepared render lanes compare citation processors after source and style setup. Path-based one-off render lanes include file read, parse, style load, processor setup, and render. Polars expression rows parse BibTeX and render inside the Polars operation, so they measure dataframe workflows rather than prepared processor calls. Compare eager and lazy Polars rows through `execution_mode`, not by changing the lane.
 
+An `unsupported` row is part of the benchmark result. It means the adapter opted out before timing because the lane and workload combination is not comparable for that package. For example, `citeproc-py` prepared CSL rendering runs on the arXiv workload, while its one-off BibTeX bibliography path is recorded as unsupported for that workload because the BibTeX source expands the fixture into non-entry bibliography rows.
+
 `refkit-bench` installs `bibtexparser==2.0.0b9` and `pybtex>=0.26,<0.27` as Python BibTeX comparison points.
 
 ## Inputs
 
 The tiny fixture is packaged at `benchmark/src/refkit_bench/data/tiny.bib`. Tiny, medium, and large inputs are deterministic ordered slices of the largest generated record set. Current generated workloads use the `synthetic_scale` family and report `Apache-2.0` as the source license.
 
-Each workload has four source forms:
+The `arxiv` input reads `data/arxiv-wild/references-subset.bib`. It is a compact subset copied from public arXiv source bibliographies used by the real-corpus parser stress tests. It includes real comments, Unicode text, DOI and URL fields, conference and journal entries, arXiv-style `CoRR` volumes, and BibTeX capitalization braces. Its result rows use the `arxiv_wild_subset` family and `mixed-arxiv-source-licenses` source license marker because individual arXiv source submissions can carry different licenses.
 
-- `bibtex`: clean generated BibTeX.
-- `raw_bibtex`: generated BibTeX with comments, a string definition, and a preamble.
-- `dirty_bibtex`: generated BibTeX with a malformed block, duplicate key, invalid month, and unresolved abbreviation.
+Each workload has five source forms:
+
+- `bibtex`: clean BibTeX for the selected workload.
+- `raw_bibtex`: generated BibTeX with comments, a string definition, and a preamble for synthetic workloads. The arXiv workload uses the same real BibTeX as its raw input.
+- `dirty_bibtex`: generated BibTeX with a malformed block, duplicate key, invalid month, and unresolved abbreviation. The arXiv workload uses the same real BibTeX because it is a clean corpus slice.
+- `duplicate_bibtex`: generated BibTeX with a duplicate entry key and a duplicate field in separate entries. Raw duplicate lanes use this source to compare explicit duplicate handling across `refkit` and `bibtexparser-2.x`.
 - `csl_json`: CSL JSON used by citeproc-py prepared render lanes.
 
 Generated result files belong in `benchmark/results/`. Commit benchmark code and audited fixtures. Leave local result files ignored.

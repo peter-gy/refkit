@@ -19,6 +19,7 @@ import refkit._native as native
 ROOT = Path(__file__).parent.parent
 WORKSPACE = ROOT.parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
+ARXIV_FIXTURE = WORKSPACE / "data" / "arxiv-wild" / "references-subset.bib"
 T = TypeVar("T")
 
 
@@ -143,6 +144,29 @@ def test_one_off_helpers_accept_loaded_style_objects() -> None:
 
     assert "Doe" in citation.text
     assert "Doe" in bibliography.text
+
+
+def test_real_arxiv_bibtex_fixture_parses_inspects_and_renders() -> None:
+    library = rk.Library.read(ARXIV_FIXTURE, diagnostics=True)
+    raw = rk.BibDocument.read(ARXIV_FIXTURE)
+    rows = {row["key"]: row for row in library.project(["key", "title", "doi", "volume"])}
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+    bibliography = doc.bibliography(all=True)
+    one_off = rk.cite(ARXIV_FIXTURE, "Kimi_K2.5", style="apa")
+
+    assert len(library) == 12
+    assert library.diagnostics == []
+    assert len(raw.entries) == 12
+    assert raw.comments[0].startswith("% Real BibTeX subset")
+    title = rows["DeepResearchGym"]["title"]
+    assert isinstance(title, str)
+    assert title.startswith("DeepResearchGym")
+    assert rows["DeepResearchGym"]["doi"] == "10.48550/ARXIV.2505.19253"
+    assert rows["ijcai2019p684"]["volume"] is None
+    assert doc.cite("ijcai2019p684").text == "(Chen et al., 2019)"
+    assert one_off.text == "(Team, 2026)"
+    assert "Ancient–Modern Chinese Translation" in bibliography.text
+    assert "10.48550/ARXIV.2505.19253" in bibliography.text
 
 
 def test_document_bibliography_all_renders_uncited_library_entries() -> None:
@@ -1058,6 +1082,108 @@ def test_names_substitute_position_condition_uses_full_history() -> None:
     doc = rk.Document(library, style, locale="en-US")
 
     assert doc.cite("item").text == "(first)"
+
+
+def test_raw_bib_document_blocks_preserve_source_order_and_spans() -> None:
+    source_path = FIXTURES / "raw-duplicates.bib"
+    source = source_path.read_text(encoding="utf-8")
+    raw = rk.BibDocument.read(source_path)
+    blocks = raw.blocks
+    spans = [tuple(block["span"]) for block in blocks]
+
+    assert spans == sorted(spans)
+    assert all(start < end for start, end in spans)
+    assert all(left[1] <= right[0] for left, right in zip(spans, spans[1:], strict=False))
+    assert {block["kind"] for block in blocks} == {
+        "comment",
+        "preamble",
+        "string",
+        "whitespace",
+        "other",
+        "entry",
+        "failed",
+    }
+    for block in blocks:
+        start, end = block["span"]
+        if block["kind"] in {"comment", "failed", "other"}:
+            raw_block = cast(dict[str, Any], block)
+            assert raw_block["raw"] == source[start:end]
+
+
+def test_raw_bib_document_duplicate_entries_require_explicit_get_all() -> None:
+    raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")
+
+    assert raw.entries.keys() == ["dup", "later"]
+    assert [entry.key for entry in raw.entries.occurrences()] == ["dup", "dup", "later"]
+    assert [entry.key for entry in raw.entries.get_all("dup")] == ["dup", "dup"]
+    assert raw.entries.get_all("missing") == []
+    assert raw.entries.get("missing") is None
+
+    with pytest.raises(rk.RefkitError, match='entry key "dup" is ambiguous'):
+        raw.entries["dup"]
+    with pytest.raises(rk.RefkitError, match="use entries.get_all"):
+        raw.entries.get("dup")
+
+    later = raw.entries["later"]
+    assert later.key == "later"
+    assert later.fields["title"].value == "Later Entry"
+
+
+def test_raw_bib_document_duplicate_fields_require_explicit_get_all() -> None:
+    raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")
+    entry = raw.entries.get_all("dup")[0]
+
+    assert entry.fields.keys() == ["title", "journal", "year"]
+    assert [field.name for field in entry.fields.occurrences()] == [
+        "title",
+        "title",
+        "journal",
+        "year",
+    ]
+    assert [field.value for field in entry.fields.get_all("title")] == [
+        "First Title",
+        "Second Title",
+    ]
+    assert entry.fields.get_all("missing") == []
+    assert entry.fields.get("missing") is None
+
+    with pytest.raises(rk.RefkitError, match='field "title" in entry "dup" is ambiguous'):
+        entry.fields["title"]
+    with pytest.raises(rk.RefkitError, match="use fields.get_all"):
+        entry.fields.get("title")
+
+    assert entry.fields["journal"].value == "j"
+
+
+def test_raw_bib_document_edits_duplicate_occurrences_without_losing_raw_blocks(
+    tmp_path: Path,
+) -> None:
+    raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")
+    first_dup, second_dup = raw.entries.get_all("dup")
+    first_dup.fields.get_all("title")[1].value = "Corrected Second Field"
+    second_dup.fields["title"].value = "Corrected Duplicate Entry"
+    output = tmp_path / "updated-duplicates.bib"
+
+    raw.write(output)
+
+    text = output.read_text(encoding="utf-8")
+    assert "% duplicate raw fixture" in text
+    assert '@preamble{"Duplicate fixture"}' in text
+    assert "@string{j = {Journal of Duplicate Contracts}}" in text
+    assert "raw prose outside entries" in text
+    assert "@broken{bad" in text
+    assert "Corrected Second Field" in text
+    assert "Corrected Duplicate Entry" in text
+
+    written = rk.BibDocument.read(output)
+    written_first, written_second = written.entries.get_all("dup")
+    assert [field.value for field in written_first.fields.get_all("title")] == [
+        "First Title",
+        "Corrected Second Field",
+    ]
+    assert written_second.fields["title"].value == "Corrected Duplicate Entry"
+    assert written.entries["later"].fields["title"].value == "Later Entry"
+    assert written.failed_blocks[0]["raw"].startswith("@broken{bad")
 
 
 def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path) -> None:

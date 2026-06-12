@@ -19,6 +19,12 @@ def failed_block_errors(raw: rk.BibDocument) -> list[str]:
     return [block["error"] for block in raw.failed_blocks]
 
 
+def duplicate_entry_titles(raw: rk.BibDocument, key: str) -> list[str]:
+    return [
+        field.value for entry in raw.entries.get_all(key) for field in entry.fields.get_all("title")
+    ]
+
+
 def test_type_checked_structured_return_samples() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
@@ -27,3 +33,9 @@ def test_type_checked_structured_return_samples() -> None:
     assert rendered_tree_kinds(doc.cite("doe2024"))
     assert all(start >= 0 for start in raw_block_starts(raw))
     assert all(error for error in failed_block_errors(raw))
+    duplicate_raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")
+    assert duplicate_entry_titles(duplicate_raw, "dup") == [
+        "First Title",
+        "Second Title",
+        "Duplicate Entry",
+    ]

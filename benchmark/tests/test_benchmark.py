@@ -73,16 +73,26 @@ def test_materialize_workload_writes_bibtex_and_raw_inputs(tmp_path: Path) -> No
     assert workload.bibtex_path.read_text(encoding="utf-8") == workload.bibtex
     assert workload.raw_bibtex_path.read_text(encoding="utf-8") == workload.raw_bibtex
     assert workload.dirty_bibtex_path.read_text(encoding="utf-8") == workload.dirty_bibtex
+    assert workload.duplicate_bibtex_path.read_text(encoding="utf-8") == workload.duplicate_bibtex
     assert workload.csl_json[0]["id"] == "item0001"
     assert "preamble" in workload.raw_bibtex.lower()
     assert "No close" in workload.dirty_bibtex
+    assert workload.duplicate_entry_key == "item0001"
+    assert workload.duplicate_field_key == "item0002"
+    assert "Duplicate benchmark entry" in workload.duplicate_bibtex
+    assert "Duplicate benchmark field" in workload.duplicate_bibtex
     assert workload.source_byte_count("bibtex") == len(workload.bibtex.encode("utf-8"))
     assert workload.source_text("raw_bibtex") == workload.raw_bibtex
     assert workload.source_byte_count("raw_bibtex") == len(workload.raw_bibtex.encode("utf-8"))
     assert workload.source_text("dirty_bibtex") == workload.dirty_bibtex
     assert workload.source_byte_count("dirty_bibtex") == len(workload.dirty_bibtex.encode("utf-8"))
+    assert workload.source_text("duplicate_bibtex") == workload.duplicate_bibtex
+    assert workload.source_byte_count("duplicate_bibtex") == len(
+        workload.duplicate_bibtex.encode("utf-8")
+    )
     assert workload.source_name("bibtex") == "synthetic_scale:tiny:bibtex"
     assert workload.source_path("bibtex") == str(workload.bibtex_path)
+    assert workload.source_path("duplicate_bibtex") == str(workload.duplicate_bibtex_path)
     assert workload.source_license("bibtex") == "Apache-2.0"
     assert workload.source_text("csl_json").startswith("[")
     assert len(workload.source_sha256("bibtex")) == 64
@@ -92,6 +102,52 @@ def test_materialize_workload_writes_bibtex_and_raw_inputs(tmp_path: Path) -> No
     assert workload.source_license("unknown") == ""
     assert workload.source_byte_count("unknown") == 0
     assert workload.source_sha256("unknown") == ""
+
+
+def test_materialize_arxiv_workload_uses_checked_in_real_bibtex(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("arxiv", tmp_path)
+
+    assert workload.family == "arxiv_wild_subset"
+    assert workload.record_count == 12
+    assert workload.keys[:3] == ["ijcai2019p684", "10.1145/3325887", "Kimi_K2.5"]
+    assert workload.bibtex.startswith("% Real BibTeX subset")
+    assert "DeepResearchGym" in workload.bibtex
+    assert "Ancient–Modern Chinese Translation" in workload.bibtex
+    assert workload.bibtex_path.read_text(encoding="utf-8") == workload.bibtex
+    assert workload.source_name("bibtex") == "arxiv_wild_subset:arxiv:bibtex"
+    assert workload.source_license("bibtex") == "mixed-arxiv-source-licenses"
+    assert workload.source_byte_count("bibtex") == len(workload.bibtex.encode("utf-8"))
+    assert len(workload.source_sha256("bibtex")) == 64
+    assert workload.duplicate_entry_key == "ijcai2019p684"
+    assert workload.duplicate_field_key == "10.1145/3325887"
+    assert "Duplicate benchmark field" in workload.source_text("duplicate_bibtex")
+    assert workload.csl_json[0]["id"] == "ijcai2019p684"
+    assert workload.csl_json[0]["type"] == "paper-conference"
+
+
+def test_arxiv_fixture_falls_back_to_packaged_data(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    packaged = tmp_path / "references-subset.bib"
+    packaged.write_text("% packaged arxiv fixture\n", encoding="utf-8")
+
+    monkeypatch.setattr(fixtures, "ARXIV_SUBSET_PATH", tmp_path / "missing-repo.bib")
+    monkeypatch.setattr(fixtures, "PACKAGED_ARXIV_SUBSET_PATH", packaged)
+
+    assert fixtures.arxiv_subset_path() == packaged
+    assert fixtures.arxiv_bibtex() == "% packaged arxiv fixture\n"
+
+
+def test_arxiv_fixture_reports_missing_data(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(fixtures, "ARXIV_SUBSET_PATH", tmp_path / "missing-repo.bib")
+    monkeypatch.setattr(fixtures, "PACKAGED_ARXIV_SUBSET_PATH", tmp_path / "missing-package.bib")
+
+    with pytest.raises(FileNotFoundError, match="arxiv workload fixture is missing"):
+        fixtures.arxiv_subset_path()
 
 
 def test_records_for_size_rejects_unknown_size() -> None:
@@ -118,6 +174,37 @@ def test_dirty_bibtex_for_empty_records_contains_only_malformed_block() -> None:
     assert "No close" in dirty
 
 
+def test_duplicate_bibtex_requires_three_records() -> None:
+    with pytest.raises(ValueError, match="at least three records"):
+        fixtures.duplicate_bibtex_for_records(fixtures.records_for_size("tiny")[:2])
+
+
+def test_record_source_forms_omit_absent_optional_fields() -> None:
+    record = fixtures.Record(
+        key="minimal",
+        family="Solo",
+        given="Sam",
+        title="Minimal Reference",
+        year=2024,
+        volume=None,
+        page_start=None,
+        page_end=None,
+        doi=None,
+        container="",
+    )
+
+    bibtex = fixtures.bibtex_for_records((record,))
+    csl = fixtures.csl_json_for_records((record,))[0]
+
+    assert "volume =" not in bibtex
+    assert "pages =" not in bibtex
+    assert "doi =" not in bibtex
+    assert "volume" not in csl
+    assert "page" not in csl
+    assert "DOI" not in csl
+    assert "container-title" not in csl
+
+
 def test_select_lanes_uses_explicit_lanes_before_group() -> None:
     assert runner.select_lanes(["input.bibtex"], "render.prepared") == ["input.bibtex"]
     all_lanes = runner.select_lanes(None, "all")
@@ -139,8 +226,13 @@ def test_select_lanes_rejects_unknown_group() -> None:
 
 
 def test_select_inputs_defaults_and_deduplicates() -> None:
-    assert runner.select_inputs(None) == ["tiny", "medium", "large"]
-    assert runner.select_inputs(["tiny", "all", "tiny"]) == ["tiny", "medium", "large"]
+    assert runner.select_inputs(None) == ["tiny", "medium", "large", "arxiv"]
+    assert runner.select_inputs(["tiny", "all", "tiny"]) == [
+        "tiny",
+        "medium",
+        "large",
+        "arxiv",
+    ]
 
 
 def test_positive_integer_parsers_reject_invalid_values() -> None:
@@ -169,6 +261,24 @@ def test_list_command_prints_lanes(capsys: pytest.CaptureFixture[str]) -> None:
         "normalized_bibliography_input",
         "bibtex_text_input",
         "refkit,bibtexparser-2.x,pybtex",
+    ]
+    assert rows["input.diagnostics"][1:5] == [
+        "input.normalized",
+        "diagnostic_reporting",
+        "dirty_bibtex_diagnostics",
+        "refkit,bibtexparser-2.x",
+    ]
+    assert rows["raw-bibtex.blocks"][1:5] == [
+        "raw-bibtex",
+        "raw_bibtex_document",
+        "raw_block_materialization",
+        "refkit,bibtexparser-2.x",
+    ]
+    assert rows["raw-bibtex.duplicates"][1:5] == [
+        "raw-bibtex",
+        "raw_bibtex_document",
+        "duplicate_handling",
+        "refkit,bibtexparser-2.x",
     ]
     assert rows["style.load"][1:5] == [
         "style",
@@ -334,6 +444,18 @@ def test_adapters_prepare_supported_lane_operations(tmp_path: Path) -> None:
     outcome = run_prepared(prepared)
     assert outcome.count == 3
 
+    prepared = refkit.prepare("extract_diagnostics", workload, tmp_path)
+    outcome = run_prepared(prepared)
+    assert outcome.count == 4
+
+    prepared = refkit.prepare("materialize_raw_blocks", workload, tmp_path)
+    outcome = run_prepared(prepared)
+    assert outcome.count >= len(workload.records)
+
+    prepared = bibtexparser_v2.prepare("handle_duplicates", workload, tmp_path)
+    outcome = run_prepared(prepared)
+    assert outcome.count == 2
+
     with pytest.raises(adapters.MissingBenchmarkOperation, match="no benchmark operation"):
         bibtexparser_v2.prepare("render_one_prepared_citation", workload, tmp_path)
 
@@ -373,6 +495,86 @@ def test_bibtexparser_v2_raw_edit_and_projection_behaviour(tmp_path: Path) -> No
     assert rows["item0001"]["title"] == "Reference Work 0001"
     assert rows["item0001"]["doi"] == "10.5555/refkit.bench.0001"
     assert rows["item0001"]["volume"] == "2"
+
+
+def test_raw_block_and_duplicate_lanes_expose_public_signals(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+
+    for adapter in (adapters.RefkitAdapter(), adapters.BibtexparserV2Adapter()):
+        raw_blocks = run_prepared(adapter.prepare("materialize_raw_blocks", workload, tmp_path))
+        duplicate_signals = run_prepared(adapter.prepare("handle_duplicates", workload, tmp_path))
+
+        block_rows = cast(list[dict[str, Any]], raw_blocks.value)
+        duplicate_rows = cast(list[dict[str, Any]], duplicate_signals.value)
+        assert {row["kind"] for row in block_rows} >= {"comment", "entry"}
+        assert {row["key"] for row in block_rows if row["kind"] == "entry"} >= set(workload.keys)
+        assert {(row["kind"], row["key"], row["field"]) for row in duplicate_rows} == {
+            ("duplicate_entry", "item0001", ""),
+            ("duplicate_field", "item0002", "title"),
+        }
+
+    arxiv = fixtures.materialize_workload("arxiv", tmp_path)
+    arxiv_blocks = run_prepared(
+        adapters.RefkitAdapter().prepare("materialize_raw_blocks", arxiv, tmp_path)
+    )
+    assert arxiv_blocks.count >= len(arxiv.records)
+
+
+def test_bibtexparser_raw_block_lane_reports_failed_blocks(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    raw_with_failure = replace(
+        workload,
+        raw_bibtex=workload.raw_bibtex + "\n@broken{bad,\n  title = {No close}\n",
+    )
+    prepared = adapters.BibtexparserV2Adapter().prepare(
+        "materialize_raw_blocks",
+        raw_with_failure,
+        tmp_path,
+    )
+    outcome = run_prepared(prepared)
+    rows = cast(list[dict[str, Any]], outcome.value)
+
+    assert any(row["kind"] == "failed" for row in rows)
+
+
+def test_bibtexparser_duplicate_lane_ignores_unrelated_parse_failures(
+    tmp_path: Path,
+) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    duplicate_with_failure = replace(
+        workload,
+        duplicate_bibtex=workload.duplicate_bibtex + "\n@broken{bad,\n  title = {No close}\n",
+    )
+    prepared = adapters.BibtexparserV2Adapter().prepare(
+        "handle_duplicates",
+        duplicate_with_failure,
+        tmp_path,
+    )
+    outcome = run_prepared(prepared)
+    rows = cast(list[dict[str, Any]], outcome.value)
+
+    assert {row["kind"] for row in rows} == {"duplicate_entry", "duplicate_field"}
+
+
+def test_diagnostics_lane_materializes_dirty_parse_reports(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    refkit = run_prepared(
+        adapters.RefkitAdapter().prepare("extract_diagnostics", workload, tmp_path)
+    )
+    bibtexparser = run_prepared(
+        adapters.BibtexparserV2Adapter().prepare("extract_diagnostics", workload, tmp_path)
+    )
+
+    refkit_rows = cast(list[dict[str, str]], refkit.value)
+    bibtexparser_rows = cast(list[dict[str, str]], bibtexparser.value)
+
+    assert refkit.count == 4
+    assert bibtexparser.count == 2
+    assert any("duplicate" in row["message"] for row in refkit_rows)
+    assert {row["kind"] for row in bibtexparser_rows} == {
+        "DuplicateBlockKeyBlock",
+        "ParsingFailedBlock",
+    }
 
 
 def test_bibtexparser_v2_adapter_handles_missing_optional_fields(tmp_path: Path) -> None:
@@ -528,7 +730,6 @@ def test_benchmark_reports_failed_rows_for_invalid_projection_outputs(tmp_path: 
         [{**row, "title": "wrong"} for row in valid_rows],
         [{**row, "doi": None} for row in valid_rows],
         [{**row, "doi": "wrong"} for row in valid_rows],
-        [{**row, "volume": None} for row in valid_rows],
         [{**row, "volume": "wrong"} for row in valid_rows],
     ]
 
@@ -617,13 +818,69 @@ def test_benchmark_reports_failed_rows_for_invalid_raw_roundtrip_outputs(tmp_pat
     missing_entry_count = tmp_path / "missing-entry-count.bib"
     missing_entry_count.write_text(
         "Edited Benchmark Title benchmark fixture with raw BibTeX blocks "
-        "benchjournal Reference benchmark fixture item0001 item0002 item0003",
+        "benchjournal Reference benchmark fixture item0001 item0002",
         encoding="utf-8",
     )
 
     for path in (missing_text, missing_entry_count):
         assert_prepared_fails_as_benchmark_row(
             replace(prepared, operation=lambda path=path: adapters.OperationOutcome(path, 3)),
+            workload,
+            tmp_path,
+        )
+
+
+def test_benchmark_reports_failed_rows_for_invalid_raw_block_outputs(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    prepared = adapters.RefkitAdapter().prepare("materialize_raw_blocks", workload, tmp_path)
+    entry_rows = [{"kind": "entry", "key": key} for key in workload.keys]
+    invalid_outputs = [
+        ([{"kind": "comment", "key": ""}, *entry_rows], len(entry_rows)),
+        ([{"kind": "comment", "key": ""}], 1),
+        (entry_rows, len(entry_rows)),
+        ([{"kind": "comment", "key": ""}, *entry_rows], len(entry_rows) + 1),
+    ]
+
+    for rows, count in invalid_outputs:
+        assert_prepared_fails_as_benchmark_row(
+            replace(
+                prepared,
+                operation=lambda rows=rows, count=count: adapters.OperationOutcome(rows, count),
+            ),
+            workload,
+            tmp_path,
+        )
+
+
+def test_benchmark_reports_failed_rows_for_invalid_duplicate_outputs(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    prepared = adapters.RefkitAdapter().prepare("handle_duplicates", workload, tmp_path)
+    valid_entry_signal = {
+        "kind": "duplicate_entry",
+        "key": "item0001",
+        "field": "",
+        "count": 2,
+    }
+    valid_field_signal = {
+        "kind": "duplicate_field",
+        "key": "item0002",
+        "field": "title",
+        "count": 2,
+    }
+    invalid_outputs = [
+        ([valid_entry_signal, valid_field_signal], 1),
+        [valid_entry_signal],
+        [{**valid_entry_signal, "key": "wrong"}, valid_field_signal],
+        [valid_entry_signal, {**valid_field_signal, "field": "wrong"}],
+    ]
+
+    for item in invalid_outputs:
+        rows, count = item if isinstance(item, tuple) else (item, len(item))
+        assert_prepared_fails_as_benchmark_row(
+            replace(
+                prepared,
+                operation=lambda rows=rows, count=count: adapters.OperationOutcome(rows, count),
+            ),
             workload,
             tmp_path,
         )
@@ -727,6 +984,31 @@ def test_recovery_lane_schedules_only_recovery_adapters(tmp_path: Path) -> None:
         assert "DuplicateBlockKeyBlock:item0001" in str(row["detail"])
 
 
+def test_diagnostics_raw_blocks_and_duplicate_lanes_record_source_metadata() -> None:
+    result = runner.run_suite(
+        lane_names=[
+            "input.diagnostics",
+            "raw-bibtex.blocks",
+            "raw-bibtex.duplicates",
+        ],
+        input_sizes=["tiny"],
+        rounds=1,
+        warmups=0,
+        build_mode="release",
+    )
+    rows = result["rows"]
+
+    assert {row["status"] for row in rows} == {"ok"}
+    assert {row["package"] for row in rows} == {"refkit", "bibtexparser-2.x"}
+    source_formats = {str(row["lane"]): row["source_format"] for row in rows}
+    assert source_formats["input.diagnostics"] == "dirty_bibtex"
+    assert source_formats["raw-bibtex.blocks"] == "raw_bibtex"
+    assert source_formats["raw-bibtex.duplicates"] == "duplicate_bibtex"
+    duplicate_rows = [row for row in rows if row["lane"] == "raw-bibtex.duplicates"]
+    assert {row["operation_count"] for row in duplicate_rows} == {2}
+    assert all(str(row["source_name"]).endswith(":duplicate_bibtex") for row in duplicate_rows)
+
+
 def test_recovery_parse_success_paths_cover_parser_return_values(tmp_path: Path) -> None:
     workload = fixtures.materialize_workload("tiny", tmp_path)
     recovery_path = tmp_path / "recoverable.bib"
@@ -809,7 +1091,7 @@ def test_polars_inspection_lanes_project_expected_rows(tmp_path: Path) -> None:
         assert outcome.count >= 1
 
 
-def test_run_adapter_lane_emits_failed_rows_for_missing_operation(tmp_path: Path) -> None:
+def test_run_adapter_lane_emits_unsupported_rows_for_missing_operation(tmp_path: Path) -> None:
     metadata = runner.machine_metadata("release")
     workload = fixtures.materialize_workload("tiny", tmp_path)
     rows = runner.run_adapter_lane(
@@ -824,10 +1106,33 @@ def test_run_adapter_lane_emits_failed_rows_for_missing_operation(tmp_path: Path
     )
 
     assert len(rows) == 1
-    assert rows[0]["status"] == "failed"
+    assert rows[0]["status"] == "unsupported"
     assert rows[0]["phase"] == "setup"
     assert rows[0]["seconds"] == 0.0
     assert "benchmark operation" in str(rows[0]["detail"])
+
+
+def test_real_arxiv_workload_records_citeproc_bibtex_path_limitation(
+    tmp_path: Path,
+) -> None:
+    metadata = runner.machine_metadata("release")
+    workload = fixtures.materialize_workload("arxiv", tmp_path)
+    rows = runner.run_adapter_lane(
+        adapter=adapters.CiteprocPyAdapter(),
+        lane=runner.LANES["render.one-off-bibliography"],
+        participant=runner.participant(runner.CITEPROC_PY, "render_path_bibliography"),
+        workload=workload,
+        directory=tmp_path,
+        rounds=1,
+        warmups=0,
+        metadata=metadata,
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["status"] == "unsupported"
+    assert rows[0]["input"] == "arxiv"
+    assert rows[0]["workload_family"] == "arxiv_wild_subset"
+    assert "non-entry bibliography rows" in str(rows[0]["detail"])
 
 
 def test_run_adapter_lane_emits_failed_setup_rows(
@@ -1023,6 +1328,31 @@ def test_run_suite_writes_only_scheduled_lane_rows() -> None:
         assert row["execution_mode"] in {"", "eager", "lazy"}
         if row["package"] == "polars-refkit" and row["status"] == "ok":
             assert row["execution_mode"] in {"eager", "lazy"}
+
+
+def test_run_suite_exercises_real_arxiv_workload() -> None:
+    result = runner.run_suite(
+        lane_names=[
+            "input.bibtex-text",
+            "inspect.fields",
+            "render.prepared-citation",
+            "bulk.polars.bibliography",
+        ],
+        input_sizes=["arxiv"],
+        rounds=1,
+        warmups=0,
+        build_mode="release",
+    )
+    rows = result["rows"]
+
+    assert rows
+    assert {row["status"] for row in rows} == {"ok"}
+    assert {row["input"] for row in rows} == {"arxiv"}
+    assert {row["workload_family"] for row in rows} == {"arxiv_wild_subset"}
+    assert {row["record_count"] for row in rows} == {12}
+    assert all(row["source_license"] == "mixed-arxiv-source-licenses" for row in rows)
+    assert any(row["package"] == "citeproc-py" for row in rows)
+    assert any(row["package"] == "polars-refkit" for row in rows)
 
 
 def test_run_suite_can_use_filtered_adapters() -> None:

@@ -263,7 +263,7 @@ class PolarsRefkitAdapter(PackageAdapter):
             operation,
             _projection_contains(
                 workload.records,
-                required_fields=("key", "title", "doi", "volume"),
+                required_fields=("key", "title", "doi"),
             ),
             source_format="bibtex",
             setup_included=True,

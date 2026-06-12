@@ -15,10 +15,11 @@ from time import perf_counter
 from typing import Any, TypedDict
 
 from refkit_bench.adapters import (
+    MissingBenchmarkOperation,
     PackageAdapter,
     adapters,
 )
-from refkit_bench.fixtures import SIZES, materialize_workload
+from refkit_bench.fixtures import WORKLOAD_NAMES, materialize_workload
 
 NATIVE_ARTIFACT_NAMES = (
     "lib_native.dylib",
@@ -153,6 +154,15 @@ LANES: dict[str, LaneSpec] = {
         participants("recover_dirty_bibtex", REFKIT, BIBTEXPARSER_V2),
         "Recover valid entries from dirty BibTeX and report parse diagnostics.",
     ),
+    "input.diagnostics": LaneSpec(
+        "input.diagnostics",
+        "input.normalized",
+        "diagnostic_reporting",
+        "dirty_bibtex_diagnostics",
+        "diagnostics",
+        participants("extract_diagnostics", REFKIT, BIBTEXPARSER_V2),
+        "Materialize diagnostics or failed-block reports from dirty BibTeX.",
+    ),
     "raw-bibtex.parse": LaneSpec(
         "raw-bibtex.parse",
         "raw-bibtex",
@@ -161,6 +171,24 @@ LANES: dict[str, LaneSpec] = {
         "raw-read",
         participants("parse_raw_bibtex", REFKIT, BIBTEXPARSER_V2),
         "Parse raw BibTeX while preserving document structure.",
+    ),
+    "raw-bibtex.blocks": LaneSpec(
+        "raw-bibtex.blocks",
+        "raw-bibtex",
+        "raw_bibtex_document",
+        "raw_block_materialization",
+        "raw-inspect",
+        participants("materialize_raw_blocks", REFKIT, BIBTEXPARSER_V2),
+        "Materialize raw BibTeX document blocks after setup.",
+    ),
+    "raw-bibtex.duplicates": LaneSpec(
+        "raw-bibtex.duplicates",
+        "raw-bibtex",
+        "raw_bibtex_document",
+        "duplicate_handling",
+        "raw-duplicates",
+        participants("handle_duplicates", REFKIT, BIBTEXPARSER_V2),
+        "Expose duplicate entry and duplicate field signals from raw BibTeX.",
     ),
     "raw-bibtex.write": LaneSpec(
         "raw-bibtex.write",
@@ -444,7 +472,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--group", default="all", help="Run lanes from a group. Use all for every lane."
     )
     parser.add_argument(
-        "--input", action="append", choices=[*SIZES, "all"], help="Input size to run."
+        "--input",
+        action="append",
+        choices=[*WORKLOAD_NAMES, "all"],
+        help="Input workload to run.",
     )
     parser.add_argument("--rounds", type=positive_int, default=5, help="Measured rounds per lane.")
     parser.add_argument(
@@ -488,10 +519,10 @@ def select_lanes(lane_names: list[str] | None, group: str) -> list[str]:
 
 def select_inputs(input_names: list[str] | None) -> list[str]:
     if not input_names:
-        return list(SIZES)
+        return list(WORKLOAD_NAMES)
     selected: list[str] = []
     for name in input_names:
-        selected.extend(SIZES if name == "all" else [name])
+        selected.extend(WORKLOAD_NAMES if name == "all" else [name])
     return list(dict.fromkeys(selected))
 
 
@@ -550,6 +581,32 @@ def run_adapter_lane(
     setup_start = perf_counter()
     try:
         prepared = adapter.prepare(participant.adapter_operation, workload, directory)
+    except MissingBenchmarkOperation as exc:
+        setup_seconds = perf_counter() - setup_start
+        return [
+            {
+                **base,
+                "phase": "setup",
+                "operation_phase": "setup",
+                "source_format": "unknown",
+                "source_name": "",
+                "source_path": "",
+                "source_license": "",
+                "input_bytes": 0,
+                "input_sha256": "",
+                "failed_block_count": 0,
+                "diagnostic_count": 0,
+                "citation_count": 0,
+                "execution_mode": "",
+                "setup_included": True,
+                "setup_seconds": setup_seconds,
+                "operation_count": 0,
+                "round": 0,
+                "seconds": 0.0,
+                "status": "unsupported",
+                "detail": exc.reason,
+            }
+        ]
     except Exception as exc:
         setup_seconds = perf_counter() - setup_start
         return [

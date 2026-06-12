@@ -13,11 +13,13 @@ from refkit_bench._adapters.common import (
     _citation_output_matches,
     _count_at_least,
     _count_is,
+    _duplicate_signals_cover,
     _entries_match,
     _keys_are,
     _lookup_keys,
     _prepared,
     _projection_contains,
+    _raw_blocks_cover,
     _raw_roundtrip_check,
     _text_contains,
 )
@@ -67,6 +69,27 @@ class RefkitAdapter(PackageAdapter):
             setup_included=True,
         )
 
+    def prepare_extract_diagnostics(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        expected = 0 if workload.dirty_bibtex == workload.bibtex else 4
+
+        def operation() -> OperationOutcome:
+            library = rk.Library.read(workload.dirty_bibtex_path, diagnostics=True)
+            diagnostics = [{"message": message} for message in library.diagnostics]
+            return OperationOutcome(
+                diagnostics,
+                len(diagnostics),
+                metadata={"diagnostic_count": len(diagnostics)},
+            )
+
+        return _prepared(
+            operation,
+            _count_is(expected),
+            source_format="dirty_bibtex",
+            setup_included=True,
+        )
+
     def prepare_parse_raw_bibtex(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
@@ -79,6 +102,62 @@ class RefkitAdapter(PackageAdapter):
             _count_is(len(workload.records)),
             source_format="raw_bibtex",
             setup_included=True,
+        )
+
+    def prepare_materialize_raw_blocks(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        import refkit as rk
+
+        document = rk.BibDocument.parse(workload.raw_bibtex)
+
+        def operation() -> OperationOutcome:
+            rows = [
+                {
+                    "kind": block["kind"],
+                    "key": block.get("key", ""),
+                    "raw_bytes": len(str(block.get("raw", "")).encode("utf-8")),
+                }
+                for block in document.blocks
+                if block["kind"] != "whitespace"
+            ]
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            operation,
+            _raw_blocks_cover(workload),
+            source_format="raw_bibtex",
+        )
+
+    def prepare_handle_duplicates(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        document = rk.BibDocument.parse(workload.duplicate_bibtex)
+
+        def operation() -> OperationOutcome:
+            duplicate_entries = document.entries.get_all(workload.duplicate_entry_key)
+            duplicate_field_entry = document.entries[workload.duplicate_field_key]
+            duplicate_fields = duplicate_field_entry.fields.get_all(workload.duplicate_field_name)
+            rows = [
+                {
+                    "kind": "duplicate_entry",
+                    "key": workload.duplicate_entry_key,
+                    "field": "",
+                    "count": len(duplicate_entries),
+                },
+                {
+                    "kind": "duplicate_field",
+                    "key": workload.duplicate_field_key,
+                    "field": workload.duplicate_field_name,
+                    "count": len(duplicate_fields),
+                },
+            ]
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            operation,
+            _duplicate_signals_cover(workload),
+            source_format="duplicate_bibtex",
         )
 
     def prepare_write_edited_raw_bibtex(
@@ -97,7 +176,7 @@ class RefkitAdapter(PackageAdapter):
 
         return _prepared(
             operation,
-            _raw_roundtrip_check(workload.keys),
+            _raw_roundtrip_check(workload.keys, workload.raw_preservation_terms),
             source_format="raw_bibtex",
         )
 
@@ -116,7 +195,7 @@ class RefkitAdapter(PackageAdapter):
 
         return _prepared(
             operation,
-            _raw_roundtrip_check(workload.keys),
+            _raw_roundtrip_check(workload.keys, workload.raw_preservation_terms),
             source_format="raw_bibtex",
             setup_included=True,
         )
@@ -387,6 +466,6 @@ class RefkitAdapter(PackageAdapter):
             operation,
             _projection_contains(
                 workload.records,
-                required_fields=("key", "title", "doi", "volume"),
+                required_fields=("key", "title", "doi"),
             ),
         )

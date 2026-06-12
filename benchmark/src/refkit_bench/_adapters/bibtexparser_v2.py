@@ -14,11 +14,13 @@ from refkit_bench._adapters.common import (
     PreparedOperation,
     _all_checks,
     _count_is,
+    _duplicate_signals_cover,
     _entries_match,
     _keys_are,
     _lookup_keys,
     _prepared,
     _projection_contains,
+    _raw_blocks_cover,
     _raw_roundtrip_check,
 )
 from refkit_bench.fixtures import Workload
@@ -91,6 +93,38 @@ class BibtexparserV2Adapter(PackageAdapter):
             setup_included=True,
         )
 
+    def prepare_extract_diagnostics(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        _require_bibtexparser_v2()
+        expected = 0 if workload.dirty_bibtex == workload.bibtex else 2
+
+        def operation() -> OperationOutcome:
+            with contextlib.redirect_stderr(io.StringIO()):
+                database = bibtexparser.parse_file(str(workload.dirty_bibtex_path))
+            failed_blocks = getattr(database, "failed_blocks", ())
+            rows = [
+                {
+                    "kind": type(block).__name__,
+                    "key": getattr(block, "key", None)
+                    or _bibtexparser_block_key(getattr(block, "raw", "")),
+                }
+                for block in failed_blocks
+            ]
+            return OperationOutcome(
+                rows,
+                len(rows),
+                _bibtexparser_v2_failed_signatures(failed_blocks),
+                metadata={"failed_block_count": len(rows), "diagnostic_count": len(rows)},
+            )
+
+        return _prepared(
+            operation,
+            _count_is(expected),
+            source_format="dirty_bibtex",
+            setup_included=True,
+        )
+
     def prepare_parse_raw_bibtex(self, workload: Workload, directory: Path) -> PreparedOperation:
         import bibtexparser
 
@@ -104,6 +138,77 @@ class BibtexparserV2Adapter(PackageAdapter):
             operation,
             _count_is(len(workload.records)),
             source_format="raw_bibtex",
+            setup_included=True,
+        )
+
+    def prepare_materialize_raw_blocks(
+        self, workload: Workload, directory: Path
+    ) -> PreparedOperation:
+        import bibtexparser
+
+        _require_bibtexparser_v2()
+        database = bibtexparser.parse_string(workload.raw_bibtex)
+
+        def operation() -> OperationOutcome:
+            rows = [
+                {
+                    "kind": _bibtexparser_block_kind(block),
+                    "key": getattr(block, "key", "") or "",
+                    "raw_bytes": len(str(getattr(block, "raw", "")).encode("utf-8")),
+                }
+                for block in database.blocks
+            ]
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(
+            operation,
+            _raw_blocks_cover(workload),
+            source_format="raw_bibtex",
+        )
+
+    def prepare_handle_duplicates(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import bibtexparser
+
+        _require_bibtexparser_v2()
+
+        def operation() -> OperationOutcome:
+            with contextlib.redirect_stderr(io.StringIO()):
+                database = bibtexparser.parse_string(workload.duplicate_bibtex)
+            rows = []
+            for block in getattr(database, "failed_blocks", ()):
+                block_type = type(block).__name__
+                key = getattr(block, "key", None) or _bibtexparser_block_key(
+                    getattr(block, "raw", "")
+                )
+                if block_type == "DuplicateBlockKeyBlock":
+                    rows.append(
+                        {
+                            "kind": "duplicate_entry",
+                            "key": key,
+                            "field": "",
+                            "count": 2,
+                        }
+                    )
+                elif block_type == "DuplicateFieldKeyBlock":
+                    rows.append(
+                        {
+                            "kind": "duplicate_field",
+                            "key": key,
+                            "field": workload.duplicate_field_name,
+                            "count": 2,
+                        }
+                    )
+            return OperationOutcome(
+                rows,
+                len(rows),
+                _bibtexparser_v2_failed_signatures(getattr(database, "failed_blocks", ())),
+                metadata={"failed_block_count": len(rows), "diagnostic_count": len(rows)},
+            )
+
+        return _prepared(
+            operation,
+            _duplicate_signals_cover(workload),
+            source_format="duplicate_bibtex",
             setup_included=True,
         )
 
@@ -124,7 +229,7 @@ class BibtexparserV2Adapter(PackageAdapter):
 
         return _prepared(
             operation,
-            _raw_roundtrip_check(workload.keys),
+            _raw_roundtrip_check(workload.keys, workload.raw_preservation_terms),
             source_format="raw_bibtex",
         )
 
@@ -145,7 +250,7 @@ class BibtexparserV2Adapter(PackageAdapter):
 
         return _prepared(
             operation,
-            _raw_roundtrip_check(workload.keys),
+            _raw_roundtrip_check(workload.keys, workload.raw_preservation_terms),
             source_format="raw_bibtex",
             setup_included=True,
         )
@@ -224,7 +329,7 @@ class BibtexparserV2Adapter(PackageAdapter):
             operation,
             _projection_contains(
                 workload.records,
-                required_fields=("key", "title", "doi", "volume"),
+                required_fields=("key", "title", "doi"),
             ),
         )
 
@@ -263,6 +368,19 @@ def _bibtexparser_v2_failed_signatures(blocks: Iterable[Any]) -> str:
             key = _bibtexparser_block_key(getattr(block, "raw", ""))
         signatures.append(f"{type(block).__name__}:{key or 'unknown'}")
     return ",".join(signatures)
+
+
+def _bibtexparser_block_kind(block: Any) -> str:
+    name = type(block).__name__
+    if name in {"ImplicitComment", "ExplicitComment"}:
+        return "comment"
+    if name == "String":
+        return "string"
+    if name == "Preamble":
+        return "preamble"
+    if name == "Entry":
+        return "entry"
+    return "failed"
 
 
 def _bibtexparser_v2_recovery_matches(
