@@ -13,8 +13,9 @@ This builds the `refkit` and `polars-refkit` sdists and wheels, then verifies th
 - each sdist excludes benchmark tooling and local-only artifacts
 - each wheel excludes benchmark tooling and local-only artifacts
 - each sdist includes the shared `crates/refkit-core` Rust sources needed for a source build
-- licenses, stubs, `py.typed`, Rust sources, and package metadata are present for each package
+- the Apache license file, stubs, `py.typed`, Rust sources, and package metadata are present for each package
 - wheel metadata reports version `0.0.1` for each package
+- wheel metadata reports the Apache-2.0 license for each package
 - wheel metadata supports Python `>=3.11, <3.15` for each package
 - `polars-refkit` wheel metadata requires the validated Polars `>=1.41, <1.42` line
 

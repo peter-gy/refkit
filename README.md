@@ -42,25 +42,27 @@ df = pl.DataFrame(
     {
         "bibtex": ["@article{doe2024, title={Fast Citations}, year={2024}}"],
         "key": ["doe2024"],
+        "keys": [["doe2024"]],
     }
 )
 
 out = df.select(
-    citation=prk.cite_bibtex("bibtex", "key"),
-    count=prk.bibtex_entry_count("bibtex"),
-    keys=prk.bibtex_keys("bibtex"),
+    citation=prk.cite("bibtex", "key"),
+    citations=prk.cite_sequence("bibtex", "keys"),
+    count=prk.entry_count("bibtex"),
+    keys=prk.keys("bibtex"),
+    entries=prk.entries("bibtex"),
 )
 ```
 
 `polars-refkit` supports:
 
-- `cite_bibtex`
-- `bibliography_bibtex`
-- `bibtex_entry_count`
-- `bibtex_keys`
-- `bibtex_diagnostics`
-- `bibtex_to_csl_json`
-- `pl.Expr.refkit`
+- citation and bibliography rendering as text, HTML, or `{text, html}` structs
+- ordered citation batches from `List[String]` key columns with `cite_sequence`
+- entry counts, key lists, parse reports, diagnostics, and validity checks
+- normalized entry projection as `List[Struct]`
+- Hayagriva entry JSON export for interchange
+- the `pl.Expr.refkit` namespace
 
 See [packages/polars-refkit/README.md](packages/polars-refkit/README.md) for the package contract.
 
@@ -85,7 +87,4 @@ make package-check
 
 ## License
 
-The packages are licensed under either:
-
-- Apache License, Version 2.0
-- MIT license
+The packages are licensed under the Apache License, Version 2.0.

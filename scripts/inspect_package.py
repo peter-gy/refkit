@@ -13,6 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL_ONLY_GOAL_PART = "no" + "git"
 NATIVE_EXTENSION_SUFFIXES = {".pyd", ".so"}
+LEGACY_LICENSE_NAME = "MI" + "T"
+LEGACY_LICENSE_FILE = "LICENSE-" + LEGACY_LICENSE_NAME
+LEGACY_DUAL_LICENSE = f"{LEGACY_LICENSE_NAME} OR Apache-2.0".encode()
 FORBIDDEN_PARTS = {
     ".DS_Store",
     ".pytest_cache",
@@ -22,6 +25,7 @@ FORBIDDEN_PARTS = {
     "__pycache__",
     "benchmark",
     "dist",
+    LEGACY_LICENSE_FILE,
     LOCAL_ONLY_GOAL_PART,
     "target",
 }
@@ -54,18 +58,17 @@ SPECS = {
                 "Cargo.lock",
                 "Cargo.toml",
                 "LICENSE-APACHE",
-                "LICENSE-MIT",
                 "README.md",
                 "crates/refkit-core/Cargo.toml",
                 "crates/refkit-core/src/lib.rs",
                 "crates/refkit-core/src/library.rs",
                 "crates/refkit-core/src/render.rs",
+                "crates/refkit-core/src/style_analysis.rs",
                 "crates/refkit-core/src/strings.rs",
                 "packages/refkit/Cargo.toml",
                 "packages/refkit/src/lib.rs",
                 "packages/refkit/src/raw.rs",
                 "packages/refkit/src/rendered.rs",
-                "packages/refkit/src/style_analysis.rs",
                 "pyproject.toml",
                 "src/refkit/__init__.py",
                 "src/refkit/__init__.pyi",
@@ -93,12 +96,12 @@ SPECS = {
                 "Cargo.lock",
                 "Cargo.toml",
                 "LICENSE-APACHE",
-                "LICENSE-MIT",
                 "README.md",
                 "crates/refkit-core/Cargo.toml",
                 "crates/refkit-core/src/lib.rs",
                 "crates/refkit-core/src/library.rs",
                 "crates/refkit-core/src/render.rs",
+                "crates/refkit-core/src/style_analysis.rs",
                 "crates/refkit-core/src/strings.rs",
                 "packages/polars-refkit/Cargo.toml",
                 "packages/polars-refkit/src/expressions.rs",
@@ -177,7 +180,6 @@ def inspect_package(
             f"{dist_info}/METADATA",
             f"{dist_info}/WHEEL",
             f"{dist_info}/licenses/LICENSE-APACHE",
-            f"{dist_info}/licenses/LICENSE-MIT",
         },
     )
     if not any(is_native_extension(spec, name) for name in wheel_names):
@@ -186,6 +188,7 @@ def inspect_package(
     metadata = read_wheel_text(wheel, f"{dist_info}/METADATA")
     assert_metadata_line(metadata, f"Name: {spec.distribution}")
     assert_metadata_line(metadata, f"Version: {version}")
+    assert_apache_license_metadata(metadata)
     assert_metadata_field(metadata, "Requires-Python", {">=3.11", "<3.15"})
     for requirement, expected_parts in spec.requires_dist.items():
         assert_metadata_requirement(metadata, requirement, expected_parts)
@@ -259,12 +262,36 @@ def assert_no_forbidden_payloads_in_wheel(path: Path) -> None:
         for name in archive.namelist():
             if name.endswith("/"):
                 continue
-            assert_no_forbidden_payload(archive.read(name), "wheel", name)
+            scan_license_text = should_scan_license_text_in_wheel(name)
+            assert_no_forbidden_payload(
+                archive.read(name),
+                "wheel",
+                name,
+                scan_license_text=scan_license_text,
+            )
 
 
-def assert_no_forbidden_payload(payload: bytes, artifact: str, name: str) -> None:
+def should_scan_license_text_in_wheel(name: str) -> bool:
+    path = Path(name)
+    if path.suffix in NATIVE_EXTENSION_SUFFIXES:
+        return False
+    return "sboms" not in path.parts
+
+
+def assert_no_forbidden_payload(
+    payload: bytes,
+    artifact: str,
+    name: str,
+    *,
+    scan_license_text: bool = True,
+) -> None:
     if LOCAL_ONLY_GOAL_PART.encode() in payload:
         raise SystemExit(f"{artifact} file {name!r} contains a forbidden local helper token")
+    if not scan_license_text:
+        return
+    for forbidden in (LEGACY_DUAL_LICENSE, LEGACY_LICENSE_FILE.encode()):
+        if forbidden in payload:
+            raise SystemExit(f"{artifact} file {name!r} contains forbidden license text")
 
 
 def assert_required(names: set[str], artifact: str, required: set[str]) -> None:
@@ -290,6 +317,15 @@ def assert_metadata_field(metadata: str, field: str, expected_parts: set[str]) -
         raise SystemExit(
             f"wheel metadata field {field!r} is {values[0]!r}, expected {sorted(expected_parts)}"
         )
+
+
+def assert_apache_license_metadata(metadata: str) -> None:
+    lines = set(metadata.splitlines())
+    if lines.isdisjoint({"License: Apache-2.0", "License-Expression: Apache-2.0"}):
+        raise SystemExit("wheel metadata is missing Apache-2.0 license metadata")
+    for line in lines:
+        if LEGACY_LICENSE_NAME in line:
+            raise SystemExit(f"wheel metadata contains forbidden legacy license text: {line!r}")
 
 
 def assert_metadata_requirement(

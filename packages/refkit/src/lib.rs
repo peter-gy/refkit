@@ -1,13 +1,12 @@
 mod raw;
 mod rendered;
-mod style_analysis;
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use biblatex::{
     Bibliography as BiblatexBibliography, ChunksExt, Entry as BiblatexEntry,
@@ -30,14 +29,13 @@ use pyo3::types::{PyAny, PyDict, PyDictMethods, PyList, PyListMethods, PyModule}
 use pyo3::{IntoPyObjectExt, intern};
 use serde_json::{Value, json};
 
-use refkit_core::{entry_type_name, option_quoted, quoted, read_bibliography_text};
+use refkit_core::{
+    can_fast_render_single_citations, citation_depends_on_subsequent_names, citation_only_style,
+    entry_type_name, full_history_citation_style, option_quoted, quoted, read_bibliography_text,
+};
 use rendered::{
     Rendered, RenderedTree, elem_children_to_html, elem_children_to_string,
     rendered_from_bibliography, rendered_from_citation,
-};
-use style_analysis::{
-    can_fast_render_single_citations, citation_depends_on_subsequent_names, citation_only_style,
-    full_history_citation_style,
 };
 
 create_exception!(refkit, RefkitError, PyException);
@@ -384,19 +382,40 @@ impl Entry {
 #[derive(Clone)]
 pub struct Style {
     id: String,
+    data: Arc<StyleData>,
+}
+
+struct StyleData {
     inner: Arc<IndependentStyle>,
+    citation_style: Arc<IndependentStyle>,
+    standalone_style: Arc<IndependentStyle>,
+    fast_citation_enabled: bool,
+    subsequent_name_rules: bool,
+}
+
+impl StyleData {
+    fn new(inner: IndependentStyle) -> Self {
+        let citation_style = full_history_citation_style(&inner).map(Arc::new);
+        let standalone_style = Arc::new(citation_only_style(&inner));
+        let fast_citation_enabled = can_fast_render_single_citations(&inner);
+        let subsequent_name_rules = citation_depends_on_subsequent_names(&inner);
+        let inner = Arc::new(inner);
+        let citation_style = citation_style.unwrap_or_else(|| Arc::clone(&inner));
+        Self {
+            inner,
+            citation_style,
+            standalone_style,
+            fast_citation_enabled,
+            subsequent_name_rules,
+        }
+    }
 }
 
 #[pymethods]
 impl Style {
     #[staticmethod]
     fn load(name: &str) -> PyResult<Self> {
-        let archived =
-            archive::ArchivedStyle::by_name(&name.to_ascii_lowercase()).ok_or_else(|| {
-                PyValueError::new_err(format!("unknown bundled style {}", quoted(name)))
-            })?;
-        let style = archived.get();
-        independent_style(name.to_string(), style)
+        cached_bundled_style(name)
     }
 
     #[staticmethod]
@@ -422,7 +441,7 @@ impl Style {
 
     #[getter]
     fn title(&self) -> String {
-        self.inner.info.title.value.clone()
+        self.data.inner.info.title.value.clone()
     }
 
     fn __repr__(&self) -> String {
@@ -660,12 +679,12 @@ struct FastCitationState {
 }
 
 impl FastCitationState {
-    fn new(style: &IndependentStyle) -> Self {
+    fn new(style: &StyleData) -> Self {
         Self {
-            enabled: can_fast_render_single_citations(style),
+            enabled: style.fast_citation_enabled,
             key_by_text: HashMap::new(),
             seen_keys: HashSet::new(),
-            subsequent_name_rules: citation_depends_on_subsequent_names(style),
+            subsequent_name_rules: style.subsequent_name_rules,
         }
     }
 }
@@ -675,18 +694,14 @@ impl Document {
     #[new]
     #[pyo3(signature = (library, style, locale = None))]
     fn new(library: &Library, style: &Style, locale: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
-        let citation_style = full_history_citation_style(style.inner.as_ref())
-            .map(Arc::new)
-            .unwrap_or_else(|| Arc::clone(&style.inner));
-        let standalone_style = Arc::new(citation_only_style(style.inner.as_ref()));
         Ok(Self {
             library: Arc::clone(&library.inner),
-            style: Arc::clone(&style.inner),
-            citation_style,
-            standalone_style,
+            style: Arc::clone(&style.data.inner),
+            citation_style: Arc::clone(&style.data.citation_style),
+            standalone_style: Arc::clone(&style.data.standalone_style),
             locale: extract_locale(locale)?,
             citations: Vec::new(),
-            fast_cite: FastCitationState::new(style.inner.as_ref()),
+            fast_cite: FastCitationState::new(style.data.as_ref()),
         })
     }
 
@@ -1230,11 +1245,35 @@ fn format_biblatex_errors(errors: &[hayagriva::io::BibLaTeXError]) -> String {
         .join("\n")
 }
 
+fn cached_bundled_style(name: &str) -> PyResult<Style> {
+    static BUNDLED_STYLES: OnceLock<Mutex<HashMap<String, Style>>> = OnceLock::new();
+
+    let key = name.to_ascii_lowercase();
+    let cache = BUNDLED_STYLES.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(style) = cache
+        .lock()
+        .map_err(|_| RefkitError::new_err("style cache lock is poisoned"))?
+        .get(&key)
+        .cloned()
+    {
+        return Ok(style);
+    }
+
+    let archived = archive::ArchivedStyle::by_name(&key)
+        .ok_or_else(|| PyValueError::new_err(format!("unknown bundled style {}", quoted(name))))?;
+    let style = independent_style(name.to_string(), archived.get())?;
+    cache
+        .lock()
+        .map_err(|_| RefkitError::new_err("style cache lock is poisoned"))?
+        .insert(key, style.clone());
+    Ok(style)
+}
+
 fn independent_style(id: String, style: CslStyle) -> PyResult<Style> {
     match style {
         CslStyle::Independent(inner) => Ok(Style {
             id,
-            inner: Arc::new(inner),
+            data: Arc::new(StyleData::new(inner)),
         }),
         CslStyle::Dependent(_) => Err(PyValueError::new_err(
             "dependent CSL styles need explicit parent resolution",
@@ -1399,18 +1438,15 @@ mod tests {
 
     fn test_document(style_name: &str, source: &str) -> Document {
         let parsed = parse_library_source(source, "bibtex", true, false).unwrap();
-        let style = Arc::new(archived_independent_style(style_name));
-        let citation_style = full_history_citation_style(style.as_ref())
-            .map(Arc::new)
-            .unwrap_or_else(|| Arc::clone(&style));
+        let style = StyleData::new(archived_independent_style(style_name));
         Document {
             library: Arc::new(parsed.inner),
-            style: Arc::clone(&style),
-            citation_style,
-            standalone_style: Arc::new(citation_only_style(style.as_ref())),
+            style: Arc::clone(&style.inner),
+            citation_style: Arc::clone(&style.citation_style),
+            standalone_style: Arc::clone(&style.standalone_style),
             locale: Some("en-US".to_string()),
             citations: Vec::new(),
-            fast_cite: FastCitationState::new(style.as_ref()),
+            fast_cite: FastCitationState::new(&style),
         }
     }
 

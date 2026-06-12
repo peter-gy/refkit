@@ -7,7 +7,7 @@ package metadata. Upstream releases may differ.
 
 Evidence paths are relative to the corresponding project root.
 
-The python-bibtexparser feature rows describe the inspected local v2 beta source tree. The benchmark suite compares against the PyPI `bibtexparser` 1.x API and labels those rows as `bibtexparser-1.x`.
+The python-bibtexparser feature rows describe the inspected local v2 beta source tree. The benchmark suite installs PyPI `bibtexparser==2.0.0b9` for its comparison rows.
 
 ## Status Legend
 
@@ -26,7 +26,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 | citeproc-py | Python CSL 1.0.1 processor with JSON and BibTeX source adapters. | `CitationStylesStyle`, `CitationStylesBibliography`, `Citation`, `CitationItem`, source adapters, and formatter modules. | Alpha API by package metadata. README states Python 3.9 and newer, lxml dependency, and almost 60 percent of the relevant citeproc test suite. |
 | python-bibtexparser | Python parser and writer for `.bib` documents. It preserves document blocks and supports transformation middleware. | `parse_string`, `parse_file`, `write_string`, `write_file`, `Library`, block classes, middleware, and `BibtexFormat`. | Version 2 beta in README and metadata. It is a BibTeX document library, not a CSL renderer. |
 | refkit | Python package backed by Rust through PyO3 and maturin. It combines normalized citation rendering with a raw BibTeX editing model. | `Library`, `Entry`, `Style`, `Locale`, `Cite`, `Document`, `Rendered`, `BibDocument`, `cite`, and `bibliography`. | Version 0.0.1. Current API supports Python 3.11 to 3.14, native parsing and rendering, and a 100 percent Python coverage gate. |
-| polars-refkit | Polars expression plugin backed by Rust through PyO3, pyo3-polars, and maturin. It parses, inspects, and renders BibTeX rows inside Polars query plans. | `cite_bibtex`, `bibliography_bibtex`, `bibtex_entry_count`, `bibtex_keys`, `bibtex_diagnostics`, `bibtex_to_csl_json`, and the `pl.Expr.refkit` namespace. | Version 0.0.1. Current API supports Python 3.11 to 3.14 and returns null for row-level parse failures where the expression has a scalar value result. |
+| polars-refkit | Polars expression plugin backed by Rust through PyO3, pyo3-polars, and maturin. It parses, inspects, projects, and renders BibTeX rows inside Polars query plans. | `cite`, `cite_sequence`, `cite_html`, `bibliography_text`, `bibliography_html`, `entry_count`, `keys`, `entries`, `parse_report`, `diagnostics`, `entries_json`, the explicit `bibtex_*` names, and the `pl.Expr.refkit` namespace. | Version 0.0.1. Current API supports Python 3.11 to 3.14 and returns null for row-level parse failures where the expression has a scalar or list value result. |
 
 ## High-Level Workflows
 
@@ -97,7 +97,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 | Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
 | --- | --- | --- | --- | --- |
-| Citation cluster rendering | Yes. `processCitationCluster`, `appendCitationCluster`, `previewCitationCluster`, and `makeCitationCluster` exist. | Yes. `Citation` and `CitationItem` are rendered through `CitationStylesBibliography.cite`. | No. | Yes. `Document.cite` accepts a key, a `Cite`, or an iterable citation group. |
+| Citation cluster rendering | Yes. `processCitationCluster`, `appendCitationCluster`, `previewCitationCluster`, and `makeCitationCluster` exist. | Yes. `Citation` and `CitationItem` are rendered through `CitationStylesBibliography.cite`. | No. | Yes. `Document.cite` accepts a key, a `Cite`, or an iterable citation group. `polars-refkit` also exposes `cite_sequence` for ordered `List[String]` key columns. |
 | Citation item locators | Yes. Locator parsing and labels are supported. | Partial. `CitationItem` accepts `locator`, `prefix`, and `suffix`, while locator labels are modeled separately in `Locator`. | No. | Yes. `Cite(key, locator, label)` maps labels to CSL locators. |
 | Citation item prefix and suffix | Yes. CSL item data can carry affixes. | Yes. `CitationItem` optional arguments include `prefix` and `suffix`. | No. | No current `Cite` prefix or suffix API. |
 | Citation sorting inside a cluster | Yes. `makeCitationCluster` computes citation sort keys when the style defines citation sorting. | Yes through style layout processing. | No. | Yes through Hayagriva rendering. |
@@ -150,10 +150,10 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 | Retrieve keys | Yes through host item lists and registry state. | Yes. `CitationStylesBibliography.keys` tracks registered keys. | Yes. `entries_dict` and block APIs expose keys. | Yes. `Library.keys` and `BibEntryMap.keys`. |
 | Iterate entries | Partial through registry and host data. | Partial through source mappings and registered items. | Yes. `library.entries`. | Yes. `Library.values` and `BibDocument.entries`. |
 | Export normalized entries to dictionaries | No public bulk export found. | Partial. Sources are Python objects and mappings. | No CSL normalization. | Yes. `Library.to_dicts`. |
-| Export CSL JSON | Native item data uses CSL JSON-like objects. No package-level exporter was found. | Partial. `CiteProcJSON` imports JSON. No exporter found. | No. | Partial. `polars_refkit.bibtex_to_csl_json` returns normalized Hayagriva entry JSON with `id` and `key` fields for dataframe rows. The core `refkit` package has no full citeproc-js CSL JSON interchange API. |
+| Export CSL JSON | Native item data uses CSL JSON-like objects. No package-level exporter was found. | Partial. `CiteProcJSON` imports JSON. No exporter found. | No. | Partial. `polars_refkit.entries_json` and `bibtex_to_hayagriva_json` return normalized Hayagriva entry JSON with `id` and `key` fields for dataframe rows. The core `refkit` package has no full citeproc-js CSL JSON interchange API. |
 | Export Arrow | No. | No. | No. | No current public API. |
 | Write `.bib` output | No. | No. | Yes. `write_string` and `write_file`. | Partial. `BibDocument.write` writes field edits while preserving unrelated raw blocks. Normalized `Library.write` is not exposed. |
-| Inspect and render BibTeX rows inside Polars | No. | No. | No. | Yes through `polars-refkit`. `bibtex_entry_count` counts entries, `bibtex_keys` returns key lists, `bibtex_diagnostics` returns row diagnostics, `cite_bibtex` renders citation text, `bibliography_bibtex` renders bibliography HTML, and `bibtex_to_csl_json` returns normalized entry JSON. |
+| Inspect and render BibTeX rows inside Polars | No. | No. | No. | Yes through `polars-refkit`. `entry_count`, `keys`, `entries`, `parse_report`, `diagnostics`, `cite`, and `bibliography_html` run as Polars expressions. Rendered structs expose text and HTML together. |
 
 ## Extensibility And Integration
 
@@ -187,7 +187,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 | Import name | `CSL` from bundled JS or CommonJS module. | `citeproc`. | `bibtexparser`. | `refkit` and `polars_refkit`. |
 | Version from inspected metadata | 2.4.63. | Versioneer-managed. | 2.0.0b9. | 0.0.1. |
 | Python version support | Not applicable. | Python 3.9 and newer, classifiers through 3.13. | Python 3.9 and newer, classifiers through 3.12. | Python 3.11 to 3.14. |
-| License from inspected metadata | CPAL-1.0 or AGPL-1.0. | BSD-2-Clause-Views. | MIT. | MIT OR Apache-2.0. |
+| Refkit workspace license | Not applicable. | Not applicable. | Not applicable. | Apache-2.0. |
 | Build system | JavaScript package and repo build scripts. | setuptools with versioneer and schema conversion. | setuptools. | uv workspace with maturin, PyO3, and pyo3-polars. |
 
 ## What refkit Unifies Today
@@ -201,7 +201,7 @@ refkit already covers the main overlap that requires two Python packages today:
 | Inspect rendered output as text, HTML, and structured data | citeproc-py supports strings in text, HTML, and RST. citeproc-js returns strings and bibliography metadata arrays. | `Rendered.text`, `Rendered.html`, and `Rendered.tree`. |
 | Repair a `.bib` title while keeping comments and malformed blocks | python-bibtexparser can preserve and write blocks. citeproc-py does not expose raw editing. | `BibDocument.read`, field mutation through `BibField.value`, and `BibDocument.write`. |
 | Query normalized parent relationships | citeproc-py and python-bibtexparser expose Python iteration. No selector language was found. | `Library.select("article > periodical[volume]")`. |
-| Inspect or render BibTeX rows in a dataframe | Existing packages require Python object materialization before dataframe use. | `polars_refkit.bibtex_keys("bibtex")`, `polars_refkit.bibtex_entry_count("bibtex")`, `polars_refkit.cite_bibtex("bibtex", "key")`, and `polars_refkit.bibliography_bibtex("bibtex")` run as Polars expressions. |
+| Inspect or render BibTeX rows in a dataframe | Existing packages require Python object materialization before dataframe use. | `polars_refkit.keys("bibtex")`, `polars_refkit.entry_count("bibtex")`, `polars_refkit.entries("bibtex")`, `polars_refkit.cite("bibtex", "key")`, and `polars_refkit.bibliography_html("bibtex")` run as Polars expressions. |
 
 ## Migration Paths
 

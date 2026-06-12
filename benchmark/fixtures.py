@@ -60,8 +60,6 @@ class Workload:
             return self.raw_bibtex
         if source_format == "dirty_bibtex":
             return self.dirty_bibtex
-        if source_format == "bibtex_rows":
-            return "\n".join(bibtex_for_records((record,)).strip() for record in self.records)
         if source_format == "csl_json":
             return json.dumps(self.csl_json, sort_keys=True, separators=(",", ":"))
         return ""

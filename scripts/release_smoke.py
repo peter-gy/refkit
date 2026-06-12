@@ -91,7 +91,7 @@ if set(versions.values()) != {expected}:
 source = "@article{smoke, title={Smoke Title}, year={2024}}"
 keys = pl.DataFrame({"bibtex": [source]}).select(
     polars_refkit.bibtex_keys("bibtex")
-).item()
+).to_series().to_list()[0]
 if keys != ["smoke"]:
     raise SystemExit(f"unexpected plugin result: {keys!r}")
 

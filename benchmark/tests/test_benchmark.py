@@ -11,6 +11,17 @@ from pathlib import Path
 import pytest
 
 from benchmark import adapters, fixtures, runner
+from benchmark._adapters import bibtexparser_v2 as bibtexparser_v2_adapter
+from benchmark._adapters import polars_refkit as polars_refkit_adapter
+
+
+def run_prepared(prepared: adapters.PreparedOperation) -> adapters.OperationOutcome:
+    try:
+        outcome = prepared.operation()
+        prepared.check(outcome)
+        return outcome
+    finally:
+        prepared.cleanup()
 
 
 def test_refkit_public_helpers_are_covered_from_benchmark_subset(tmp_path: Path) -> None:
@@ -69,10 +80,6 @@ def test_materialize_workload_writes_bibtex_and_raw_inputs(tmp_path: Path) -> No
     assert workload.source_byte_count("raw_bibtex") == len(workload.raw_bibtex.encode("utf-8"))
     assert workload.source_text("dirty_bibtex") == workload.dirty_bibtex
     assert workload.source_byte_count("dirty_bibtex") == len(workload.dirty_bibtex.encode("utf-8"))
-    assert workload.source_text("bibtex_rows").count("@article{") == 3
-    assert workload.source_byte_count("bibtex_rows") == len(
-        workload.source_text("bibtex_rows").encode("utf-8")
-    )
     assert workload.source_text("csl_json").startswith("[")
     assert len(workload.source_sha256("bibtex")) == 64
     assert workload.source_text("unknown") == ""
@@ -159,9 +166,18 @@ def test_list_command_prints_cases(capsys: pytest.CaptureFixture[str]) -> None:
         "library_keys",
         "entry_lookup",
         "field_projection",
+        "lazy_bibtex_parse",
+        "lazy_citation_render",
+        "lazy_bibliography_render",
+        "lazy_repeated_render",
+        "lazy_bulk_materialization",
+        "lazy_library_keys",
+        "lazy_entry_lookup",
+        "lazy_field_projection",
     ]
     assert "missing_reference\terror" in out
     assert "field_projection\tinspect" in out
+    assert "lazy_field_projection\tpolars-lazy" in out
     assert "style_load\tsetup" in out
 
 
@@ -264,87 +280,52 @@ def test_machine_metadata_contains_versions() -> None:
     assert metadata["packages"]["polars-refkit"] == metadata_module.version("polars-refkit")
     assert metadata["packages"]["citeproc-py"] != "not-installed"
     assert metadata["packages"]["bibtexparser"] != "not-installed"
+    assert metadata["packages"]["bibtexparser-v2"] == metadata["packages"]["bibtexparser"]
+
+
+def test_adapter_registry_contains_current_benchmark_packages() -> None:
+    names = [adapter.name for adapter in adapters.adapters()]
+
+    assert names == ["refkit", "polars-refkit", "citeproc-py", "bibtexparser-2.x"]
 
 
 def test_adapters_prepare_supported_and_unsupported_cases(tmp_path: Path) -> None:
     workload = fixtures.materialize_workload("tiny", tmp_path)
     refkit = adapters.RefkitAdapter()
     polars_refkit = adapters.PolarsRefkitAdapter()
-    bibtexparser = adapters.BibtexparserAdapter()
+    bibtexparser_v2 = adapters.BibtexparserV2Adapter()
 
     prepared = refkit.prepare("bibtex_parse", workload, tmp_path)
-    outcome = prepared.operation()
-    prepared.check(outcome)
+    outcome = run_prepared(prepared)
     assert outcome.count == 3
 
     prepared = polars_refkit.prepare("field_projection", workload, tmp_path)
-    outcome = prepared.operation()
-    prepared.check(outcome)
+    outcome = run_prepared(prepared)
+    assert outcome.count == 3
+
+    prepared = polars_refkit.prepare("citation_render", workload, tmp_path)
+    outcome = run_prepared(prepared)
+    assert outcome.count == 1
+
+    prepared = polars_refkit.prepare("bibliography_render", workload, tmp_path)
+    outcome = run_prepared(prepared)
+    assert outcome.count == 3
+
+    prepared = polars_refkit.prepare("repeated_render", workload, tmp_path)
+    outcome = run_prepared(prepared)
     assert outcome.count == 3
 
     with pytest.raises(adapters.UnsupportedOperation, match="does not render"):
-        bibtexparser.prepare("citation_render", workload, tmp_path)
+        bibtexparser_v2.prepare("citation_render", workload, tmp_path)
 
     with pytest.raises(adapters.UnsupportedOperation, match="does not support"):
         refkit.prepare("unknown_case", workload, tmp_path)
 
 
-def test_polars_json_rows_normalize_projection_fields() -> None:
-    rows = adapters._polars_json_rows(
-        [
-            None,
-            json.dumps(
-                [
-                    {
-                        "key": "direct",
-                        "serial-number": {"doi": "10.5555/direct"},
-                        "volume": "9",
-                        "parent": {"volume": "ignored"},
-                    }
-                ]
-            ),
-            json.dumps(
-                [
-                    {
-                        "key": "nested",
-                        "serial-number": {"doi": "10.5555/nested"},
-                        "parent": [{"title": "Series"}, {"volume": "12"}],
-                    },
-                    {
-                        "key": "missing",
-                        "serial-number": "plain",
-                    },
-                ]
-            ),
-        ]
-    )
-
-    assert rows == [
-        {
-            "key": "direct",
-            "serial-number": {"doi": "10.5555/direct"},
-            "doi": "10.5555/direct",
-            "volume": "9",
-            "parent": {"volume": "ignored"},
-        },
-        {
-            "key": "nested",
-            "serial-number": {"doi": "10.5555/nested"},
-            "doi": "10.5555/nested",
-            "parent": [{"title": "Series"}, {"volume": "12"}],
-            "volume": "12",
-        },
-        {
-            "key": "missing",
-            "serial-number": "plain",
-        },
-    ]
-
-
 def test_explicit_unsupported_methods_report_reasons(tmp_path: Path) -> None:
     workload = fixtures.materialize_workload("tiny", tmp_path)
     cases_by_adapter = {
-        adapters.BibtexparserAdapter(): [
+        adapters.BibtexparserV2Adapter(): [
             "citation_render",
             "bibliography_render",
             "repeated_render",
@@ -353,8 +334,6 @@ def test_explicit_unsupported_methods_report_reasons(tmp_path: Path) -> None:
             "missing_reference",
         ],
         adapters.PolarsRefkitAdapter(): [
-            "citation_render",
-            "bibliography_render",
             "raw_bibtex_parse",
             "raw_bibtex_write",
             "style_load",
@@ -367,6 +346,51 @@ def test_explicit_unsupported_methods_report_reasons(tmp_path: Path) -> None:
                 adapter.prepare(case_name, workload, tmp_path)
 
 
+def test_bibtexparser_v2_adapter_requires_requested_beta(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    adapter = bibtexparser_v2_adapter.BibtexparserV2Adapter()
+
+    monkeypatch.setattr(bibtexparser_v2_adapter, "package_version", lambda name: "2.0.0b8")
+
+    with pytest.raises(RuntimeError, match="bibtexparser==2.0.0b9"):
+        adapter.prepare("bibtex_parse", workload, tmp_path)
+
+
+def test_bibtexparser_v2_field_helpers_cover_existing_and_missing_fields() -> None:
+    from bibtexparser.model import Entry, Field
+
+    entry = Entry("article", "item0001", [Field("title", "Old Title")])
+
+    assert adapters._bibtexparser_v2_field_value(entry, "doi") is None
+    adapters._bibtexparser_v2_set_field(entry, "title", "New Title")
+    adapters._bibtexparser_v2_set_field(entry, "doi", "10.5555/example")
+
+    assert adapters._bibtexparser_v2_field_value(entry, "title") == "New Title"
+    assert adapters._bibtexparser_v2_field_value(entry, "doi") == "10.5555/example"
+    assert adapters._bibtexparser_block_key("@broken{missing,\n") == "missing"
+    assert adapters._bibtexparser_block_key("plain text") is None
+
+
+def test_bibtexparser_v2_recovery_check_rejects_extra_failed_blocks() -> None:
+    class Failed:
+        def __init__(self, raw: str) -> None:
+            self.raw = raw
+
+    class Database:
+        failed_blocks = [
+            Failed("@broken{missing,\n"),
+            Failed("@broken{extra,\n"),
+        ]
+
+    check = adapters._bibtexparser_v2_recovery_matches(["Failed:missing"])
+
+    with pytest.raises(AssertionError, match="failed block signatures"):
+        check(adapters.OperationOutcome(Database(), 3))
+
+
 def test_check_helpers_reject_bad_outcomes(tmp_path: Path) -> None:
     tiny_records = fixtures.records_for_size("tiny")
 
@@ -376,7 +400,8 @@ def test_check_helpers_reject_bad_outcomes(tmp_path: Path) -> None:
     with pytest.raises(AssertionError, match="at least 2"):
         adapters._count_at_least(2)(adapters.OperationOutcome("", 1))
     adapters._recovery_parse_result(2)(adapters.OperationOutcome("", 2))
-    adapters._recovery_parse_result(2)(adapters.OperationOutcome("", 0, "error=Parser: bad"))
+    with pytest.raises(AssertionError, match="recovered entries"):
+        adapters._recovery_parse_result(2)(adapters.OperationOutcome("", 0, "error=Parser: bad"))
     with pytest.raises(AssertionError, match="recovered entries"):
         adapters._recovery_parse_result(2)(adapters.OperationOutcome("", 1))
     with pytest.raises(AssertionError, match="expected keys"):
@@ -505,6 +530,7 @@ def test_check_helpers_reject_bad_outcomes(tmp_path: Path) -> None:
                 1,
             )
         )
+    assert adapters._error_detail(ValueError("bad")).startswith("error=ValueError")
     with pytest.raises(AssertionError, match="expected 1 entries"):
         adapters._entries_match(fixtures.records_for_size("tiny")[:1])(
             adapters.OperationOutcome([], 0)
@@ -565,13 +591,25 @@ def test_each_comparable_workflow_has_correctness_check(tmp_path: Path) -> None:
         ],
         adapters.PolarsRefkitAdapter(): [
             "bibtex_parse",
+            "citation_render",
+            "bibliography_render",
+            "repeated_render",
             "bulk_materialization",
             "library_keys",
             "entry_lookup",
             "field_projection",
+            "lazy_bibtex_parse",
+            "lazy_citation_render",
+            "lazy_bibliography_render",
+            "lazy_repeated_render",
+            "lazy_bulk_materialization",
+            "lazy_library_keys",
+            "lazy_entry_lookup",
+            "lazy_field_projection",
         ],
-        adapters.BibtexparserAdapter(): [
+        adapters.BibtexparserV2Adapter(): [
             "bibtex_parse",
+            "bibtex_recovery_parse",
             "raw_bibtex_parse",
             "raw_bibtex_write",
             "raw_bibtex_roundtrip",
@@ -585,8 +623,7 @@ def test_each_comparable_workflow_has_correctness_check(tmp_path: Path) -> None:
     for adapter, case_names in cases_by_adapter.items():
         for case_name in case_names:
             prepared = adapter.prepare(case_name, workload, tmp_path)
-            outcome = prepared.operation()
-            prepared.check(outcome)
+            outcome = run_prepared(prepared)
             assert outcome.count >= 1
 
 
@@ -616,28 +653,45 @@ def test_benchmark_render_metadata_describes_citation_requests(tmp_path: Path) -
         )
 
 
-def test_recovery_parse_errors_are_recorded_in_row_detail(tmp_path: Path) -> None:
+def test_recovery_parse_non_recovering_adapters_are_unsupported(tmp_path: Path) -> None:
     metadata = runner.machine_metadata("release")
     workload = fixtures.materialize_workload("tiny", tmp_path)
 
-    for adapter in (adapters.CiteprocPyAdapter(), adapters.BibtexparserAdapter()):
-        rows = runner.run_adapter_case(
-            adapter=adapter,
-            case=runner.CASES["bibtex_recovery_parse"],
-            workload=workload,
-            directory=tmp_path,
-            rounds=2,
-            warmups=0,
-            metadata=metadata,
-        )
+    rows = runner.run_adapter_case(
+        adapter=adapters.CiteprocPyAdapter(),
+        case=runner.CASES["bibtex_recovery_parse"],
+        workload=workload,
+        directory=tmp_path,
+        rounds=2,
+        warmups=0,
+        metadata=metadata,
+    )
 
-        assert len(rows) == 2
-        for row in rows:
-            assert row["status"] == "ok"
-            assert row["phase"] == "parse-recovery"
-            assert row["source_format"] == "dirty_bibtex"
-            assert row["operation_count"] == 0
-            assert "error=" in str(row["detail"])
+    assert len(rows) == 1
+    assert rows[0]["status"] == "unsupported"
+    assert rows[0]["phase"] == "unsupported"
+    assert rows[0]["source_format"] == "unsupported"
+    assert "dirty BibTeX" in str(rows[0]["detail"])
+
+    rows = runner.run_adapter_case(
+        adapter=adapters.BibtexparserV2Adapter(),
+        case=runner.CASES["bibtex_recovery_parse"],
+        workload=workload,
+        directory=tmp_path,
+        rounds=2,
+        warmups=0,
+        metadata=metadata,
+    )
+
+    assert len(rows) == 2
+    for row in rows:
+        assert row["status"] == "ok"
+        assert row["phase"] == "parse-recovery"
+        assert row["source_format"] == "dirty_bibtex"
+        assert row["operation_count"] == len(workload.records)
+        assert "failed_blocks=2" in str(row["detail"])
+        assert "ParsingFailedBlock:missing" in str(row["detail"])
+        assert "DuplicateBlockKeyBlock:item0001" in str(row["detail"])
 
 
 def test_recovery_parse_success_paths_cover_parser_return_values(tmp_path: Path) -> None:
@@ -650,11 +704,13 @@ def test_recovery_parse_success_paths_cover_parser_return_values(tmp_path: Path)
         dirty_bibtex_path=recovery_path,
     )
 
-    for adapter in (adapters.CiteprocPyAdapter(), adapters.BibtexparserAdapter()):
+    for adapter in (
+        adapters.RefkitAdapter(),
+        adapters.BibtexparserV2Adapter(),
+    ):
         prepared = adapter.prepare("bibtex_recovery_parse", recoverable, tmp_path)
-        outcome = prepared.operation()
+        outcome = run_prepared(prepared)
 
-        prepared.check(outcome)
         assert outcome.count == len(workload.records)
 
 
@@ -691,33 +747,101 @@ def test_polars_parse_includes_file_and_dataframe_setup(tmp_path: Path) -> None:
     assert outcome.count == 0
 
 
-def test_polars_entry_lookup_prepares_full_input(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
+def test_polars_entry_lookup_uses_full_document_projection(tmp_path: Path) -> None:
     workload = fixtures.materialize_workload("medium", tmp_path)
-    lengths: list[int] = []
-    original = adapters._polars_entry_frame
-
-    def tracking_frame(records: tuple[object, ...]) -> object:
-        lengths.append(len(records))
-        return original(records)
-
-    monkeypatch.setattr(adapters, "_polars_entry_frame", tracking_frame)
-
     prepared = adapters.PolarsRefkitAdapter().prepare("entry_lookup", workload, tmp_path)
     outcome = prepared.operation()
 
     prepared.check(outcome)
-    assert lengths == [len(workload.records)]
+    assert prepared.metadata["source_format"] == "bibtex"
     assert outcome.count == 16
+
+
+def test_polars_benchmark_cases_record_execution_mode(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    adapter = adapters.PolarsRefkitAdapter()
+
+    eager = adapter.prepare("field_projection", workload, tmp_path)
+    lazy = adapter.prepare("lazy_field_projection", workload, tmp_path)
+
+    assert eager.metadata["execution_mode"] == "eager"
+    assert lazy.metadata["execution_mode"] == "lazy"
+    assert eager.metadata["setup_included"] is True
+    assert lazy.metadata["setup_included"] is True
+    run_prepared(lazy)
+
+
+def test_polars_inspection_cases_execute_projection_during_operation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    adapter = adapters.PolarsRefkitAdapter()
+    calls: list[tuple[str, ...]] = []
+    original = polars_refkit_adapter._polars_entries_frame
+
+    def wrapped_entries_frame(
+        frame: object,
+        column: str,
+        *,
+        fields: tuple[str, ...],
+    ) -> object:
+        calls.append(fields)
+        return original(frame, column, fields=fields)
+
+    monkeypatch.setattr(
+        polars_refkit_adapter,
+        "_polars_entries_frame",
+        wrapped_entries_frame,
+    )
+    prepared = [
+        adapter.prepare("bulk_materialization", workload, tmp_path),
+        adapter.prepare("entry_lookup", workload, tmp_path),
+        adapter.prepare("field_projection", workload, tmp_path),
+    ]
+
+    assert calls == []
+    for item in prepared:
+        outcome = item.operation()
+        item.check(outcome)
+
+    assert calls == [
+        ("key", "title"),
+        ("key", "title"),
+        ("key", "title", "doi", "volume"),
+    ]
+
+
+def test_polars_keys_case_executes_plugin_expression_during_operation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import polars_refkit as prk
+
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    prepared = adapters.PolarsRefkitAdapter().prepare("library_keys", workload, tmp_path)
+    calls = 0
+    original = prk.keys
+
+    def wrapped_keys(source: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(source)
+
+    monkeypatch.setattr(prk, "keys", wrapped_keys)
+
+    assert calls == 0
+    outcome = prepared.operation()
+    prepared.check(outcome)
+
+    assert calls == 1
 
 
 def test_run_adapter_case_emits_unsupported_rows(tmp_path: Path) -> None:
     metadata = runner.machine_metadata("release")
     workload = fixtures.materialize_workload("tiny", tmp_path)
     rows = runner.run_adapter_case(
-        adapter=adapters.BibtexparserAdapter(),
+        adapter=adapters.BibtexparserV2Adapter(),
         case=runner.CASES["citation_render"],
         workload=workload,
         directory=tmp_path,
@@ -833,6 +957,41 @@ def test_run_adapter_case_emits_failed_warmup_rows(
     assert rows[0]["source_format"] == "unknown"
 
 
+def test_run_adapter_case_reports_cleanup_failure(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class CleanupFailingAdapter(adapters.PackageAdapter):
+        name = "cleanup-failing"
+        distribution = "cleanup-failing"
+
+        def prepare_bibtex_parse(
+            self,
+            workload: object,
+            directory: Path,
+        ) -> adapters.PreparedOperation:
+            return adapters.PreparedOperation(
+                phase="parse",
+                operation=lambda: adapters.OperationOutcome("ok", 1),
+                check=adapters._count_is(1),
+                cleanup=lambda: (_ for _ in ()).throw(RuntimeError("cleanup failed")),
+            )
+
+    metadata = runner.machine_metadata("release")
+    rows = runner.run_adapter_case(
+        adapter=CleanupFailingAdapter(),
+        case=runner.CASES["bibtex_parse"],
+        workload=fixtures.materialize_workload("tiny", tmp_path),
+        directory=tmp_path,
+        rounds=1,
+        warmups=0,
+        metadata=metadata,
+    )
+
+    assert rows[0]["status"] == "ok"
+    assert "cleanup failed" in capsys.readouterr().err
+
+
 def test_run_suite_writes_ok_and_unsupported_rows() -> None:
     result = runner.run_suite(
         case_names=["bibtex_parse", "citation_render"],
@@ -857,6 +1016,9 @@ def test_run_suite_writes_ok_and_unsupported_rows() -> None:
         assert isinstance(row["setup_seconds"], float)
         assert row["setup_seconds"] >= 0.0
         assert row["adapter_version"] == row["package_version"]
+        assert row["execution_mode"] in {"", "eager", "lazy"}
+        if row["package"] == "polars-refkit" and row["status"] == "ok":
+            assert row["execution_mode"] in {"eager", "lazy"}
 
 
 def test_write_json_and_csv_outputs(tmp_path: Path) -> None:

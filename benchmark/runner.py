@@ -5,6 +5,7 @@ import csv
 import json
 import platform
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -13,7 +14,11 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, TypedDict
 
-from benchmark.adapters import PackageAdapter, UnsupportedOperation, adapters
+from benchmark.adapters import (
+    PackageAdapter,
+    UnsupportedOperation,
+    adapters,
+)
 from benchmark.fixtures import SIZES, materialize_workload
 
 NATIVE_ARTIFACT_NAMES = (
@@ -39,6 +44,7 @@ RESULT_FIELDS = [
     "input_sha256",
     "source_format",
     "citation_count",
+    "execution_mode",
     "setup_included",
     "setup_seconds",
     "operation_count",
@@ -104,7 +110,11 @@ CASES: dict[str, CaseSpec] = {
         "raw",
         "Parse raw BibTeX, edit one title, and write BibTeX text.",
     ),
-    "style_load": CaseSpec("style_load", "setup", "Load the APA citation style."),
+    "style_load": CaseSpec(
+        "style_load",
+        "setup",
+        "Resolve the APA citation style after benchmark warmup. Public process caches count.",
+    ),
     "processor_setup": CaseSpec(
         "processor_setup",
         "setup",
@@ -138,12 +148,12 @@ CASES: dict[str, CaseSpec] = {
     "one_off_cite": CaseSpec(
         "one_off_cite",
         "one-off",
-        "Read a BibTeX file, load a style, and render one APA citation.",
+        "Run the one-off citation helper after benchmark warmup.",
     ),
     "one_off_bibliography": CaseSpec(
         "one_off_bibliography",
         "one-off",
-        "Read a BibTeX file, load a style, and render an APA bibliography.",
+        "Run the one-off bibliography helper after benchmark warmup.",
     ),
     "missing_reference": CaseSpec(
         "missing_reference", "error", "Resolve one missing citation key."
@@ -161,6 +171,46 @@ CASES: dict[str, CaseSpec] = {
         "field_projection",
         "inspect",
         "Project common scalar fields from all entries after setup.",
+    ),
+    "lazy_bibtex_parse": CaseSpec(
+        "lazy_bibtex_parse",
+        "polars-lazy",
+        "Parse BibTeX through a Polars lazy expression and collect.",
+    ),
+    "lazy_citation_render": CaseSpec(
+        "lazy_citation_render",
+        "polars-lazy",
+        "Render one citation through a Polars lazy expression and collect.",
+    ),
+    "lazy_bibliography_render": CaseSpec(
+        "lazy_bibliography_render",
+        "polars-lazy",
+        "Render a bibliography through a Polars lazy expression and collect.",
+    ),
+    "lazy_repeated_render": CaseSpec(
+        "lazy_repeated_render",
+        "polars-lazy",
+        "Render ordered citation batches through a Polars lazy expression and collect.",
+    ),
+    "lazy_bulk_materialization": CaseSpec(
+        "lazy_bulk_materialization",
+        "polars-lazy",
+        "Materialize entries through a Polars lazy expression and collect.",
+    ),
+    "lazy_library_keys": CaseSpec(
+        "lazy_library_keys",
+        "polars-lazy",
+        "Enumerate citation keys through a Polars lazy expression and collect.",
+    ),
+    "lazy_entry_lookup": CaseSpec(
+        "lazy_entry_lookup",
+        "polars-lazy",
+        "Project and filter entries through a Polars lazy expression and collect.",
+    ),
+    "lazy_field_projection": CaseSpec(
+        "lazy_field_projection",
+        "polars-lazy",
+        "Project common scalar fields through a Polars lazy expression and collect.",
     ),
 }
 
@@ -309,6 +359,7 @@ def run_adapter_case(
                 "input_bytes": 0,
                 "input_sha256": "",
                 "citation_count": 0,
+                "execution_mode": "",
                 "setup_included": False,
                 "setup_seconds": setup_seconds,
                 "operation_count": 0,
@@ -329,6 +380,7 @@ def run_adapter_case(
                 "input_bytes": 0,
                 "input_sha256": "",
                 "citation_count": 0,
+                "execution_mode": "",
                 "setup_included": True,
                 "setup_seconds": setup_seconds,
                 "operation_count": 0,
@@ -341,57 +393,64 @@ def run_adapter_case(
     setup_seconds = perf_counter() - setup_start
     operation_fields = prepared_row_fields(prepared, workload, setup_seconds)
 
-    for _ in range(warmups):
-        try:
-            outcome = prepared.operation()
-            prepared.check(outcome)
-        except Exception as exc:
-            return [
-                {
-                    **base,
-                    **operation_fields,
-                    "phase": prepared.phase,
-                    "round": 0,
-                    "seconds": 0.0,
-                    "status": "failed",
-                    "detail": repr(exc),
-                }
-            ]
+    try:
+        for _ in range(warmups):
+            try:
+                outcome = prepared.operation()
+                prepared.check(outcome)
+            except Exception as exc:
+                return [
+                    {
+                        **base,
+                        **operation_fields,
+                        "phase": prepared.phase,
+                        "round": 0,
+                        "seconds": 0.0,
+                        "status": "failed",
+                        "detail": repr(exc),
+                    }
+                ]
 
-    rows: list[Row] = []
-    for round_index in range(1, rounds + 1):
-        start = perf_counter()
+        rows: list[Row] = []
+        for round_index in range(1, rounds + 1):
+            start = perf_counter()
+            try:
+                outcome = prepared.operation()
+                elapsed = perf_counter() - start
+                seconds = outcome.seconds if outcome.seconds is not None else elapsed
+                prepared.check(outcome)
+                rows.append(
+                    {
+                        **base,
+                        **operation_fields,
+                        "phase": prepared.phase,
+                        "round": round_index,
+                        "seconds": seconds,
+                        "status": "ok",
+                        "detail": outcome.detail,
+                        "operation_count": outcome.count,
+                    }
+                )
+            except Exception as exc:
+                seconds = perf_counter() - start
+                rows.append(
+                    {
+                        **base,
+                        **operation_fields,
+                        "phase": prepared.phase,
+                        "round": round_index,
+                        "seconds": seconds,
+                        "status": "failed",
+                        "detail": repr(exc),
+                    }
+                )
+                break
+        return rows
+    finally:
         try:
-            outcome = prepared.operation()
-            seconds = perf_counter() - start
-            prepared.check(outcome)
-            rows.append(
-                {
-                    **base,
-                    **operation_fields,
-                    "phase": prepared.phase,
-                    "round": round_index,
-                    "seconds": seconds,
-                    "status": "ok",
-                    "detail": outcome.detail,
-                    "operation_count": outcome.count,
-                }
-            )
+            prepared.cleanup()
         except Exception as exc:
-            seconds = perf_counter() - start
-            rows.append(
-                {
-                    **base,
-                    **operation_fields,
-                    "phase": prepared.phase,
-                    "round": round_index,
-                    "seconds": seconds,
-                    "status": "failed",
-                    "detail": repr(exc),
-                }
-            )
-            break
-    return rows
+            print(f"benchmark cleanup failed for {adapter.name}: {exc!r}", file=sys.stderr)
 
 
 def base_row(
@@ -402,7 +461,7 @@ def base_row(
     rounds: int,
     warmups: int,
 ) -> Row:
-    adapter_version = package_version(adapter.distribution)
+    adapter_version = adapter.version() or package_version(adapter.distribution)
     return {
         "case": case.name,
         "group": case.group,
@@ -436,6 +495,7 @@ def prepared_row_fields(
         "input_sha256": workload.source_sha256(source_format),
         "source_format": source_format,
         "citation_count": int(prepared.metadata.get("citation_count", 0)),
+        "execution_mode": str(prepared.metadata.get("execution_mode", "")),
         "setup_included": bool(prepared.metadata.get("setup_included", False)),
         "setup_seconds": setup_seconds,
         "operation_count": 0,
@@ -455,6 +515,7 @@ def machine_metadata(build_mode: str = "auto") -> Metadata:
             "polars-refkit": package_version("polars-refkit"),
             "citeproc-py": package_version("citeproc-py"),
             "bibtexparser": package_version("bibtexparser"),
+            "bibtexparser-v2": package_version("bibtexparser"),
             "citeproc-py-styles": package_version("citeproc-py-styles"),
         },
     }

@@ -8,10 +8,11 @@ use hayagriva::citationberg::{
 };
 use hayagriva::{
     BibliographyDriver, BibliographyItem, BibliographyRequest, BufWriteFormat, CitationItem,
-    CitationRequest, ElemChild, ElemChildren, Library as HayLibrary, archive,
+    CitationRequest, ElemChild, ElemChildren, Library as HayLibrary, archive, standalone_citation,
 };
 
 use crate::quoted;
+use crate::style_analysis::can_fast_render_single_citations;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedOutput {
@@ -63,11 +64,15 @@ pub fn render_citation(
     style: &IndependentStyle,
     locale: Option<&str>,
 ) -> Result<RenderedOutput, String> {
+    let locales = bundled_locales();
+    let locale = locale.map(|code| LocaleCode(code.to_string()));
+    if can_fast_render_single_citations(style) {
+        return render_independent_citation_inner(library, key, style, locale, locales);
+    }
+
     let entry = library
         .get(key)
         .ok_or_else(|| format!("missing reference {}", quoted(key)))?;
-    let locales = bundled_locales();
-    let locale = locale.map(|code| LocaleCode(code.to_string()));
     let mut driver = BibliographyDriver::new();
 
     driver.citation(CitationRequest::new(
@@ -86,6 +91,113 @@ pub fn render_citation(
     Ok(RenderedOutput {
         text: elem_children_to_string(&citation.citation, BufWriteFormat::Plain)?,
         html: elem_children_to_html(&citation.citation)?,
+    })
+}
+
+pub fn render_citation_sequence(
+    library: &HayLibrary,
+    keys: &[&str],
+    style: &IndependentStyle,
+    locale: Option<&str>,
+) -> Result<Vec<RenderedOutput>, String> {
+    let locales = bundled_locales();
+    let locale = locale.map(|code| LocaleCode(code.to_string()));
+    if can_fast_render_single_citations(style) {
+        if let Some(rendered) =
+            render_independent_citation_sequence(library, keys, style, locale.clone(), locales)?
+        {
+            return Ok(rendered);
+        }
+    }
+
+    let mut driver = BibliographyDriver::new();
+
+    for key in keys {
+        let entry = library
+            .get(key)
+            .ok_or_else(|| format!("missing reference {}", quoted(key)))?;
+        driver.citation(CitationRequest::new(
+            vec![CitationItem::with_entry(entry)],
+            style,
+            locale.clone(),
+            locales,
+            None,
+        ));
+    }
+
+    let rendered = driver.finish(BibliographyRequest::new(style, locale, locales));
+    if rendered.citations.len() != keys.len() {
+        return Err("citation renderer returned an unexpected citation count".to_string());
+    }
+
+    rendered
+        .citations
+        .iter()
+        .map(|citation| {
+            Ok(RenderedOutput {
+                text: elem_children_to_string(&citation.citation, BufWriteFormat::Plain)?,
+                html: elem_children_to_html(&citation.citation)?,
+            })
+        })
+        .collect()
+}
+
+fn render_independent_citation_sequence(
+    library: &HayLibrary,
+    keys: &[&str],
+    style: &IndependentStyle,
+    locale: Option<LocaleCode>,
+    locales: &[CslLocale],
+) -> Result<Option<Vec<RenderedOutput>>, String> {
+    let mut key_by_text: HashMap<String, &str> = HashMap::new();
+    let mut rendered = Vec::with_capacity(keys.len());
+
+    for key in keys {
+        let output =
+            render_independent_citation_inner(library, key, style, locale.clone(), locales)?;
+        if let Some(existing_key) = key_by_text.get(&output.text) {
+            if existing_key != key {
+                return Ok(None);
+            }
+        }
+        key_by_text.insert(output.text.clone(), key);
+        rendered.push(output);
+    }
+
+    Ok(Some(rendered))
+}
+
+pub fn render_independent_citation(
+    library: &HayLibrary,
+    key: &str,
+    style: &IndependentStyle,
+    locale: Option<&str>,
+) -> Result<RenderedOutput, String> {
+    let locales = bundled_locales();
+    let locale = locale.map(|code| LocaleCode(code.to_string()));
+    render_independent_citation_inner(library, key, style, locale, locales)
+}
+
+fn render_independent_citation_inner(
+    library: &HayLibrary,
+    key: &str,
+    style: &IndependentStyle,
+    locale: Option<LocaleCode>,
+    locales: &[CslLocale],
+) -> Result<RenderedOutput, String> {
+    let entry = library
+        .get(key)
+        .ok_or_else(|| format!("missing reference {}", quoted(key)))?;
+    let children = standalone_citation(CitationRequest::new(
+        vec![CitationItem::with_entry(entry)],
+        style,
+        locale,
+        locales,
+        None,
+    ));
+    Ok(RenderedOutput {
+        text: elem_children_to_string(&children, BufWriteFormat::Plain)?,
+        html: elem_children_to_html(&children)?,
     })
 }
 
@@ -390,6 +502,57 @@ mod tests {
 
         assert!(rendered.text.contains("Doe"));
         assert!(rendered.html.contains("Doe"));
+    }
+
+    #[test]
+    fn renders_citation_sequence_in_key_order() {
+        let parsed = crate::parse_library_source(
+            "@article{doe2024, author = {Doe, Jane}, title = {Core}, year = {2024}}
+             @article{roe2023, author = {Roe, Richard}, title = {Edges}, year = {2023}}",
+            "bibtex",
+            false,
+            false,
+        )
+        .unwrap();
+        let style = load_independent_style("apa").unwrap();
+
+        let rendered = render_citation_sequence(
+            &parsed.inner,
+            &["doe2024", "roe2023"],
+            &style,
+            Some("en-US"),
+        )
+        .unwrap();
+
+        assert_eq!(rendered.len(), 2);
+        assert!(rendered[0].text.contains("Doe"));
+        assert!(rendered[1].text.contains("Roe"));
+        assert!(rendered[0].html.contains("Doe"));
+        assert!(rendered[1].html.contains("Roe"));
+    }
+
+    #[test]
+    fn citation_sequence_falls_back_for_ambiguous_fast_texts() {
+        let parsed = crate::parse_library_source(
+            "@article{doe2024a, author = {Doe, Jane}, title = {Alpha}, year = {2024}}
+             @article{doe2024b, author = {Doe, Jane}, title = {Beta}, year = {2024}}",
+            "bibtex",
+            false,
+            false,
+        )
+        .unwrap();
+        let style = load_independent_style("apa").unwrap();
+
+        let rendered = render_citation_sequence(
+            &parsed.inner,
+            &["doe2024a", "doe2024b"],
+            &style,
+            Some("en-US"),
+        )
+        .unwrap();
+
+        assert_eq!(rendered.len(), 2);
+        assert_ne!(rendered[0].text, rendered[1].text);
     }
 
     fn formatted(text: &str) -> hayagriva::Formatted {

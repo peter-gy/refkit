@@ -4,13 +4,13 @@ use hayagriva::citationberg::{
     TextTarget,
 };
 
-pub(crate) fn citation_only_style(style: &IndependentStyle) -> IndependentStyle {
+pub fn citation_only_style(style: &IndependentStyle) -> IndependentStyle {
     let mut style = style.clone();
     style.bibliography = None;
     style
 }
 
-pub(crate) fn full_history_citation_style(style: &IndependentStyle) -> Option<IndependentStyle> {
+pub fn full_history_citation_style(style: &IndependentStyle) -> Option<IndependentStyle> {
     if !citation_depends_on_citation_number(style) || bibliography_has_sort(style) {
         return None;
     }
@@ -18,13 +18,13 @@ pub(crate) fn full_history_citation_style(style: &IndependentStyle) -> Option<In
     Some(citation_only_style(style))
 }
 
-pub(crate) fn can_fast_render_single_citations(style: &IndependentStyle) -> bool {
+pub fn can_fast_render_single_citations(style: &IndependentStyle) -> bool {
     !citation_depends_on_citation_number(style)
         && !citation_depends_on_position(style)
         && !citation_depends_on_subsequent_names(style)
 }
 
-pub(crate) fn citation_depends_on_subsequent_names(style: &IndependentStyle) -> bool {
+pub fn citation_depends_on_subsequent_names(style: &IndependentStyle) -> bool {
     elements_depend_on_subsequent_names(
         &style.citation.layout.elements,
         &style.citation.name_options,

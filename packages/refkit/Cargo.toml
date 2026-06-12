@@ -10,7 +10,6 @@ repository.workspace = true
 include = [
     "/Cargo.toml",
     "/LICENSE-APACHE",
-    "/LICENSE-MIT",
     "/pyproject.toml",
     "/README.md",
     "/src",

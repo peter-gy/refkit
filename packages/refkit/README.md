@@ -133,13 +133,16 @@ df = pl.DataFrame(
     {
         "bibtex": ["@article{doe2024, title={Fast Citations}, year={2024}}"],
         "key": ["doe2024"],
+        "keys": [["doe2024"]],
     }
 )
 
 out = df.select(
-    citation=prk.cite_bibtex("bibtex", "key"),
-    count=prk.bibtex_entry_count("bibtex"),
-    keys=prk.bibtex_keys("bibtex"),
+    citation=prk.cite("bibtex", "key"),
+    citations=prk.cite_sequence("bibtex", "keys"),
+    count=prk.entry_count("bibtex"),
+    keys=prk.keys("bibtex"),
+    entries=prk.entries("bibtex"),
 )
 ```
 
@@ -163,7 +166,4 @@ make package-check
 
 ## License
 
-`refkit` is licensed under either of:
-
-- Apache License, Version 2.0, available in [LICENSE-APACHE](LICENSE-APACHE)
-- MIT license, available in [LICENSE-MIT](LICENSE-MIT)
+`refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE-APACHE](LICENSE-APACHE).
