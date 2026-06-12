@@ -34,7 +34,6 @@ __all__ = [
     "bibtex_is_valid",
     "bibtex_keys",
     "bibtex_parse_report",
-    "bibtex_to_csl_json",
     "bibtex_to_hayagriva_json",
     "cite",
     "cite_bibtex",
@@ -316,7 +315,6 @@ def bibliography_html(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr:
     """Render an HTML bibliography from each BibTeX row."""
 
@@ -326,7 +324,6 @@ def bibliography_html(
         style=style,
         locale=locale,
         strict=strict,
-        all=all,
         output_name="bibliography_html",
     )
 
@@ -337,7 +334,6 @@ def bibliography_bibtex(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr:
     """Render an HTML bibliography from each BibTeX row."""
 
@@ -347,7 +343,6 @@ def bibliography_bibtex(
         style=style,
         locale=locale,
         strict=strict,
-        all=all,
         output_name="bibliography_bibtex",
     )
 
@@ -358,7 +353,6 @@ def bibliography_text(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr:
     """Render a plain-text bibliography from each BibTeX row."""
 
@@ -368,7 +362,6 @@ def bibliography_text(
         style=style,
         locale=locale,
         strict=strict,
-        all=all,
         output_name="bibliography_text",
     )
 
@@ -379,7 +372,6 @@ def bibliography_bibtex_text(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr:
     """Render a plain-text bibliography from each BibTeX row."""
 
@@ -389,7 +381,6 @@ def bibliography_bibtex_text(
         style=style,
         locale=locale,
         strict=strict,
-        all=all,
         output_name="bibliography_bibtex_text",
     )
 
@@ -400,7 +391,6 @@ def bibliography_rendered(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr:
     """Render a bibliography as a `{text, html}` struct."""
 
@@ -410,7 +400,6 @@ def bibliography_rendered(
         style=style,
         locale=locale,
         strict=strict,
-        all=all,
         output_name="bibliography_rendered",
     )
 
@@ -421,7 +410,6 @@ def bibliography_bibtex_rendered(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr:
     """Render a bibliography as a `{text, html}` struct."""
 
@@ -431,7 +419,6 @@ def bibliography_bibtex_rendered(
         style=style,
         locale=locale,
         strict=strict,
-        all=all,
         output_name="bibliography_bibtex_rendered",
     )
 
@@ -545,17 +532,6 @@ def bibtex_parse_report(bibtex: Any, *, strict: bool = False) -> pl.Expr:
         bibtex,
         strict=strict,
         output_name="bibtex_parse_report",
-    )
-
-
-def bibtex_to_csl_json(bibtex: Any, *, strict: bool = False) -> pl.Expr:
-    """Return normalized entry JSON for each BibTeX row."""
-
-    return _parse_expr(
-        "bibtex_to_csl_json",
-        bibtex,
-        strict=strict,
-        output_name="bibtex_to_csl_json",
     )
 
 
@@ -714,7 +690,6 @@ class RefkitExprNamespace:
         style: str = "apa",
         locale: str = "en-US",
         strict: bool = False,
-        all: bool = True,
     ) -> pl.Expr:
         """Render an HTML bibliography from each BibTeX row."""
 
@@ -724,7 +699,6 @@ class RefkitExprNamespace:
             style=style,
             locale=locale,
             strict=strict,
-            all=all,
             output_name="bibliography",
         )
 
@@ -734,7 +708,6 @@ class RefkitExprNamespace:
         style: str = "apa",
         locale: str = "en-US",
         strict: bool = False,
-        all: bool = True,
     ) -> pl.Expr:
         """Render an HTML bibliography from each BibTeX row."""
 
@@ -744,7 +717,6 @@ class RefkitExprNamespace:
             style=style,
             locale=locale,
             strict=strict,
-            all=all,
             output_name="bibliography_html",
         )
 
@@ -754,7 +726,6 @@ class RefkitExprNamespace:
         style: str = "apa",
         locale: str = "en-US",
         strict: bool = False,
-        all: bool = True,
     ) -> pl.Expr:
         """Render a plain-text bibliography from each BibTeX row."""
 
@@ -764,7 +735,6 @@ class RefkitExprNamespace:
             style=style,
             locale=locale,
             strict=strict,
-            all=all,
             output_name="bibliography_text",
         )
 
@@ -774,7 +744,6 @@ class RefkitExprNamespace:
         style: str = "apa",
         locale: str = "en-US",
         strict: bool = False,
-        all: bool = True,
     ) -> pl.Expr:
         """Render a bibliography as a `{text, html}` struct."""
 
@@ -784,7 +753,6 @@ class RefkitExprNamespace:
             style=style,
             locale=locale,
             strict=strict,
-            all=all,
             output_name="bibliography_rendered",
         )
 
@@ -832,16 +800,6 @@ class RefkitExprNamespace:
         """Return parser diagnostics as a list column for each BibTeX row."""
 
         return _diagnostics_expr(self._expr, strict=strict, output_name="diagnostics")
-
-    def to_csl_json(self, *, strict: bool = False) -> pl.Expr:
-        """Return normalized entry JSON for each BibTeX row."""
-
-        return _parse_expr(
-            "bibtex_to_csl_json",
-            self._expr,
-            strict=strict,
-            output_name="to_csl_json",
-        )
 
     def entries_json(self, *, strict: bool = False) -> pl.Expr:
         """Return normalized Hayagriva entry JSON for each BibTeX row."""
@@ -907,13 +865,12 @@ def _bibliography_expr(
     style: str,
     locale: str,
     strict: bool,
-    all: bool,
     output_name: str,
 ) -> pl.Expr:
     return _register(
         function_name,
         [bibtex],
-        kwargs={"style": style, "locale": locale, "strict": strict, "all": all},
+        kwargs={"style": style, "locale": locale, "strict": strict, "all": True},
         output_name=output_name,
     )
 

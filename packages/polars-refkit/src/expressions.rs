@@ -4,12 +4,12 @@ use pyo3_polars::derive::polars_expr;
 use pyo3_polars::export::polars_arrow::array::IntoBoxedArray;
 use pyo3_polars::export::polars_arrow::bitmap::Bitmap;
 use refkit_core::{
-    IndependentStyle, ParsedLibrary, ProjectField, RenderedOutput,
-    can_fast_render_single_citations, library_to_normalized_json, load_independent_style,
-    parse_library_source, parse_project_field, project_records, render_bibliography,
-    render_citation, render_citation_sequence, render_independent_citation,
+    CoreLibrary, NormalizedEntry, NormalizedValue, PreparedStyle, ProjectField, RenderedOutput,
+    load_prepared_style, parse_bibtex_report_source, parse_project_field,
+    render_library_bibliography, render_library_citation, render_library_citation_sequence,
 };
 use serde::Deserialize;
+use serde_json::Value;
 
 #[derive(Debug, Deserialize)]
 struct ParseKwargs {
@@ -103,15 +103,14 @@ fn render_citation_field(
     let bibtex = inputs[0].str()?;
     let keys = inputs[1].str()?;
     let len = broadcast_len(bibtex.len(), keys.len(), "cite_bibtex")?;
-    let style = load_independent_style(&kwargs.style).map_err(compute_error)?;
-    let fast_citation = can_fast_render_single_citations(style.as_ref());
+    let style = load_style(&kwargs.style)?;
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
 
     let output = match parse_broadcast_library(bibtex, kwargs.strict) {
         Some(library) => (0..len)
             .map(|index| {
                 let key = broadcast_get(keys, index)?;
-                render_single_citation(&library, key, style.as_ref(), locale, fast_citation)
+                render_library_citation(&library, key, style.as_ref(), locale)
                     .ok()
                     .map(|rendered| rendered_field(rendered, field))
             })
@@ -120,8 +119,8 @@ fn render_citation_field(
             .map(|index| {
                 let source = broadcast_get(bibtex, index)?;
                 let key = broadcast_get(keys, index)?;
-                let library = parse_library_source(source, "bibtex", kwargs.strict, false).ok()?;
-                render_single_citation(&library, key, style.as_ref(), locale, fast_citation)
+                let library = parse_value_library_source(source, kwargs.strict).ok()?;
+                render_library_citation(&library, key, style.as_ref(), locale)
                     .ok()
                     .map(|rendered| rendered_field(rendered, field))
             })
@@ -138,7 +137,7 @@ fn render_citation_sequence_field(
     let bibtex = inputs[0].str()?;
     let key_lists = inputs[1].list()?;
     let len = broadcast_len(bibtex.len(), key_lists.len(), "cite_bibtex_sequence")?;
-    let style = load_independent_style(&kwargs.style).map_err(compute_error)?;
+    let style = load_style(&kwargs.style)?;
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
     let mut builder = ListStringChunkedBuilder::new("cite_bibtex_sequence".into(), len, len * 2);
 
@@ -162,7 +161,7 @@ fn render_citation_sequence_field(
                     builder.append_null();
                     continue;
                 };
-                match parse_library_source(source, "bibtex", kwargs.strict, false) {
+                match parse_value_library_source(source, kwargs.strict) {
                     Ok(library) => append_citation_sequence_field(
                         &mut builder,
                         &library,
@@ -202,15 +201,15 @@ fn render_bibliography_field(
     field: RenderedField,
 ) -> PolarsResult<Series> {
     let bibtex = inputs[0].str()?;
-    let style = load_independent_style(&kwargs.style).map_err(compute_error)?;
+    let style = load_style(&kwargs.style)?;
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
 
     let output = bibtex
         .iter()
         .map(|value| {
             let source = value?;
-            let library = parse_library_source(source, "bibtex", kwargs.strict, false).ok()?;
-            render_bibliography(&library.inner, &style, locale, kwargs.all)
+            let library = parse_value_library_source(source, kwargs.strict).ok()?;
+            render_library_bibliography(&library, style.as_ref(), locale, kwargs.all)
                 .ok()
                 .map(|rendered| rendered_field(rendered, field))
         })
@@ -225,9 +224,9 @@ fn bibtex_entry_count(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Se
         .iter()
         .map(|value| {
             value.and_then(|source| {
-                parse_library_source(source, "bibtex", kwargs.strict, false)
+                parse_value_library_source(source, kwargs.strict)
                     .ok()
-                    .and_then(|library| u32::try_from(library.inner.len()).ok())
+                    .and_then(|library| u32::try_from(library.len()).ok())
             })
         })
         .collect::<UInt32Chunked>();
@@ -245,10 +244,9 @@ fn bibtex_keys(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
             builder.append_null();
             continue;
         };
-        match parse_library_source(source, "bibtex", kwargs.strict, false) {
+        match parse_value_library_source(source, kwargs.strict) {
             Ok(library) => {
-                let keys = library.inner.keys().collect::<Vec<_>>();
-                builder.append_values_iter(keys.into_iter());
+                builder.append_values_iter(library.keys().iter().map(String::as_str));
             }
             Err(_) => builder.append_null(),
         }
@@ -268,13 +266,8 @@ fn bibtex_diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Se
             builder.append_null();
             continue;
         };
-        match parse_library_source(source, "bibtex", kwargs.strict, true) {
-            Ok(library) => {
-                let diagnostics = library.diagnostics.iter().map(String::as_str);
-                builder.append_values_iter(diagnostics);
-            }
-            Err(err) => builder.append_values_iter(std::iter::once(err.as_str())),
-        }
+        let report = parse_bibtex_report_source(source, kwargs.strict);
+        builder.append_values_iter(report.diagnostics.iter().map(String::as_str));
     }
 
     Ok(builder.finish().into_series())
@@ -297,20 +290,18 @@ fn bibtex_parse_report(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<S
             diagnostics.append_null();
             continue;
         };
-        match parse_library_source(source, "bibtex", kwargs.strict, true) {
-            Ok(library) => {
-                ok.push(Some(true));
-                entry_count.push(u32::try_from(library.inner.len()).ok());
-                keys.append_values_iter(library.inner.keys());
-                diagnostics.append_values_iter(library.diagnostics.iter().map(String::as_str));
-            }
-            Err(err) => {
-                ok.push(Some(false));
-                entry_count.push(None);
-                keys.append_null();
-                diagnostics.append_values_iter(std::iter::once(err.as_str()));
-            }
+        let report = parse_bibtex_report_source(source, kwargs.strict);
+        ok.push(Some(report.ok));
+        entry_count.push(
+            report
+                .entry_count
+                .and_then(|count| u32::try_from(count).ok()),
+        );
+        match report.keys {
+            Some(keys_value) => keys.append_values_iter(keys_value.iter().map(String::as_str)),
+            None => keys.append_null(),
         }
+        diagnostics.append_values_iter(report.diagnostics.iter().map(String::as_str));
     }
 
     let fields = [
@@ -331,9 +322,7 @@ fn bibtex_is_valid(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Serie
     let bibtex = inputs[0].str()?;
     let output = bibtex
         .iter()
-        .map(|value| {
-            value.map(|source| parse_library_source(source, "bibtex", kwargs.strict, false).is_ok())
-        })
+        .map(|value| value.map(|source| parse_value_library_source(source, kwargs.strict).is_ok()))
         .collect::<BooleanChunked>();
     Ok(output.into_series())
 }
@@ -354,10 +343,11 @@ fn bibtex_entries(inputs: &[Series], kwargs: EntriesKwargs) -> PolarsResult<Seri
             builder.append_null();
             continue;
         };
-        match parse_library_source(source, "bibtex", kwargs.strict, false) {
+        match parse_value_library_source(source, kwargs.strict) {
             Ok(library) => {
-                let records =
-                    project_records(&library.inner, &fields, None).map_err(compute_error)?;
+                let records = library
+                    .project_records(&fields, None)
+                    .map_err(compute_error)?;
                 let entries = entry_records_to_struct_series(records, &field_names)?;
                 builder.append_series(&entries)?;
             }
@@ -366,11 +356,6 @@ fn bibtex_entries(inputs: &[Series], kwargs: EntriesKwargs) -> PolarsResult<Seri
     }
 
     Ok(builder.finish().into_series())
-}
-
-#[polars_expr(output_type=String)]
-fn bibtex_to_csl_json(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    bibtex_to_normalized_json(inputs, kwargs)
 }
 
 #[polars_expr(output_type=String)]
@@ -384,11 +369,38 @@ fn bibtex_to_normalized_json(inputs: &[Series], kwargs: ParseKwargs) -> PolarsRe
         .iter()
         .map(|value| {
             let source = value?;
-            let library = parse_library_source(source, "bibtex", kwargs.strict, false).ok()?;
-            library_to_normalized_json(&library.inner).ok()
+            let library = parse_value_library_source(source, kwargs.strict).ok()?;
+            library.normalized_entries().ok().and_then(|entries| {
+                serde_json::to_string(&normalized_entries_to_json(&entries)).ok()
+            })
         })
         .collect::<StringChunked>();
     Ok(output.into_series())
+}
+
+fn normalized_entries_to_json(entries: &[NormalizedEntry]) -> Vec<Value> {
+    entries
+        .iter()
+        .map(|entry| normalized_value_to_json(&entry.value))
+        .collect()
+}
+
+fn normalized_value_to_json(value: &NormalizedValue) -> Value {
+    match value {
+        NormalizedValue::Null => Value::Null,
+        NormalizedValue::Bool(value) => Value::Bool(*value),
+        NormalizedValue::Number(value) => Value::Number(value.clone()),
+        NormalizedValue::String(value) => Value::String(value.clone()),
+        NormalizedValue::Array(values) => {
+            Value::Array(values.iter().map(normalized_value_to_json).collect())
+        }
+        NormalizedValue::Object(values) => Value::Object(
+            values
+                .iter()
+                .map(|(key, value)| (key.clone(), normalized_value_to_json(value)))
+                .collect(),
+        ),
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -405,23 +417,22 @@ fn render_citation_struct(
     let bibtex = inputs[0].str()?;
     let keys = inputs[1].str()?;
     let len = broadcast_len(bibtex.len(), keys.len(), name)?;
-    let style = load_independent_style(&kwargs.style).map_err(compute_error)?;
-    let fast_citation = can_fast_render_single_citations(style.as_ref());
+    let style = load_style(&kwargs.style)?;
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
 
     let rendered = match parse_broadcast_library(bibtex, kwargs.strict) {
         Some(library) => (0..len)
             .map(|index| {
                 let key = broadcast_get(keys, index)?;
-                render_single_citation(&library, key, style.as_ref(), locale, fast_citation).ok()
+                render_library_citation(&library, key, style.as_ref(), locale).ok()
             })
             .collect::<Vec<_>>(),
         None => (0..len)
             .map(|index| {
                 let source = broadcast_get(bibtex, index)?;
                 let key = broadcast_get(keys, index)?;
-                let library = parse_library_source(source, "bibtex", kwargs.strict, false).ok()?;
-                render_single_citation(&library, key, style.as_ref(), locale, fast_citation).ok()
+                let library = parse_value_library_source(source, kwargs.strict).ok()?;
+                render_library_citation(&library, key, style.as_ref(), locale).ok()
             })
             .collect::<Vec<_>>(),
     };
@@ -436,7 +447,7 @@ fn render_citation_sequence_struct(
     let bibtex = inputs[0].str()?;
     let key_lists = inputs[1].list()?;
     let len = broadcast_len(bibtex.len(), key_lists.len(), name)?;
-    let style = load_independent_style(&kwargs.style).map_err(compute_error)?;
+    let style = load_style(&kwargs.style)?;
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
     let mut builder =
         AnonymousOwnedListBuilder::new(name.into(), len, Some(rendered_struct_dtype()));
@@ -460,7 +471,7 @@ fn render_citation_sequence_struct(
                     builder.append_null();
                     continue;
                 };
-                match parse_library_source(source, "bibtex", kwargs.strict, false) {
+                match parse_value_library_source(source, kwargs.strict) {
                     Ok(library) => append_citation_sequence_struct(
                         &mut builder,
                         &library,
@@ -484,15 +495,15 @@ fn render_bibliography_struct(
     name: &str,
 ) -> PolarsResult<Series> {
     let bibtex = inputs[0].str()?;
-    let style = load_independent_style(&kwargs.style).map_err(compute_error)?;
+    let style = load_style(&kwargs.style)?;
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
 
     let rendered = bibtex
         .iter()
         .map(|value| {
             let source = value?;
-            let library = parse_library_source(source, "bibtex", kwargs.strict, false).ok()?;
-            render_bibliography(&library.inner, &style, locale, kwargs.all).ok()
+            let library = parse_value_library_source(source, kwargs.strict).ok()?;
+            render_library_bibliography(&library, style.as_ref(), locale, kwargs.all).ok()
         })
         .collect::<Vec<_>>();
     rendered_outputs_to_struct_series(name, &rendered)
@@ -500,10 +511,10 @@ fn render_bibliography_struct(
 
 fn append_citation_sequence_field(
     builder: &mut ListStringChunkedBuilder,
-    library: &ParsedLibrary,
+    library: &CoreLibrary,
     key_lists: &ListChunked,
     index: usize,
-    style: &IndependentStyle,
+    style: &PreparedStyle,
     locale: Option<&str>,
     field: RenderedField,
 ) -> PolarsResult<()> {
@@ -513,7 +524,7 @@ fn append_citation_sequence_field(
     };
 
     let key_refs = keys.iter().map(String::as_str).collect::<Vec<_>>();
-    match render_citation_sequence(&library.inner, &key_refs, style, locale) {
+    match render_library_citation_sequence(library, &key_refs, style, locale) {
         Ok(rendered) => {
             let values = rendered
                 .into_iter()
@@ -528,10 +539,10 @@ fn append_citation_sequence_field(
 
 fn append_citation_sequence_struct(
     builder: &mut AnonymousOwnedListBuilder,
-    library: &ParsedLibrary,
+    library: &CoreLibrary,
     key_lists: &ListChunked,
     index: usize,
-    style: &IndependentStyle,
+    style: &PreparedStyle,
     locale: Option<&str>,
 ) -> PolarsResult<()> {
     let Some(keys) = citation_keys_at(key_lists, index)? else {
@@ -540,7 +551,7 @@ fn append_citation_sequence_struct(
     };
 
     let key_refs = keys.iter().map(String::as_str).collect::<Vec<_>>();
-    match render_citation_sequence(&library.inner, &key_refs, style, locale) {
+    match render_library_citation_sequence(library, &key_refs, style, locale) {
         Ok(rendered) => {
             let rendered = rendered.into_iter().map(Some).collect::<Vec<_>>();
             let entries = rendered_outputs_to_struct_series("citation", &rendered)?;
@@ -662,18 +673,8 @@ fn rendered_field(rendered: RenderedOutput, field: RenderedField) -> String {
     }
 }
 
-fn render_single_citation(
-    library: &ParsedLibrary,
-    key: &str,
-    style: &IndependentStyle,
-    locale: Option<&str>,
-    fast_citation: bool,
-) -> Result<RenderedOutput, String> {
-    if fast_citation {
-        render_independent_citation(&library.inner, key, style, locale)
-    } else {
-        render_citation(&library.inner, key, style, locale)
-    }
+fn parse_value_library_source(source: &str, strict: bool) -> Result<CoreLibrary, String> {
+    CoreLibrary::parse_bibtex(source, strict)
 }
 
 fn parse_project_fields(fields: &[String]) -> Result<Vec<ProjectField>, String> {
@@ -683,11 +684,15 @@ fn parse_project_fields(fields: &[String]) -> Result<Vec<ProjectField>, String> 
         .collect()
 }
 
-fn parse_broadcast_library(bibtex: &StringChunked, strict: bool) -> Option<ParsedLibrary> {
+fn parse_broadcast_library(bibtex: &StringChunked, strict: bool) -> Option<CoreLibrary> {
     if bibtex.len() != 1 {
         return None;
     }
-    parse_library_source(bibtex.get(0)?, "bibtex", strict, false).ok()
+    parse_value_library_source(bibtex.get(0)?, strict).ok()
+}
+
+fn load_style(name: &str) -> PolarsResult<std::sync::Arc<PreparedStyle>> {
+    load_prepared_style(name).map_err(|err| compute_error(err.to_string()))
 }
 
 fn broadcast_len(left: usize, right: usize, operation: &str) -> PolarsResult<usize> {

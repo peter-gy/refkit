@@ -67,9 +67,9 @@ out = batch.select(citations=prk.cite_sequence(pl.lit(df["bibtex"][0]), "keys"))
 | `cite_sequence(bibtex, keys, style="apa", locale="en-US", strict=False)` | `List[String]` | Renders an ordered list of citation texts from a `List[String]` key column. Missing keys and row parse failures return null for the row. |
 | `cite_sequence_html(bibtex, keys, style="apa", locale="en-US", strict=False)` | `List[String]` | Renders an ordered list of citation HTML strings from a `List[String]` key column. |
 | `cite_sequence_rendered(bibtex, keys, style="apa", locale="en-US", strict=False)` | `List[Struct[text, html]]` | Renders ordered citations with both text and HTML fields. |
-| `bibliography_html(bibtex, style="apa", locale="en-US", strict=False, all=True)` | `String` | Renders all entries as an HTML bibliography. `all=False` returns the empty cited bibliography because Polars rows do not carry citation history. Row parse failures return null. |
-| `bibliography_text(bibtex, style="apa", locale="en-US", strict=False, all=True)` | `String` | Renders all entries as a plain-text bibliography. |
-| `bibliography_rendered(bibtex, style="apa", locale="en-US", strict=False, all=True)` | `Struct[text, html]` | Renders all entries with both bibliography formats. |
+| `bibliography_html(bibtex, style="apa", locale="en-US", strict=False)` | `String` | Renders all entries in the row as an HTML bibliography. Row parse failures return null. |
+| `bibliography_text(bibtex, style="apa", locale="en-US", strict=False)` | `String` | Renders all entries in the row as a plain-text bibliography. |
+| `bibliography_rendered(bibtex, style="apa", locale="en-US", strict=False)` | `Struct[text, html]` | Renders all entries in the row with both bibliography formats. |
 | `entry_count(bibtex, strict=False)` | `UInt32` | Counts normalized entries in each BibTeX string. |
 | `keys(bibtex, strict=False)` | `List[String]` | Returns normalized entry keys in source order. |
 | `entries(bibtex, fields=("key", "entry_type", "title", "doi", "volume"), strict=False)` | `List[Struct]` | Projects normalized entries into Polars-native rows. |
@@ -77,7 +77,7 @@ out = batch.select(citations=prk.cite_sequence(pl.lit(df["bibtex"][0]), "keys"))
 | `diagnostics(bibtex, strict=False)` | `List[String]` | Returns an empty list for valid rows and parse messages for invalid rows. |
 | `entries_json(bibtex, strict=False)` | `String` | Returns normalized Hayagriva entry JSON with `id` and `key` fields. |
 
-The `bibtex_*` function names remain available for explicit BibTeX call sites, including `bibtex_to_csl_json`. Prefer `entries_json` or `bibtex_to_hayagriva_json` when the JSON shape matters.
+Explicit BibTeX aliases remain for render and parse call sites: `cite_bibtex*`, `bibliography_bibtex*`, `bibtex_entry_count`, `bibtex_is_valid`, `bibtex_keys`, `bibtex_entries`, `bibtex_diagnostics`, `bibtex_parse_report`, and `bibtex_to_hayagriva_json`. Use `entries_json` or `bibtex_to_hayagriva_json` for normalized Hayagriva entry JSON.
 
 ## Expression Namespace
 

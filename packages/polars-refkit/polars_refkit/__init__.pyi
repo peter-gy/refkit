@@ -107,7 +107,6 @@ def bibliography_html(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr: ...
 def bibliography_bibtex(
     bibtex: Any,
@@ -115,7 +114,6 @@ def bibliography_bibtex(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr: ...
 def bibliography_text(
     bibtex: Any,
@@ -123,7 +121,6 @@ def bibliography_text(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr: ...
 def bibliography_bibtex_text(
     bibtex: Any,
@@ -131,7 +128,6 @@ def bibliography_bibtex_text(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr: ...
 def bibliography_rendered(
     bibtex: Any,
@@ -139,7 +135,6 @@ def bibliography_rendered(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr: ...
 def bibliography_bibtex_rendered(
     bibtex: Any,
@@ -147,7 +142,6 @@ def bibliography_bibtex_rendered(
     style: str = "apa",
     locale: str = "en-US",
     strict: bool = False,
-    all: bool = True,
 ) -> pl.Expr: ...
 def entry_count(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
 def bibtex_entry_count(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
@@ -171,7 +165,6 @@ def diagnostics(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
 def bibtex_diagnostics(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
 def parse_report(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
 def bibtex_parse_report(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def bibtex_to_csl_json(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
 def entries_json(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
 def bibtex_to_hayagriva_json(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
 def __getattr__(name: str) -> Any: ...

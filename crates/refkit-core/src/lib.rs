@@ -1,25 +1,29 @@
+mod document;
 mod library;
+mod raw;
 mod render;
+mod render_tree;
 mod strings;
+mod style;
 mod style_analysis;
 
-pub use hayagriva::citationberg::IndependentStyle;
+pub use document::{Cite as CoreCite, Document as CoreDocument, DocumentError};
 pub use library::{
-    EntryRecord, ParsedLibrary, ProjectField, SourceText, entry_record, library_to_normalized_json,
-    parse_library_path, parse_library_source, parse_project_field, project_records,
+    EntryRecord, Library as CoreLibrary, NormalizedEntry, NormalizedValue, ParseReport,
+    ProjectField, SourceText, parse_bibtex_report_source, parse_project_field,
     read_bibliography_text,
 };
-pub use render::{
-    RenderedOutput, bibliography_to_text_html, bundled_locales, elem_children_to_html,
-    elem_children_to_string, load_independent_style, render_bibliography, render_citation,
-    render_citation_sequence, render_independent_citation, safe_href,
+pub use raw::{
+    RawBlockInfo, RawDocument, RawEditError, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo,
 };
+pub use render::{
+    RenderedOutput, bundled_locales, render_library_bibliography, render_library_citation,
+    render_library_citation_sequence,
+};
+pub use render_tree::{RenderedFormatting, RenderedNode, RenderedRecord};
 pub use strings::{
     display_name, elem_meta_name, entry_type_name, font_style_name, font_variant_name,
     font_weight_name, formatting_summary, option_quoted, quoted, text_decoration_name,
     vertical_align_name,
 };
-pub use style_analysis::{
-    can_fast_render_single_citations, citation_depends_on_subsequent_names, citation_only_style,
-    full_history_citation_style,
-};
+pub use style::{PreparedStyle, StyleError, load_prepared_style, prepare_style_from_xml};

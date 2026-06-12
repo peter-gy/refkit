@@ -1,6 +1,6 @@
 # refkit workspace
 
-The refkit workspace exposes bibliography capabilities through two Python interfaces backed by Rust.
+The refkit workspace exposes bibliography capabilities through two Python interfaces backed by a shared Rust core.
 
 | Package | Import | Purpose |
 | --- | --- | --- |
@@ -9,6 +9,8 @@ The refkit workspace exposes bibliography capabilities through two Python interf
 | `refkit-bench` | `python -m refkit_bench.runner` | Repository benchmark runner for capability lanes and comparison packages. |
 
 Both packages are versioned as `0.0.1`. `refkit` supports CPython 3.11 through 3.14, and the wheels use the Python 3.11 stable ABI.
+
+`crates/refkit-core` owns parsing, style loading, rendering, raw BibTeX editing, selectors, and projection. Package directories add host integration only.
 
 ## Capabilities
 

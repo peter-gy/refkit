@@ -1,17 +1,19 @@
 use std::collections::HashMap;
 use std::fmt::{self, Write as _};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::OnceLock;
 
 use hayagriva::citationberg::{
     Display, FontStyle, FontVariant, FontWeight, IndependentStyle, Locale as CslLocale, LocaleCode,
-    Style as CslStyle, TextDecoration, VerticalAlign,
+    TextDecoration, VerticalAlign,
 };
 use hayagriva::{
     BibliographyDriver, BibliographyItem, BibliographyRequest, BufWriteFormat, CitationItem,
     CitationRequest, ElemChild, ElemChildren, Library as HayLibrary, archive, standalone_citation,
 };
 
+use crate::library::Library;
 use crate::quoted;
+use crate::style::PreparedStyle;
 use crate::style_analysis::can_fast_render_single_citations;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,40 +27,34 @@ pub fn bundled_locales() -> &'static [CslLocale] {
     LOCALES.get_or_init(archive::locales).as_slice()
 }
 
-pub fn load_independent_style(name: &str) -> Result<Arc<IndependentStyle>, String> {
-    static STYLES: OnceLock<Mutex<HashMap<String, Arc<IndependentStyle>>>> = OnceLock::new();
-
-    let key = name.to_ascii_lowercase();
-    let cache = STYLES.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some(style) = cache
-        .lock()
-        .map_err(|_| "style cache lock is poisoned".to_string())?
-        .get(&key)
-        .cloned()
-    {
-        return Ok(style);
-    }
-
-    let archived = archive::ArchivedStyle::by_name(&key)
-        .ok_or_else(|| format!("unknown bundled style {}", quoted(name)))?;
-    let style = match archived.get() {
-        CslStyle::Independent(style) => Arc::new(style),
-        CslStyle::Dependent(_) => {
-            return Err(format!(
-                "bundled style {} is dependent and needs explicit parent resolution",
-                quoted(name)
-            ));
-        }
-    };
-
-    cache
-        .lock()
-        .map_err(|_| "style cache lock is poisoned".to_string())?
-        .insert(key, Arc::clone(&style));
-    Ok(style)
+pub fn render_library_citation(
+    library: &Library,
+    key: &str,
+    style: &PreparedStyle,
+    locale: Option<&str>,
+) -> Result<RenderedOutput, String> {
+    render_citation(library.inner(), key, style.inner.as_ref(), locale)
 }
 
-pub fn render_citation(
+pub fn render_library_citation_sequence(
+    library: &Library,
+    keys: &[&str],
+    style: &PreparedStyle,
+    locale: Option<&str>,
+) -> Result<Vec<RenderedOutput>, String> {
+    render_citation_sequence(library.inner(), keys, style.inner.as_ref(), locale)
+}
+
+pub fn render_library_bibliography(
+    library: &Library,
+    style: &PreparedStyle,
+    locale: Option<&str>,
+    all: bool,
+) -> Result<RenderedOutput, String> {
+    render_bibliography(library.inner(), style.inner.as_ref(), locale, all)
+}
+
+pub(crate) fn render_citation(
     library: &HayLibrary,
     key: &str,
     style: &IndependentStyle,
@@ -94,7 +90,7 @@ pub fn render_citation(
     })
 }
 
-pub fn render_citation_sequence(
+pub(crate) fn render_citation_sequence(
     library: &HayLibrary,
     keys: &[&str],
     style: &IndependentStyle,
@@ -167,17 +163,6 @@ fn render_independent_citation_sequence(
     Ok(Some(rendered))
 }
 
-pub fn render_independent_citation(
-    library: &HayLibrary,
-    key: &str,
-    style: &IndependentStyle,
-    locale: Option<&str>,
-) -> Result<RenderedOutput, String> {
-    let locales = bundled_locales();
-    let locale = locale.map(|code| LocaleCode(code.to_string()));
-    render_independent_citation_inner(library, key, style, locale, locales)
-}
-
 fn render_independent_citation_inner(
     library: &HayLibrary,
     key: &str,
@@ -201,7 +186,7 @@ fn render_independent_citation_inner(
     })
 }
 
-pub fn render_bibliography(
+pub(crate) fn render_bibliography(
     library: &HayLibrary,
     style: &IndependentStyle,
     locale: Option<&str>,
@@ -234,7 +219,9 @@ pub fn render_bibliography(
     Ok(RenderedOutput { text, html })
 }
 
-pub fn bibliography_to_text_html(items: &[BibliographyItem]) -> Result<(String, String), String> {
+pub(crate) fn bibliography_to_text_html(
+    items: &[BibliographyItem],
+) -> Result<(String, String), String> {
     let mut text = String::with_capacity(items.len() * 224);
     let mut html = String::with_capacity(items.len() * 384);
     for item in items {
@@ -247,7 +234,7 @@ pub fn bibliography_to_text_html(items: &[BibliographyItem]) -> Result<(String, 
     Ok((text, html))
 }
 
-pub fn elem_children_to_string(
+pub(crate) fn elem_children_to_string(
     children: &ElemChildren,
     format: BufWriteFormat,
 ) -> Result<String, String> {
@@ -258,13 +245,13 @@ pub fn elem_children_to_string(
     Ok(output)
 }
 
-pub fn elem_children_to_html(children: &ElemChildren) -> Result<String, String> {
+pub(crate) fn elem_children_to_html(children: &ElemChildren) -> Result<String, String> {
     let mut output = String::new();
     render_children_html(children, &mut output).map_err(|err| err.to_string())?;
     Ok(output)
 }
 
-pub fn safe_href(value: &str) -> Option<&str> {
+pub(crate) fn safe_href(value: &str) -> Option<&str> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return None;
@@ -446,6 +433,8 @@ fn write_html_escaped(output: &mut String, value: &str) {
 mod tests {
     use hayagriva::{ElemChild, ElemChildren};
 
+    use crate::load_prepared_style;
+
     use super::*;
 
     #[test]
@@ -489,16 +478,17 @@ mod tests {
 
     #[test]
     fn renders_citation_text_and_html() {
-        let parsed = crate::parse_library_source(
+        let library = Library::parse_source(
             "@article{doe2024, author = {Doe, Jane}, title = {Core}, year = {2024}}",
             "bibtex",
             false,
             false,
         )
         .unwrap();
-        let style = load_independent_style("apa").unwrap();
+        let style = load_prepared_style("apa").unwrap();
 
-        let rendered = render_citation(&parsed.inner, "doe2024", &style, Some("en-US")).unwrap();
+        let rendered =
+            render_library_citation(&library, "doe2024", style.as_ref(), Some("en-US")).unwrap();
 
         assert!(rendered.text.contains("Doe"));
         assert!(rendered.html.contains("Doe"));
@@ -506,7 +496,7 @@ mod tests {
 
     #[test]
     fn renders_citation_sequence_in_key_order() {
-        let parsed = crate::parse_library_source(
+        let library = Library::parse_source(
             "@article{doe2024, author = {Doe, Jane}, title = {Core}, year = {2024}}
              @article{roe2023, author = {Roe, Richard}, title = {Edges}, year = {2023}}",
             "bibtex",
@@ -514,12 +504,12 @@ mod tests {
             false,
         )
         .unwrap();
-        let style = load_independent_style("apa").unwrap();
+        let style = load_prepared_style("apa").unwrap();
 
-        let rendered = render_citation_sequence(
-            &parsed.inner,
+        let rendered = render_library_citation_sequence(
+            &library,
             &["doe2024", "roe2023"],
-            &style,
+            style.as_ref(),
             Some("en-US"),
         )
         .unwrap();
@@ -533,7 +523,7 @@ mod tests {
 
     #[test]
     fn citation_sequence_falls_back_for_ambiguous_fast_texts() {
-        let parsed = crate::parse_library_source(
+        let library = Library::parse_source(
             "@article{doe2024a, author = {Doe, Jane}, title = {Alpha}, year = {2024}}
              @article{doe2024b, author = {Doe, Jane}, title = {Beta}, year = {2024}}",
             "bibtex",
@@ -541,12 +531,12 @@ mod tests {
             false,
         )
         .unwrap();
-        let style = load_independent_style("apa").unwrap();
+        let style = load_prepared_style("apa").unwrap();
 
-        let rendered = render_citation_sequence(
-            &parsed.inner,
+        let rendered = render_library_citation_sequence(
+            &library,
             &["doe2024a", "doe2024b"],
-            &style,
+            style.as_ref(),
             Some("en-US"),
         )
         .unwrap();

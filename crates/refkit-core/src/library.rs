@@ -1,25 +1,50 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 
 use biblatex::{
     Bibliography as BiblatexBibliography, ChunksExt, Entry as BiblatexEntry,
     TypeError as BiblatexTypeError,
 };
-use hayagriva::{Entry as HayEntry, Library as HayLibrary};
-use serde_json::{Value, json};
+use hayagriva::{Entry as HayEntry, Library as HayLibrary, Selector};
+use serde_json::{Number, Value, json};
 
+use crate::raw::{
+    remove_block_containing_span, sanitize_biblatex_for_library,
+    sanitize_biblatex_for_library_literals,
+};
 use crate::{entry_type_name, quoted};
 
-pub struct ParsedLibrary {
-    pub inner: HayLibrary,
-    pub diagnostics: Vec<String>,
+pub(crate) struct ParsedLibrary {
+    pub(crate) inner: HayLibrary,
+    pub(crate) diagnostics: Vec<String>,
+}
+
+pub struct Library {
+    inner: Arc<HayLibrary>,
+    diagnostics: Vec<String>,
+    keys: OnceLock<Vec<String>>,
+    records: OnceLock<RecordCache>,
+}
+
+struct RecordCache {
+    records: Vec<EntryRecord>,
+    index: HashMap<String, usize>,
 }
 
 pub struct SourceText {
     pub source: String,
     pub diagnostic: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseReport {
+    pub ok: bool,
+    pub entry_count: Option<usize>,
+    pub keys: Option<Vec<String>>,
+    pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +54,22 @@ pub struct EntryRecord {
     pub title: Option<String>,
     pub volume: Option<String>,
     pub doi: Option<String>,
+    pub parents: Vec<EntryRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NormalizedEntry {
+    pub value: NormalizedValue,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum NormalizedValue {
+    Null,
+    Bool(bool),
+    Number(Number),
+    String(String),
+    Array(Vec<NormalizedValue>),
+    Object(BTreeMap<String, NormalizedValue>),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -39,6 +80,162 @@ pub enum ProjectField {
     Title,
     Doi,
     Volume,
+}
+
+impl Library {
+    pub fn read_path(
+        path: impl AsRef<Path>,
+        strict: bool,
+        diagnostics: bool,
+    ) -> Result<Self, String> {
+        parse_library_path(path.as_ref().to_path_buf(), strict, diagnostics).map(Self::from_parsed)
+    }
+
+    pub fn parse_source(
+        source: &str,
+        format: &str,
+        strict: bool,
+        diagnostics: bool,
+    ) -> Result<Self, String> {
+        parse_library_source(source, format, strict, diagnostics).map(Self::from_parsed)
+    }
+
+    pub fn parse_bibtex(source: &str, strict: bool) -> Result<Self, String> {
+        parse_bibtex_value_source(source, strict).map(Self::from_parsed)
+    }
+
+    pub(crate) fn from_parsed(parsed: ParsedLibrary) -> Self {
+        Self {
+            inner: Arc::new(parsed.inner),
+            diagnostics: parsed.diagnostics,
+            keys: OnceLock::new(),
+            records: OnceLock::new(),
+        }
+    }
+
+    pub(crate) fn inner(&self) -> &HayLibrary {
+        self.inner.as_ref()
+    }
+
+    pub fn diagnostics(&self) -> &[String] {
+        &self.diagnostics
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.inner.get(key).is_some()
+    }
+
+    pub fn keys(&self) -> &[String] {
+        self.keys
+            .get_or_init(|| self.inner.keys().map(str::to_string).collect())
+    }
+
+    pub fn records(&self) -> &[EntryRecord] {
+        &self.record_cache().records
+    }
+
+    pub fn get_record(&self, key: &str) -> Option<&EntryRecord> {
+        let cache = self.record_cache();
+        cache.index.get(key).map(|index| &cache.records[*index])
+    }
+
+    pub fn select_records(&self, selector: &str) -> Result<Vec<EntryRecord>, String> {
+        let selector =
+            Selector::parse(selector).map_err(|err| format!("invalid selector: {err}"))?;
+        Ok(self
+            .inner
+            .iter()
+            .filter(|entry| selector.matches(entry))
+            .map(entry_record)
+            .collect())
+    }
+
+    pub fn project_records(
+        &self,
+        fields: &[ProjectField],
+        keys: Option<&[String]>,
+    ) -> Result<Vec<Vec<Option<String>>>, String> {
+        if fields
+            .iter()
+            .all(|field| matches!(field, ProjectField::Key))
+        {
+            return self.project_key_fields(fields, keys);
+        }
+
+        match keys {
+            Some(keys) => keys
+                .iter()
+                .map(|key| {
+                    let Some(entry) = self.inner.get(key) else {
+                        return Err(format!("missing reference {}", quoted(key)));
+                    };
+                    let record = entry_record(entry);
+                    Ok(project_record(&record, fields))
+                })
+                .collect(),
+            None => Ok(self
+                .record_cache()
+                .records
+                .iter()
+                .map(|record| project_record(record, fields))
+                .collect()),
+        }
+    }
+
+    pub fn normalized_entries(&self) -> Result<Vec<NormalizedEntry>, String> {
+        normalized_entries(self.inner.as_ref())
+    }
+
+    fn record_cache(&self) -> &RecordCache {
+        self.records
+            .get_or_init(|| RecordCache::from_library(&self.inner))
+    }
+
+    fn project_key_fields(
+        &self,
+        fields: &[ProjectField],
+        keys: Option<&[String]>,
+    ) -> Result<Vec<Vec<Option<String>>>, String> {
+        let keys = match keys {
+            Some(keys) => {
+                for key in keys {
+                    if self.inner.get(key).is_none() {
+                        return Err(format!("missing reference {}", quoted(key)));
+                    }
+                }
+                keys.to_vec()
+            }
+            None => self.keys().to_vec(),
+        };
+
+        Ok(keys
+            .into_iter()
+            .map(|key| fields.iter().map(|_| Some(key.clone())).collect())
+            .collect())
+    }
+}
+
+impl RecordCache {
+    fn from_library(library: &HayLibrary) -> Self {
+        let mut records = Vec::with_capacity(library.len());
+        let mut index = HashMap::with_capacity(library.len());
+
+        for entry in library.iter() {
+            let key = entry.key().to_string();
+            index.insert(key, records.len());
+            records.push(entry_record(entry));
+        }
+
+        Self { records, index }
+    }
 }
 
 pub fn read_bibliography_text(path: &Path) -> Result<SourceText, String> {
@@ -59,7 +256,7 @@ pub fn read_bibliography_text(path: &Path) -> Result<SourceText, String> {
     }
 }
 
-pub fn parse_library_path(
+pub(crate) fn parse_library_path(
     path: PathBuf,
     strict: bool,
     diagnostics: bool,
@@ -85,14 +282,17 @@ pub fn parse_library_path(
     Ok(parsed)
 }
 
-pub fn parse_library_source(
+pub(crate) fn parse_library_source(
     source: &str,
     format: &str,
     strict: bool,
     diagnostics: bool,
 ) -> Result<ParsedLibrary, String> {
     match format.to_ascii_lowercase().as_str() {
-        "bib" | "bibtex" | "biblatex" => parse_biblatex_library(source, strict, diagnostics),
+        "bib" | "bibtex" | "biblatex" => {
+            let parsed = parse_biblatex_library(source, strict, diagnostics)?;
+            reject_recovered_empty_bibtex(source, strict, parsed)
+        }
         "yaml" | "yml" => hayagriva::io::from_yaml_str(source)
             .map(|inner| ParsedLibrary {
                 inner,
@@ -103,7 +303,58 @@ pub fn parse_library_source(
     }
 }
 
-pub fn entry_record(entry: &HayEntry) -> EntryRecord {
+pub(crate) fn parse_bibtex_value_source(
+    source: &str,
+    strict: bool,
+) -> Result<ParsedLibrary, String> {
+    parse_library_source(source, "bibtex", strict, false)
+}
+
+pub fn parse_bibtex_report_source(source: &str, strict: bool) -> ParseReport {
+    match parse_library_source(source, "bibtex", strict, true) {
+        Ok(parsed) if recovered_empty_source_is_failure(source, &parsed) => ParseReport {
+            ok: false,
+            entry_count: None,
+            keys: None,
+            diagnostics: parsed.diagnostics,
+        },
+        Ok(parsed) => ParseReport {
+            ok: true,
+            entry_count: Some(parsed.inner.len()),
+            keys: Some(parsed.inner.keys().map(str::to_string).collect()),
+            diagnostics: parsed.diagnostics,
+        },
+        Err(err) => ParseReport {
+            ok: false,
+            entry_count: None,
+            keys: None,
+            diagnostics: vec![err],
+        },
+    }
+}
+
+fn recovered_empty_source_is_failure(source: &str, parsed: &ParsedLibrary) -> bool {
+    !source.trim().is_empty() && parsed.inner.is_empty() && !parsed.diagnostics.is_empty()
+}
+
+fn reject_recovered_empty_bibtex(
+    source: &str,
+    strict: bool,
+    parsed: ParsedLibrary,
+) -> Result<ParsedLibrary, String> {
+    if recovered_empty_source_is_failure(source, &parsed) {
+        return Err(parsed.diagnostics.join("\n"));
+    }
+    if parsed.inner.is_empty() && !source.trim().is_empty() && parsed.diagnostics.is_empty() {
+        let diagnosed = parse_biblatex_library(source, strict, true)?;
+        if recovered_empty_source_is_failure(source, &diagnosed) {
+            return Err(diagnosed.diagnostics.join("\n"));
+        }
+    }
+    Ok(parsed)
+}
+
+pub(crate) fn entry_record(entry: &HayEntry) -> EntryRecord {
     EntryRecord {
         key: entry.key().to_string(),
         entry_type: entry_type_name(entry.entry_type()).to_string(),
@@ -115,24 +366,41 @@ pub fn entry_record(entry: &HayEntry) -> EntryRecord {
         doi: entry
             .serial_number()
             .and_then(|serial| serial.0.get("doi").cloned()),
+        parents: entry.parents().iter().map(entry_record).collect(),
     }
 }
 
-pub fn library_to_normalized_json(library: &HayLibrary) -> Result<String, String> {
-    let entries = library
-        .iter()
-        .map(entry_to_normalized_json_value)
-        .collect::<Result<Vec<_>, _>>()?;
-    serde_json::to_string(&entries).map_err(|err| err.to_string())
+pub(crate) fn normalized_entries(library: &HayLibrary) -> Result<Vec<NormalizedEntry>, String> {
+    library.iter().map(entry_to_normalized_entry).collect()
 }
 
-fn entry_to_normalized_json_value(entry: &HayEntry) -> Result<Value, String> {
+fn entry_to_normalized_entry(entry: &HayEntry) -> Result<NormalizedEntry, String> {
     let mut value = serde_json::to_value(entry).map_err(|err| err.to_string())?;
     if let Some(map) = value.as_object_mut() {
         map.insert("id".to_string(), json!(entry.key()));
         map.insert("key".to_string(), json!(entry.key()));
     }
-    Ok(value)
+    Ok(NormalizedEntry {
+        value: normalized_value_from_json(value),
+    })
+}
+
+fn normalized_value_from_json(value: Value) -> NormalizedValue {
+    match value {
+        Value::Null => NormalizedValue::Null,
+        Value::Bool(value) => NormalizedValue::Bool(value),
+        Value::Number(value) => NormalizedValue::Number(value),
+        Value::String(value) => NormalizedValue::String(value),
+        Value::Array(values) => {
+            NormalizedValue::Array(values.into_iter().map(normalized_value_from_json).collect())
+        }
+        Value::Object(values) => NormalizedValue::Object(
+            values
+                .into_iter()
+                .map(|(key, value)| (key, normalized_value_from_json(value)))
+                .collect(),
+        ),
+    }
 }
 
 pub fn parse_project_field(field: &str) -> Result<ProjectField, String> {
@@ -144,29 +412,6 @@ pub fn parse_project_field(field: &str) -> Result<ProjectField, String> {
         "doi" => Ok(ProjectField::Doi),
         "volume" => Ok(ProjectField::Volume),
         _ => Err(format!("unsupported projection field {}", quoted(field))),
-    }
-}
-
-pub fn project_records(
-    library: &HayLibrary,
-    fields: &[ProjectField],
-    keys: Option<&[String]>,
-) -> Result<Vec<Vec<Option<String>>>, String> {
-    let entries = library.iter().map(entry_record).collect::<Vec<_>>();
-    match keys {
-        Some(keys) => keys
-            .iter()
-            .map(|key| {
-                let Some(record) = entries.iter().find(|entry| &entry.key == key) else {
-                    return Err(format!("missing reference {}", quoted(key)));
-                };
-                Ok(project_record(record, fields))
-            })
-            .collect(),
-        None => Ok(entries
-            .iter()
-            .map(|record| project_record(record, fields))
-            .collect()),
     }
 }
 
@@ -188,22 +433,30 @@ fn parse_biblatex_library(
     strict: bool,
     diagnostics: bool,
 ) -> Result<ParsedLibrary, String> {
-    if strict {
-        return match hayagriva::io::from_biblatex_str(source) {
-            Ok(inner) => Ok(ParsedLibrary {
-                inner,
-                diagnostics: Vec::new(),
-            }),
-            Err(errors) => Err(format_biblatex_errors(&errors)),
-        };
+    if !strict {
+        return recover_biblatex_library(source, diagnostics);
     }
 
-    let mut recovery_diagnostics = Vec::new();
-    let mut bibliography = BiblatexBibliography::parse(source)
-        .map_err(|err| format!("biblatex parse error: {err}"))?;
+    match hayagriva::io::from_biblatex_str(source) {
+        Ok(inner) => Ok(ParsedLibrary {
+            inner,
+            diagnostics: Vec::new(),
+        }),
+        Err(errors) => Err(format_biblatex_errors(&errors)),
+    }
+}
+
+fn recover_biblatex_library(source: &str, diagnostics: bool) -> Result<ParsedLibrary, String> {
+    let (sanitized, mut recovery_diagnostics) =
+        sanitize_biblatex_for_library(source, false, diagnostics);
+    let mut bibliography =
+        recover_biblatex_syntax(&sanitized, &mut recovery_diagnostics, diagnostics)
+            .map_err(|err| format_recovery_failure(&err))?;
     sanitize_biblatex_typed_fields(&mut bibliography, &mut recovery_diagnostics, diagnostics);
     let inner =
-        convert_biblatex_with_recovery(&bibliography, &mut recovery_diagnostics, diagnostics)?;
+        convert_biblatex_with_recovery(&bibliography, &mut recovery_diagnostics, diagnostics)
+            .map_err(|err| format_recovery_failure(&err))?;
+
     Ok(ParsedLibrary {
         inner,
         diagnostics: if diagnostics {
@@ -212,6 +465,10 @@ fn parse_biblatex_library(
             Vec::new()
         },
     })
+}
+
+fn format_recovery_failure(recovery_error: &str) -> String {
+    format!("non-strict recovery failed:\n{recovery_error}")
 }
 
 fn sanitize_biblatex_typed_fields(
@@ -265,6 +522,69 @@ fn remove_field_if(
             quoted(value.trim())
         ));
     }
+}
+
+fn recover_biblatex_syntax(
+    source: &str,
+    diagnostics: &mut Vec<String>,
+    collect_diagnostics: bool,
+) -> Result<BiblatexBibliography, String> {
+    const MAX_SYNTAX_RECOVERY_PASSES: usize = 16;
+    let mut candidate = source.to_string();
+    match BiblatexBibliography::parse(&candidate) {
+        Ok(bibliography) => return Ok(bibliography),
+        Err(first_err) => {
+            let (validated, validation_diagnostics) =
+                sanitize_biblatex_for_library(&candidate, true, collect_diagnostics);
+            if validated != candidate {
+                diagnostics.extend(validation_diagnostics);
+                candidate = validated;
+                if let Ok(bibliography) = BiblatexBibliography::parse(&candidate) {
+                    return Ok(bibliography);
+                }
+            } else if collect_diagnostics {
+                diagnostics.push(format!(
+                    "syntax recovery could not pre-filter BibTeX entries after parse error: {first_err}"
+                ));
+            }
+
+            let (literal, literal_diagnostics) =
+                sanitize_biblatex_for_library_literals(&candidate, collect_diagnostics);
+            if literal != candidate {
+                diagnostics.extend(literal_diagnostics);
+                candidate = literal;
+                if let Ok(bibliography) = BiblatexBibliography::parse(&candidate) {
+                    return Ok(bibliography);
+                }
+            }
+        }
+    }
+
+    for _ in 0..MAX_SYNTAX_RECOVERY_PASSES {
+        match BiblatexBibliography::parse(&candidate) {
+            Ok(bibliography) => return Ok(bibliography),
+            Err(err) => {
+                let Some((next, diagnostic)) =
+                    remove_block_containing_span(&candidate, err.span.clone())
+                else {
+                    return Err(format!("biblatex parse error: {err}"));
+                };
+                if collect_diagnostics {
+                    diagnostics.push(format!(
+                        "ignored BibTeX block during syntax recovery because {err}: {diagnostic}"
+                    ));
+                }
+                if next.len() >= candidate.len() {
+                    return Err(format!("biblatex parse error did not make progress: {err}"));
+                }
+                candidate = next;
+            }
+        }
+    }
+
+    Err(format!(
+        "biblatex syntax recovery exceeded {MAX_SYNTAX_RECOVERY_PASSES} passes"
+    ))
 }
 
 fn convert_biblatex_with_recovery(
@@ -490,17 +810,18 @@ mod tests {
         )
         .unwrap();
 
-        let rows = project_records(
-            &parsed.inner,
-            &[
-                ProjectField::Key,
-                ProjectField::Title,
-                ProjectField::Doi,
-                ProjectField::Volume,
-            ],
-            None,
-        )
-        .unwrap();
+        let library = Library::from_parsed(parsed);
+        let rows = library
+            .project_records(
+                &[
+                    ProjectField::Key,
+                    ProjectField::Title,
+                    ProjectField::Doi,
+                    ProjectField::Volume,
+                ],
+                None,
+            )
+            .unwrap();
 
         assert_eq!(
             rows,
@@ -510,6 +831,106 @@ mod tests {
                 Some("10.1/test".to_string()),
                 None,
             ]]
+        );
+    }
+
+    #[test]
+    fn non_strict_recovery_keeps_valid_entries_and_reports_malformed_blocks() {
+        let parsed = parse_library_source(
+            concat!(
+                "@article{valid,\n",
+                "  author = {Doe, Jane},\n",
+                "  title = {Kept Entry},\n",
+                "  year = {2024}\n",
+                "}\n",
+                "@broken{missing,\n",
+                "  title = {No close}\n",
+            ),
+            "bibtex",
+            false,
+            true,
+        )
+        .unwrap();
+
+        let keys = parsed
+            .inner
+            .iter()
+            .map(|entry| entry.key().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(keys, vec!["valid"]);
+        assert!(
+            parsed
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("ignored malformed BibTeX block"))
+        );
+    }
+
+    #[test]
+    fn bibtex_value_parse_treats_recovered_empty_source_as_failure() {
+        let err = match parse_bibtex_value_source("@broken{missing", false) {
+            Ok(_) => panic!("expected recovered empty source to fail"),
+            Err(err) => err,
+        };
+        let report = parse_bibtex_report_source("@broken{missing", false);
+
+        assert!(err.contains("malformed BibTeX block"));
+        assert!(!report.ok);
+        assert_eq!(report.entry_count, None);
+        assert_eq!(report.keys, None);
+        assert!(report.diagnostics[0].contains("malformed BibTeX block"));
+    }
+
+    #[test]
+    fn non_strict_recovery_removes_invalid_typed_fields() {
+        let parsed = parse_library_source(
+            concat!(
+                "@article{badmonth,\n",
+                "  author = {Doe, Jane},\n",
+                "  title = {Bad Month},\n",
+                "  year = {2024},\n",
+                "  month = {16}\n",
+                "}\n",
+            ),
+            "bibtex",
+            false,
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(parsed.inner.len(), 1);
+        assert!(
+            parsed
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("ignored BibTeX field \"month\""))
+        );
+    }
+
+    #[test]
+    fn non_strict_recovery_literalizes_unknown_abbreviations() {
+        let parsed = parse_library_source(
+            concat!(
+                "@article{macro,\n",
+                "  author = {Doe, Jane},\n",
+                "  title = {Macro Journal},\n",
+                "  year = {2024},\n",
+                "  journal = JMLR # { Extra}\n",
+                "}\n",
+            ),
+            "bibtex",
+            false,
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(parsed.inner.len(), 1);
+        assert!(
+            parsed
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("unknown abbreviation"))
         );
     }
 

@@ -265,6 +265,29 @@ def test_library_values_entry_types_and_parent_lists_are_public_contracts() -> N
     assert entry.parents[0].title == "Journal of Citation Systems"
 
 
+def test_entry_parent_chains_preserve_nested_hayagriva_parents() -> None:
+    library = rk.Library.parse(
+        """chapter:
+  type: Chapter
+  title: Nested Chapter
+  parent:
+    type: Book
+    title: Parent Book
+    parent:
+      type: Anthology
+      title: Grand Collection
+""",
+        format="yaml",
+    )
+
+    entry = library["chapter"]
+    assert entry.parent is not None
+    assert entry.parent.title == "Parent Book"
+    assert entry.parent.parent is not None
+    assert entry.parent.parent.title == "Grand Collection"
+    assert entry.parents[0].parents[0].entry_type == "Anthology"
+
+
 def test_version_and_missing_module_attribute() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     cargo = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
@@ -554,6 +577,21 @@ def test_library_parse_default_recovery_keeps_valid_bibtex_entries() -> None:
     )
 
     assert library.keys() == ["valid"]
+
+
+def test_library_rejects_malformed_only_bibtex_without_rejecting_empty_input(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(rk.RefkitError, match="malformed BibTeX block"):
+        rk.Library.parse("@broken{missing", format="bibtex")
+
+    malformed = tmp_path / "malformed.bib"
+    malformed.write_text("@broken{missing")
+    with pytest.raises(rk.RefkitError, match="malformed BibTeX block"):
+        rk.Library.read(malformed)
+
+    assert rk.Library.parse("", format="bibtex").is_empty()
+    assert rk.Library.parse("% only a comment\n", format="bibtex").is_empty()
 
 
 def test_library_non_strict_recovers_entries_after_unclosed_block(tmp_path: Path) -> None:
