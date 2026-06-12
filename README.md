@@ -1,31 +1,17 @@
-# refkit workspace
+# refkit
 
-The refkit workspace exposes bibliography capabilities through two Python interfaces backed by a shared Rust core.
+`refkit` parses bibliography files, renders CSL citations, edits raw BibTeX, and applies the same Rust-backed capabilities to Polars columns.
 
-| Package | Import | Purpose |
-| --- | --- | --- |
-| `refkit` | `import refkit as rk` | Citation parsing, CSL rendering, normalized library access, and raw BibTeX editing. |
-| `polars-refkit` | `import polars_refkit as prk` | Polars expressions for BibTeX columns. |
-| `refkit-bench` | `python -m refkit_bench.runner` | Repository benchmark runner for capability lanes and comparison packages. |
+## Install
 
-Both packages are versioned as `0.0.1`. `refkit` supports CPython 3.11 through 3.14, and the wheels use the Python 3.11 stable ABI.
+```bash
+pip install refkit
+pip install polars-refkit
+```
 
-`crates/refkit-core` owns parsing, style loading, rendering, raw BibTeX editing, selectors, and projection. Package directories add host integration only.
+Both packages are versioned as `0.0.1` and support CPython 3.11 through 3.14. Wheels use the Python 3.11 stable ABI.
 
-## Capabilities
-
-| Capability | `refkit` | `polars-refkit` |
-| --- | --- | --- |
-| Normalized bibliography input | `Library.read`, `Library.parse` | `entry_count`, `keys`, `entries`, `parse_report` |
-| Raw BibTeX document editing | `BibDocument` | Use `refkit` for block-level edits |
-| Citation style input | `Style.load`, `Style.from_path`, `Style.from_xml` | `style=` arguments on render expressions |
-| Citation rendering | `Document.cite`, `cite` | `cite`, `cite_html`, `cite_sequence` |
-| Bibliography rendering | `Document.bibliography`, `bibliography` | `bibliography_text`, `bibliography_html` |
-| Rendered output access | `Rendered.text`, `Rendered.html`, `Rendered.tree` | text, HTML, and rendered struct expressions |
-| Entry inspection | keys, lookup, selectors, projection, dictionaries | key and entry projection expressions |
-| Bulk tabular processing | Use Python loops over `Library` objects | eager and lazy Polars expressions |
-
-## refkit
+## Render Citations From Python
 
 ```python
 import refkit as rk
@@ -34,21 +20,24 @@ library = rk.Library.read("refs.bib")
 style = rk.Style.load("apa")
 doc = rk.Document(library, style, locale="en-US")
 
-print(doc.cite("doe2024").text)
+first = doc.cite("doe2024")
+second = doc.cite([rk.Cite("doe2024", locator="12", label="page"), "roe2022"])
+
+print(first.text)
+print(second.text)
 print(doc.bibliography().html)
 ```
 
-`refkit` supports:
+`Library` is the normalized citation database. `Style` loads a bundled or explicit CSL style. `Document` keeps citation order, repeated citation state, and bibliography state. Each render returns `Rendered` with `text`, `html`, and `tree`.
 
-- `Library.read` and `Library.parse` for BibTeX, BibLaTeX, and Hayagriva YAML
-- `Style.load`, `Style.from_path`, and `Style.from_xml`
-- `Document.cite` and `Document.bibliography`
-- `Rendered.text`, `Rendered.html`, and `Rendered.tree`
-- `BibDocument` for raw BibTeX comments, preambles, strings, failed blocks, order, spans, and field edits
+Use the one-call helpers for scripts:
 
-See [packages/refkit/README.md](packages/refkit/README.md) for the package contract.
+```python
+rk.cite("refs.bib", "doe2024", style="ieee").text
+rk.bibliography("refs.bib", style="chicago-author-date").html
+```
 
-## polars-refkit
+## Process BibTeX Columns In Polars
 
 ```python
 import polars as pl
@@ -65,22 +54,52 @@ df = pl.DataFrame(
 out = df.select(
     citation=prk.cite("bibtex", "key"),
     citations=prk.cite_sequence("bibtex", "keys"),
+    bibliography=prk.bibliography_html("bibtex"),
     count=prk.entry_count("bibtex"),
     keys=prk.keys("bibtex"),
     entries=prk.entries("bibtex"),
 )
 ```
 
-`polars-refkit` supports:
+`polars-refkit` runs inside the Polars expression engine. Each row is one BibTeX or BibLaTeX source. Parse failures return null for value expressions and diagnostics through `diagnostics` or `parse_report`.
 
-- citation and bibliography rendering as text, HTML, or `{text, html}` structs
-- ordered citation batches from `List[String]` key columns with `cite_sequence`
-- entry counts, key lists, parse reports, diagnostics, and validity checks
-- normalized entry projection as `List[Struct]`
-- Hayagriva entry JSON export for interchange
-- the `pl.Expr.refkit` namespace
+## Choose A Package
 
-See [packages/polars-refkit/README.md](packages/polars-refkit/README.md) for the package contract.
+| Package | Import | Use it for |
+| --- | --- | --- |
+| `refkit` | `import refkit as rk` | Citation rendering, normalized library access, selectors, and raw BibTeX editing. |
+| `polars-refkit` | `import polars_refkit as prk` | BibTeX parsing, inspection, and rendering inside eager or lazy Polars plans. |
+| `refkit-bench` | `python -m refkit_bench.runner` | Repository benchmark lanes for parser, renderer, raw BibTeX, and Polars workflows. |
+
+## Capabilities
+
+| Capability | `refkit` | `polars-refkit` |
+| --- | --- | --- |
+| Read normalized bibliography data | `Library.read`, `Library.parse` | `entry_count`, `keys`, `entries`, `parse_report` |
+| Render citations | `Document.cite`, `cite` | `cite`, `cite_html`, `cite_rendered`, `cite_sequence` |
+| Render bibliographies | `Document.bibliography`, `bibliography` | `bibliography_text`, `bibliography_html`, `bibliography_rendered` |
+| Load CSL styles and locales | `Style.load`, `Style.from_path`, `Style.from_xml`, `Locale.load` | `style=` and `locale=` arguments |
+| Inspect entries | Mapping access, selectors, `project`, `to_dicts` | `keys`, `entries`, `entries_json` |
+| Edit raw BibTeX | `BibDocument` | Use `refkit` for block-level edits |
+| Export rendered output | `Rendered.text`, `Rendered.html`, `Rendered.tree` | string and struct expressions |
+
+## Architecture
+
+`crates/refkit-core` owns the platform-independent work: parsing, recovery, normalized records, raw BibTeX blocks, style preparation, document rendering, rendered trees, and shared error records.
+
+The Python packages are adapters over that core:
+
+- `refkit` owns PyO3 classes, Python exceptions, GIL release, and Python value conversion.
+- `polars-refkit` owns expression registration, dtypes, broadcasting, null mapping, eager and lazy execution, and dataframe diagnostics.
+
+## Package Docs
+
+- [refkit Python API](packages/refkit/README.md)
+- [polars-refkit expressions](packages/polars-refkit/README.md)
+- [refkit benchmark runner](benchmark/README.md)
+- [API contracts](docs/api-contracts.md)
+- [Migration guide](docs/migration.md)
+- [Feature matrix](docs/feature-matrix.md)
 
 ## Development
 

@@ -1,6 +1,16 @@
 # polars-refkit
 
-`polars-refkit` adds Rust-backed Polars expressions for BibTeX columns. It imports as `polars_refkit`.
+`polars-refkit` adds Rust-backed Polars expressions for BibTeX and BibLaTeX columns. It imports as `polars_refkit`.
+
+## Install
+
+```bash
+pip install polars-refkit
+```
+
+`polars-refkit` requires Polars `>=1.41,<1.42` and supports CPython 3.11 through 3.14.
+
+## Render And Inspect Rows
 
 ```python
 import polars as pl
@@ -26,9 +36,7 @@ out = df.select(
 )
 ```
 
-The expressions run inside the Polars engine. Each row is treated as one BibTeX or BibLaTeX source. Row-level parse failures return null for value expressions and a diagnostic list from `diagnostics`.
-
-Top-level functions and namespace methods use stable default output names, so multiple expressions over the same `bibtex` column can be selected without manual aliases. Use `alias` or named `select` expressions when a result column needs a different name.
+Each row is one BibTeX or BibLaTeX source. The expressions run inside eager `DataFrame.select` and lazy `LazyFrame.select(...).collect()` plans. Row-level parse failures return null for value expressions and a diagnostic list from `diagnostics` or `parse_report`.
 
 String arguments name columns. Use `pl.lit(...)` for literal BibTeX sources or citation keys:
 
@@ -37,25 +45,25 @@ keys = pl.DataFrame({"key": ["doe2024"]})
 out = keys.select(citation=prk.cite(pl.lit(df["bibtex"][0]), "key"))
 ```
 
-Use `cite_sequence` when one row has an ordered list of citation keys and the output should preserve citation order:
+Use `cite_sequence` when one row has an ordered list of citation keys:
 
 ```python
 batch = pl.DataFrame({"keys": [["doe2024", "roe2022"]]})
 out = batch.select(citations=prk.cite_sequence(pl.lit(df["bibtex"][0]), "keys"))
 ```
 
-`polars-refkit` requires Polars `>=1.41,<1.42`.
+Top-level functions and namespace methods use stable default output names, so multiple expressions over the same `bibtex` column can be selected without manual aliases. Use `alias` or named `select` expressions when a result column needs a different name.
 
 ## Capabilities
 
 | Capability | Polars surface |
 | --- | --- |
-| Normalized bibliography input | `entry_count`, `keys`, `entries`, `parse_report`, and `diagnostics` |
-| Citation rendering | `cite`, `cite_html`, `cite_rendered`, `cite_sequence`, and sequence variants |
-| Bibliography rendering | `bibliography_text`, `bibliography_html`, and `bibliography_rendered` |
-| Entry inspection | `keys`, `entries`, and `entries_json` |
-| Bulk tabular processing | eager `DataFrame.select` and lazy `LazyFrame.select(...).collect()` |
-| Expression namespace | `pl.Expr.refkit` methods with the same capability set |
+| Read normalized bibliography data | `entry_count`, `keys`, `entries`, `parse_report`, `diagnostics` |
+| Render citations | `cite`, `cite_html`, `cite_rendered`, `cite_sequence`, and sequence variants |
+| Render bibliographies | `bibliography_text`, `bibliography_html`, `bibliography_rendered` |
+| Inspect entries | `keys`, `entries`, `entries_json` |
+| Process dataframe columns | eager `DataFrame.select` and lazy `LazyFrame.select(...).collect()` |
+| Use expression namespace | `pl.Expr.refkit` methods with the same capability set |
 
 ## Expressions
 
@@ -64,11 +72,11 @@ out = batch.select(citations=prk.cite_sequence(pl.lit(df["bibtex"][0]), "keys"))
 | `cite(bibtex, key, style="apa", locale="en-US", strict=False)` | `String` | Renders one citation as text. Missing keys and row parse failures return null. |
 | `cite_html(bibtex, key, style="apa", locale="en-US", strict=False)` | `String` | Renders one citation as escaped HTML. |
 | `cite_rendered(bibtex, key, style="apa", locale="en-US", strict=False)` | `Struct[text, html]` | Renders one citation with both text and HTML fields. |
-| `cite_sequence(bibtex, keys, style="apa", locale="en-US", strict=False)` | `List[String]` | Renders an ordered list of citation texts from a `List[String]` key column. Missing keys and row parse failures return null for the row. |
-| `cite_sequence_html(bibtex, keys, style="apa", locale="en-US", strict=False)` | `List[String]` | Renders an ordered list of citation HTML strings from a `List[String]` key column. |
+| `cite_sequence(bibtex, keys, style="apa", locale="en-US", strict=False)` | `List[String]` | Renders ordered citation text from a `List[String]` key column. Missing keys and row parse failures return null for the row. |
+| `cite_sequence_html(bibtex, keys, style="apa", locale="en-US", strict=False)` | `List[String]` | Renders ordered citation HTML from a `List[String]` key column. |
 | `cite_sequence_rendered(bibtex, keys, style="apa", locale="en-US", strict=False)` | `List[Struct[text, html]]` | Renders ordered citations with both text and HTML fields. |
 | `bibliography_html(bibtex, style="apa", locale="en-US", strict=False)` | `String` | Renders all entries in the row as an HTML bibliography. Row parse failures return null. |
-| `bibliography_text(bibtex, style="apa", locale="en-US", strict=False)` | `String` | Renders all entries in the row as a plain-text bibliography. |
+| `bibliography_text(bibtex, style="apa", locale="en-US", strict=False)` | `String` | Renders all entries in the row as plain text. |
 | `bibliography_rendered(bibtex, style="apa", locale="en-US", strict=False)` | `Struct[text, html]` | Renders all entries in the row with both bibliography formats. |
 | `entry_count(bibtex, strict=False)` | `UInt32` | Counts normalized entries in each BibTeX string. |
 | `keys(bibtex, strict=False)` | `List[String]` | Returns normalized entry keys in source order. |

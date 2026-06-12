@@ -1,6 +1,16 @@
 # refkit
 
-`refkit` reads BibTeX, BibLaTeX, and Hayagriva YAML into a citation library, renders CSL citations, and edits raw BibTeX documents from Python.
+`refkit` reads BibTeX, BibLaTeX, and Hayagriva YAML, renders CSL citations, and edits raw BibTeX documents from Python.
+
+## Install
+
+```bash
+pip install refkit
+```
+
+`refkit` supports CPython 3.11 through 3.14. Wheels use the Python 3.11 stable ABI.
+
+## Render A Citation
 
 ```python
 import refkit as rk
@@ -13,29 +23,13 @@ first = doc.cite("doe2024")
 second = doc.cite([rk.Cite("doe2024", locator="12", label="page"), "roe2022"])
 
 print(first.text)
+print(second.text)
 print(doc.bibliography().html)
 ```
 
-Use `doc.bibliography(all=True)` to render every entry in the library. Without `all=True`, the bibliography contains entries that have been cited through the document.
+`Document` records citation history. `doc.bibliography()` renders cited entries. Use `doc.bibliography(all=True)` to render every entry in the library.
 
-`refkit` supports CPython 3.11 through 3.14. Wheels use the Python 3.11 stable ABI.
-
-## Capabilities
-
-| Capability | Python surface |
-| --- | --- |
-| Normalized bibliography input | `Library.read` and `Library.parse` |
-| Raw BibTeX document editing | `BibDocument.read`, `BibDocument.parse`, field assignment, and `write` |
-| Citation style input | `Style.load`, `Style.from_path`, `Style.from_xml`, and `Locale.load` |
-| Citation rendering | `Document.cite` and `cite` |
-| Bibliography rendering | `Document.bibliography` and `bibliography` |
-| Rendered output access | `Rendered.text`, `Rendered.html`, and `Rendered.tree` |
-| Entry inspection | `keys`, `get`, `get_many`, `select`, `project`, and `to_dicts` |
-| Error contracts | `MissingReferenceError`, `RefkitError`, `ValueError`, `KeyError`, and `TypeError` at the public call site |
-
-## One-Off Rendering
-
-One-off helpers read a bibliography path, load the style, render, and return a `Rendered` object.
+For one-off scripts, pass a bibliography path directly:
 
 ```python
 rk.cite("refs.bib", "doe2024", style="ieee").text
@@ -44,7 +38,19 @@ rk.bibliography("refs.bib", style="chicago-author-date").html
 
 Use `Library.parse` and `Document` when the bibliography source is already in memory or when several citations share the same library and style.
 
-## Supported Formats
+## Capabilities
+
+| Capability | Python surface |
+| --- | --- |
+| Read normalized bibliography data | `Library.read`, `Library.parse` |
+| Render citations | `Document.cite`, `cite` |
+| Render bibliographies | `Document.bibliography`, `bibliography` |
+| Load styles and locales | `Style.load`, `Style.from_path`, `Style.from_xml`, `Locale.load` |
+| Inspect entries | mapping access, `keys`, `get`, `get_many`, `select`, `project`, `to_dicts` |
+| Edit raw BibTeX | `BibDocument.read`, `BibDocument.parse`, field assignment, `write` |
+| Inspect rendered output | `Rendered.text`, `Rendered.html`, `Rendered.tree` |
+
+## Input Formats
 
 | API | Input | Result |
 | --- | --- | --- |
@@ -52,32 +58,13 @@ Use `Library.parse` and `Document` when the bibliography source is already in me
 | `Library.read(path)` | `.yaml`, `.yml` | Normalized citation library from Hayagriva YAML. |
 | `Library.parse(source, format="bibtex")` | BibTeX or BibLaTeX string | Normalized citation library. |
 | `Library.parse(source, format="yaml")` | Hayagriva YAML string | Normalized citation library. |
-| `BibDocument.read(path)` | `.bib` | Raw document model for comments, preambles, strings, failed blocks, order, spans, and field edits. |
+| `BibDocument.read(path)` | `.bib` | Raw document model with comments, preambles, strings, failed blocks, order, spans, and editable fields. |
 | `Style.load(name)` | Bundled style name such as `apa` | CSL style for rendering. |
 | `Style.from_path(path)` | Independent CSL XML file | CSL style for rendering. |
 | `Style.from_xml(xml)` | Independent CSL XML string | CSL style for rendering. |
 | `Locale.load(code)` | Bundled locale code such as `en-US` | Locale object for rendering. |
 
-## Library
-
-`Library` is the normalized citation database. Use it for rendering, selectors, mapping access, and bulk export.
-
-```python
-library = rk.Library.read("refs.bib")
-
-print(library.keys())
-print(library.project(["key", "title", "doi", "volume"]))
-print(library.to_dicts())
-```
-
-`Library.select` accepts Hayagriva selector strings.
-
-```python
-for entry in library.select("article > periodical[volume]"):
-    print(entry.key, entry.title, entry.parent.title)
-```
-
-Hayagriva YAML is a mapping from citation keys to entry mappings.
+Hayagriva YAML is a mapping from citation keys to entry mappings:
 
 ```yaml
 doe2024:
@@ -92,19 +79,39 @@ doe2024:
 ```
 
 ```python
-source = """
+library = rk.Library.parse(
+    """
 doe2024:
   type: Article
   title: Refkit for Bibliographies
   date: 2024
-"""
-
-library = rk.Library.parse(source, format="yaml")
+""",
+    format="yaml",
+)
 ```
 
-## BibDocument
+## Inspect A Library
 
-`BibDocument` is the raw BibTeX document model. Use it when comments, preambles, strings, failed blocks, order, or source spans need to survive an edit.
+`Library` is the normalized citation database. Use it for rendering, selectors, mapping access, and bulk export.
+
+```python
+library = rk.Library.read("refs.bib")
+
+print(library.keys())
+print(library.project(["key", "title", "doi", "volume"]))
+print(library.to_dicts())
+```
+
+`Library.select` accepts Hayagriva selector strings:
+
+```python
+for entry in library.select("article > periodical[volume]"):
+    print(entry.key, entry.title, entry.parent.title)
+```
+
+## Edit Raw BibTeX
+
+`BibDocument` preserves the raw `.bib` structure that normalized rendering does not need: comments, preambles, string definitions, failed blocks, order, and source spans.
 
 ```python
 raw = rk.BibDocument.read("refs.bib")
@@ -112,7 +119,7 @@ raw.entries["doe2024"].fields["title"].value = "Corrected title"
 raw.write("refs.bib")
 ```
 
-Direct map lookup requires a unique entry key and a unique field name. When a file contains duplicates, choose the source-order occurrence explicitly.
+Direct map lookup requires one matching entry key and one matching field name. When a file contains duplicates, choose the source-order occurrence explicitly:
 
 ```python
 raw = rk.BibDocument.read("refs.bib")
@@ -122,7 +129,7 @@ second_entry.fields.get_all("title")[0].value = "Corrected title"
 raw.write("refs.bib")
 ```
 
-## Rendered
+## Inspect Rendered Output
 
 `Document.cite`, `Document.bibliography`, `cite`, and `bibliography` return `Rendered`.
 
@@ -134,9 +141,11 @@ print(rendered.html)
 print(rendered.tree)
 ```
 
-## Polars
+`Rendered.tree` returns structured nodes for text, links, element metadata, transparent citation fragments, and bibliography entries.
 
-Install `polars-refkit` when BibTeX source lives in a Polars dataframe.
+## Use With Polars
+
+Install `polars-refkit` when BibTeX source lives in a dataframe and the result should stay in a Polars query plan.
 
 ```python
 import polars as pl
