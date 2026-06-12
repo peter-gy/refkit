@@ -9,7 +9,7 @@ description = "Python bindings for fast citation parsing, rendering, and BibTeX 
 repository.workspace = true
 include = [
     "/Cargo.toml",
-    "/LICENSE-APACHE",
+    "/LICENSE",
     "/pyproject.toml",
     "/README.md",
     "/src",

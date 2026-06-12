@@ -16,6 +16,7 @@ NATIVE_EXTENSION_SUFFIXES = {".pyd", ".so"}
 LEGACY_LICENSE_NAME = "MI" + "T"
 LEGACY_LICENSE_FILE = "LICENSE-" + LEGACY_LICENSE_NAME
 LEGACY_DUAL_LICENSE = f"{LEGACY_LICENSE_NAME} OR Apache-2.0".encode()
+OLD_APACHE_LICENSE_FILE = "LICENSE-" + "APACHE"
 FORBIDDEN_PARTS = {
     ".DS_Store",
     ".pytest_cache",
@@ -26,6 +27,7 @@ FORBIDDEN_PARTS = {
     "benchmark",
     "dist",
     LEGACY_LICENSE_FILE,
+    OLD_APACHE_LICENSE_FILE,
     LOCAL_ONLY_GOAL_PART,
     "target",
 }
@@ -57,7 +59,7 @@ SPECS = {
             {
                 "Cargo.lock",
                 "Cargo.toml",
-                "LICENSE-APACHE",
+                "LICENSE",
                 "README.md",
                 "crates/refkit-core/Cargo.toml",
                 "crates/refkit-core/src/lib.rs",
@@ -95,7 +97,7 @@ SPECS = {
             {
                 "Cargo.lock",
                 "Cargo.toml",
-                "LICENSE-APACHE",
+                "LICENSE",
                 "README.md",
                 "crates/refkit-core/Cargo.toml",
                 "crates/refkit-core/src/lib.rs",
@@ -179,7 +181,7 @@ def inspect_package(
             *spec.wheel_required,
             f"{dist_info}/METADATA",
             f"{dist_info}/WHEEL",
-            f"{dist_info}/licenses/LICENSE-APACHE",
+            f"{dist_info}/licenses/LICENSE",
         },
     )
     if not any(is_native_extension(spec, name) for name in wheel_names):
@@ -289,7 +291,11 @@ def assert_no_forbidden_payload(
         raise SystemExit(f"{artifact} file {name!r} contains a forbidden local helper token")
     if not scan_license_text:
         return
-    for forbidden in (LEGACY_DUAL_LICENSE, LEGACY_LICENSE_FILE.encode()):
+    for forbidden in (
+        LEGACY_DUAL_LICENSE,
+        LEGACY_LICENSE_FILE.encode(),
+        OLD_APACHE_LICENSE_FILE.encode(),
+    ):
         if forbidden in payload:
             raise SystemExit(f"{artifact} file {name!r} contains forbidden license text")
 

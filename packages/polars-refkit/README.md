@@ -119,4 +119,4 @@ uv run pytest packages/polars-refkit/tests --no-cov
 
 ## License
 
-`polars-refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE-APACHE](LICENSE-APACHE).
+`polars-refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE](LICENSE).

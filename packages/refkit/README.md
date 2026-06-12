@@ -179,4 +179,4 @@ make package-check
 
 ## License
 
-`refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE-APACHE](LICENSE-APACHE).
+`refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE](LICENSE).

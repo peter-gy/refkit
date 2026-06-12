@@ -9,7 +9,7 @@ description = "Polars expression plugin for refkit citation and BibTeX workflows
 repository.workspace = true
 include = [
     "/Cargo.toml",
-    "/LICENSE-APACHE",
+    "/LICENSE",
     "/README.md",
     "/polars_refkit",
     "/src",
