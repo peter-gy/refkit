@@ -15,36 +15,68 @@ pip install refkit
 ```python
 import refkit as rk
 
-library = rk.Library.read("refs.bib")
+library = rk.Library.parse_bibtex(
+    """
+@article{doe2024,
+  author = {Doe, Jane},
+  title = {Fast Citations},
+  journal = {Journal of Citation Tests},
+  year = {2024}
+}
+@book{roe2022,
+  author = {Roe, Richard},
+  title = {Batch References},
+  publisher = {Example Press},
+  year = {2022}
+}
+"""
+)
 style = rk.Style.load("apa")
 doc = rk.Document(library, style, locale="en-US")
 
-first = doc.cite("doe2024")
-second = doc.cite([rk.Cite("doe2024", locator="12", label="page"), "roe2022"])
+rendered = doc.render(
+    [
+        rk.Citation("intro", "doe2024"),
+        rk.Citation(
+            "detail",
+            rk.CitationGroup([rk.Cite("doe2024", locator="12", label="page"), "roe2022"]),
+        ),
+    ]
+)
 
-print(first.text)
-print(second.text)
-print(doc.bibliography().html)
+print(rendered["intro"].text)
+print(rendered["detail"].text)
+print(rendered.bibliography.text)
 ```
 
-`Document` records citation history. `doc.bibliography()` renders cited entries. Use `doc.bibliography(all=True)` to render every entry in the library.
+Expected output:
+
+```text
+(Doe, 2024)
+(Doe, 2024, p. 12; Roe, 2022)
+Doe, J. (2024). Fast Citations. Journal of Citation Tests.
+Roe, R. (2022). Batch References. Example Press.
+```
+
+`Document.render` renders the whole citation document at once. It returns `RenderedDocument`, where `rendered["intro"]` and `rendered["detail"]` are named citation outputs and `rendered.bibliography` is the cited bibliography for those citations.
+`Cite` names one citation item. `CitationGroup` renders several items as one citation. `Citation(id, group)` gives that rendered citation a stable lookup name. Citation ids must be unique inside one `Document.render` call.
 
 For one-off scripts, pass a bibliography path directly:
 
 ```python
 rk.cite("refs.bib", "doe2024", style="ieee").text
-rk.bibliography("refs.bib", style="chicago-author-date").html
+rk.full_bibliography("refs.bib", style="chicago-author-date").html
 ```
 
-Use `Library.parse` and `Document` when the bibliography source is already in memory or when several citations share the same library and style.
+Use `Library.parse_bibtex`, `Library.parse_yaml`, and `Document` when the bibliography source is already in memory or when several citations share the same library and style.
 
 ## Capabilities
 
 | Capability | Python surface |
 | --- | --- |
-| Read normalized bibliography data | `Library.read`, `Library.parse` |
-| Render citations | `Document.cite`, `cite` |
-| Render bibliographies | `Document.bibliography`, `bibliography` |
+| Read normalized bibliography data | `Library.read`, `Library.parse_bibtex`, `Library.parse_yaml` |
+| Render citations | `Document.render`, `Citation`, `Cite`, `CitationGroup`, `cite` |
+| Render bibliographies | `Document.cited_bibliography`, `Document.full_bibliography`, `full_bibliography` |
 | Load styles and locales | `Style.load`, `Style.from_path`, `Style.from_xml`, `Locale.load` |
 | Inspect entries | mapping access, `keys`, `get`, `get_many`, `select`, `project`, `to_dicts` |
 | Edit raw BibTeX | `BibDocument.read`, `BibDocument.parse`, field assignment, `write` |
@@ -56,8 +88,8 @@ Use `Library.parse` and `Document` when the bibliography source is already in me
 | --- | --- | --- |
 | `Library.read(path)` | `.bib` | Normalized citation library from BibTeX or BibLaTeX. |
 | `Library.read(path)` | `.yaml`, `.yml` | Normalized citation library from Hayagriva YAML. |
-| `Library.parse(source, format="bibtex")` | BibTeX or BibLaTeX string | Normalized citation library. |
-| `Library.parse(source, format="yaml")` | Hayagriva YAML string | Normalized citation library. |
+| `Library.parse_bibtex(source)` | BibTeX or BibLaTeX string | Normalized citation library. |
+| `Library.parse_yaml(source)` | Hayagriva YAML string | Normalized citation library. |
 | `BibDocument.read(path)` | `.bib` | Raw document model with comments, preambles, strings, failed blocks, order, spans, and editable fields. |
 | `Style.load(name)` | Bundled style name such as `apa` | CSL style for rendering. |
 | `Style.from_path(path)` | Independent CSL XML file | CSL style for rendering. |
@@ -79,14 +111,13 @@ doe2024:
 ```
 
 ```python
-library = rk.Library.parse(
+library = rk.Library.parse_yaml(
     """
 doe2024:
   type: Article
   title: Refkit for Bibliographies
   date: 2024
-""",
-    format="yaml",
+"""
 )
 ```
 
@@ -106,7 +137,7 @@ print(library.to_dicts())
 
 ```python
 for entry in library.select("article > periodical[volume]"):
-    print(entry.key, entry.title, entry.parent.title)
+    print(entry.key, entry.title, entry.parents[0].title)
 ```
 
 ## Edit Raw BibTeX
@@ -119,7 +150,7 @@ raw.entries["doe2024"].fields["title"].value = "Corrected title"
 raw.write("refs.bib")
 ```
 
-Direct map lookup requires one matching entry key and one matching field name. When a file contains duplicates, choose the source-order occurrence explicitly:
+Direct map lookup requires one matching entry key and one matching field name. `unique_keys()` returns one key per name. `occurrence_keys()` returns keys in source order, including duplicates. When a file contains duplicates, choose the source-order occurrence explicitly:
 
 ```python
 raw = rk.BibDocument.read("refs.bib")
@@ -131,14 +162,15 @@ raw.write("refs.bib")
 
 ## Inspect Rendered Output
 
-`Document.cite`, `Document.bibliography`, `cite`, and `bibliography` return `Rendered`.
+`Document.render`, `Document.cited_bibliography`, `Document.full_bibliography`, `cite`, and `full_bibliography` return rendered values.
 
 ```python
-rendered = doc.cite("doe2024")
+rendered = doc.render([rk.Citation("intro", "doe2024")])
+citation = rendered["intro"]
 
-print(rendered.text)
-print(rendered.html)
-print(rendered.tree)
+print(citation.text)
+print(citation.html)
+print(citation.tree)
 ```
 
 `Rendered.tree` returns structured nodes for text, links, element metadata, transparent citation fragments, and bibliography entries.
@@ -160,11 +192,12 @@ df = pl.DataFrame(
 )
 
 out = df.select(
-    citation=prk.cite("bibtex", "key"),
-    citations=prk.cite_sequence("bibtex", "keys"),
-    count=prk.entry_count("bibtex"),
-    keys=prk.keys("bibtex"),
-    entries=prk.entries("bibtex"),
+    citation=pl.col("bibtex").refkit.cite(pl.col("key")),
+    each_citation=pl.col("bibtex").refkit.cite_each(pl.col("keys")),
+    grouped_citation=pl.col("bibtex").refkit.cite_group(pl.col("keys")),
+    count=pl.col("bibtex").refkit.entry_count(),
+    keys=pl.col("bibtex").refkit.keys(),
+    entries=pl.col("bibtex").refkit.entries(),
 )
 ```
 

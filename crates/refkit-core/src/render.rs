@@ -36,13 +36,22 @@ pub fn render_library_citation(
     render_citation(library.inner(), key, style.inner.as_ref(), locale)
 }
 
-pub fn render_library_citation_sequence(
+pub fn render_library_citation_each(
     library: &Library,
     keys: &[&str],
     style: &PreparedStyle,
     locale: Option<&str>,
 ) -> Result<Vec<RenderedOutput>, String> {
-    render_citation_sequence(library.inner(), keys, style.inner.as_ref(), locale)
+    render_citation_each(library.inner(), keys, style.inner.as_ref(), locale)
+}
+
+pub fn render_library_citation_group(
+    library: &Library,
+    keys: &[&str],
+    style: &PreparedStyle,
+    locale: Option<&str>,
+) -> Result<RenderedOutput, String> {
+    render_citation_group(library.inner(), keys, style.inner.as_ref(), locale)
 }
 
 pub fn render_library_bibliography(
@@ -52,6 +61,28 @@ pub fn render_library_bibliography(
     all: bool,
 ) -> Result<RenderedOutput, String> {
     render_bibliography(library.inner(), style.inner.as_ref(), locale, all)
+}
+
+pub(crate) fn render_citation_group(
+    library: &HayLibrary,
+    keys: &[&str],
+    style: &IndependentStyle,
+    locale: Option<&str>,
+) -> Result<RenderedOutput, String> {
+    let locales = bundled_locales();
+    let locale = locale.map(|code| LocaleCode(code.to_string()));
+    let mut items = Vec::with_capacity(keys.len());
+    for key in keys {
+        let entry = library
+            .get(key)
+            .ok_or_else(|| format!("missing reference {}", quoted(key)))?;
+        items.push(CitationItem::with_entry(entry));
+    }
+    let children = standalone_citation(CitationRequest::new(items, style, locale, locales, None));
+    Ok(RenderedOutput {
+        text: elem_children_to_string(&children, BufWriteFormat::Plain)?,
+        html: elem_children_to_html(&children)?,
+    })
 }
 
 pub(crate) fn render_citation(
@@ -90,7 +121,7 @@ pub(crate) fn render_citation(
     })
 }
 
-pub(crate) fn render_citation_sequence(
+pub(crate) fn render_citation_each(
     library: &HayLibrary,
     keys: &[&str],
     style: &IndependentStyle,
@@ -100,7 +131,7 @@ pub(crate) fn render_citation_sequence(
     let locale = locale.map(|code| LocaleCode(code.to_string()));
     if can_fast_render_single_citations(style) {
         if let Some(rendered) =
-            render_independent_citation_sequence(library, keys, style, locale.clone(), locales)?
+            render_independent_citation_each(library, keys, style, locale.clone(), locales)?
         {
             return Ok(rendered);
         }
@@ -138,7 +169,7 @@ pub(crate) fn render_citation_sequence(
         .collect()
 }
 
-fn render_independent_citation_sequence(
+fn render_independent_citation_each(
     library: &HayLibrary,
     keys: &[&str],
     style: &IndependentStyle,
@@ -495,7 +526,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_citation_sequence_in_key_order() {
+    fn renders_citation_each_in_key_order() {
         let library = Library::parse_source(
             "@article{doe2024, author = {Doe, Jane}, title = {Core}, year = {2024}}
              @article{roe2023, author = {Roe, Richard}, title = {Edges}, year = {2023}}",
@@ -506,7 +537,7 @@ mod tests {
         .unwrap();
         let style = load_prepared_style("apa").unwrap();
 
-        let rendered = render_library_citation_sequence(
+        let rendered = render_library_citation_each(
             &library,
             &["doe2024", "roe2023"],
             style.as_ref(),
@@ -522,7 +553,7 @@ mod tests {
     }
 
     #[test]
-    fn citation_sequence_falls_back_for_ambiguous_fast_texts() {
+    fn citation_each_falls_back_for_ambiguous_fast_texts() {
         let library = Library::parse_source(
             "@article{doe2024a, author = {Doe, Jane}, title = {Alpha}, year = {2024}}
              @article{doe2024b, author = {Doe, Jane}, title = {Beta}, year = {2024}}",
@@ -533,7 +564,7 @@ mod tests {
         .unwrap();
         let style = load_prepared_style("apa").unwrap();
 
-        let rendered = render_library_citation_sequence(
+        let rendered = render_library_citation_each(
             &library,
             &["doe2024a", "doe2024b"],
             style.as_ref(),

@@ -80,14 +80,27 @@ def _run_with_worker_progress(operation: Callable[[], T]) -> T:
     return result
 
 
+def _render_one(doc: rk.Document, citation: str | rk.Cite | rk.CitationGroup) -> rk.Rendered:
+    return doc.render([rk.Citation("citation", citation)])["citation"]
+
+
 def test_public_document_example_renders_text_html_and_tree() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     style = rk.Style.load("apa")
 
     doc = rk.Document(library, style, locale="en-US")
-    first = doc.cite("doe2024")
-    second = doc.cite([rk.Cite("doe2024", locator="12", label="page"), "roe2022"])
-    bibliography = doc.bibliography()
+    rendered = doc.render(
+        [
+            rk.Citation("first", "doe2024"),
+            rk.Citation(
+                "second",
+                rk.CitationGroup([rk.Cite("doe2024", locator="12", label="page"), "roe2022"]),
+            ),
+        ]
+    )
+    first = rendered["first"]
+    second = rendered["second"]
+    bibliography = rendered.bibliography
     entry = library["doe2024"]
 
     assert "Doe" in first.text
@@ -102,19 +115,35 @@ def test_public_document_example_renders_text_html_and_tree() -> None:
     assert first.to_tree() == first.tree
 
 
-def test_document_accepts_iterables_for_citation_groups() -> None:
+def test_document_accepts_named_citation_groups() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
-    rendered = doc.cite(key for key in ["doe2024", "roe2022"])
+    group = rk.CitationGroup(key for key in ["doe2024", "roe2022"])
+    rendered = doc.render([rk.Citation("group", group)])
 
-    assert rendered.text
-    assert doc.bibliography().text
+    assert len(group) == 2
+    assert [item.key for item in group.items] == ["doe2024", "roe2022"]
+    assert rendered["group"].text
+    assert rendered.bibliography.text
+
+
+def test_document_rejects_unnamed_iterable_citation_groups() -> None:
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+
+    with pytest.raises(TypeError, match="Citation"):
+        doc.render(cast(Any, ["doe2024", "roe2022"]))
+
+
+def test_citation_group_requires_at_least_one_citation() -> None:
+    with pytest.raises(ValueError, match="at least one citation"):
+        rk.CitationGroup([])
 
 
 def test_one_off_helpers_render_citation_and_bibliography() -> None:
     citation = rk.cite(FIXTURES / "basic.bib", "doe2024", style="ieee")
-    bibliography = rk.bibliography(FIXTURES / "basic.bib", style="chicago-author-date")
+    bibliography = rk.full_bibliography(FIXTURES / "basic.bib", style="chicago-author-date")
 
     assert citation.text
     assert bibliography.text
@@ -123,35 +152,42 @@ def test_one_off_helpers_render_citation_and_bibliography() -> None:
     assert "Roe" in bibliography.text
 
 
-def test_one_off_cite_accepts_iterable_citation_groups() -> None:
-    tuple_group = rk.cite(FIXTURES / "basic.bib", ("doe2024", "roe2022"), style="apa")
-    generator_group = rk.cite(
+def test_one_off_cite_accepts_named_citation_groups() -> None:
+    rendered = rk.cite(
         FIXTURES / "basic.bib",
-        (key for key in ["doe2024", "roe2022"]),
+        rk.CitationGroup(["doe2024", "roe2022"]),
         style="apa",
     )
 
-    assert "Doe" in tuple_group.text
-    assert "Roe" in tuple_group.text
-    assert generator_group.text == tuple_group.text
+    assert "Doe" in rendered.text
+    assert "Roe" in rendered.text
+
+
+def test_one_off_cite_rejects_unnamed_iterable_citation_groups() -> None:
+    with pytest.raises(TypeError, match="CitationGroup"):
+        rk.cite(
+            FIXTURES / "basic.bib",
+            cast(Any, ("doe2024", "roe2022")),
+            style="apa",
+        )
 
 
 def test_one_off_helpers_accept_loaded_style_objects() -> None:
     style = rk.Style.load("apa")
 
     citation = rk.cite(FIXTURES / "basic.bib", "doe2024", style=style)
-    bibliography = rk.bibliography(FIXTURES / "basic.bib", style=style)
+    bibliography = rk.full_bibliography(FIXTURES / "basic.bib", style=style)
 
     assert "Doe" in citation.text
     assert "Doe" in bibliography.text
 
 
 def test_real_arxiv_bibtex_fixture_parses_inspects_and_renders() -> None:
-    library = rk.Library.read(ARXIV_FIXTURE, diagnostics=True)
+    library = rk.Library.read(ARXIV_FIXTURE, recovery="report")
     raw = rk.BibDocument.read(ARXIV_FIXTURE)
     rows = {row["key"]: row for row in library.project(["key", "title", "doi", "volume"])}
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
-    bibliography = doc.bibliography(all=True)
+    bibliography = doc.full_bibliography()
     one_off = rk.cite(ARXIV_FIXTURE, "Kimi_K2.5", style="apa")
 
     assert len(library) == 12
@@ -163,18 +199,18 @@ def test_real_arxiv_bibtex_fixture_parses_inspects_and_renders() -> None:
     assert title.startswith("DeepResearchGym")
     assert rows["DeepResearchGym"]["doi"] == "10.48550/ARXIV.2505.19253"
     assert rows["ijcai2019p684"]["volume"] is None
-    assert doc.cite("ijcai2019p684").text == "(Chen et al., 2019)"
+    assert _render_one(doc, "ijcai2019p684").text == "(Chen et al., 2019)"
     assert one_off.text == "(Team, 2026)"
     assert "Ancient–Modern Chinese Translation" in bibliography.text
     assert "10.48550/ARXIV.2505.19253" in bibliography.text
 
 
-def test_document_bibliography_all_renders_uncited_library_entries() -> None:
+def test_document_bibliography_scope_is_explicit() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
-    cited = doc.bibliography()
-    full = doc.bibliography(all=True)
+    cited = doc.cited_bibliography([])
+    full = doc.full_bibliography()
 
     assert cited.text == ""
     assert cited.html == ""
@@ -183,10 +219,10 @@ def test_document_bibliography_all_renders_uncited_library_entries() -> None:
 
 
 def test_bibliography_render_releases_gil_for_worker_thread() -> None:
-    library = rk.Library.parse(_many_bibtex_records(2000))
+    library = rk.Library.parse_bibtex(_many_bibtex_records(2000))
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
-    rendered = _run_with_worker_progress(lambda: doc.bibliography(all=True))
+    rendered = _run_with_worker_progress(lambda: doc.full_bibliography())
 
     assert rendered.text
 
@@ -201,7 +237,7 @@ def test_raw_bib_document_write_releases_gil_for_worker_thread(tmp_path: Path) -
 
 
 def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
-    library = rk.Library.parse(
+    library = rk.Library.parse_bibtex(
         """@article{inline,
   author = {Doe, Jane},
   title = {Inline Source},
@@ -241,7 +277,7 @@ def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
     with pytest.raises(ValueError, match="unsupported projection field"):
         library.project(["unknown"])
 
-    yaml_library = rk.Library.parse((FIXTURES / "parent.yaml").read_text(), format="yaml")
+    yaml_library = rk.Library.parse_yaml((FIXTURES / "parent.yaml").read_text())
     matches = yaml_library.select("article > periodical[volume]")
 
     assert matches[0].key == "doe2024"
@@ -255,6 +291,34 @@ def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
     ]
 
 
+def test_mode_and_option_arguments_are_keyword_only() -> None:
+    library = rk.Library.read(FIXTURES / "basic.bib", recovery="report")
+    parsed = rk.Library.parse_bibtex("@article{inline, title={Inline Source}, year={2024}}")
+    style = rk.Style.load("apa")
+    doc = rk.Document(library, style, locale="en-US")
+
+    assert parsed.keys() == ["inline"]
+    assert doc.full_bibliography().text
+    assert library.project(["key"], keys=["doe2024"]) == [{"key": "doe2024"}]
+    assert rk.Cite("doe2024", locator="12", label="page").locator == "12"
+
+    with pytest.raises(TypeError):
+        cast(Any, rk.Library.read)(FIXTURES / "basic.bib", True)
+    with pytest.raises(TypeError):
+        cast(Any, rk.Library.parse_bibtex)(
+            "@article{inline, title={Inline Source}, year={2024}}",
+            True,
+        )
+    with pytest.raises(TypeError):
+        cast(Any, rk.Cite)("doe2024", "12", "page")
+    with pytest.raises(TypeError):
+        cast(Any, rk.Document)(library, style, "en-US")
+    with pytest.raises(TypeError):
+        cast(Any, doc.full_bibliography)(True)
+    with pytest.raises(TypeError):
+        cast(Any, library.project)(["key"], ["doe2024"])
+
+
 def test_library_values_entry_types_and_parent_lists_are_public_contracts() -> None:
     library = rk.Library.read(FIXTURES / "parent.yaml")
     entry = library["doe2024"]
@@ -266,7 +330,7 @@ def test_library_values_entry_types_and_parent_lists_are_public_contracts() -> N
 
 
 def test_entry_parent_chains_preserve_nested_hayagriva_parents() -> None:
-    library = rk.Library.parse(
+    library = rk.Library.parse_yaml(
         """chapter:
   type: Chapter
   title: Nested Chapter
@@ -276,15 +340,11 @@ def test_entry_parent_chains_preserve_nested_hayagriva_parents() -> None:
     parent:
       type: Anthology
       title: Grand Collection
-""",
-        format="yaml",
+"""
     )
 
     entry = library["chapter"]
-    assert entry.parent is not None
-    assert entry.parent.title == "Parent Book"
-    assert entry.parent.parent is not None
-    assert entry.parent.parent.title == "Grand Collection"
+    assert entry.parents[0].title == "Parent Book"
     assert entry.parents[0].parents[0].entry_type == "Anthology"
 
 
@@ -329,7 +389,7 @@ def test_rendered_html_escapes_bibliography_data(tmp_path: Path) -> None:
 """,
     )
 
-    rendered = rk.bibliography(source, style="apa")
+    rendered = rk.full_bibliography(source, style="apa")
 
     assert "<script>" not in rendered.html
     assert "&lt;script&gt;" in rendered.html
@@ -347,7 +407,7 @@ def test_rendered_html_does_not_emit_unsafe_link_schemes(tmp_path: Path) -> None
 """,
     )
 
-    rendered = rk.bibliography(source, style="apa")
+    rendered = rk.full_bibliography(source, style="apa")
 
     assert 'href="javascript:alert(1)"' not in rendered.html
     assert "javascript:alert(1)" in rendered.html
@@ -363,8 +423,7 @@ def test_rendered_html_preserves_csl_formatting() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
-    doc.cite("doe2024")
-    rendered = doc.bibliography()
+    rendered = doc.cited_bibliography([rk.Citation("citation", "doe2024")])
 
     assert "<i>Journal of Citation Systems</i>" in rendered.html
     assert '<a href="https://doi.org/10.1234/refkit.2024">' in rendered.html
@@ -374,8 +433,7 @@ def test_bibliography_text_and_tree_include_second_field_labels() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     doc = rk.Document(library, rk.Style.load("ieee"), locale="en-US")
 
-    doc.cite("doe2024")
-    rendered = doc.bibliography()
+    rendered = doc.cited_bibliography([rk.Citation("citation", "doe2024")])
     entry = cast(dict[str, Any], rendered.tree[0])
     first_field = cast(dict[str, Any], entry["first_field"])
 
@@ -389,8 +447,9 @@ def test_bibliography_text_and_tree_include_second_field_labels() -> None:
 def test_rendered_tree_exposes_documented_structured_keys() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     doc = rk.Document(library, rk.Style.load("ieee"), locale="en-US")
-    citation_tree = doc.cite("doe2024").tree
-    bibliography_tree = doc.bibliography().tree
+    rendered = doc.render([rk.Citation("citation", "doe2024")])
+    citation_tree = rendered["citation"].tree
+    bibliography_tree = rendered.bibliography.tree
 
     assert citation_tree[0]["kind"] == "Element"
     assert "children" in citation_tree[0]
@@ -404,7 +463,7 @@ def test_rendered_tree_uses_stable_public_strings() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     doc = rk.Document(library, rk.Style.load("ieee"), locale="en-US")
 
-    citation_tree = doc.cite("doe2024").tree
+    citation_tree = _render_one(doc, "doe2024").tree
     entry_node = cast(dict[str, Any], citation_tree[0])
     nodes = list(_tree_nodes(citation_tree))
     citation_number = next(node for node in nodes if node.get("meta") == "CitationNumber")
@@ -430,8 +489,7 @@ def test_library_reads_yaml_and_selects_parent_periodical() -> None:
     assert len(matches) == 1
     assert matches[0].key == "doe2024"
     assert matches[0].title == "Refkit for Bibliographies"
-    assert matches[0].parent is not None
-    assert matches[0].parent.title == "Journal of Citation Systems"
+    assert matches[0].parents[0].title == "Journal of Citation Systems"
 
 
 def test_library_reads_yml() -> None:
@@ -471,42 +529,36 @@ def test_library_reads_hayagriva_yaml_schema_and_selectors(tmp_path: Path) -> No
     yml_path = tmp_path / "hayagriva-rich.yml"
     yml_path.write_text(source, encoding="utf-8")
     assert rk.Library.read(yml_path).keys() == library.keys()
-    assert rk.Library.parse(source, format="yaml").keys() == library.keys()
-    assert rk.Library.parse(source, format="yml").keys() == library.keys()
+    assert rk.Library.parse_yaml(source).keys() == library.keys()
 
 
-def test_library_reads_bibtex_and_biblatex_aliases() -> None:
+def test_library_reads_bibtex_and_biblatex_sources() -> None:
     source = (FIXTURES / "typst-biblatex.bib").read_text(encoding="utf-8")
     read_library = rk.Library.read(FIXTURES / "typst-biblatex.bib")
 
     assert read_library["biblatex2023"].title == "The biblatex Package"
-    assert read_library["arrgh"].parent is not None
-    assert read_library["arrgh"].parent.title == "Journal of Political Economy"
+    assert read_library["arrgh"].parents[0].title == "Journal of Political Economy"
     assert read_library["arrgh"].volume == "115"
-    assert read_library["tolkien54"].parent is not None
-    assert read_library["tolkien54"].parent.title == "The Lord of the Rings"
+    assert read_library["tolkien54"].parents[0].title == "The Lord of the Rings"
 
-    for format_name in ["bib", "bibtex", "biblatex"]:
-        library = rk.Library.parse(source, format=format_name)
-        assert library["arrgh"].volume == "115"
-        assert library.project(["key", "title", "volume"], keys=["tolkien54"]) == [
-            {
-                "key": "tolkien54",
-                "title": "The Fellowship of the Ring",
-                "volume": "1",
-            }
-        ]
+    library = rk.Library.parse_bibtex(source)
+
+    assert library["arrgh"].volume == "115"
+    assert library.project(["key", "title", "volume"], keys=["tolkien54"]) == [
+        {
+            "key": "tolkien54",
+            "title": "The Fellowship of the Ring",
+            "volume": "1",
+        }
+    ]
 
 
-def test_library_reports_unsupported_read_extension_and_parse_format(tmp_path: Path) -> None:
+def test_library_reports_unsupported_read_extension(tmp_path: Path) -> None:
     source = tmp_path / "refs.json"
     source.write_text("{}", encoding="utf-8")
 
     with pytest.raises(rk.RefkitError, match='unsupported bibliography extension "json"'):
         rk.Library.read(source)
-
-    with pytest.raises(rk.RefkitError, match='unsupported bibliography format "json"'):
-        rk.Library.parse("{}", format="json")
 
 
 def test_style_and_locale_loaders_cover_supported_sources() -> None:
@@ -526,7 +578,7 @@ def test_style_and_locale_loaders_cover_supported_sources() -> None:
     assert from_path.id.endswith("refkit-note.csl")
     assert from_path.title == "Refkit Note Fixture"
     assert locale.code == "en-US"
-    assert "Doe" in document.cite("doe2024").text
+    assert "Doe" in _render_one(document, "doe2024").text
 
     with pytest.raises(ValueError, match="unknown bundled style"):
         rk.Style.load("unknown-style")
@@ -536,7 +588,7 @@ def test_style_and_locale_loaders_cover_supported_sources() -> None:
         rk.Locale.load("zz-ZZ")
 
 
-def test_library_default_recovery_keeps_valid_bibtex_entries_with_diagnostics(
+def test_library_report_recovery_keeps_valid_bibtex_records_with_diagnostics(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "mixed.bib"
@@ -553,9 +605,9 @@ def test_library_default_recovery_keeps_valid_bibtex_entries_with_diagnostics(
     )
 
     with pytest.raises(rk.RefkitError):
-        rk.Library.read(source, strict=True)
+        rk.Library.read(source)
 
-    library = rk.Library.read(source, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
     assert library["valid"].title == "Kept Entry"
@@ -563,9 +615,10 @@ def test_library_default_recovery_keeps_valid_bibtex_entries_with_diagnostics(
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
 
 
-def test_library_parse_default_recovery_keeps_valid_bibtex_entries() -> None:
-    library = rk.Library.parse(
-        """@article{valid,
+def test_library_parse_bibtex_default_recovery_raises_on_malformed_records() -> None:
+    with pytest.raises(rk.RefkitError, match="parse error"):
+        rk.Library.parse_bibtex(
+            """@article{valid,
   author = {Doe, Jane},
   title = {Kept Entry},
   year = {2024}
@@ -574,6 +627,21 @@ def test_library_parse_default_recovery_keeps_valid_bibtex_entries() -> None:
 @broken{missing,
   title = {No close}
 """
+        )
+
+
+def test_library_parse_bibtex_report_recovery_keeps_valid_records() -> None:
+    library = rk.Library.parse_bibtex(
+        """@article{valid,
+  author = {Doe, Jane},
+  title = {Kept Entry},
+  year = {2024}
+}
+
+@broken{missing,
+  title = {No close}
+""",
+        recovery="report",
     )
 
     assert library.keys() == ["valid"]
@@ -582,16 +650,16 @@ def test_library_parse_default_recovery_keeps_valid_bibtex_entries() -> None:
 def test_library_rejects_malformed_only_bibtex_without_rejecting_empty_input(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(rk.RefkitError, match="malformed BibTeX block"):
-        rk.Library.parse("@broken{missing", format="bibtex")
+    with pytest.raises(rk.RefkitError, match="parse error"):
+        rk.Library.parse_bibtex("@broken{missing")
 
     malformed = tmp_path / "malformed.bib"
     malformed.write_text("@broken{missing")
-    with pytest.raises(rk.RefkitError, match="malformed BibTeX block"):
+    with pytest.raises(rk.RefkitError, match="parse error"):
         rk.Library.read(malformed)
 
-    assert rk.Library.parse("", format="bibtex").is_empty()
-    assert rk.Library.parse("% only a comment\n", format="bibtex").is_empty()
+    assert rk.Library.parse_bibtex("").is_empty()
+    assert rk.Library.parse_bibtex("% only a comment\n").is_empty()
 
 
 def test_library_non_strict_recovers_entries_after_unclosed_block(tmp_path: Path) -> None:
@@ -614,7 +682,7 @@ def test_library_non_strict_recovers_entries_after_unclosed_block(tmp_path: Path
 """,
     )
 
-    library = rk.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["before", "after"]
     assert library["after"].title == "After"
@@ -633,7 +701,7 @@ def test_library_non_strict_recovers_entry_after_malformed_at_line(tmp_path: Pat
 """,
     )
 
-    library = rk.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -655,7 +723,7 @@ def test_library_non_strict_drops_closed_malformed_entries(tmp_path: Path) -> No
 """,
     )
 
-    library = rk.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
     assert library.diagnostics
@@ -678,7 +746,7 @@ def test_library_non_strict_drops_missing_separator_after_bare_value(tmp_path: P
 """,
     )
 
-    library = rk.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -700,7 +768,7 @@ def test_library_non_strict_drops_missing_field_values(tmp_path: Path) -> None:
 """,
     )
 
-    library = rk.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -722,7 +790,7 @@ def test_library_non_strict_drops_entries_missing_key_comma(tmp_path: Path) -> N
 """,
     )
 
-    library = rk.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -744,7 +812,7 @@ def test_library_non_strict_drops_malformed_field_identifiers(tmp_path: Path) ->
 """,
     )
 
-    library = rk.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -766,7 +834,7 @@ def test_library_non_strict_drops_malformed_unsafe_bare_values(tmp_path: Path) -
 """,
     )
 
-    library = rk.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
     assert "ignored malformed BibTeX block" in library.diagnostics[0]
@@ -787,7 +855,7 @@ def test_library_non_strict_drops_malformed_string_definitions(tmp_path: Path) -
 """,
     )
 
-    library = rk.Library.read(source, strict=False, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
     assert len(library.diagnostics) == 3
@@ -795,7 +863,7 @@ def test_library_non_strict_drops_malformed_string_definitions(tmp_path: Path) -
 
 
 def test_library_recovery_ignores_invalid_typed_fields() -> None:
-    library = rk.Library.parse(
+    library = rk.Library.parse_bibtex(
         """@article{badmonth,
   author = {Doe, Jane},
   title = {Bad Month},
@@ -803,7 +871,7 @@ def test_library_recovery_ignores_invalid_typed_fields() -> None:
   month = {16}
 }
 """,
-        diagnostics=True,
+        recovery="report",
     )
 
     assert library.keys() == ["badmonth"]
@@ -812,7 +880,7 @@ def test_library_recovery_ignores_invalid_typed_fields() -> None:
 
 
 def test_library_recovery_literalizes_unknown_bibtex_abbreviations() -> None:
-    library = rk.Library.parse(
+    library = rk.Library.parse_bibtex(
         """@article{macro,
   author = {Doe, Jane},
   title = {Macro Journal},
@@ -820,7 +888,7 @@ def test_library_recovery_literalizes_unknown_bibtex_abbreviations() -> None:
   journal = JMLR # { Extra}
 }
 """,
-        diagnostics=True,
+        recovery="report",
     )
 
     assert library.keys() == ["macro"]
@@ -840,7 +908,7 @@ def test_library_read_decodes_windows_1252_bibtex(tmp_path: Path) -> None:
     )
 
     raw = rk.BibDocument.read(source)
-    library = rk.Library.read(source, diagnostics=True)
+    library = rk.Library.read(source, recovery="report")
 
     assert raw.entries["encoded"].fields["title"].value == "Smart ’ Quote"
     assert library["encoded"].title == "Smart ’ Quote"
@@ -852,9 +920,22 @@ def test_missing_reference_raises_structured_error() -> None:
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
     with pytest.raises(rk.MissingReferenceError, match="missing-key"):
-        doc.cite("missing-key")
+        doc.render([rk.Citation("missing", "missing-key")])
 
-    assert "Doe" in doc.cite("doe2024").text
+    assert "Doe" in _render_one(doc, "doe2024").text
+
+
+def test_document_render_rejects_duplicate_citation_ids() -> None:
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+
+    with pytest.raises(ValueError, match='duplicate citation id "same"'):
+        doc.render(
+            [
+                rk.Citation("same", "doe2024"),
+                rk.Citation("same", "smith2023"),
+            ]
+        )
 
 
 def test_invalid_locator_label_raises_value_error() -> None:
@@ -862,20 +943,20 @@ def test_invalid_locator_label_raises_value_error() -> None:
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
     with pytest.raises(ValueError, match='unknown locator label "nonsense"'):
-        doc.cite(rk.Cite("doe2024", locator="12", label="nonsense"))
+        doc.render([rk.Citation("citation", rk.Cite("doe2024", locator="12", label="nonsense"))])
 
 
 def test_valid_locator_label_renders_locator_text() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
-    rendered = doc.cite(rk.Cite("doe2024", locator="12", label="page"))
+    rendered = _render_one(doc, rk.Cite("doe2024", locator="12", label="page"))
 
     assert rendered.text == "(Doe, 2024, p. 12)"
 
 
 def test_ambiguous_author_date_citations_fall_back_to_disambiguation() -> None:
-    library = rk.Library.parse(
+    library = rk.Library.parse_bibtex(
         """@article{first,
   author = {Doe, Jane},
   title = {First},
@@ -893,9 +974,16 @@ def test_ambiguous_author_date_citations_fall_back_to_disambiguation() -> None:
     )
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
-    assert doc.cite("first").text == "(Doe, 2024)"
-    assert doc.cite("second").text == "(Doe, 2024b)"
-    assert "2024a" in doc.bibliography().text
+    rendered = doc.render(
+        [
+            rk.Citation("first", "first"),
+            rk.Citation("second", "second"),
+        ]
+    )
+
+    assert rendered["first"].text == "(Doe, 2024a)"
+    assert rendered["second"].text == "(Doe, 2024b)"
+    assert "2024a" in rendered.bibliography.text
 
 
 def test_bibliography_only_year_suffix_does_not_change_citation_text() -> None:
@@ -927,7 +1015,7 @@ def test_bibliography_only_year_suffix_does_not_change_citation_text() -> None:
 </style>
 """,
     )
-    library = rk.Library.parse(
+    library = rk.Library.parse_bibtex(
         """@article{first,
   author = {Doe, Jane},
   title = {First},
@@ -945,9 +1033,15 @@ def test_bibliography_only_year_suffix_does_not_change_citation_text() -> None:
     )
     doc = rk.Document(library, style, locale="en-US")
 
-    first = doc.cite("first").text
-    second = doc.cite("second").text
-    bibliography = doc.bibliography().text
+    rendered = doc.render(
+        [
+            rk.Citation("first", "first"),
+            rk.Citation("second", "second"),
+        ]
+    )
+    first = rendered["first"].text
+    second = rendered["second"].text
+    bibliography = rendered.bibliography.text
 
     assert first == "(Jane Doe, 2024)"
     assert second == "(Jane Doe, 2024)"
@@ -955,8 +1049,8 @@ def test_bibliography_only_year_suffix_does_not_change_citation_text() -> None:
     assert "(2024)b" in bibliography
 
 
-def test_slow_path_citation_disables_later_fast_disambiguation() -> None:
-    library = rk.Library.parse(
+def test_whole_document_render_resolves_disambiguation_before_returning_citations() -> None:
+    library = rk.Library.parse_bibtex(
         """@article{first,
   author = {Doe, Jane},
   title = {First},
@@ -974,8 +1068,15 @@ def test_slow_path_citation_disables_later_fast_disambiguation() -> None:
     )
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
-    assert doc.cite(rk.Cite("first", locator="12", label="page")).text == ("(Doe, 2024, p. 12)")
-    assert doc.cite("second").text == "(Doe, 2024b)"
+    rendered = doc.render(
+        [
+            rk.Citation("first", rk.Cite("first", locator="12", label="page")),
+            rk.Citation("second", "second"),
+        ]
+    )
+
+    assert rendered["first"].text == "(Doe, 2024a, p. 12)"
+    assert rendered["second"].text == "(Doe, 2024b)"
 
 
 def test_repeated_key_respects_subsequent_name_rules() -> None:
@@ -1010,7 +1111,7 @@ def test_repeated_key_respects_subsequent_name_rules() -> None:
 </style>
 """,
     )
-    library = rk.Library.parse(
+    library = rk.Library.parse_yaml(
         """team:
   type: Article
   author: ["Alpha, Ann", "Beta, Bob", "Gamma, Gus"]
@@ -1019,13 +1120,18 @@ def test_repeated_key_respects_subsequent_name_rules() -> None:
   parent:
     type: Periodical
     title: Journal
-""",
-        format="yaml",
+"""
     )
     doc = rk.Document(library, style, locale="en-US")
 
-    first = doc.cite("team").text
-    second = doc.cite("team").text
+    rendered = doc.render(
+        [
+            rk.Citation("first", "team"),
+            rk.Citation("second", "team"),
+        ]
+    )
+    first = rendered["first"].text
+    second = rendered["second"].text
 
     assert first != second
     assert "et al" in second
@@ -1059,7 +1165,7 @@ def test_names_substitute_citation_number_uses_bibliography_sort() -> None:
 </style>
 """,
     )
-    library = rk.Library.parse(
+    library = rk.Library.parse_yaml(
         """a:
   type: Article
   title: Alpha
@@ -1068,13 +1174,19 @@ b:
   type: Article
   title: Beta
   date: 2024
-""",
-        format="yaml",
+"""
     )
     doc = rk.Document(library, style, locale="en-US")
 
-    assert doc.cite("b").text == "[1]"
-    assert doc.cite("a").text == "[1]"
+    rendered = doc.render(
+        [
+            rk.Citation("b", "b"),
+            rk.Citation("a", "a"),
+        ]
+    )
+
+    assert rendered["b"].text == "[2]"
+    assert rendered["a"].text == "[1]"
 
 
 def test_names_substitute_position_condition_uses_full_history() -> None:
@@ -1109,17 +1221,18 @@ def test_names_substitute_position_condition_uses_full_history() -> None:
 </style>
 """,
     )
-    library = rk.Library.parse(
+    library = rk.Library.parse_yaml(
         """item:
   type: Article
   title: Position Work
   date: 2024
-""",
-        format="yaml",
+"""
     )
     doc = rk.Document(library, style, locale="en-US")
 
-    assert doc.cite("item").text == "(first)"
+    rendered = doc.render([rk.Citation("item", "item")])
+
+    assert rendered["item"].text == "(first)"
 
 
 def test_raw_bib_document_blocks_preserve_source_order_and_spans() -> None:
@@ -1151,16 +1264,16 @@ def test_raw_bib_document_blocks_preserve_source_order_and_spans() -> None:
 def test_raw_bib_document_duplicate_entries_require_explicit_get_all() -> None:
     raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")
 
-    assert raw.entries.keys() == ["dup", "later"]
+    assert raw.entries.unique_keys() == ["dup", "later"]
     assert [entry.key for entry in raw.entries.occurrences()] == ["dup", "dup", "later"]
     assert [entry.key for entry in raw.entries.get_all("dup")] == ["dup", "dup"]
     assert raw.entries.get_all("missing") == []
-    assert raw.entries.get("missing") is None
+    assert raw.entries.get_unique("missing") is None
 
     with pytest.raises(rk.RefkitError, match='entry key "dup" is ambiguous'):
         raw.entries["dup"]
     with pytest.raises(rk.RefkitError, match="use entries.get_all"):
-        raw.entries.get("dup")
+        raw.entries.get_unique("dup")
 
     later = raw.entries["later"]
     assert later.key == "later"
@@ -1171,7 +1284,7 @@ def test_raw_bib_document_duplicate_fields_require_explicit_get_all() -> None:
     raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")
     entry = raw.entries.get_all("dup")[0]
 
-    assert entry.fields.keys() == ["title", "journal", "year"]
+    assert entry.fields.unique_keys() == ["title", "journal", "year"]
     assert [field.name for field in entry.fields.occurrences()] == [
         "title",
         "title",
@@ -1183,12 +1296,12 @@ def test_raw_bib_document_duplicate_fields_require_explicit_get_all() -> None:
         "Second Title",
     ]
     assert entry.fields.get_all("missing") == []
-    assert entry.fields.get("missing") is None
+    assert entry.fields.get_unique("missing") is None
 
     with pytest.raises(rk.RefkitError, match='field "title" in entry "dup" is ambiguous'):
         entry.fields["title"]
     with pytest.raises(rk.RefkitError, match="use fields.get_all"):
-        entry.fields.get("title")
+        entry.fields.get_unique("title")
 
     assert entry.fields["journal"].value == "j"
 
@@ -1265,7 +1378,7 @@ def test_raw_bib_document_preserves_typst_biblatex_blocks(tmp_path: Path) -> Non
     assert any(comment.startswith("% Comments before") for comment in raw.comments)
     assert raw.strings["benchjournal"] == "Journal of Citation Benchmarks"
     assert raw.preamble == '"Reference " # "fixture"'
-    assert raw.entries.keys() == ["fischer2022equivalence", "roes2003belief"]
+    assert raw.entries.unique_keys() == ["fischer2022equivalence", "roes2003belief"]
     assert raw.entries["roes2003belief"].span[0] < raw.entries["roes2003belief"].span[1]
     assert raw.failed_blocks[0]["kind"] == "failed"
     assert "field author is missing '='" in raw.failed_blocks[0]["error"]
@@ -1286,7 +1399,9 @@ def test_raw_bib_document_preserves_typst_biblatex_blocks(tmp_path: Path) -> Non
     assert written.entries["roes2003belief"].fields["title"].value == "Edited belief title"
 
 
-def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers() -> None:
+def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers(
+    tmp_path: Path,
+) -> None:
     raw = rk.BibDocument.parse(
         """% inline comment
 @article{inline,
@@ -1302,15 +1417,15 @@ def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers() -> 
     assert not raw.entries.is_empty()
     assert "inline" in raw.entries
     assert "missing" not in raw.entries
-    entry = raw.entries.get("inline")
+    entry = raw.entries.get_unique("inline")
     assert entry is not None
     assert entry.key == "inline"
-    assert raw.entries.get("missing") is None
+    assert raw.entries.get_unique("missing") is None
     assert [entry.key for entry in raw.entries.occurrences()] == ["inline"]
     assert [entry.key for entry in raw.entries.get_all("inline")] == ["inline"]
     assert raw.entries["inline"].fields
     assert not raw.entries["inline"].fields.is_empty()
-    title = raw.entries["inline"].fields.get("title")
+    title = raw.entries["inline"].fields.get_unique("title")
     assert title is not None
     assert title.name == "title"
     assert title.value == "Inline Raw"
@@ -1320,11 +1435,13 @@ def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers() -> 
     ]
     assert "title" in raw.entries["inline"].fields
     assert "missing" not in raw.entries["inline"].fields
-    assert raw.entries["inline"].fields.get("missing") is None
+    assert raw.entries["inline"].fields.get_unique("missing") is None
     assert raw.failed_blocks
 
-    with pytest.raises(ValueError, match="write path is required"):
-        raw.write()
+    output = tmp_path / "inline.bib"
+    raw.write(output)
+
+    assert "@article{inline" in output.read_text(encoding="utf-8")
 
 
 def test_raw_bib_document_accepts_permissive_citation_keys() -> None:
@@ -1536,7 +1653,7 @@ def test_raw_bib_document_preserves_duplicate_keys_on_write(tmp_path: Path) -> N
     with pytest.raises(rk.RefkitError, match='entry key "same" is ambiguous'):
         raw.entries["same"]
     with pytest.raises(rk.RefkitError, match='entry key "same" is ambiguous'):
-        raw.entries.get("same")
+        raw.entries.get_unique("same")
 
     duplicates[1].fields["title"].value = "Corrected second"
     output = tmp_path / "duplicates-out.bib"
@@ -1547,7 +1664,7 @@ def test_raw_bib_document_preserves_duplicate_keys_on_write(tmp_path: Path) -> N
     assert "title = {Corrected second}" in text
     assert text.count("@article{same") == 2
 
-    recovered = rk.Library.read(output, strict=False, diagnostics=True)
+    recovered = rk.Library.read(output, recovery="report")
     assert recovered["same"].title == "First"
     assert 'ignored duplicate BibTeX entry key "same"' in recovered.diagnostics[0]
 
@@ -1563,7 +1680,7 @@ def test_raw_bib_document_duplicate_fields_are_addressable_by_occurrence(tmp_pat
     )
 
     entry = raw.entries["duplicate"]
-    assert entry.fields.keys() == ["title", "year"]
+    assert entry.fields.unique_keys() == ["title", "year"]
     assert [field.name for field in entry.fields.occurrences()] == ["title", "title", "year"]
     titles = entry.fields.get_all("title")
     assert [field.value for field in titles] == ["First", "Second"]
@@ -1571,7 +1688,7 @@ def test_raw_bib_document_duplicate_fields_are_addressable_by_occurrence(tmp_pat
     with pytest.raises(rk.RefkitError, match='field "title" in entry "duplicate" is ambiguous'):
         entry.fields["title"]
     with pytest.raises(rk.RefkitError, match='field "title" in entry "duplicate" is ambiguous'):
-        entry.fields.get("title")
+        entry.fields.get_unique("title")
 
     titles[0].value = "Corrected first"
     output = tmp_path / "duplicate-fields-out.bib"

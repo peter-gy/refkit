@@ -30,7 +30,9 @@ def test_type_checked_structured_return_samples() -> None:
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
     raw = rk.BibDocument.read(FIXTURES / "raw.bib")
 
-    assert rendered_tree_kinds(doc.cite("doe2024"))
+    rendered = doc.render([rk.Citation("first", "doe2024")])
+
+    assert rendered_tree_kinds(rendered["first"])
     assert all(start >= 0 for start in raw_block_starts(raw))
     assert all(error for error in failed_block_errors(raw))
     duplicate_raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")

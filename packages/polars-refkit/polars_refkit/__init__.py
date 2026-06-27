@@ -1,4 +1,4 @@
-"""Polars expressions for BibTeX citation workflows."""
+"""Polars expressions for row-level BibTeX citation workflows."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _metadata_version
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, TypeAlias
 
 import polars as pl
 from polars.plugins import register_plugin_function
@@ -14,6 +14,8 @@ from polars.plugins import register_plugin_function
 from ._internal import __version__ as _native_version
 
 PLUGIN_PATH = Path(__file__).parent
+RecoveryMode: TypeAlias = Literal["error", "report"]
+ColumnExpr: TypeAlias = str | pl.Expr
 
 try:
     __version__ = _metadata_version("polars-refkit")
@@ -22,538 +24,344 @@ except PackageNotFoundError:
 
 __all__ = [
     "__version__",
-    "bibliography_html",
-    "bibliography_bibtex",
-    "bibliography_bibtex_rendered",
-    "bibliography_bibtex_text",
-    "bibliography_rendered",
-    "bibliography_text",
-    "bibtex_diagnostics",
-    "bibtex_entries",
-    "bibtex_entry_count",
-    "bibtex_is_valid",
-    "bibtex_keys",
-    "bibtex_parse_report",
-    "bibtex_to_hayagriva_json",
+    "RefkitExprNamespace",
+    "full_bibliography_html",
+    "full_bibliography_rendered",
+    "full_bibliography_text",
+    "can_parse",
     "cite",
-    "cite_bibtex",
-    "cite_bibtex_html",
-    "cite_bibtex_rendered",
-    "cite_bibtex_sequence",
-    "cite_bibtex_sequence_html",
-    "cite_bibtex_sequence_rendered",
+    "cite_each",
+    "cite_each_html",
+    "cite_each_rendered",
+    "cite_group",
+    "cite_group_html",
+    "cite_group_rendered",
     "cite_html",
     "cite_rendered",
-    "cite_sequence",
-    "cite_sequence_html",
-    "cite_sequence_rendered",
     "diagnostics",
     "entries",
-    "entries_json",
     "entry_count",
-    "is_valid",
+    "has_diagnostics",
     "keys",
     "parse_report",
+    "to_hayagriva_json",
 ]
 
 
 def cite(
-    bibtex: Any,
-    key: Any,
+    bibtex_col: ColumnExpr,
+    key_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
     """Render one citation as plain text from each BibTeX row and key row."""
 
     return _cite_expr(
-        "cite_bibtex",
-        bibtex,
-        key,
+        "cite",
+        bibtex_col,
+        key_col,
         style=style,
         locale=locale,
-        strict=strict,
+        recovery=recovery,
         output_name="cite",
     )
 
 
-def cite_bibtex(
-    bibtex: Any,
-    key: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr:
-    """Render one citation from each BibTeX row and key row."""
-
-    return _cite_expr(
-        "cite_bibtex",
-        bibtex,
-        key,
-        style=style,
-        locale=locale,
-        strict=strict,
-        output_name="cite_bibtex",
-    )
-
-
 def cite_html(
-    bibtex: Any,
-    key: Any,
+    bibtex_col: ColumnExpr,
+    key_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
     """Render one citation as HTML from each BibTeX row and key row."""
 
     return _cite_expr(
-        "cite_bibtex_html",
-        bibtex,
-        key,
+        "cite_html",
+        bibtex_col,
+        key_col,
         style=style,
         locale=locale,
-        strict=strict,
+        recovery=recovery,
         output_name="cite_html",
     )
 
 
-def cite_bibtex_html(
-    bibtex: Any,
-    key: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr:
-    """Render one citation as HTML from each BibTeX row and key row."""
-
-    return _cite_expr(
-        "cite_bibtex_html",
-        bibtex,
-        key,
-        style=style,
-        locale=locale,
-        strict=strict,
-        output_name="cite_bibtex_html",
-    )
-
-
 def cite_rendered(
-    bibtex: Any,
-    key: Any,
+    bibtex_col: ColumnExpr,
+    key_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
     """Render one citation as a `{text, html}` struct."""
 
     return _cite_expr(
-        "cite_bibtex_rendered",
-        bibtex,
-        key,
+        "cite_rendered",
+        bibtex_col,
+        key_col,
         style=style,
         locale=locale,
-        strict=strict,
+        recovery=recovery,
         output_name="cite_rendered",
     )
 
 
-def cite_bibtex_rendered(
-    bibtex: Any,
-    key: Any,
+def cite_each(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render one citation as a `{text, html}` struct."""
+    """Render each key in a `List[String]` column as a separate citation."""
 
-    return _cite_expr(
-        "cite_bibtex_rendered",
-        bibtex,
-        key,
+    return _cite_list_expr(
+        "cite_each",
+        bibtex_col,
+        keys_col,
         style=style,
         locale=locale,
-        strict=strict,
-        output_name="cite_bibtex_rendered",
+        recovery=recovery,
+        output_name="cite_each",
     )
 
 
-def cite_sequence(
-    bibtex: Any,
-    keys: Any,
+def cite_each_html(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render ordered citation texts from one BibTeX row and one list-of-keys row."""
+    """Render each key in a `List[String]` column as separate citation HTML."""
 
-    return _cite_sequence_expr(
-        "cite_bibtex_sequence",
-        bibtex,
-        keys,
+    return _cite_list_expr(
+        "cite_each_html",
+        bibtex_col,
+        keys_col,
         style=style,
         locale=locale,
-        strict=strict,
-        output_name="cite_sequence",
+        recovery=recovery,
+        output_name="cite_each_html",
     )
 
 
-def cite_bibtex_sequence(
-    bibtex: Any,
-    keys: Any,
+def cite_each_rendered(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render ordered citation texts from one BibTeX row and one list-of-keys row."""
+    """Render each key in a `List[String]` column as `{text, html}` structs."""
 
-    return _cite_sequence_expr(
-        "cite_bibtex_sequence",
-        bibtex,
-        keys,
+    return _cite_list_expr(
+        "cite_each_rendered",
+        bibtex_col,
+        keys_col,
         style=style,
         locale=locale,
-        strict=strict,
-        output_name="cite_bibtex_sequence",
+        recovery=recovery,
+        output_name="cite_each_rendered",
     )
 
 
-def cite_sequence_html(
-    bibtex: Any,
-    keys: Any,
+def cite_group(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render ordered citation HTML from one BibTeX row and one list-of-keys row."""
+    """Render a `List[String]` key column as one grouped citation."""
 
-    return _cite_sequence_expr(
-        "cite_bibtex_sequence_html",
-        bibtex,
-        keys,
+    return _cite_list_expr(
+        "cite_group",
+        bibtex_col,
+        keys_col,
         style=style,
         locale=locale,
-        strict=strict,
-        output_name="cite_sequence_html",
+        recovery=recovery,
+        output_name="cite_group",
     )
 
 
-def cite_bibtex_sequence_html(
-    bibtex: Any,
-    keys: Any,
+def cite_group_html(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render ordered citation HTML from one BibTeX row and one list-of-keys row."""
+    """Render a `List[String]` key column as one grouped citation in HTML."""
 
-    return _cite_sequence_expr(
-        "cite_bibtex_sequence_html",
-        bibtex,
-        keys,
+    return _cite_list_expr(
+        "cite_group_html",
+        bibtex_col,
+        keys_col,
         style=style,
         locale=locale,
-        strict=strict,
-        output_name="cite_bibtex_sequence_html",
+        recovery=recovery,
+        output_name="cite_group_html",
     )
 
 
-def cite_sequence_rendered(
-    bibtex: Any,
-    keys: Any,
+def cite_group_rendered(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render ordered citations as a list of `{text, html}` structs."""
+    """Render a grouped citation as a `{text, html}` struct."""
 
-    return _cite_sequence_expr(
-        "cite_bibtex_sequence_rendered",
-        bibtex,
-        keys,
+    return _cite_list_expr(
+        "cite_group_rendered",
+        bibtex_col,
+        keys_col,
         style=style,
         locale=locale,
-        strict=strict,
-        output_name="cite_sequence_rendered",
+        recovery=recovery,
+        output_name="cite_group_rendered",
     )
 
 
-def cite_bibtex_sequence_rendered(
-    bibtex: Any,
-    keys: Any,
+def full_bibliography_html(
+    bibtex_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render ordered citations as a list of `{text, html}` structs."""
-
-    return _cite_sequence_expr(
-        "cite_bibtex_sequence_rendered",
-        bibtex,
-        keys,
-        style=style,
-        locale=locale,
-        strict=strict,
-        output_name="cite_bibtex_sequence_rendered",
-    )
-
-
-def bibliography_html(
-    bibtex: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr:
-    """Render an HTML bibliography from each BibTeX row."""
+    """Render every entry in each BibTeX row as an HTML bibliography."""
 
     return _bibliography_expr(
-        "bibliography_bibtex",
-        bibtex,
+        "full_bibliography_html",
+        bibtex_col,
         style=style,
         locale=locale,
-        strict=strict,
-        output_name="bibliography_html",
+        recovery=recovery,
+        output_name="full_bibliography_html",
     )
 
 
-def bibliography_bibtex(
-    bibtex: Any,
+def full_bibliography_text(
+    bibtex_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render an HTML bibliography from each BibTeX row."""
+    """Render every entry in each BibTeX row as a plain-text bibliography."""
 
     return _bibliography_expr(
-        "bibliography_bibtex",
-        bibtex,
+        "full_bibliography_text",
+        bibtex_col,
         style=style,
         locale=locale,
-        strict=strict,
-        output_name="bibliography_bibtex",
+        recovery=recovery,
+        output_name="full_bibliography_text",
     )
 
 
-def bibliography_text(
-    bibtex: Any,
+def full_bibliography_rendered(
+    bibtex_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render a plain-text bibliography from each BibTeX row."""
+    """Render every entry in each BibTeX row as a `{text, html}` struct."""
 
     return _bibliography_expr(
-        "bibliography_bibtex_text",
-        bibtex,
+        "full_bibliography_rendered",
+        bibtex_col,
         style=style,
         locale=locale,
-        strict=strict,
-        output_name="bibliography_text",
+        recovery=recovery,
+        output_name="full_bibliography_rendered",
     )
 
 
-def bibliography_bibtex_text(
-    bibtex: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr:
-    """Render a plain-text bibliography from each BibTeX row."""
-
-    return _bibliography_expr(
-        "bibliography_bibtex_text",
-        bibtex,
-        style=style,
-        locale=locale,
-        strict=strict,
-        output_name="bibliography_bibtex_text",
-    )
-
-
-def bibliography_rendered(
-    bibtex: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr:
-    """Render a bibliography as a `{text, html}` struct."""
-
-    return _bibliography_expr(
-        "bibliography_bibtex_rendered",
-        bibtex,
-        style=style,
-        locale=locale,
-        strict=strict,
-        output_name="bibliography_rendered",
-    )
-
-
-def bibliography_bibtex_rendered(
-    bibtex: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr:
-    """Render a bibliography as a `{text, html}` struct."""
-
-    return _bibliography_expr(
-        "bibliography_bibtex_rendered",
-        bibtex,
-        style=style,
-        locale=locale,
-        strict=strict,
-        output_name="bibliography_bibtex_rendered",
-    )
-
-
-def entry_count(bibtex: Any, *, strict: bool = False) -> pl.Expr:
+def entry_count(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr:
     """Return the number of normalized entries in each BibTeX row."""
 
+    return _parse_expr("entry_count", bibtex_col, recovery=recovery, output_name="entry_count")
+
+
+def can_parse(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr:
+    """Return whether each BibTeX row parses under the selected recovery policy."""
+
+    return _parse_expr("can_parse", bibtex_col, recovery=recovery, output_name="can_parse")
+
+
+def has_diagnostics(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr:
+    """Return whether parser diagnostics were reported for each BibTeX row."""
+
     return _parse_expr(
-        "bibtex_entry_count",
-        bibtex,
-        strict=strict,
-        output_name="entry_count",
+        "has_diagnostics",
+        bibtex_col,
+        recovery=recovery,
+        output_name="has_diagnostics",
     )
 
 
-def bibtex_entry_count(bibtex: Any, *, strict: bool = False) -> pl.Expr:
-    """Return the number of normalized entries in each BibTeX row."""
-
-    return _parse_expr(
-        "bibtex_entry_count",
-        bibtex,
-        strict=strict,
-        output_name="bibtex_entry_count",
-    )
-
-
-def bibtex_is_valid(bibtex: Any, *, strict: bool = False) -> pl.Expr:
-    """Return whether each BibTeX row parses into a normalized library."""
-
-    return _parse_expr(
-        "bibtex_is_valid",
-        bibtex,
-        strict=strict,
-        output_name="bibtex_is_valid",
-    )
-
-
-def is_valid(bibtex: Any, *, strict: bool = False) -> pl.Expr:
-    """Return whether each BibTeX row parses into a normalized library."""
-
-    return _parse_expr("bibtex_is_valid", bibtex, strict=strict, output_name="is_valid")
-
-
-def keys(bibtex: Any, *, strict: bool = False) -> pl.Expr:
+def keys(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr:
     """Return citation keys as a list column for each BibTeX row."""
 
-    return _parse_expr("bibtex_keys", bibtex, strict=strict, output_name="keys")
-
-
-def bibtex_keys(bibtex: Any, *, strict: bool = False) -> pl.Expr:
-    """Return citation keys as a list column for each BibTeX row."""
-
-    return _parse_expr(
-        "bibtex_keys",
-        bibtex,
-        strict=strict,
-        output_name="bibtex_keys",
-    )
+    return _parse_expr("keys", bibtex_col, recovery=recovery, output_name="keys")
 
 
 def entries(
-    bibtex: Any,
+    bibtex_col: ColumnExpr,
     *,
-    fields: Iterable[str] = ("key", "entry_type", "title", "doi", "volume"),
-    strict: bool = False,
+    fields: Iterable[str] | None = None,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr:
     """Return normalized entry records as `List[Struct]` for each BibTeX row."""
 
-    return _entries_expr(bibtex, fields=fields, strict=strict, output_name="entries")
-
-
-def bibtex_entries(
-    bibtex: Any,
-    *,
-    fields: Iterable[str] = ("key", "entry_type", "title", "doi", "volume"),
-    strict: bool = False,
-) -> pl.Expr:
-    """Return normalized entry records as `List[Struct]` for each BibTeX row."""
-
-    return _entries_expr(bibtex, fields=fields, strict=strict, output_name="bibtex_entries")
-
-
-def bibtex_diagnostics(bibtex: Any, *, strict: bool = False) -> pl.Expr:
-    """Return parser diagnostics as a list column for each BibTeX row."""
-
-    return _diagnostics_expr(bibtex, strict=strict, output_name="bibtex_diagnostics")
-
-
-def diagnostics(bibtex: Any, *, strict: bool = False) -> pl.Expr:
-    """Return parser diagnostics as a list column for each BibTeX row."""
-
-    return _diagnostics_expr(bibtex, strict=strict, output_name="diagnostics")
-
-
-def parse_report(bibtex: Any, *, strict: bool = False) -> pl.Expr:
-    """Return `{ok, entry_count, keys, diagnostics}` from one parse per row."""
-
-    return _parse_expr(
-        "bibtex_parse_report",
-        bibtex,
-        strict=strict,
-        output_name="parse_report",
+    if isinstance(fields, str):
+        raise TypeError("fields must be an iterable of field names")
+    selected_fields = ("key", "title", "doi", "volume") if fields is None else tuple(fields)
+    return _entries_expr(
+        bibtex_col,
+        fields=selected_fields,
+        recovery=recovery,
+        output_name="entries",
     )
 
 
-def bibtex_parse_report(bibtex: Any, *, strict: bool = False) -> pl.Expr:
+def diagnostics(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr:
+    """Return parser diagnostics as a list column for each BibTeX row."""
+
+    return _diagnostics_expr(bibtex_col, recovery=recovery, output_name="diagnostics")
+
+
+def parse_report(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr:
     """Return `{ok, entry_count, keys, diagnostics}` from one parse per row."""
 
-    return _parse_expr(
-        "bibtex_parse_report",
-        bibtex,
-        strict=strict,
-        output_name="bibtex_parse_report",
-    )
+    return _parse_expr("parse_report", bibtex_col, recovery=recovery, output_name="parse_report")
 
 
-def entries_json(bibtex: Any, *, strict: bool = False) -> pl.Expr:
+def to_hayagriva_json(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr:
     """Return normalized Hayagriva entry JSON for each BibTeX row."""
 
     return _parse_expr(
-        "bibtex_to_hayagriva_json",
-        bibtex,
-        strict=strict,
-        output_name="entries_json",
-    )
-
-
-def bibtex_to_hayagriva_json(bibtex: Any, *, strict: bool = False) -> pl.Expr:
-    """Return normalized Hayagriva entry JSON for each BibTeX row."""
-
-    return _parse_expr(
-        "bibtex_to_hayagriva_json",
-        bibtex,
-        strict=strict,
-        output_name="bibtex_to_hayagriva_json",
+        "to_hayagriva_json",
+        bibtex_col,
+        recovery=recovery,
+        output_name="to_hayagriva_json",
     )
 
 
@@ -566,357 +374,317 @@ class RefkitExprNamespace:
 
     def cite(
         self,
-        key: Any,
+        key_col: ColumnExpr,
         *,
         style: str = "apa",
         locale: str = "en-US",
-        strict: bool = False,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
         """Render one citation from each BibTeX row and key row."""
 
-        return _cite_expr(
-            "cite_bibtex",
-            self._expr,
-            key,
-            style=style,
-            locale=locale,
-            strict=strict,
-            output_name="cite",
-        )
+        return cite(self._expr, key_col, style=style, locale=locale, recovery=recovery)
 
     def cite_html(
         self,
-        key: Any,
+        key_col: ColumnExpr,
         *,
         style: str = "apa",
         locale: str = "en-US",
-        strict: bool = False,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
         """Render one citation as HTML from each BibTeX row and key row."""
 
-        return _cite_expr(
-            "cite_bibtex_html",
-            self._expr,
-            key,
-            style=style,
-            locale=locale,
-            strict=strict,
-            output_name="cite_html",
-        )
+        return cite_html(self._expr, key_col, style=style, locale=locale, recovery=recovery)
 
     def cite_rendered(
         self,
-        key: Any,
+        key_col: ColumnExpr,
         *,
         style: str = "apa",
         locale: str = "en-US",
-        strict: bool = False,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
         """Render one citation as a `{text, html}` struct."""
 
-        return _cite_expr(
-            "cite_bibtex_rendered",
-            self._expr,
-            key,
-            style=style,
-            locale=locale,
-            strict=strict,
-            output_name="cite_rendered",
-        )
+        return cite_rendered(self._expr, key_col, style=style, locale=locale, recovery=recovery)
 
-    def cite_sequence(
+    def cite_each(
         self,
-        keys: Any,
+        keys_col: ColumnExpr,
         *,
         style: str = "apa",
         locale: str = "en-US",
-        strict: bool = False,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
-        """Render ordered citation texts from one BibTeX row and one list-of-keys row."""
+        """Render each key in a `List[String]` column as a separate citation."""
 
-        return _cite_sequence_expr(
-            "cite_bibtex_sequence",
-            self._expr,
-            keys,
-            style=style,
-            locale=locale,
-            strict=strict,
-            output_name="cite_sequence",
-        )
+        return cite_each(self._expr, keys_col, style=style, locale=locale, recovery=recovery)
 
-    def cite_sequence_html(
+    def cite_each_html(
         self,
-        keys: Any,
+        keys_col: ColumnExpr,
         *,
         style: str = "apa",
         locale: str = "en-US",
-        strict: bool = False,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
-        """Render ordered citation HTML from one BibTeX row and one list-of-keys row."""
+        """Render each key in a `List[String]` column as separate citation HTML."""
 
-        return _cite_sequence_expr(
-            "cite_bibtex_sequence_html",
-            self._expr,
-            keys,
-            style=style,
-            locale=locale,
-            strict=strict,
-            output_name="cite_sequence_html",
-        )
+        return cite_each_html(self._expr, keys_col, style=style, locale=locale, recovery=recovery)
 
-    def cite_sequence_rendered(
+    def cite_each_rendered(
         self,
-        keys: Any,
+        keys_col: ColumnExpr,
         *,
         style: str = "apa",
         locale: str = "en-US",
-        strict: bool = False,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
-        """Render ordered citations as a list of `{text, html}` structs."""
+        """Render each key in a `List[String]` column as `{text, html}` structs."""
 
-        return _cite_sequence_expr(
-            "cite_bibtex_sequence_rendered",
+        return cite_each_rendered(
             self._expr,
-            keys,
+            keys_col,
             style=style,
             locale=locale,
-            strict=strict,
-            output_name="cite_sequence_rendered",
+            recovery=recovery,
         )
 
-    def bibliography(
+    def cite_group(
         self,
+        keys_col: ColumnExpr,
         *,
         style: str = "apa",
         locale: str = "en-US",
-        strict: bool = False,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
-        """Render an HTML bibliography from each BibTeX row."""
+        """Render a `List[String]` key column as one grouped citation."""
 
-        return _bibliography_expr(
-            "bibliography_bibtex",
+        return cite_group(self._expr, keys_col, style=style, locale=locale, recovery=recovery)
+
+    def cite_group_html(
+        self,
+        keys_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr:
+        """Render a `List[String]` key column as one grouped citation in HTML."""
+
+        return cite_group_html(self._expr, keys_col, style=style, locale=locale, recovery=recovery)
+
+    def cite_group_rendered(
+        self,
+        keys_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr:
+        """Render a grouped citation as a `{text, html}` struct."""
+
+        return cite_group_rendered(
             self._expr,
+            keys_col,
             style=style,
             locale=locale,
-            strict=strict,
-            output_name="bibliography",
+            recovery=recovery,
         )
 
-    def bibliography_html(
+    def full_bibliography_html(
         self,
         *,
         style: str = "apa",
         locale: str = "en-US",
-        strict: bool = False,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
-        """Render an HTML bibliography from each BibTeX row."""
+        """Render every entry in each BibTeX row as an HTML bibliography."""
 
-        return _bibliography_expr(
-            "bibliography_bibtex",
-            self._expr,
-            style=style,
-            locale=locale,
-            strict=strict,
-            output_name="bibliography_html",
-        )
+        return full_bibliography_html(self._expr, style=style, locale=locale, recovery=recovery)
 
-    def bibliography_text(
+    def full_bibliography_text(
         self,
         *,
         style: str = "apa",
         locale: str = "en-US",
-        strict: bool = False,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
-        """Render a plain-text bibliography from each BibTeX row."""
+        """Render every entry in each BibTeX row as a plain-text bibliography."""
 
-        return _bibliography_expr(
-            "bibliography_bibtex_text",
-            self._expr,
-            style=style,
-            locale=locale,
-            strict=strict,
-            output_name="bibliography_text",
-        )
+        return full_bibliography_text(self._expr, style=style, locale=locale, recovery=recovery)
 
-    def bibliography_rendered(
+    def full_bibliography_rendered(
         self,
         *,
         style: str = "apa",
         locale: str = "en-US",
-        strict: bool = False,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
-        """Render a bibliography as a `{text, html}` struct."""
+        """Render every entry in each BibTeX row as a `{text, html}` struct."""
 
-        return _bibliography_expr(
-            "bibliography_bibtex_rendered",
-            self._expr,
-            style=style,
-            locale=locale,
-            strict=strict,
-            output_name="bibliography_rendered",
-        )
+        return full_bibliography_rendered(self._expr, style=style, locale=locale, recovery=recovery)
 
-    def entry_count(self, *, strict: bool = False) -> pl.Expr:
+    def entry_count(self, *, recovery: RecoveryMode = "error") -> pl.Expr:
         """Return the number of normalized entries in each BibTeX row."""
 
-        return _parse_expr(
-            "bibtex_entry_count",
-            self._expr,
-            strict=strict,
-            output_name="entry_count",
-        )
+        return entry_count(self._expr, recovery=recovery)
 
-    def is_valid(self, *, strict: bool = False) -> pl.Expr:
-        """Return whether each BibTeX row parses into a normalized library."""
+    def can_parse(self, *, recovery: RecoveryMode = "error") -> pl.Expr:
+        """Return whether each BibTeX row parses under the selected recovery policy."""
 
-        return _parse_expr("bibtex_is_valid", self._expr, strict=strict, output_name="is_valid")
+        return can_parse(self._expr, recovery=recovery)
 
-    def keys(self, *, strict: bool = False) -> pl.Expr:
+    def has_diagnostics(self, *, recovery: RecoveryMode = "error") -> pl.Expr:
+        """Return whether parser diagnostics were reported for each BibTeX row."""
+
+        return has_diagnostics(self._expr, recovery=recovery)
+
+    def keys(self, *, recovery: RecoveryMode = "error") -> pl.Expr:
         """Return citation keys as a list column for each BibTeX row."""
 
-        return _parse_expr("bibtex_keys", self._expr, strict=strict, output_name="keys")
+        return keys(self._expr, recovery=recovery)
 
     def entries(
         self,
         *,
-        fields: Iterable[str] = ("key", "entry_type", "title", "doi", "volume"),
-        strict: bool = False,
+        fields: Iterable[str] | None = None,
+        recovery: RecoveryMode = "error",
     ) -> pl.Expr:
         """Return normalized entry records as `List[Struct]` for each BibTeX row."""
 
-        return _entries_expr(self._expr, fields=fields, strict=strict, output_name="entries")
+        return entries(self._expr, fields=fields, recovery=recovery)
 
-    def parse_report(self, *, strict: bool = False) -> pl.Expr:
+    def parse_report(self, *, recovery: RecoveryMode = "error") -> pl.Expr:
         """Return `{ok, entry_count, keys, diagnostics}` from one parse per row."""
 
-        return _parse_expr(
-            "bibtex_parse_report",
-            self._expr,
-            strict=strict,
-            output_name="parse_report",
-        )
+        return parse_report(self._expr, recovery=recovery)
 
-    def diagnostics(self, *, strict: bool = False) -> pl.Expr:
+    def diagnostics(self, *, recovery: RecoveryMode = "error") -> pl.Expr:
         """Return parser diagnostics as a list column for each BibTeX row."""
 
-        return _diagnostics_expr(self._expr, strict=strict, output_name="diagnostics")
+        return diagnostics(self._expr, recovery=recovery)
 
-    def entries_json(self, *, strict: bool = False) -> pl.Expr:
+    def to_hayagriva_json(self, *, recovery: RecoveryMode = "error") -> pl.Expr:
         """Return normalized Hayagriva entry JSON for each BibTeX row."""
 
-        return _parse_expr(
-            "bibtex_to_hayagriva_json",
-            self._expr,
-            strict=strict,
-            output_name="entries_json",
-        )
-
-    def to_hayagriva_json(self, *, strict: bool = False) -> pl.Expr:
-        """Return normalized Hayagriva entry JSON for each BibTeX row."""
-
-        return _parse_expr(
-            "bibtex_to_hayagriva_json",
-            self._expr,
-            strict=strict,
-            output_name="to_hayagriva_json",
-        )
+        return to_hayagriva_json(self._expr, recovery=recovery)
 
 
 def _cite_expr(
     function_name: str,
-    bibtex: Any,
-    key: Any,
+    bibtex_col: ColumnExpr,
+    key_col: ColumnExpr,
     *,
     style: str,
     locale: str,
-    strict: bool,
+    recovery: RecoveryMode,
     output_name: str,
 ) -> pl.Expr:
     return _register(
         function_name,
-        [bibtex, key],
-        kwargs={"style": style, "locale": locale, "strict": strict, "all": True},
+        [bibtex_col, key_col],
+        kwargs=_render_kwargs(style, locale, recovery),
         output_name=output_name,
     )
 
 
-def _cite_sequence_expr(
+def _cite_list_expr(
     function_name: str,
-    bibtex: Any,
-    keys: Any,
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str,
     locale: str,
-    strict: bool,
+    recovery: RecoveryMode,
     output_name: str,
 ) -> pl.Expr:
     return _register(
         function_name,
-        [bibtex, keys],
-        kwargs={"style": style, "locale": locale, "strict": strict, "all": True},
+        [bibtex_col, keys_col],
+        kwargs=_render_kwargs(style, locale, recovery),
         output_name=output_name,
     )
 
 
 def _bibliography_expr(
     function_name: str,
-    bibtex: Any,
+    bibtex_col: ColumnExpr,
     *,
     style: str,
     locale: str,
-    strict: bool,
+    recovery: RecoveryMode,
     output_name: str,
 ) -> pl.Expr:
     return _register(
         function_name,
-        [bibtex],
-        kwargs={"style": style, "locale": locale, "strict": strict, "all": True},
+        [bibtex_col],
+        kwargs=_render_kwargs(style, locale, recovery),
         output_name=output_name,
     )
 
 
 def _parse_expr(
     function_name: str,
-    bibtex: Any,
+    bibtex_col: ColumnExpr,
     *,
-    strict: bool,
+    recovery: RecoveryMode,
     output_name: str,
 ) -> pl.Expr:
     return _register(
         function_name,
-        [bibtex],
-        kwargs={"strict": strict},
+        [bibtex_col],
+        kwargs={"strict": _recovery_to_strict(recovery)},
         output_name=output_name,
     )
 
 
 def _entries_expr(
-    bibtex: Any,
+    bibtex_col: ColumnExpr,
     *,
     fields: Iterable[str],
-    strict: bool,
+    recovery: RecoveryMode,
     output_name: str,
 ) -> pl.Expr:
     return _register(
-        "bibtex_entries",
-        [bibtex],
-        kwargs={"strict": strict, "fields": list(fields)},
+        "entries",
+        [bibtex_col],
+        kwargs={"strict": _recovery_to_strict(recovery), "fields": list(fields)},
         output_name=output_name,
     )
 
 
-def _diagnostics_expr(bibtex: Any, *, strict: bool, output_name: str) -> pl.Expr:
+def _diagnostics_expr(
+    bibtex_col: ColumnExpr, *, recovery: RecoveryMode, output_name: str
+) -> pl.Expr:
     return _register(
-        "bibtex_diagnostics",
-        [bibtex],
-        kwargs={"strict": strict},
+        "diagnostics",
+        [bibtex_col],
+        kwargs={"strict": _recovery_to_strict(recovery)},
         output_name=output_name,
     )
+
+
+def _render_kwargs(style: str, locale: str, recovery: RecoveryMode) -> dict[str, Any]:
+    return {
+        "style": style,
+        "locale": locale,
+        "strict": _recovery_to_strict(recovery),
+        "all": True,
+    }
+
+
+def _recovery_to_strict(recovery: RecoveryMode) -> bool:
+    if recovery == "error":
+        return True
+    if recovery == "report":
+        return False
+    raise ValueError("recovery must be 'error' or 'report'")
 
 
 def _register(
     function_name: str,
-    args: list[Any],
+    args: list[ColumnExpr],
     *,
     kwargs: dict[str, Any] | None,
     output_name: str,
@@ -930,7 +698,7 @@ def _register(
     ).alias(output_name)
 
 
-def _parse_into_expr(expr: Any) -> pl.Expr:
+def _parse_into_expr(expr: ColumnExpr) -> pl.Expr:
     if isinstance(expr, pl.Expr):
         return expr
     if isinstance(expr, str):

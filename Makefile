@@ -41,9 +41,13 @@ rust-floor:
 	fi
 	rustup run 1.85 cargo check --locked --workspace
 
+.PHONY: clean-build
+clean-build:
+	rm -rf dist target/wheels
+
 .PHONY: build
-build:
-	uv build --all-packages
+build: clean-build
+	uv build --all-packages --no-create-gitignore
 
 .PHONY: all
 all: lint typecheck test benchmark-test rust rust-floor build

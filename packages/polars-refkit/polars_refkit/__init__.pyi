@@ -1,170 +1,225 @@
 from collections.abc import Iterable
-from typing import Any
+from typing import Literal, TypeAlias
 
 import polars as pl
 
 __version__: str
 
+RecoveryMode: TypeAlias = Literal["error", "report"]
+ColumnExpr: TypeAlias = str | pl.Expr
+
+class RefkitExprNamespace:
+    def cite(
+        self,
+        key_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def cite_html(
+        self,
+        key_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def cite_rendered(
+        self,
+        key_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def cite_each(
+        self,
+        keys_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def cite_each_html(
+        self,
+        keys_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def cite_each_rendered(
+        self,
+        keys_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def cite_group(
+        self,
+        keys_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def cite_group_html(
+        self,
+        keys_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def cite_group_rendered(
+        self,
+        keys_col: ColumnExpr,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def full_bibliography_html(
+        self,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def full_bibliography_text(
+        self,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def full_bibliography_rendered(
+        self,
+        *,
+        style: str = "apa",
+        locale: str = "en-US",
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def entry_count(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+    def can_parse(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+    def has_diagnostics(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+    def keys(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+    def entries(
+        self,
+        *,
+        fields: Iterable[str] | None = None,
+        recovery: RecoveryMode = "error",
+    ) -> pl.Expr: ...
+    def diagnostics(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+    def parse_report(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+    def to_hayagriva_json(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+
 def cite(
-    bibtex: Any,
-    key: Any,
+    bibtex_col: ColumnExpr,
+    key_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr: ...
-def cite_bibtex(
-    bibtex: Any,
-    key: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
 def cite_html(
-    bibtex: Any,
-    key: Any,
+    bibtex_col: ColumnExpr,
+    key_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr: ...
-def cite_bibtex_html(
-    bibtex: Any,
-    key: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
 def cite_rendered(
-    bibtex: Any,
-    key: Any,
+    bibtex_col: ColumnExpr,
+    key_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def cite_bibtex_rendered(
-    bibtex: Any,
-    key: Any,
+def cite_each(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def cite_sequence(
-    bibtex: Any,
-    keys: Any,
+def cite_each_html(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def cite_bibtex_sequence(
-    bibtex: Any,
-    keys: Any,
+def cite_each_rendered(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def cite_sequence_html(
-    bibtex: Any,
-    keys: Any,
+def cite_group(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def cite_bibtex_sequence_html(
-    bibtex: Any,
-    keys: Any,
+def cite_group_html(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def cite_sequence_rendered(
-    bibtex: Any,
-    keys: Any,
+def cite_group_rendered(
+    bibtex_col: ColumnExpr,
+    keys_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def cite_bibtex_sequence_rendered(
-    bibtex: Any,
-    keys: Any,
+def full_bibliography_html(
+    bibtex_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def bibliography_html(
-    bibtex: Any,
+def full_bibliography_text(
+    bibtex_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def bibliography_bibtex(
-    bibtex: Any,
+def full_bibliography_rendered(
+    bibtex_col: ColumnExpr,
     *,
     style: str = "apa",
     locale: str = "en-US",
-    strict: bool = False,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def bibliography_text(
-    bibtex: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr: ...
-def bibliography_bibtex_text(
-    bibtex: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr: ...
-def bibliography_rendered(
-    bibtex: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr: ...
-def bibliography_bibtex_rendered(
-    bibtex: Any,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    strict: bool = False,
-) -> pl.Expr: ...
-def entry_count(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def bibtex_entry_count(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def is_valid(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def bibtex_is_valid(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def keys(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def bibtex_keys(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
+def entry_count(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+def can_parse(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+def has_diagnostics(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+def keys(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
 def entries(
-    bibtex: Any,
+    bibtex_col: ColumnExpr,
     *,
-    fields: Iterable[str] = ("key", "entry_type", "title", "doi", "volume"),
-    strict: bool = False,
+    fields: Iterable[str] | None = None,
+    recovery: RecoveryMode = "error",
 ) -> pl.Expr: ...
-def bibtex_entries(
-    bibtex: Any,
-    *,
-    fields: Iterable[str] = ("key", "entry_type", "title", "doi", "volume"),
-    strict: bool = False,
-) -> pl.Expr: ...
-def diagnostics(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def bibtex_diagnostics(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def parse_report(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def bibtex_parse_report(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def entries_json(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def bibtex_to_hayagriva_json(bibtex: Any, *, strict: bool = False) -> pl.Expr: ...
-def __getattr__(name: str) -> Any: ...
+def diagnostics(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+def parse_report(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+def to_hayagriva_json(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+def __getattr__(name: str): ...

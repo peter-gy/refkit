@@ -16,25 +16,57 @@ Both packages are versioned as `0.0.1` and support CPython 3.11 through 3.14. Wh
 ```python
 import refkit as rk
 
-library = rk.Library.read("refs.bib")
+library = rk.Library.parse_bibtex(
+    """
+@article{doe2024,
+  author = {Doe, Jane},
+  title = {Fast Citations},
+  journal = {Journal of Citation Tests},
+  year = {2024}
+}
+@book{roe2022,
+  author = {Roe, Richard},
+  title = {Batch References},
+  publisher = {Example Press},
+  year = {2022}
+}
+"""
+)
 style = rk.Style.load("apa")
 doc = rk.Document(library, style, locale="en-US")
 
-first = doc.cite("doe2024")
-second = doc.cite([rk.Cite("doe2024", locator="12", label="page"), "roe2022"])
+rendered = doc.render(
+    [
+        rk.Citation("intro", "doe2024"),
+        rk.Citation(
+            "detail",
+            rk.CitationGroup([rk.Cite("doe2024", locator="12", label="page"), "roe2022"]),
+        ),
+    ]
+)
 
-print(first.text)
-print(second.text)
-print(doc.bibliography().html)
+print(rendered["intro"].text)
+print(rendered["detail"].text)
+print(rendered.bibliography.text)
 ```
 
-`Library` is the normalized citation database. `Style` loads a bundled or explicit CSL style. `Document` keeps citation order, repeated citation state, and bibliography state. Each render returns `Rendered` with `text`, `html`, and `tree`.
+Expected output:
+
+```text
+(Doe, 2024)
+(Doe, 2024, p. 12; Roe, 2022)
+Doe, J. (2024). Fast Citations. Journal of Citation Tests.
+Roe, R. (2022). Batch References. Example Press.
+```
+
+`Library` is the normalized citation database. `Style` loads a bundled or explicit CSL style. `Document.render` renders the whole citation document at once and returns `RenderedDocument` with named citations and a cited bibliography. Each rendered citation and bibliography is `Rendered` with `text`, `html`, and `tree`.
+`Cite` names one citation item. `CitationGroup` renders several items as one citation. `Citation(id, group)` gives that rendered citation a stable lookup name. Citation ids must be unique inside one `Document.render` call.
 
 Use the one-call helpers for scripts:
 
 ```python
 rk.cite("refs.bib", "doe2024", style="ieee").text
-rk.bibliography("refs.bib", style="chicago-author-date").html
+rk.full_bibliography("refs.bib", style="chicago-author-date").html
 ```
 
 ## Process BibTeX Columns In Polars
@@ -52,16 +84,18 @@ df = pl.DataFrame(
 )
 
 out = df.select(
-    citation=prk.cite("bibtex", "key"),
-    citations=prk.cite_sequence("bibtex", "keys"),
-    bibliography=prk.bibliography_html("bibtex"),
-    count=prk.entry_count("bibtex"),
-    keys=prk.keys("bibtex"),
-    entries=prk.entries("bibtex"),
+    citation=pl.col("bibtex").refkit.cite(pl.col("key")),
+    literal_citation=pl.col("bibtex").refkit.cite(pl.lit("doe2024")),
+    each_citation=pl.col("bibtex").refkit.cite_each(pl.col("keys")),
+    grouped_citation=pl.col("bibtex").refkit.cite_group(pl.col("keys")),
+    bibliography=pl.col("bibtex").refkit.full_bibliography_html(),
+    count=pl.col("bibtex").refkit.entry_count(),
+    keys=pl.col("bibtex").refkit.keys(),
+    entries=pl.col("bibtex").refkit.entries(),
 )
 ```
 
-`polars-refkit` runs inside the Polars expression engine. Each row is one BibTeX or BibLaTeX source. Parse failures return null for value expressions and diagnostics through `diagnostics` or `parse_report`.
+`polars-refkit` runs inside the Polars expression engine. Each row is one BibTeX or BibLaTeX source. Strings name columns. Use `pl.lit(...)` for literal BibTeX or citation keys. Parse failures return null for value expressions, `can_parse` returns whether a row can produce a normalized library, and `has_diagnostics`, `diagnostics`, and `parse_report` expose parse messages.
 
 ## Choose A Package
 
@@ -75,11 +109,11 @@ out = df.select(
 
 | Capability | `refkit` | `polars-refkit` |
 | --- | --- | --- |
-| Read normalized bibliography data | `Library.read`, `Library.parse` | `entry_count`, `keys`, `entries`, `parse_report` |
-| Render citations | `Document.cite`, `cite` | `cite`, `cite_html`, `cite_rendered`, `cite_sequence` |
-| Render bibliographies | `Document.bibliography`, `bibliography` | `bibliography_text`, `bibliography_html`, `bibliography_rendered` |
+| Read normalized bibliography data | `Library.read`, `Library.parse_bibtex`, `Library.parse_yaml` | `entry_count`, `can_parse`, `has_diagnostics`, `keys`, `entries`, `parse_report` |
+| Render citations | `Document.render`, `Citation`, `Cite`, `CitationGroup`, `cite` | `cite`, `cite_html`, `cite_rendered`, `cite_each`, `cite_group` |
+| Render bibliographies | `Document.cited_bibliography`, `Document.full_bibliography`, `full_bibliography` | `full_bibliography_text`, `full_bibliography_html`, `full_bibliography_rendered` |
 | Load CSL styles and locales | `Style.load`, `Style.from_path`, `Style.from_xml`, `Locale.load` | `style=` and `locale=` arguments |
-| Inspect entries | Mapping access, selectors, `project`, `to_dicts` | `keys`, `entries`, `entries_json` |
+| Inspect entries | Mapping access, selectors, `project`, `to_dicts` | `keys`, `entries`, `to_hayagriva_json` |
 | Edit raw BibTeX | `BibDocument` | Use `refkit` for block-level edits |
 | Export rendered output | `Rendered.text`, `Rendered.html`, `Rendered.tree` | string and struct expressions |
 

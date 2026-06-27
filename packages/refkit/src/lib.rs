@@ -1,6 +1,7 @@
 mod raw;
 mod rendered;
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,9 +14,9 @@ use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyAny, PyDict, PyDictMethods, PyList, PyListMethods, PyModule};
 
 use refkit_core::{
-    CoreCite, CoreDocument, CoreLibrary, DocumentError, EntryRecord, NormalizedEntry,
-    NormalizedValue, PreparedStyle, ProjectField, StyleError, bundled_locales, load_prepared_style,
-    option_quoted, parse_project_field, prepare_style_from_xml, quoted,
+    CoreCite, CoreDocument, CoreLibrary, CoreRenderedDocument, DocumentError, EntryRecord,
+    NormalizedEntry, NormalizedValue, PreparedStyle, ProjectField, StyleError, bundled_locales,
+    load_prepared_style, option_quoted, parse_project_field, prepare_style_from_xml, quoted,
 };
 use rendered::Rendered;
 
@@ -71,24 +72,25 @@ impl Library {
 #[pymethods]
 impl Library {
     #[staticmethod]
-    #[pyo3(signature = (path, strict = false, diagnostics = false))]
-    fn read(py: Python<'_>, path: PathBuf, strict: bool, diagnostics: bool) -> PyResult<Self> {
+    #[pyo3(signature = (path, *, recovery = "error"))]
+    fn read(py: Python<'_>, path: PathBuf, recovery: &str) -> PyResult<Self> {
+        let (strict, diagnostics) = parse_recovery_policy(recovery)?;
         let library = py.detach(move || CoreLibrary::read_path(path, strict, diagnostics));
         library.map(Self::from_core).map_err(RefkitError::new_err)
     }
 
     #[staticmethod]
-    #[pyo3(signature = (source, format = "bibtex", strict = false, diagnostics = false))]
-    fn parse(
-        py: Python<'_>,
-        source: String,
-        format: &str,
-        strict: bool,
-        diagnostics: bool,
-    ) -> PyResult<Self> {
-        let format = format.to_string();
+    #[pyo3(signature = (source, *, recovery = "error"))]
+    fn parse_bibtex(py: Python<'_>, source: String, recovery: &str) -> PyResult<Self> {
+        let (strict, diagnostics) = parse_recovery_policy(recovery)?;
         let library =
-            py.detach(move || CoreLibrary::parse_source(&source, &format, strict, diagnostics));
+            py.detach(move || CoreLibrary::parse_source(&source, "bibtex", strict, diagnostics));
+        library.map(Self::from_core).map_err(RefkitError::new_err)
+    }
+
+    #[staticmethod]
+    fn parse_yaml(py: Python<'_>, source: String) -> PyResult<Self> {
+        let library = py.detach(move || CoreLibrary::parse_source(&source, "yaml", false, false));
         library.map(Self::from_core).map_err(RefkitError::new_err)
     }
 
@@ -159,7 +161,7 @@ impl Library {
         normalized_entries_to_py(py, &entries)
     }
 
-    #[pyo3(signature = (fields = None, keys = None))]
+    #[pyo3(signature = (fields = None, *, keys = None))]
     fn project(
         &self,
         py: Python<'_>,
@@ -229,16 +231,6 @@ impl Entry {
     }
 
     #[getter]
-    fn parent(&self) -> Option<Entry> {
-        self.data
-            .record
-            .parents
-            .first()
-            .cloned()
-            .map(Entry::from_record)
-    }
-
-    #[getter]
     fn parents(&self) -> Vec<Entry> {
         self.data
             .record
@@ -265,6 +257,16 @@ impl Entry {
             quoted(&self.data.record.key),
             quoted(&self.data.record.entry_type)
         )
+    }
+}
+
+fn parse_recovery_policy(recovery: &str) -> PyResult<(bool, bool)> {
+    match recovery {
+        "error" => Ok((true, true)),
+        "report" => Ok((false, true)),
+        _ => Err(PyValueError::new_err(
+            "recovery must be 'error' or 'report'",
+        )),
     }
 }
 
@@ -372,7 +374,7 @@ pub struct Cite {
 #[pymethods]
 impl Cite {
     #[new]
-    #[pyo3(signature = (key, locator = None, label = None))]
+    #[pyo3(signature = (key, *, locator = None, label = None))]
     fn new(key: String, locator: Option<String>, label: Option<String>) -> Self {
         Self {
             key,
@@ -387,6 +389,73 @@ impl Cite {
             quoted(&self.key),
             option_quoted(self.locator.as_deref()),
             option_quoted(self.label.as_deref())
+        )
+    }
+}
+
+#[pyclass(module = "refkit", skip_from_py_object)]
+#[derive(Clone)]
+pub struct CitationGroup {
+    cites: Vec<Cite>,
+}
+
+#[pymethods]
+impl CitationGroup {
+    #[new]
+    #[pyo3(signature = (items))]
+    fn new(items: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let cites = parse_citation_group_items(items)?;
+        if cites.is_empty() {
+            return Err(PyValueError::new_err(
+                "CitationGroup requires at least one citation",
+            ));
+        }
+        Ok(Self { cites })
+    }
+
+    #[getter]
+    fn items(&self) -> Vec<Cite> {
+        self.cites.clone()
+    }
+
+    fn __len__(&self) -> usize {
+        self.cites.len()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("CitationGroup({} citations)", self.cites.len())
+    }
+}
+
+#[pyclass(module = "refkit", skip_from_py_object)]
+#[derive(Clone)]
+pub struct Citation {
+    #[pyo3(get)]
+    id: String,
+    group: Vec<Cite>,
+}
+
+#[pymethods]
+impl Citation {
+    #[new]
+    #[pyo3(signature = (id, citation))]
+    fn new(id: String, citation: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let group = parse_citation_arg(citation)?;
+        Ok(Self { id, group })
+    }
+
+    #[getter]
+    fn group(&self) -> CitationGroup {
+        CitationGroup {
+            cites: self.group.clone(),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Citation(id={}, {} items)",
+            quoted(&self.id),
+            self.group.len()
         )
     }
 }
@@ -551,7 +620,7 @@ pub struct Document {
 #[pymethods]
 impl Document {
     #[new]
-    #[pyo3(signature = (library, style, locale = None))]
+    #[pyo3(signature = (library, style, *, locale = None))]
     fn new(library: &Library, style: &Style, locale: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let inner = CoreDocument::new(
             Arc::clone(&library.inner),
@@ -561,31 +630,113 @@ impl Document {
         Ok(Self { inner })
     }
 
-    fn cite(&mut self, py: Python<'_>, items: &Bound<'_, PyAny>) -> PyResult<Rendered> {
-        let group = parse_cite_group(items)?
+    fn render(&self, py: Python<'_>, citations: &Bound<'_, PyAny>) -> PyResult<RenderedDocument> {
+        let parsed = parse_document_citations(citations)?;
+        let ids = parsed
+            .iter()
+            .map(|citation| citation.id.clone())
+            .collect::<Vec<_>>();
+        let groups = parsed
             .into_iter()
-            .map(|cite| cite.to_core())
+            .map(|citation| {
+                citation
+                    .group
+                    .into_iter()
+                    .map(|cite| cite.to_core())
+                    .collect()
+            })
             .collect();
-        let rendered = py.detach(|| self.inner.cite_group(group));
+        let rendered = py.detach(|| self.inner.render(groups));
+        rendered
+            .map(|document| RenderedDocument::from_core(ids, document))
+            .map_err(document_error_to_py)
+    }
+
+    fn cited_bibliography(
+        &self,
+        py: Python<'_>,
+        citations: &Bound<'_, PyAny>,
+    ) -> PyResult<Rendered> {
+        let groups = parse_document_citations(citations)?
+            .into_iter()
+            .map(|citation| {
+                citation
+                    .group
+                    .into_iter()
+                    .map(|cite| cite.to_core())
+                    .collect()
+            })
+            .collect();
+        let rendered = py.detach(|| self.inner.cited_bibliography(groups));
         rendered
             .map(Rendered::from_record)
             .map_err(document_error_to_py)
     }
 
-    #[pyo3(signature = (all = false))]
-    fn bibliography(&self, py: Python<'_>, all: bool) -> PyResult<Rendered> {
-        let rendered = py.detach(|| self.inner.bibliography(all));
+    fn full_bibliography(&self, py: Python<'_>) -> PyResult<Rendered> {
+        let rendered = py.detach(|| self.inner.full_bibliography());
         rendered
             .map(Rendered::from_record)
             .map_err(document_error_to_py)
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "Document({} entries, {} citations)",
-            self.inner.entry_count(),
-            self.inner.citation_count()
-        )
+        format!("Document({} entries)", self.inner.entry_count())
+    }
+}
+
+#[pyclass(module = "refkit", skip_from_py_object)]
+pub struct RenderedDocument {
+    citation_ids: Vec<String>,
+    citations: Vec<Rendered>,
+    bibliography: Rendered,
+}
+
+#[pymethods]
+impl RenderedDocument {
+    #[getter]
+    fn citation_order(&self) -> Vec<String> {
+        self.citation_ids.clone()
+    }
+
+    #[getter]
+    fn citations(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let dict = PyDict::new(py);
+        for (id, rendered) in self.citation_ids.iter().zip(self.citations.iter()) {
+            dict.set_item(id, rendered.clone())?;
+        }
+        Ok(dict.into_any().unbind())
+    }
+
+    #[getter]
+    fn bibliography(&self) -> Rendered {
+        self.bibliography.clone()
+    }
+
+    fn __getitem__(&self, id: &str) -> PyResult<Rendered> {
+        self.citation_ids
+            .iter()
+            .position(|candidate| candidate == id)
+            .map(|index| self.citations[index].clone())
+            .ok_or_else(|| PyKeyError::new_err(id.to_string()))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("RenderedDocument({} citations)", self.citations.len())
+    }
+}
+
+impl RenderedDocument {
+    fn from_core(ids: Vec<String>, document: CoreRenderedDocument) -> Self {
+        Self {
+            citation_ids: ids,
+            citations: document
+                .citations
+                .into_iter()
+                .map(Rendered::from_record)
+                .collect(),
+            bibliography: Rendered::from_record(document.bibliography),
+        }
     }
 }
 
@@ -643,9 +794,50 @@ fn extract_locale(locale: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>>
     ))
 }
 
-fn parse_cite_group(items: &Bound<'_, PyAny>) -> PyResult<Vec<Cite>> {
-    if let Ok(cite) = parse_single_cite(items) {
+fn parse_citation_arg(citation: &Bound<'_, PyAny>) -> PyResult<Vec<Cite>> {
+    if let Ok(group) = citation.extract::<PyRef<'_, CitationGroup>>() {
+        return Ok(group.cites.clone());
+    }
+
+    if let Ok(cite) = parse_single_cite(citation) {
         return Ok(vec![cite]);
+    }
+
+    Err(PyTypeError::new_err(
+        "citation must be a key string, Cite, or CitationGroup",
+    ))
+}
+
+fn parse_document_citations(citations: &Bound<'_, PyAny>) -> PyResult<Vec<Citation>> {
+    if citations.extract::<String>().is_ok() {
+        return Err(PyTypeError::new_err(
+            "citations must be an iterable of Citation objects",
+        ));
+    }
+    let iter = citations
+        .try_iter()
+        .map_err(|_| PyTypeError::new_err("citations must be an iterable of Citation objects"))?;
+    let mut parsed = Vec::new();
+    let mut ids = HashSet::new();
+    for citation in iter {
+        let citation = citation?;
+        let citation = citation.extract::<PyRef<'_, Citation>>()?;
+        if !ids.insert(citation.id.clone()) {
+            return Err(PyValueError::new_err(format!(
+                "duplicate citation id {}",
+                quoted(&citation.id)
+            )));
+        }
+        parsed.push(citation.clone());
+    }
+    Ok(parsed)
+}
+
+fn parse_citation_group_items(items: &Bound<'_, PyAny>) -> PyResult<Vec<Cite>> {
+    if items.extract::<String>().is_ok() {
+        return Err(PyTypeError::new_err(
+            "CitationGroup items must be an iterable of key strings or Cite objects",
+        ));
     }
 
     if let Ok(iter) = items.try_iter() {
@@ -653,7 +845,7 @@ fn parse_cite_group(items: &Bound<'_, PyAny>) -> PyResult<Vec<Cite>> {
     }
 
     Err(PyTypeError::new_err(
-        "citation items must be strings, Cite objects, or iterables of them",
+        "CitationGroup items must be an iterable of key strings or Cite objects",
     ))
 }
 
@@ -692,7 +884,10 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Style>()?;
     m.add_class::<Locale>()?;
     m.add_class::<Cite>()?;
+    m.add_class::<CitationGroup>()?;
+    m.add_class::<Citation>()?;
     m.add_class::<Document>()?;
+    m.add_class::<RenderedDocument>()?;
     m.add_class::<Rendered>()?;
     raw::register(m)?;
     Ok(())

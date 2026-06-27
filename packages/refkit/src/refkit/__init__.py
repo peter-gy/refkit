@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _metadata_version
 from os import PathLike
@@ -14,6 +13,8 @@ from ._native import (
     BibEntryMap,
     BibField,
     BibFieldMap,
+    Citation,
+    CitationGroup,
     Cite,
     Document,
     Entry,
@@ -22,6 +23,7 @@ from ._native import (
     MissingReferenceError,
     RefkitError,
     Rendered,
+    RenderedDocument,
     Style,
 )
 from ._native import (
@@ -39,7 +41,9 @@ __all__ = [
     "BibEntryMap",
     "BibField",
     "BibFieldMap",
+    "Citation",
     "Cite",
+    "CitationGroup",
     "RefkitError",
     "Document",
     "Entry",
@@ -47,28 +51,32 @@ __all__ = [
     "Locale",
     "MissingReferenceError",
     "Rendered",
+    "RenderedDocument",
     "Style",
-    "bibliography",
     "cite",
+    "full_bibliography",
     "__version__",
 ]
 
 
 def cite(
     source: str | PathLike[str],
-    item: str | Cite | Iterable[str | Cite],
+    citation: str | Cite | CitationGroup,
     *,
     style: str | Style = "apa",
     locale: str | Locale | None = "en-US",
 ) -> Rendered:
-    """Read `source` and render one citation group."""
+    """Read `source` and render one citation."""
 
     library = Library.read(source)
     loaded_style = Style.load(style) if isinstance(style, str) else style
-    return Document(library, loaded_style, locale=locale).cite(item)
+    rendered = Document(library, loaded_style, locale=locale).render(
+        [Citation("citation", citation)]
+    )
+    return rendered["citation"]
 
 
-def bibliography(
+def full_bibliography(
     source: str | PathLike[str],
     *,
     style: str | Style = "apa",
@@ -79,7 +87,7 @@ def bibliography(
     library = Library.read(source)
     loaded_style = Style.load(style) if isinstance(style, str) else style
     document = Document(library, loaded_style, locale=locale)
-    return document.bibliography(all=True)
+    return document.full_bibliography()
 
 
 def __getattr__(name: str) -> Any:

@@ -43,7 +43,7 @@ class RefkitAdapter(PackageAdapter):
         import refkit as rk
 
         def operation() -> OperationOutcome:
-            library = rk.Library.parse(workload.bibtex)
+            library = rk.Library.parse_bibtex(workload.bibtex)
             return OperationOutcome(library, len(library))
 
         return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
@@ -54,7 +54,7 @@ class RefkitAdapter(PackageAdapter):
         import refkit as rk
 
         def operation() -> OperationOutcome:
-            library = rk.Library.read(workload.dirty_bibtex_path, diagnostics=True)
+            library = rk.Library.read(workload.dirty_bibtex_path, recovery="report")
             return OperationOutcome(
                 library,
                 len(library),
@@ -75,7 +75,7 @@ class RefkitAdapter(PackageAdapter):
         expected = 0 if workload.dirty_bibtex == workload.bibtex else 4
 
         def operation() -> OperationOutcome:
-            library = rk.Library.read(workload.dirty_bibtex_path, diagnostics=True)
+            library = rk.Library.read(workload.dirty_bibtex_path, recovery="report")
             diagnostics = [{"message": message} for message in library.diagnostics]
             return OperationOutcome(
                 diagnostics,
@@ -212,7 +212,7 @@ class RefkitAdapter(PackageAdapter):
     def prepare_create_processor(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
         style = rk.Style.load("apa")
 
         def operation() -> OperationOutcome:
@@ -226,13 +226,13 @@ class RefkitAdapter(PackageAdapter):
     ) -> PreparedOperation:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
         style = rk.Style.load("apa")
         key = workload.keys[0]
 
         def operation() -> OperationOutcome:
             document = rk.Document(library, style, locale="en-US")
-            rendered = document.cite(key)
+            rendered = document.render([rk.Citation("citation", key)])["citation"]
             return OperationOutcome(rendered.text, 1)
 
         return _prepared(
@@ -246,12 +246,12 @@ class RefkitAdapter(PackageAdapter):
     ) -> PreparedOperation:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
         style = rk.Style.load("apa")
 
         def operation() -> OperationOutcome:
             document = rk.Document(library, style, locale="en-US")
-            rendered = document.bibliography(all=True)
+            rendered = document.full_bibliography()
             return OperationOutcome(rendered.text, len(workload.records))
 
         return _prepared(
@@ -268,15 +268,14 @@ class RefkitAdapter(PackageAdapter):
     ) -> PreparedOperation:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
         style = rk.Style.load("apa")
         keys = workload.keys
 
         def operation() -> OperationOutcome:
             document = rk.Document(library, style, locale="en-US")
-            for key in keys:
-                document.cite(key)
-            rendered = document.bibliography()
+            citations = [rk.Citation(f"citation_{index}", key) for index, key in enumerate(keys)]
+            rendered = document.cited_bibliography(citations)
             return OperationOutcome(rendered.text, len(keys))
 
         return _prepared(
@@ -293,13 +292,15 @@ class RefkitAdapter(PackageAdapter):
     ) -> PreparedOperation:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
         style = rk.Style.load("apa")
         keys = workload.keys
 
         def operation() -> OperationOutcome:
             document = rk.Document(library, style, locale="en-US")
-            texts = [document.cite(key).text for key in keys]
+            citations = [rk.Citation(f"citation_{index}", key) for index, key in enumerate(keys)]
+            rendered = document.render(citations)
+            texts = [rendered[f"citation_{index}"].text for index in range(len(keys))]
             return OperationOutcome("\n".join(texts), len(texts))
 
         return _prepared(
@@ -350,10 +351,10 @@ class RefkitAdapter(PackageAdapter):
     def _prepared_rendered_citation(self, workload: Workload) -> Any:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
         style = rk.Style.load("apa")
         document = rk.Document(library, style, locale="en-US")
-        return document.cite(workload.keys[0])
+        return document.render([rk.Citation("citation", workload.keys[0])])["citation"]
 
     def prepare_render_path_citation(
         self, workload: Workload, directory: Path
@@ -379,7 +380,7 @@ class RefkitAdapter(PackageAdapter):
         import refkit as rk
 
         def operation() -> OperationOutcome:
-            rendered = rk.bibliography(workload.bibtex_path, style="apa")
+            rendered = rk.full_bibliography(workload.bibtex_path, style="apa")
             return OperationOutcome(rendered.text, len(workload.records))
 
         return _prepared(
@@ -397,13 +398,13 @@ class RefkitAdapter(PackageAdapter):
     ) -> PreparedOperation:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
         style = rk.Style.load("apa")
 
         def operation() -> OperationOutcome:
             document = rk.Document(library, style, locale="en-US")
             try:
-                document.cite("missing-reference")
+                document.render([rk.Citation("missing", "missing-reference")])
             except rk.MissingReferenceError as exc:
                 return OperationOutcome(str(exc), 1, "raised")
             raise AssertionError("missing reference did not raise")  # pragma: no cover
@@ -419,7 +420,7 @@ class RefkitAdapter(PackageAdapter):
     ) -> PreparedOperation:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
 
         def operation() -> OperationOutcome:
             rows = library.project(["key", "title"])
@@ -433,7 +434,7 @@ class RefkitAdapter(PackageAdapter):
     def prepare_list_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
 
         def operation() -> OperationOutcome:
             keys = library.keys()
@@ -444,7 +445,7 @@ class RefkitAdapter(PackageAdapter):
     def prepare_lookup_entries(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
         keys = _lookup_keys(workload)
 
         def operation() -> OperationOutcome:
@@ -456,7 +457,7 @@ class RefkitAdapter(PackageAdapter):
     def prepare_project_fields(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
-        library = rk.Library.parse(workload.bibtex)
+        library = rk.Library.parse_bibtex(workload.bibtex)
 
         def operation() -> OperationOutcome:
             rows = library.project(["key", "title", "doi", "volume"])

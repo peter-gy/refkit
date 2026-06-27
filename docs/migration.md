@@ -9,36 +9,50 @@ Use `Library`, `Style`, and `Document` for the main render flow.
 ```python
 import refkit as rk
 
-library = rk.Library.read("refs.bib")
+library = rk.Library.parse_bibtex(
+    """
+@article{doe2024, title={Fast Citations}, year={2024}}
+@book{roe2022, title={Batch References}, year={2022}}
+"""
+)
 style = rk.Style.load("apa")
 doc = rk.Document(library, style, locale="en-US")
+rendered = doc.render([rk.Citation("intro", "doe2024")])
 
-print(doc.cite("doe2024").text)
-print(doc.bibliography().html)
+print(rendered["intro"].text)
+print(rendered.bibliography.html)
 ```
 
 The closest citeproc-py roles map to these refkit objects:
 
 | citeproc-py role | refkit object |
 | --- | --- |
-| BibTeX source adapter | `Library.read("refs.bib")` or `Library.parse(source, format="bibtex")` |
+| BibTeX source adapter | `Library.read("refs.bib")` or `Library.parse_bibtex(source)` |
 | JSON source adapter | Use a BibTeX, BibLaTeX, or Hayagriva YAML source. CSL JSON input is outside the current API. |
 | `CitationStylesStyle` | `Style` |
 | `CitationItem` | `Cite` |
+| Citation cluster | `CitationGroup` inside a named `Citation` |
 | `CitationStylesBibliography` | `Document` |
 | Formatter output | `Rendered.text`, `Rendered.html`, `Rendered.tree` |
 
-`Document.cite` accepts a key string, a `Cite`, or an iterable citation group.
+`Document.render` accepts named `Citation` objects. Use `CitationGroup` inside a `Citation` when one rendered citation contains multiple citation items.
 
 ```python
-doc.cite([rk.Cite("doe2024", locator="12", label="page"), "roe2022"])
+rendered = doc.render(
+    [
+        rk.Citation(
+            "detail",
+            rk.CitationGroup([rk.Cite("doe2024", locator="12", label="page"), "roe2022"]),
+        )
+    ]
+)
 ```
 
 Missing references raise `MissingReferenceError`. There is no callback-based missing-reference hook in the main API.
 
 ```python
 try:
-    doc.cite("missing-key")
+    doc.render([rk.Citation("missing", "missing-key")])
 except rk.MissingReferenceError:
     ...
 ```
@@ -84,10 +98,10 @@ raw.write("refs.bib")
 
 ## In-Memory Sources
 
-Use `Library.parse` for normalized in-memory rendering and `BibDocument.parse` for raw in-memory repair.
+Use `Library.parse_bibtex` or `Library.parse_yaml` for normalized in-memory rendering. Use `BibDocument.parse` for raw in-memory repair.
 
 ```python
-library = rk.Library.parse("@article{doe2024, title={Fast Citations}, year={2024}}")
+library = rk.Library.parse_bibtex("@article{doe2024, title={Fast Citations}, year={2024}}")
 raw = rk.BibDocument.parse("@article{doe2024, title={Old}}\n")
 ```
 

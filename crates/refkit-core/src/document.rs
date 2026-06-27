@@ -1,4 +1,3 @@
-use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -6,16 +5,12 @@ use std::sync::Arc;
 use hayagriva::citationberg::taxonomy::Locator as CslLocator;
 use hayagriva::citationberg::{IndependentStyle, LocaleCode};
 use hayagriva::{
-    BibliographyDriver, BibliographyRequest, BufWriteFormat, CitationItem, CitationRequest,
-    Entry as HayEntry, LocatorPayload, Rendered as HayRendered, SpecificLocator,
-    standalone_citation,
+    BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest, Entry as HayEntry,
+    LocatorPayload, Rendered as HayRendered, SpecificLocator,
 };
 
-use crate::render::{bundled_locales, elem_children_to_html, elem_children_to_string};
-use crate::render_tree::{
-    rendered_record_from_bibliography, rendered_record_from_citation,
-    rendered_record_from_citation_parts,
-};
+use crate::render::bundled_locales;
+use crate::render_tree::{rendered_record_from_bibliography, rendered_record_from_citation};
 use crate::{CoreLibrary, PreparedStyle, RenderedRecord};
 
 #[derive(Debug, Clone)]
@@ -59,27 +54,12 @@ pub struct Document {
     library: Arc<CoreLibrary>,
     style: Arc<PreparedStyle>,
     locale: Option<String>,
-    citations: Vec<Vec<Cite>>,
-    fast_cite: FastCitationState,
 }
 
-#[derive(Clone)]
-struct FastCitationState {
-    enabled: bool,
-    key_by_text: HashMap<String, String>,
-    seen_keys: HashSet<String>,
-    subsequent_name_rules: bool,
-}
-
-impl FastCitationState {
-    fn new(fast_citation_enabled: bool, subsequent_name_rules: bool) -> Self {
-        Self {
-            enabled: fast_citation_enabled,
-            key_by_text: HashMap::new(),
-            seen_keys: HashSet::new(),
-            subsequent_name_rules,
-        }
-    }
+#[derive(Debug)]
+pub struct RenderedDocument {
+    pub citations: Vec<RenderedRecord>,
+    pub bibliography: RenderedRecord,
 }
 
 impl Document {
@@ -88,14 +68,10 @@ impl Document {
         style: Arc<PreparedStyle>,
         locale: Option<String>,
     ) -> Self {
-        let fast_cite =
-            FastCitationState::new(style.fast_citation_enabled, style.subsequent_name_rules);
         Self {
             library,
             style,
             locale,
-            citations: Vec::new(),
-            fast_cite,
         }
     }
 
@@ -103,106 +79,38 @@ impl Document {
         self.library.len()
     }
 
-    pub fn citation_count(&self) -> usize {
-        self.citations.len()
+    pub fn render(&self, citations: Vec<Vec<Cite>>) -> Result<RenderedDocument, DocumentError> {
+        let rendered = self.render_with_citations(&citations, false, self.style.inner.as_ref())?;
+        let citations = rendered
+            .citations
+            .iter()
+            .map(rendered_record_from_citation)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(DocumentError::Render)?;
+        let bibliography = rendered_record_from_bibliography(rendered.bibliography)
+            .map_err(DocumentError::Render)?;
+        Ok(RenderedDocument {
+            citations,
+            bibliography,
+        })
     }
 
-    pub fn cite_group(&mut self, group: Vec<Cite>) -> Result<RenderedRecord, DocumentError> {
-        let fast_cite = self.fast_cite.clone();
-        self.citations.push(group);
-        match self.render_appended_citation() {
-            Ok(rendered) => Ok(rendered),
-            Err(err) => {
-                self.citations.pop();
-                self.fast_cite = fast_cite;
-                Err(err)
-            }
-        }
-    }
-
-    pub fn bibliography(&self, all: bool) -> Result<RenderedRecord, DocumentError> {
-        let rendered = self.render_all(all)?;
+    pub fn cited_bibliography(
+        &self,
+        citations: Vec<Vec<Cite>>,
+    ) -> Result<RenderedRecord, DocumentError> {
+        let rendered = self.render_with_citations(&citations, false, self.style.inner.as_ref())?;
         rendered_record_from_bibliography(rendered.bibliography).map_err(DocumentError::Render)
     }
 
-    fn render_appended_citation(&mut self) -> Result<RenderedRecord, DocumentError> {
-        if let Some(rendered) = self.try_render_fast_citation()? {
-            return Ok(rendered);
-        }
-        self.render_latest_citation()
+    pub fn full_bibliography(&self) -> Result<RenderedRecord, DocumentError> {
+        let rendered = self.render_with_citations(&[], true, self.style.inner.as_ref())?;
+        rendered_record_from_bibliography(rendered.bibliography).map_err(DocumentError::Render)
     }
 
-    fn try_render_fast_citation(&mut self) -> Result<Option<RenderedRecord>, DocumentError> {
-        if !self.fast_cite.enabled {
-            return Ok(None);
-        }
-
-        let Some(group) = self.citations.last() else {
-            return Ok(None);
-        };
-        let [cite] = group.as_slice() else {
-            self.fast_cite.enabled = false;
-            return Ok(None);
-        };
-        if cite.locator.is_some() {
-            self.fast_cite.enabled = false;
-            return Ok(None);
-        }
-
-        let entry = self
-            .library
-            .inner()
-            .get(&cite.key)
-            .ok_or_else(|| DocumentError::MissingReference(cite.key.clone()))?;
-        if self.fast_cite.subsequent_name_rules && self.fast_cite.seen_keys.contains(&cite.key) {
-            return Ok(None);
-        }
-
-        let locale = self.locale.as_ref().map(|code| LocaleCode(code.clone()));
-        let children = standalone_citation(CitationRequest::new(
-            vec![citation_item(entry, cite)?],
-            self.style.standalone_style.as_ref(),
-            locale,
-            bundled_locales(),
-            None,
-        ));
-        let text = elem_children_to_string(&children, BufWriteFormat::Plain)
-            .map_err(DocumentError::Render)?;
-
-        match self.fast_cite.key_by_text.get(&text) {
-            Some(existing_key) if existing_key != &cite.key => {
-                self.fast_cite.enabled = false;
-                Ok(None)
-            }
-            _ => {
-                self.fast_cite
-                    .key_by_text
-                    .insert(text.clone(), cite.key.clone());
-                self.fast_cite.seen_keys.insert(cite.key.clone());
-                let html = elem_children_to_html(&children).map_err(DocumentError::Render)?;
-                Ok(Some(rendered_record_from_citation_parts(
-                    text, html, children,
-                )))
-            }
-        }
-    }
-
-    fn render_latest_citation(&self) -> Result<RenderedRecord, DocumentError> {
-        let rendered = self.render_with_style(false, self.style.citation_style.as_ref())?;
-        let Some(citation) = rendered.citations.last() else {
-            return Err(DocumentError::Render(
-                "citation renderer returned no citations".to_string(),
-            ));
-        };
-        rendered_record_from_citation(citation).map_err(DocumentError::Render)
-    }
-
-    fn render_all(&self, all: bool) -> Result<HayRendered, DocumentError> {
-        self.render_with_style(all, self.style.inner.as_ref())
-    }
-
-    fn render_with_style(
+    fn render_with_citations(
         &self,
+        citations: &[Vec<Cite>],
         all: bool,
         style: &IndependentStyle,
     ) -> Result<HayRendered, DocumentError> {
@@ -210,7 +118,7 @@ impl Document {
         let locale = self.locale.as_ref().map(|code| LocaleCode(code.clone()));
         let mut driver = BibliographyDriver::new();
 
-        for group in &self.citations {
+        for group in citations {
             let mut items = Vec::with_capacity(group.len());
             for cite in group {
                 let entry = self
@@ -269,49 +177,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn failed_group_citation_rolls_back_state() {
-        let mut document = test_document(
-            "apa",
-            "@article{valid, author = {Doe, Jane}, title = {Valid}, year = {2024}}",
-        );
-
-        assert!(
-            document
-                .cite_group(vec![test_cite("valid"), test_cite("missing")])
-                .is_err()
-        );
-
-        assert_eq!(document.citation_count(), 0);
-
-        let rendered = document.cite_group(vec![test_cite("valid")]).unwrap();
-        assert!(rendered.text.contains("Doe"));
-    }
-
-    #[test]
-    fn invalid_locator_label_is_structured_error() {
-        let mut document = test_document(
+    fn missing_reference_fails_whole_document_render() {
+        let document = test_document(
             "apa",
             "@article{valid, author = {Doe, Jane}, title = {Valid}, year = {2024}}",
         );
 
         let err = document
-            .cite_group(vec![Cite::new(
+            .render(vec![vec![test_cite("valid")], vec![test_cite("missing")]])
+            .unwrap_err();
+
+        assert_eq!(err, DocumentError::MissingReference("missing".to_string()));
+    }
+
+    #[test]
+    fn invalid_locator_label_is_structured_error() {
+        let document = test_document(
+            "apa",
+            "@article{valid, author = {Doe, Jane}, title = {Valid}, year = {2024}}",
+        );
+
+        let err = document
+            .render(vec![vec![Cite::new(
                 "valid".to_string(),
                 Some("12".to_string()),
                 Some("nonsense".to_string()),
-            )])
+            )]])
             .unwrap_err();
 
         assert_eq!(
             err,
             DocumentError::UnknownLocatorLabel("nonsense".to_string())
         );
-        assert_eq!(document.citation_count(), 0);
     }
 
     #[test]
-    fn bibliography_uses_citation_history() {
-        let mut document = test_document(
+    fn bibliography_scope_is_explicit() {
+        let document = test_document(
             "ieee",
             concat!(
                 "@article{a, author = {Doe, Jane}, title = {A}, year = {2024}}\n",
@@ -319,10 +221,13 @@ mod tests {
             ),
         );
 
-        document.cite_group(vec![test_cite("b")]).unwrap();
-        let cited = document.bibliography(false).unwrap();
-        let full = document.bibliography(true).unwrap();
+        let rendered = document.render(vec![vec![test_cite("b")]]).unwrap();
+        let cited = document
+            .cited_bibliography(vec![vec![test_cite("b")]])
+            .unwrap();
+        let full = document.full_bibliography().unwrap();
 
+        assert!(rendered.citations[0].text.contains("[1]"));
         assert!(cited.text.contains("Roe"));
         assert!(!cited.text.contains("Doe"));
         assert!(full.text.contains("Roe"));

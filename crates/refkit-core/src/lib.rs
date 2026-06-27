@@ -7,7 +7,10 @@ mod strings;
 mod style;
 mod style_analysis;
 
-pub use document::{Cite as CoreCite, Document as CoreDocument, DocumentError};
+pub use document::{
+    Cite as CoreCite, Document as CoreDocument, DocumentError,
+    RenderedDocument as CoreRenderedDocument,
+};
 pub use library::{
     EntryRecord, Library as CoreLibrary, NormalizedEntry, NormalizedValue, ParseReport,
     ProjectField, SourceText, parse_bibtex_report_source, parse_project_field,
@@ -18,7 +21,7 @@ pub use raw::{
 };
 pub use render::{
     RenderedOutput, bundled_locales, render_library_bibliography, render_library_citation,
-    render_library_citation_sequence,
+    render_library_citation_each, render_library_citation_group,
 };
 pub use render_tree::{RenderedFormatting, RenderedNode, RenderedRecord};
 pub use strings::{

@@ -4,27 +4,42 @@ Refkit exposes two bibliography models:
 
 | Model | Use it for | Source APIs |
 | --- | --- | --- |
-| `Library` | Rendering, selection, normalized entry access, and bulk export. | `Library.read(path)`, `Library.parse(source, format=...)` |
+| `Library` | Rendering, selection, normalized entry access, and bulk export. | `Library.read(path)`, `Library.parse_bibtex(source)`, `Library.parse_yaml(source)` |
 | `BibDocument` | Raw `.bib` inspection and field edits that keep comments, strings, preambles, malformed blocks, order, and byte spans. | `BibDocument.read(path)`, `BibDocument.parse(source)` |
 
 ## One-Off Helpers
 
-`cite(source, item, style="apa", locale="en-US")` and `bibliography(source, style="apa", locale="en-US")` read `source` as a file path. Use `Library.parse` and `Document` when the bibliography source is already in memory.
+`cite(source, citation, style="apa", locale="en-US")` and `full_bibliography(source, style="apa", locale="en-US")` read `source` as a file path. Use `Library.parse_bibtex`, `Library.parse_yaml`, and `Document` when the bibliography source is already in memory.
 
 ```python
 import refkit as rk
 
-library = rk.Library.parse("@article{doe2024, title={Fast Citations}, year={2024}}")
+library = rk.Library.parse_bibtex(
+    """
+@article{doe2024, title={Fast Citations}, year={2024}}
+@book{roe2022, title={Batch References}, year={2022}}
+"""
+)
 doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 
-print(doc.cite("doe2024").text)
+rendered = doc.render([rk.Citation("intro", "doe2024")])
+print(rendered["intro"].text)
 ```
 
-`cite` accepts the same citation group shapes as `Document.cite`: a key string, a `Cite` object, or an iterable of key strings and `Cite` objects.
+`Document.render` accepts named `Citation` objects. Each `Citation` has a unique `id` and a citation value: a key string, a `Cite`, or a `CitationGroup`. Use `CitationGroup([...])` when one rendered citation contains multiple items. Raw lists, tuples, and generators are group inputs inside `CitationGroup`, not direct `Document.render` arguments.
 
 ```python
-rk.cite("refs.bib", ("doe2024", rk.Cite("roe2022", locator="12", label="page")))
+doc.render(
+    [
+        rk.Citation(
+            "detail",
+            rk.CitationGroup(["doe2024", rk.Cite("roe2022", locator="12", label="page")]),
+        )
+    ]
+)
 ```
+
+`Document.render([...])` returns `RenderedDocument`. Use `rendered["detail"]` or `rendered.citations["detail"]` for named citations and `rendered.bibliography` for the cited bibliography. Use `Document.cited_bibliography([...])` when only the cited bibliography is needed. Use `Document.full_bibliography()` when every library entry should appear.
 
 ## Rendered Output
 
@@ -55,7 +70,7 @@ Bibliography trees contain entries:
 
 ## Projection Rows
 
-`Library.project(fields=None, keys=None)` returns a list of dictionaries. Supported fields are `key`, `entry_type`, `type`, `title`, `doi`, and `volume`. `title`, `doi`, and `volume` may be `None`.
+`Library.project(fields=None, *, keys=None)` returns a list of dictionaries. Supported fields are `key`, `entry_type`, `type`, `title`, `doi`, and `volume`. `title`, `doi`, and `volume` may be `None`.
 
 ```python
 import refkit as rk
@@ -63,6 +78,8 @@ import refkit as rk
 library = rk.Library.read("refs.bib")
 rows = library.project(["key", "type", "title"])
 ```
+
+`Library.read` and `Library.parse_bibtex` use `recovery="error"` by default. Malformed BibTeX raises `RefkitError`. Use `recovery="report"` when a workflow intentionally keeps recoverable entries and reads `library.diagnostics`.
 
 ## Raw BibTeX Blocks
 
@@ -89,16 +106,16 @@ for entry in raw.entries.get_all("doe2024"):
     print(entry.key, entry.span)
 ```
 
-Use `fields.get_all(name)` when an entry contains duplicate field names.
+Use `raw.entries.unique_keys()` when one key per distinct entry name is needed. Use `raw.entries.occurrence_keys()` when source-order duplicates matter. Use `fields.get_all(name)` and `fields.occurrence_keys()` when an entry contains duplicate field names.
 
 ## Errors
 
 | API | Error | Trigger |
 | --- | --- | --- |
 | `Library.read(path)` | `RefkitError` | Unsupported file extension. |
-| `Library.read(path, strict=True)` | `RefkitError` | Exact BibTeX parse failure. |
-| `Library.parse(source, format=...)` | `RefkitError` | Unsupported format. |
-| `Library.parse(source, format=..., strict=True)` | `RefkitError` | Exact BibTeX parse failure. |
+| `Library.read(path, *, recovery="error")` | `RefkitError` | BibTeX parse failure. |
+| `Library.parse_bibtex(source, *, recovery="error")` | `RefkitError` | BibTeX parse failure. |
+| `Library.parse_yaml(source)` | `RefkitError` | Invalid Hayagriva YAML. |
 | `Library.project(fields=..., keys=...)` | `TypeError` | `fields` or `keys` is a string or is not iterable. |
 | `Library.project(fields=...)` | `ValueError` | A projection field is not one of `key`, `entry_type`, `type`, `title`, `doi`, or `volume`. |
 | `Library.project(keys=...)` | `KeyError` | A requested entry key is absent from the `Library`. |
@@ -107,9 +124,11 @@ Use `fields.get_all(name)` when an entry contains duplicate field names.
 | `Style.from_xml(xml)` | `ValueError` | Invalid CSL XML or dependent style input. |
 | `Style.from_path(path)` | `RefkitError`, `ValueError` | File read failure or invalid CSL XML. |
 | `Locale.load(code)` | `ValueError` | Unknown bundled locale code. |
-| `Document.cite(item)` | `MissingReferenceError` | A citation key is absent from the `Library`. The failed call does not append to document state. |
-| `Document.cite(Cite(..., label=...))` | `ValueError` | Unknown locator label. |
-| `BibDocument.write()` | `ValueError` | The document came from `BibDocument.parse` and no output path was passed. |
+| `Document.render(citations)` | `TypeError` | `citations` is not an iterable of `Citation` objects. |
+| `CitationGroup([])` | `ValueError` | The group has no citation items. |
+| `Document.render(citations)` | `MissingReferenceError` | A citation key is absent from the `Library`. |
+| `Document.render([Citation(..., Cite(..., label=...))])` | `ValueError` | Unknown locator label. |
+| `BibDocument.write(path)` | `RefkitError` | The output path cannot be written. |
 | `BibField.value = ...` | `ValueError` | The replacement value cannot be represented safely with the original delimiter mode. |
-| `raw.entries[key]` or `raw.entries.get(key)` | `RefkitError` | The raw document contains duplicate entry keys. |
-| `entry.fields[name]` or `entry.fields.get(name)` | `RefkitError` | The raw entry contains duplicate field names. |
+| `raw.entries[key]` or `raw.entries.get_unique(key)` | `RefkitError` | The raw document contains duplicate entry keys. |
+| `entry.fields[name]` or `entry.fields.get_unique(name)` | `RefkitError` | The raw entry contains duplicate field names. |

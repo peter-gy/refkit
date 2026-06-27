@@ -440,7 +440,7 @@ def test_adapters_prepare_supported_lane_operations(tmp_path: Path) -> None:
     outcome = run_prepared(prepared)
     assert outcome.count == 3
 
-    prepared = polars_refkit.prepare("render_citation_sequence_eager", workload, tmp_path)
+    prepared = polars_refkit.prepare("render_citation_each_eager", workload, tmp_path)
     outcome = run_prepared(prepared)
     assert outcome.count == 3
 

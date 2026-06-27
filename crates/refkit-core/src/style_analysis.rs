@@ -4,20 +4,6 @@ use hayagriva::citationberg::{
     TextTarget,
 };
 
-pub(crate) fn citation_only_style(style: &IndependentStyle) -> IndependentStyle {
-    let mut style = style.clone();
-    style.bibliography = None;
-    style
-}
-
-pub(crate) fn full_history_citation_style(style: &IndependentStyle) -> Option<IndependentStyle> {
-    if !citation_depends_on_citation_number(style) || bibliography_has_sort(style) {
-        return None;
-    }
-
-    Some(citation_only_style(style))
-}
-
 pub(crate) fn can_fast_render_single_citations(style: &IndependentStyle) -> bool {
     !citation_depends_on_citation_number(style)
         && !citation_depends_on_position(style)
@@ -31,14 +17,6 @@ pub(crate) fn citation_depends_on_subsequent_names(style: &IndependentStyle) -> 
         style,
         &mut Vec::new(),
     )
-}
-
-fn bibliography_has_sort(style: &IndependentStyle) -> bool {
-    style
-        .bibliography
-        .as_ref()
-        .and_then(|bibliography| bibliography.sort.as_ref())
-        .is_some()
 }
 
 fn citation_depends_on_citation_number(style: &IndependentStyle) -> bool {
@@ -295,62 +273,4 @@ fn macro_depends_on_subsequent_names(
         elements_depend_on_subsequent_names(&csl_macro.children, inherited, style, seen_macros);
     seen_macros.pop();
     depends
-}
-
-#[cfg(test)]
-mod tests {
-    use hayagriva::archive;
-    use hayagriva::citationberg::Style as CslStyle;
-
-    use super::*;
-
-    #[test]
-    fn citation_only_style_keeps_bibliography_sorted_numbers_on_full_path() {
-        let apa = archived_independent_style("apa");
-        let ieee = archived_independent_style("ieee");
-        let sorted_numbers = independent_style_from_xml(
-            r#"<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="in-text">
-  <info>
-    <title>Sorted Numbers</title>
-    <id>https://example.com/sorted-numbers</id>
-    <updated>2024-01-01T00:00:00+00:00</updated>
-  </info>
-  <citation>
-    <layout>
-      <number variable="citation-number"/>
-    </layout>
-  </citation>
-  <bibliography>
-    <sort>
-      <key variable="title"/>
-    </sort>
-    <layout>
-      <text variable="title"/>
-    </layout>
-  </bibliography>
-</style>"#,
-        );
-
-        assert!(full_history_citation_style(&apa).is_none());
-        assert!(full_history_citation_style(&ieee).is_some());
-        assert!(full_history_citation_style(&sorted_numbers).is_none());
-        assert!(!can_fast_render_single_citations(&ieee));
-    }
-
-    fn archived_independent_style(name: &str) -> IndependentStyle {
-        let style = archive::ArchivedStyle::by_name(name)
-            .unwrap_or_else(|| panic!("missing archived style {name}"))
-            .get();
-        match style {
-            CslStyle::Independent(style) => style,
-            CslStyle::Dependent(_) => panic!("expected independent style {name}"),
-        }
-    }
-
-    fn independent_style_from_xml(xml: &str) -> IndependentStyle {
-        match CslStyle::from_xml(xml).unwrap() {
-            CslStyle::Independent(style) => style,
-            CslStyle::Dependent(_) => panic!("expected independent style"),
-        }
-    }
 }

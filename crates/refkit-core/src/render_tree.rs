@@ -39,14 +39,6 @@ impl RenderedRecord {
     }
 }
 
-pub(crate) fn rendered_record_from_citation_parts(
-    text: String,
-    html: String,
-    children: ElemChildren,
-) -> RenderedRecord {
-    RenderedRecord::new(text, html, RenderedTree::Citation(children))
-}
-
 pub fn rendered_record_from_citation(
     citation: &RenderedCitation,
 ) -> Result<RenderedRecord, String> {

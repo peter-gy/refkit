@@ -6,11 +6,6 @@ use hayagriva::archive;
 use hayagriva::citationberg::{IndependentStyle, Style as CslStyle};
 
 use crate::quoted;
-use crate::style_analysis::{
-    can_fast_render_single_citations, citation_depends_on_subsequent_names, citation_only_style,
-    full_history_citation_style,
-};
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StyleError {
     CachePoisoned,
@@ -43,27 +38,12 @@ impl std::error::Error for StyleError {}
 #[derive(Debug, Clone)]
 pub struct PreparedStyle {
     pub(crate) inner: Arc<IndependentStyle>,
-    pub(crate) citation_style: Arc<IndependentStyle>,
-    pub(crate) standalone_style: Arc<IndependentStyle>,
-    pub(crate) fast_citation_enabled: bool,
-    pub(crate) subsequent_name_rules: bool,
 }
 
 impl PreparedStyle {
     pub(crate) fn new(inner: IndependentStyle) -> Self {
-        let citation_style = full_history_citation_style(&inner).map(Arc::new);
-        let standalone_style = Arc::new(citation_only_style(&inner));
-        let fast_citation_enabled = can_fast_render_single_citations(&inner);
-        let subsequent_name_rules = citation_depends_on_subsequent_names(&inner);
         let inner = Arc::new(inner);
-        let citation_style = citation_style.unwrap_or_else(|| Arc::clone(&inner));
-        Self {
-            inner,
-            citation_style,
-            standalone_style,
-            fast_citation_enabled,
-            subsequent_name_rules,
-        }
+        Self { inner }
     }
 
     pub fn title(&self) -> &str {

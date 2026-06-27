@@ -20,7 +20,6 @@ type SharedDocument = Rc<RefCell<RawDocument>>;
 #[pyclass(module = "refkit", unsendable)]
 pub struct BibDocument {
     doc: SharedDocument,
-    path: Option<PathBuf>,
 }
 
 #[pymethods]
@@ -35,7 +34,6 @@ impl BibDocument {
         let data = parsed.map_err(RefkitError::new_err)?;
         Ok(Self {
             doc: Rc::new(RefCell::new(data)),
-            path: Some(path),
         })
     }
 
@@ -44,7 +42,6 @@ impl BibDocument {
         let data = py.detach(move || RawDocument::parse(&source));
         Self {
             doc: Rc::new(RefCell::new(data)),
-            path: None,
         }
     }
 
@@ -88,19 +85,12 @@ impl BibDocument {
         json_to_py(py, &payload)
     }
 
-    #[pyo3(signature = (path = None))]
-    fn write(&self, py: Python<'_>, path: Option<PathBuf>) -> PyResult<()> {
-        let (target, data) = {
-            let doc = self.doc.borrow();
-            let target = path
-                .or_else(|| self.path.clone())
-                .ok_or_else(|| PyValueError::new_err("write path is required"))?;
-            (target, doc.clone())
-        };
+    fn write(&self, py: Python<'_>, path: PathBuf) -> PyResult<()> {
+        let data = self.doc.borrow().clone();
 
         py.detach(move || {
             let rendered = render_document(&data)?;
-            fs::write(&target, rendered)
+            fs::write(&path, rendered)
                 .map_err(|err| RefkitError::new_err(format!("failed to write BibTeX: {err}")))?;
             Ok(())
         })
@@ -123,8 +113,17 @@ pub struct BibEntryMap {
 
 #[pymethods]
 impl BibEntryMap {
-    fn keys(&self) -> Vec<String> {
+    fn unique_keys(&self) -> Vec<String> {
         self.doc.borrow().entry_keys()
+    }
+
+    fn occurrence_keys(&self) -> Vec<String> {
+        self.doc
+            .borrow()
+            .entry_occurrences()
+            .into_iter()
+            .map(|entry| entry.key)
+            .collect()
     }
 
     fn occurrences(&self) -> Vec<BibEntry> {
@@ -156,7 +155,7 @@ impl BibEntryMap {
         self.doc.borrow().entry_count() == 0
     }
 
-    fn get(&self, key: &str) -> PyResult<Option<BibEntry>> {
+    fn get_unique(&self, key: &str) -> PyResult<Option<BibEntry>> {
         let entry_id = {
             let doc = self.doc.borrow();
             unique_entry_id(&doc, key)?
@@ -259,8 +258,13 @@ pub struct BibFieldMap {
 
 #[pymethods]
 impl BibFieldMap {
-    fn keys(&self) -> PyResult<Vec<String>> {
+    fn unique_keys(&self) -> PyResult<Vec<String>> {
         self.with_fields(|doc| doc.field_keys(self.entry_id))
+    }
+
+    fn occurrence_keys(&self) -> PyResult<Vec<String>> {
+        self.with_fields(|doc| doc.field_occurrences(self.entry_id))
+            .map(|fields| fields.into_iter().map(|field| field.name).collect())
     }
 
     fn occurrences(&self) -> PyResult<Vec<BibField>> {
@@ -299,7 +303,7 @@ impl BibFieldMap {
             .map(|fields| fields.is_empty())
     }
 
-    fn get(&self, key: &str) -> PyResult<Option<BibField>> {
+    fn get_unique(&self, key: &str) -> PyResult<Option<BibField>> {
         let key = key.to_ascii_lowercase();
         let field_id = self.unique_field(&key)?;
         Ok(field_id.map(|field_id| BibField {

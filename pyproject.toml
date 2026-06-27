@@ -25,6 +25,7 @@ members = [
 
 [dependency-groups]
 dev = [
+    "hatchling>=1.27",
     "maturin>=1.9,<2",
     "pyrefly>=1.0.0",
     "pytest>=9.0.3",

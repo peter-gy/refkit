@@ -14,11 +14,9 @@ dependencies = [
     "citeproc-py>=0.9.3",
     "citeproc-py-styles>=0.1.5",
     "polars>=1.41,<1.42",
-    "polars-refkit",
+    "polars-refkit==0.0.1",
     "pybtex>=0.26,<0.27",
-    "pytest>=9.0.3",
-    "pytest-cov>=7.0.0",
-    "refkit",
+    "refkit==0.0.1",
 ]
 
 [project.scripts]
@@ -32,13 +30,24 @@ refkit = { workspace = true }
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
 [tool.hatch.build.targets.sdist]
-include = [
+ignore-vcs = true
+only-include = [
     "README.md",
     "LICENSE",
     "pyproject.toml",
     "src/refkit_bench",
     "tests",
+]
+exclude = [
+    ".gitignore",
+    "/.gitignore",
+    ".pytest_cache",
+    "**/.pytest_cache",
+    "**/__pycache__",
 ]
 
 [tool.hatch.build.targets.sdist.force-include]

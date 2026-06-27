@@ -40,7 +40,7 @@ class PolarsRefkitAdapter(PackageAdapter):
     ) -> PreparedOperation:
         return self._prepare_render_bibliography_expression(workload, lazy=False)
 
-    def prepare_render_citation_sequence_eager(
+    def prepare_render_citation_each_eager(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         return self._prepare_render_repeated_citations(workload, lazy=False)
@@ -76,7 +76,7 @@ class PolarsRefkitAdapter(PackageAdapter):
     ) -> PreparedOperation:
         return self._prepare_render_bibliography_expression(workload, lazy=True)
 
-    def prepare_render_citation_sequence_lazy(
+    def prepare_render_citation_each_lazy(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
         return self._prepare_render_repeated_citations(workload, lazy=True)
@@ -142,7 +142,7 @@ class PolarsRefkitAdapter(PackageAdapter):
             result = _select(
                 frame,
                 lazy=lazy,
-                bibliography=prk.bibliography_text("bibtex"),
+                bibliography=prk.full_bibliography_text("bibtex"),
             )
             bibliography = result["bibliography"].item()
             return OperationOutcome(bibliography, len(workload.records))
@@ -166,7 +166,7 @@ class PolarsRefkitAdapter(PackageAdapter):
         frame = _frame({"bibtex": [workload.bibtex], "keys": [workload.keys]}, lazy=lazy)
 
         def operation() -> OperationOutcome:
-            result = _select(frame, lazy=lazy, citations=prk.cite_sequence("bibtex", "keys"))
+            result = _select(frame, lazy=lazy, citations=prk.cite_each("bibtex", "keys"))
             texts = result["citations"].to_list()[0]
             return OperationOutcome("\n".join(texts), len(texts))
 
