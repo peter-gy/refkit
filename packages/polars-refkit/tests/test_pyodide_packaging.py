@@ -33,7 +33,7 @@ def test_rust_plugin_uses_package_local_pyodide_abi_boundary() -> None:
     polars_core = cast(dict[str, Any], dependencies["polars-core"])
     pyo3_polars = cast(dict[str, Any], dependencies["pyo3-polars"])
 
-    assert package["version"] == "0.0.1"
+    assert package["version"] == "0.0.2"
     assert workspace["resolver"] == "3"
     assert polars["version"] == "=0.50.0"
     assert polars_core["version"] == "=0.50.0"
@@ -77,6 +77,33 @@ def test_workflows_build_and_test_polars_refkit_pyemscripten_wheels() -> None:
     assert "smoke_polars_refkit.py" in ci
     assert "smoke_polars_refkit.py" in release_tests
     assert "refkit-bench" not in publish
+
+
+def test_public_build_surface_excludes_refkit_bench() -> None:
+    makefile = read_text("Makefile")
+    workspace = read_toml("pyproject.toml")
+    bench = read_toml("packages/refkit-bench/pyproject.toml")
+
+    public_version = cast(dict[str, Any], workspace["project"])["version"]
+    bench_project = cast(dict[str, Any], bench["project"])
+    bench_dependencies = cast(list[str], bench_project["dependencies"])
+    bench_sources = cast(dict[str, Any], bench["tool"]["uv"]["sources"])
+    root_sources = cast(dict[str, Any], workspace["tool"]["uv"]["sources"])
+
+    assert "uv build --all-packages" not in makefile
+    assert "uv build --package refkit-core" in makefile
+    assert "uv build --package refkit" in makefile
+    assert "uv build --package polars-refkit" in makefile
+    assert bench_project["version"] != public_version
+    assert "refkit" in bench_dependencies
+    assert "polars-refkit" in bench_dependencies
+    assert not any(
+        dependency.startswith(("refkit==", "polars-refkit==")) for dependency in bench_dependencies
+    )
+    assert bench_sources["refkit"] == {"workspace": True}
+    assert bench_sources["polars-refkit"] == {"workspace": True}
+    assert root_sources["refkit"] == {"workspace": True}
+    assert root_sources["polars-refkit"] == {"workspace": True}
 
 
 def test_pyodide_smoke_runs_through_public_polars_expressions() -> None:

@@ -1367,7 +1367,7 @@ def test_main_returns_failure_for_failed_rows(
                     "python": "3",
                     "os": "test",
                     "cpu": "test",
-                    "refkit_version": "0.0.1",
+                    "refkit_version": "0.0.2",
                     "refkit_commit": "test",
                     "build_mode": "release",
                 }

@@ -13,7 +13,7 @@ pip install polars-refkit
 `refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`.
 Installing `refkit` also installs the matching native wheel for the current Python platform.
 
-`refkit`, `refkit-core`, and `polars-refkit` are versioned as `0.0.1` and support CPython 3.11 through 3.14. Native wheels use the Python 3.11 stable ABI. `refkit-core` and `polars-refkit` also publish PyEmscripten wheels for the Python 3.14 Pyodide runtime.
+`refkit`, `refkit-core`, and `polars-refkit` are versioned as `0.0.2` and support CPython 3.11 through 3.14. Native wheels use the Python 3.11 stable ABI. `refkit-core` and `polars-refkit` also publish PyEmscripten wheels for the Python 3.14 Pyodide runtime.
 
 ## Render Citations From Python
 

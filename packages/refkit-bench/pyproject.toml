@@ -14,9 +14,9 @@ dependencies = [
     "citeproc-py>=0.9.3",
     "citeproc-py-styles>=0.1.5",
     "polars>=1.29",
-    "polars-refkit==0.0.1",
+    "polars-refkit",
     "pybtex>=0.26,<0.27",
-    "refkit==0.0.1",
+    "refkit",
 ]
 
 [project.scripts]

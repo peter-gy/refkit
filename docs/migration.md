@@ -10,7 +10,7 @@ Install `refkit` for Python citation workflows:
 pip install refkit
 ```
 
-`refkit` is pure Python and depends on `refkit-core==0.0.1`.
+`refkit` is pure Python and depends on `refkit-core==0.0.2`.
 `refkit-core` contains the native Rust/PyO3 extension as `refkit_core._refkit_core`.
 Importing `refkit` checks that the installed `refkit-core` version matches the version required by `refkit`.
 

@@ -94,7 +94,9 @@ clean:
 
 .PHONY: build
 build: clean-build
-	uv build --all-packages --no-create-gitignore
+	uv build --package refkit-core --no-create-gitignore
+	uv build --package refkit --no-create-gitignore
+	uv build --package polars-refkit --no-create-gitignore
 
 .PHONY: all
 all: lint typecheck test benchmark-test rust rust-floor build

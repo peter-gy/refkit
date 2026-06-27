@@ -1,6 +1,6 @@
 # Feature Matrix
 
-This matrix compares the refkit workspace at 0.0.1 with the inspected local checkouts of
+This matrix compares the refkit workspace at 0.0.2 with the inspected local checkouts of
 citeproc-js, citeproc-py, and python-bibtexparser on 2026-06-10. It describes
 the features visible in the checked source trees, README files, tests, and
 package metadata. Upstream releases may differ.
@@ -25,13 +25,13 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 | citeproc-js | JavaScript CSL and CSL-M processor. It renders citation clusters and bibliographies from CSL-like item data supplied by a host application. | `new CSL.Engine(sys, style)`, then `processCitationCluster`, `makeCitationCluster`, `makeBibliography`, `updateItems`, and related state APIs. | Mature processor package. `package.json` reports `citeproc` 2.4.63, based on citeproc-js 1.4.63. README states the project passes more than 1,300 integration tests. |
 | citeproc-py | Python CSL 1.0.1 processor with JSON and BibTeX source adapters. | `CitationStylesStyle`, `CitationStylesBibliography`, `Citation`, `CitationItem`, source adapters, and formatter modules. | Alpha API by package metadata. README states Python 3.9 and newer, lxml dependency, and almost 60 percent of the relevant citeproc test suite. |
 | python-bibtexparser | Python parser and writer for `.bib` documents. It preserves document blocks and supports transformation middleware. | `parse_string`, `parse_file`, `write_string`, `write_file`, `Library`, block classes, middleware, and `BibtexFormat`. | Version 2 beta in README and metadata. It is a BibTeX document library, not a CSL renderer. |
-| refkit | Pure Python package backed by the exact matching `refkit-core` native package. It combines normalized citation rendering with a raw BibTeX editing model. | `Library`, `Entry`, `Style`, `Locale`, `Citation`, `Cite`, `CitationGroup`, `Document`, `RenderedDocument`, `Rendered`, `BibDocument`, `cite`, and `full_bibliography`. | Version 0.0.1. Current API supports Python 3.11 to 3.14 and rejects a mismatched `refkit-core` version at import time. |
-| refkit-core | Rust/PyO3 extension package used by `refkit`. It builds `refkit_core._refkit_core` for CPython and PyEmscripten. | `Library`, `Entry`, `Style`, `Locale`, `Citation`, `Cite`, `CitationGroup`, `Document`, `RenderedDocument`, `Rendered`, `BibDocument`, and `build_info`. | Version 0.0.1. Current package builds CPython wheels with the Python 3.11 stable ABI and a Python 3.14 Pyodide wheel through `wasm32-unknown-emscripten`. |
-| polars-refkit | Polars expression plugin backed by Rust through PyO3, pyo3-polars, and maturin. It parses, inspects, projects, and renders BibTeX rows inside Polars query plans. | `cite`, `cite_each`, `cite_group`, `cite_html`, `full_bibliography_text`, `full_bibliography_html`, `entry_count`, `can_parse`, `has_diagnostics`, `keys`, `entries`, `parse_report`, `diagnostics`, `to_hayagriva_json`, and the `pl.Expr.refkit` namespace. | Version 0.0.1. Current API supports Python 3.11 to 3.14 and returns null for row-level parse failures where the expression has a scalar or list value result. Current package builds CPython wheels with the Python 3.11 stable ABI and a Python 3.14 Pyodide wheel through `wasm32-unknown-emscripten`. |
+| refkit | Pure Python package backed by the exact matching `refkit-core` native package. It combines normalized citation rendering with a raw BibTeX editing model. | `Library`, `Entry`, `Style`, `Locale`, `Citation`, `Cite`, `CitationGroup`, `Document`, `RenderedDocument`, `Rendered`, `BibDocument`, `cite`, and `full_bibliography`. | Version 0.0.2. Current API supports Python 3.11 to 3.14 and rejects a mismatched `refkit-core` version at import time. |
+| refkit-core | Rust/PyO3 extension package used by `refkit`. It builds `refkit_core._refkit_core` for CPython and PyEmscripten. | `Library`, `Entry`, `Style`, `Locale`, `Citation`, `Cite`, `CitationGroup`, `Document`, `RenderedDocument`, `Rendered`, `BibDocument`, and `build_info`. | Version 0.0.2. Current package builds CPython wheels with the Python 3.11 stable ABI and a Python 3.14 Pyodide wheel through `wasm32-unknown-emscripten`. |
+| polars-refkit | Polars expression plugin backed by Rust through PyO3, pyo3-polars, and maturin. It parses, inspects, projects, and renders BibTeX rows inside Polars query plans. | `cite`, `cite_each`, `cite_group`, `cite_html`, `full_bibliography_text`, `full_bibliography_html`, `entry_count`, `can_parse`, `has_diagnostics`, `keys`, `entries`, `parse_report`, `diagnostics`, `to_hayagriva_json`, and the `pl.Expr.refkit` namespace. | Version 0.0.2. Current API supports Python 3.11 to 3.14 and returns null for row-level parse failures where the expression has a scalar or list value result. Current package builds CPython wheels with the Python 3.11 stable ABI and a Python 3.14 Pyodide wheel through `wasm32-unknown-emscripten`. |
 
 ## High-Level Workflows
 
-| Workflow | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Workflow | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | Render citations from a style and reference database | Yes. It is the core processor workflow. | Yes. It registers citation items against a source and renders through a style. | No. It does not render CSL citations. | Yes. `Document.render` renders named citations from `Library` and `Style`. |
 | Render a bibliography | Yes. `makeBibliography` renders registered and uncited items with optional section filters. | Yes. `CitationStylesBibliography.bibliography` renders registered items. | No. It writes BibTeX, not styled bibliographies. | Yes. `Document.render` and `Document.cited_bibliography` render cited entries. `Document.full_bibliography` and top-level `full_bibliography` render the full library. |
@@ -42,7 +42,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 ## Input And Data Model
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | CSL item data input | Yes. Items are retrieved through `sys.retrieveItem`. | Yes. `CiteProcJSON` accepts citeproc-js-like JSON. | No. | No public CSL JSON reader yet. |
 | Host-supplied item retrieval | Yes. `CSL.Engine` stores `sys` and calls `retrieveItem`. | Partial. Sources are Python mappings that return references by key. | No. | No. `Library` owns parsed entries. |
@@ -57,7 +57,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 ## Raw BibTeX Document Features
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | Top-level block order | No. | No. | Yes. `Library.blocks` preserves insertion order. | Yes. `BibDocument.blocks` reports block order. |
 | Entry blocks | No. | Partial. BibTeX source reads entries for rendering, not raw editing. | Yes. `Entry` exposes `entry_type`, `key`, `fields`, and `fields_dict`. | Yes. `BibEntry` exposes `key`, `kind`, `fields`, and `span`. |
@@ -81,7 +81,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 ## CSL Styles And Locales
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | CSL style parsing | Yes. `CSL.setupXml` accepts serialized XML, serialized JSON, DOM, E4X, or JS objects. | Yes. `CitationStylesStyle` parses CSL XML through lxml. | No. | Yes. `Style.load`, `Style.from_xml`, and `Style.from_path` use Hayagriva and Citationberg. |
 | CSL schema validation | Partial. The repo includes CSL and CSL-M schemata and test infrastructure. Runtime setup accepts parsed style input. | Yes. `CitationStylesXML` validates with RelaxNG when enabled. | No. | Partial. `Style.from_xml` returns a parse error for invalid CSL XML. No public schema-validation switch is exposed. |
@@ -96,7 +96,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 ## Citation Rendering
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | Citation cluster rendering | Yes. `processCitationCluster`, `appendCitationCluster`, `previewCitationCluster`, and `makeCitationCluster` exist. | Yes. `Citation` and `CitationItem` are rendered through `CitationStylesBibliography.cite`. | No. | Yes. `Document.render` accepts named `Citation` objects. `CitationGroup` renders several items as one citation. `polars-refkit` exposes `cite_each` for one citation per key and `cite_group` for one grouped citation. |
 | Citation item locators | Yes. Locator parsing and labels are supported. | Partial. `CitationItem` accepts `locator`, `prefix`, and `suffix`, while locator labels are modeled separately in `Locator`. | No. | Yes. `Cite(key, *, locator, label)` maps labels to CSL locators. |
@@ -116,7 +116,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 ## Dynamic Document State
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | Append citation to current document | Yes. `appendCitationCluster` computes prior citation state and appends. | Partial. Calls to `register` and `cite` accumulate registered items. | No. | No current public append API. `Document.render` takes the complete citation list so prior citation outputs and bibliography state are produced together. |
 | Insert or edit citation with pre and post citation context | Yes. `processCitationCluster` accepts `citationsPre` and `citationsPost`. | No direct equivalent found. | No. | No current public API. |
@@ -129,7 +129,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 ## Output Formats And Rendered Shape
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | Plain text citation output | Yes. `text` output mode exists. | Yes. `formatter.plain` exists. | No citation output. | Yes. `Rendered.text` and `to_text`. |
 | HTML citation output | Yes. `html` output mode exists. | Yes. `formatter.html` exists. | No citation output. | Yes. `Rendered.html` and `to_html`. |
@@ -145,7 +145,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 ## Querying, Conversion, And Export
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | Select entries by bibliography conditions | Partial. Bibliography section filters apply during rendering. | No general query language found. | Partial. Users can iterate blocks and entries in Python. | Yes. `Library.select` accepts Hayagriva selectors such as `article > periodical[volume]`. |
 | Retrieve keys | Yes through host item lists and registry state. | Yes. `CitationStylesBibliography.keys` tracks registered keys. | Yes. `entries_dict` and block APIs expose keys. | Yes. `Library.keys`, `BibEntryMap.unique_keys`, and `BibEntryMap.occurrence_keys`. |
@@ -158,7 +158,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 ## Extensibility And Integration
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | Host integration hooks | Yes. `sys` supplies items, locales, abbreviations, style modules, wrappers, and comparison functions. | Partial. Source mappings and callback-based missing references are extension points. | No renderer integration hooks. | Partial. Python API exposes objects and exceptions. No callback hooks are used in the main API. |
 | Middleware stack | No general Python-style middleware stack. The processor has many internal extension points. | No general middleware stack. | Yes. Parse and write stacks accept middleware. | No current public middleware stack. |
@@ -171,7 +171,7 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 ## Errors, Diagnostics, And Validation
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | Structured missing-reference error | External or processor error depending on host behavior. | Partial. Missing items can be passed to a callback during registration. | No citation references. | Yes. `MissingReferenceError`. |
 | Parser diagnostics | Yes for processor style errors and test runner output. | Partial. CSL validation warnings and Python exceptions. | Yes. Failed blocks carry exceptions and raw block data. | Yes. `Library.read(recovery="report")` returns recovery diagnostics, and `BibDocument.failed_blocks` preserves raw errors. |
@@ -181,12 +181,12 @@ The python-bibtexparser feature rows describe the inspected local v2 beta source
 
 ## Packaging And Compatibility
 
-| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.1 |
+| Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace 0.0.2 |
 | --- | --- | --- | --- | --- |
 | Package language | JavaScript. | Python. | Python. | Python plus Rust. |
 | Package name from metadata | `citeproc`. | `citeproc-py`. | `bibtexparser`. | `refkit` and `polars-refkit`. |
 | Import name | `CSL` from bundled JS or CommonJS module. | `citeproc`. | `bibtexparser`. | `refkit` and `polars_refkit`. |
-| Version from inspected metadata | 2.4.63. | Versioneer-managed. | 2.0.0b9. | 0.0.1. |
+| Version from inspected metadata | 2.4.63. | Versioneer-managed. | 2.0.0b9. | 0.0.2. |
 | Python version support | Not applicable. | Python 3.9 and newer, classifiers through 3.13. | Python 3.9 and newer, classifiers through 3.12. | Python 3.11 to 3.14. |
 | Refkit workspace license | Not applicable. | Not applicable. | Not applicable. | Apache-2.0. |
 | Build system | JavaScript package and repo build scripts. | setuptools with versioneer and schema conversion. | setuptools. | uv workspace with maturin, PyO3, and pyo3-polars. |

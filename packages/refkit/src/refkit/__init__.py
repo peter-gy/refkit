@@ -7,7 +7,7 @@ from os import PathLike
 
 import refkit_core as _core
 
-_COMPATIBLE_REFKIT_CORE_VERSION = "0.0.1"
+_COMPATIBLE_REFKIT_CORE_VERSION = "0.0.2"
 __version__ = _metadata_version("refkit")
 
 
