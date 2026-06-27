@@ -1,15 +1,20 @@
+POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
+
 .PHONY: format
 format:
 	uv run ruff check --fix .
 	uv run ruff format .
 	cargo fmt --all
+	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all
 
 .PHONY: lint
 lint:
 	uv run ruff check .
 	uv run ruff format --check .
 	cargo fmt --all --check
+	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all --check
 	cargo clippy --workspace --all-targets --all-features -- -D warnings
+	cargo clippy --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features -- -D warnings
 
 .PHONY: typecheck
 typecheck:
@@ -27,7 +32,9 @@ benchmark-test:
 .PHONY: rust
 rust:
 	cargo check --workspace
+	cargo check --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 	cargo test --workspace
+	cargo test --manifest-path $(POLARS_REFKIT_RUST)
 
 .PHONY: rust-floor
 rust-floor:
@@ -36,6 +43,7 @@ rust-floor:
 		rustup toolchain install 1.85 --profile minimal; \
 	fi
 	rustup run 1.85 cargo check --locked --workspace
+	rustup run 1.85 cargo check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 
 .PHONY: clean-build
 clean-build:

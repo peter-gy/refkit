@@ -5,9 +5,11 @@ use serde_json::Value;
 
 use super::ParseKwargs;
 use super::broadcast::parse_value_library_source;
-use super::dtypes::{keys_output, parse_report_output};
+use super::dtypes::{
+    boolean_output, keys_output, parse_report_output, string_output, uint32_output,
+};
 
-#[polars_expr(output_type=UInt32)]
+#[polars_expr(output_type_func=uint32_output)]
 fn entry_count(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
     let bibtex = inputs[0].str()?;
     let output = bibtex
@@ -106,7 +108,7 @@ fn parse_report(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> 
     )
 }
 
-#[polars_expr(output_type=Boolean)]
+#[polars_expr(output_type_func=boolean_output)]
 fn can_parse(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
     let bibtex = inputs[0].str()?;
     let output = bibtex
@@ -116,7 +118,7 @@ fn can_parse(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
     Ok(output.into_series())
 }
 
-#[polars_expr(output_type=Boolean)]
+#[polars_expr(output_type_func=boolean_output)]
 fn has_diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
     let bibtex = inputs[0].str()?;
     let output = bibtex
@@ -132,7 +134,7 @@ fn has_diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Serie
     Ok(output.into_series())
 }
 
-#[polars_expr(output_type=String)]
+#[polars_expr(output_type_func=string_output)]
 fn to_hayagriva_json(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
     let bibtex = inputs[0].str()?;
     let output = bibtex

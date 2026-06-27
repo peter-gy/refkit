@@ -49,6 +49,7 @@ jobs:
               "refkit": Path("packages/refkit/pyproject.toml"),
               "refkit-core": Path("packages/refkit-core/pyproject.toml"),
               "polars-refkit": Path("packages/polars-refkit/pyproject.toml"),
+              "polars-refkit-rust": Path("packages/polars-refkit/rust/Cargo.toml"),
               "rust-workspace": Path("Cargo.toml"),
           }
           dependency_pins = {
@@ -62,6 +63,8 @@ jobs:
               data = tomllib.loads(path.read_text(encoding="utf-8"))
               if "project" in data:
                   version = data["project"]["version"]
+              elif "package" in data:
+                  version = data["package"]["version"]
               else:
                   version = data["workspace"]["package"]["version"]
               if version != release_version:
@@ -447,11 +450,79 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  build-polars-refkit-wasm:
+    name: polars-refkit / Build PyEmscripten wheel (${{ matrix.python-version }})
+    needs: check-release-version
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.14"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+
+      - name: Install Pyodide build tools
+        run: uv sync --locked --only-group pyodide-build
+
+      - name: Get Pyodide config
+        id: pyodide-config
+        run: |
+          {
+            echo "rust-toolchain=$(uv run --locked --only-group pyodide-build pyodide config get rust_toolchain)"
+            echo "emscripten-version=$(uv run --locked --only-group pyodide-build pyodide config get emscripten_version)"
+            echo "pyodide-abi-version=$(uv run --locked --only-group pyodide-build pyodide config get pyodide_abi_version)"
+            echo "rustflags=$(uv run --locked --only-group pyodide-build pyodide config get rustflags)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Emscripten
+        uses: emscripten-core/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984 # v16
+        with:
+          version: ${{ steps.pyodide-config.outputs.emscripten-version }}
+          no-cache: true
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        env:
+          CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide-config.outputs.rustflags }}
+          HOST_CC: cc
+          MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide-config.outputs.pyodide-abi-version }}
+        with:
+          working-directory: packages/polars-refkit
+          target: wasm32-unknown-emscripten
+          args: --release --out dist --interpreter ${{ matrix.python-version }}
+          rust-toolchain: ${{ steps.pyodide-config.outputs.rust-toolchain }}
+          sccache: false
+
+      - name: Check metadata
+        run: uvx twine check --strict packages/polars-refkit/dist/*
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release_polars_refkit_pyemscripten_${{ matrix.python-version }}
+          path: packages/polars-refkit/dist/*.whl
+          retention-days: 7
+          if-no-files-found: error
+
   test-polars-refkit:
     name: polars-refkit / Test release artifacts
     needs:
+      - build-refkit
+      - build-refkit-core-wasm
       - build-polars-refkit-sdist
       - build-polars-refkit-cpython
+      - build-polars-refkit-wasm
     uses: ./.github/workflows/release-tests.yml
     with:
       package: polars-refkit
@@ -462,6 +533,7 @@ jobs:
       - check-release-version
       - build-polars-refkit-sdist
       - build-polars-refkit-cpython
+      - build-polars-refkit-wasm
       - test-polars-refkit
     runs-on: ubuntu-latest
     environment: release

@@ -12,7 +12,9 @@ use super::RenderKwargs;
 use super::broadcast::{
     broadcast_get, broadcast_len, load_style, parse_broadcast_library, parse_value_library_source,
 };
-use super::dtypes::{keys_output, rendered_list_output, rendered_output, rendered_struct_dtype};
+use super::dtypes::{
+    keys_output, rendered_list_output, rendered_output, rendered_struct_dtype, string_output,
+};
 
 #[derive(Clone, Copy)]
 enum RenderedField {
@@ -20,12 +22,12 @@ enum RenderedField {
     Html,
 }
 
-#[polars_expr(output_type=String)]
+#[polars_expr(output_type_func=string_output)]
 fn cite(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
     render_citation_field(inputs, kwargs, RenderedField::Text)
 }
 
-#[polars_expr(output_type=String)]
+#[polars_expr(output_type_func=string_output)]
 fn cite_html(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
     render_citation_field(inputs, kwargs, RenderedField::Html)
 }
@@ -50,12 +52,12 @@ fn cite_each_rendered(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<S
     render_citation_each_struct(inputs, kwargs, "cite_each_rendered")
 }
 
-#[polars_expr(output_type=String)]
+#[polars_expr(output_type_func=string_output)]
 fn cite_group(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
     render_citation_group_field(inputs, kwargs, RenderedField::Text)
 }
 
-#[polars_expr(output_type=String)]
+#[polars_expr(output_type_func=string_output)]
 fn cite_group_html(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
     render_citation_group_field(inputs, kwargs, RenderedField::Html)
 }
@@ -65,12 +67,12 @@ fn cite_group_rendered(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<
     render_citation_group_struct(inputs, kwargs, "cite_group_rendered")
 }
 
-#[polars_expr(output_type=String)]
+#[polars_expr(output_type_func=string_output)]
 fn full_bibliography_html(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
     render_bibliography_field(inputs, kwargs, RenderedField::Html)
 }
 
-#[polars_expr(output_type=String)]
+#[polars_expr(output_type_func=string_output)]
 fn full_bibliography_text(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
     render_bibliography_field(inputs, kwargs, RenderedField::Text)
 }

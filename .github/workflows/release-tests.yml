@@ -308,6 +308,53 @@ jobs:
           assert out.item() == 1
           PY
 
+  test-polars-refkit-pyemscripten:
+    name: polars-refkit / Test PyEmscripten install
+    if: inputs.package == 'polars-refkit'
+    needs: validate-package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.14"
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+
+      - name: Download refkit distribution
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_refkit_dist
+          path: dist
+
+      - name: Download refkit-core wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_refkit_core_pyemscripten_3.14
+          path: dist
+
+      - name: Download polars-refkit wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_polars_refkit_pyemscripten_3.14
+          path: dist
+
+      - name: Test installed package
+        run: |
+          uv sync --locked --only-group pyodide-build
+          uv run --locked --only-group pyodide-build pyodide venv .venv-pyodide
+          source .venv-pyodide/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install polars
+          python -m pip install refkit --no-index --find-links dist --force-reinstall
+          python -m pip install dist/polars_refkit-*.whl
+          python .github/pyodide/smoke_polars_refkit.py
+
   test-polars-refkit-sdist:
     name: polars-refkit / Test sdist rebuild
     if: inputs.package == 'polars-refkit'

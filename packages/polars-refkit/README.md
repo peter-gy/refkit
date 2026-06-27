@@ -8,7 +8,7 @@
 pip install polars-refkit
 ```
 
-`polars-refkit` requires Polars `>=1.29` and supports CPython 3.11 through 3.14.
+`polars-refkit` requires Polars `>=1.29` and supports CPython 3.11 through 3.14. It also publishes a Python 3.14 PyEmscripten wheel for Pyodide.
 
 ## Render And Inspect Rows
 

@@ -10,6 +10,18 @@ pub(super) fn keys_output(input_fields: &[Field]) -> PolarsResult<Field> {
     ))
 }
 
+pub(super) fn boolean_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    fixed_output(input_fields, DataType::Boolean)
+}
+
+pub(super) fn string_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    fixed_output(input_fields, DataType::String)
+}
+
+pub(super) fn uint32_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    fixed_output(input_fields, DataType::UInt32)
+}
+
 pub(super) fn entries_output(input_fields: &[Field], kwargs: EntriesKwargs) -> PolarsResult<Field> {
     let field = input_fields[0].clone();
     let field_names = kwargs.fields.iter().map(String::as_str).collect::<Vec<_>>();
@@ -63,4 +75,9 @@ fn parse_report_struct_dtype() -> DataType {
             DataType::List(Box::new(DataType::String)),
         ),
     ])
+}
+
+fn fixed_output(input_fields: &[Field], dtype: DataType) -> PolarsResult<Field> {
+    let field = input_fields[0].clone();
+    Ok(Field::new(field.name, dtype))
 }

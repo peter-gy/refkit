@@ -169,6 +169,83 @@ jobs:
           name: polars_refkit_pypi_files_Linux_cp311
           path: packages/polars-refkit/dist
 
+  build-polars-refkit-wasm:
+    name: polars-refkit / Build PyEmscripten (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.14"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - run: uv sync --locked --only-group pyodide-build
+
+      - name: Get Pyodide config
+        id: pyodide-config
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+
+          keys = {
+              "rust-toolchain": "rust_toolchain",
+              "emscripten-version": "emscripten_version",
+              "pyodide-abi-version": "pyodide_abi_version",
+              "rustflags": "rustflags",
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              for output_name, config_name in keys.items():
+                  value = subprocess.check_output(
+                      [
+                          "uv",
+                          "run",
+                          "--locked",
+                          "--only-group",
+                          "pyodide-build",
+                          "pyodide",
+                          "config",
+                          "get",
+                          config_name,
+                      ],
+                      text=True,
+                  ).strip()
+                  print(f"{output_name}={value}", file=output)
+          PY
+
+      - uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: ${{ steps.pyodide-config.outputs.emscripten-version }}
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        env:
+          CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide-config.outputs.rustflags }}
+          HOST_CC: cc
+          MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide-config.outputs.pyodide-abi-version }}
+        with:
+          working-directory: packages/polars-refkit
+          target: wasm32-unknown-emscripten
+          args: --release --out dist --interpreter ${{ matrix.python-version }}
+          rust-toolchain: ${{ steps.pyodide-config.outputs.rust-toolchain }}
+          sccache: true
+
+      - run: ls -lh packages/polars-refkit/dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: polars_refkit_pypi_files_pyemscripten_${{ matrix.python-version }}
+          path: packages/polars-refkit/dist
+
   test-pyemscripten:
     name: refkit / Test Pyodide install (${{ matrix.python-version }})
     needs:
@@ -208,6 +285,54 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install refkit --no-index --find-links dist
           python .github/pyodide/smoke_refkit.py
+
+  test-polars-refkit-pyemscripten:
+    name: polars-refkit / Test Pyodide install (${{ matrix.python-version }})
+    needs:
+      - build-refkit-pure
+      - build-refkit-core-wasm
+      - build-polars-refkit-wasm
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.14"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: refkit_core_pypi_files_pyemscripten_${{ matrix.python-version }}
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: refkit_pypi_files
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: polars_refkit_pypi_files_pyemscripten_${{ matrix.python-version }}
+          path: dist
+
+      - run: |
+          uv sync --locked --only-group pyodide-build
+          uv run --locked --only-group pyodide-build pyodide venv .venv-pyodide
+          source .venv-pyodide/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install polars
+          python -m pip install refkit --no-index --find-links dist
+          python -m pip install dist/polars_refkit-*.whl
+          python .github/pyodide/smoke_polars_refkit.py
 
   test-cpython-wheels:
     name: refkit / Test CPython wheels (${{ matrix.os }}, py${{ matrix.python-version }})

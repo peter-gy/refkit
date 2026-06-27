@@ -13,7 +13,7 @@ pip install polars-refkit
 `refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`.
 Installing `refkit` also installs the matching native wheel for the current Python platform.
 
-`refkit`, `refkit-core`, and `polars-refkit` are versioned as `0.0.1` and support CPython 3.11 through 3.14. Native wheels use the Python 3.11 stable ABI. `refkit-core` also publishes PyEmscripten wheels for the Python 3.14 Pyodide runtime.
+`refkit`, `refkit-core`, and `polars-refkit` are versioned as `0.0.1` and support CPython 3.11 through 3.14. Native wheels use the Python 3.11 stable ABI. `refkit-core` and `polars-refkit` also publish PyEmscripten wheels for the Python 3.14 Pyodide runtime.
 
 ## Render Citations From Python
 
@@ -124,14 +124,14 @@ out = df.select(
 
 ## Architecture
 
-The root Cargo workspace owns the Rust crates.
+The root Cargo workspace owns the shared Rust core and the `refkit-core` native adapter.
 `crates/refkit-core` contains the platform-independent work: parsing, recovery, normalized records, raw BibTeX blocks, style preparation, document rendering, rendered trees, and shared error records.
 
 The Python packages are adapters over that core:
 
 - `refkit-core` owns PyO3 classes, Python exceptions, GIL release, Python value conversion, and PyEmscripten wheel builds.
 - `refkit` is pure Python. It pins one exact `refkit-core` version and rejects a mismatched core at import time.
-- `polars-refkit` owns expression registration, dtypes, broadcasting, null mapping, eager and lazy execution, and dataframe diagnostics.
+- `polars-refkit` owns expression registration, dtypes, broadcasting, null mapping, eager and lazy execution, dataframe diagnostics, and its package-local Rust workspace for the Polars plugin ABI.
 
 ## Package Docs
 
