@@ -119,7 +119,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - macos-latest
+          - macos-15
           - windows-latest
     steps:
       - name: Checkout
@@ -414,7 +414,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - macos-latest
+          - macos-15
           - windows-latest
     steps:
       - name: Checkout

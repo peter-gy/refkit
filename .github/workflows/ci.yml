@@ -44,7 +44,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - macos-latest
+          - macos-15
           - windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -225,10 +225,10 @@ jobs:
           - os: ubuntu-latest
             artifact-os: Linux
             python-version: "3.14"
-          - os: macos-latest
+          - os: macos-15
             artifact-os: macOS
             python-version: "3.11"
-          - os: macos-latest
+          - os: macos-15
             artifact-os: macOS
             python-version: "3.14"
           - os: windows-latest
@@ -247,6 +247,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           cache-dependency-glob: uv.lock
+          ignore-empty-workdir: true
 
       - uses: actions/download-artifact@v8
         with:
