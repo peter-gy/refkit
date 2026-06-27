@@ -108,7 +108,7 @@ jobs:
       - name: Test installed package
         run: |
           uv sync --locked --only-group pyodide-build
-          uv run pyodide venv .venv-pyodide
+          uv run --locked --only-group pyodide-build pyodide venv .venv-pyodide
           source .venv-pyodide/bin/activate
           python -m pip install --upgrade pip
           python -m pip install refkit-core --no-index --no-deps --find-links dist --force-reinstall
@@ -238,7 +238,7 @@ jobs:
       - name: Test installed package
         run: |
           uv sync --locked --only-group pyodide-build
-          uv run pyodide venv .venv-pyodide
+          uv run --locked --only-group pyodide-build pyodide venv .venv-pyodide
           source .venv-pyodide/bin/activate
           python -m pip install --upgrade pip
           python -m pip install refkit --no-index --find-links dist --force-reinstall

@@ -106,7 +106,17 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
               for output_name, config_name in keys.items():
                   value = subprocess.check_output(
-                      ["uv", "run", "pyodide", "config", "get", config_name],
+                      [
+                          "uv",
+                          "run",
+                          "--locked",
+                          "--only-group",
+                          "pyodide-build",
+                          "pyodide",
+                          "config",
+                          "get",
+                          config_name,
+                      ],
                       text=True,
                   ).strip()
                   print(f"{output_name}={value}", file=output)
@@ -193,7 +203,7 @@ jobs:
 
       - run: |
           uv sync --locked --only-group pyodide-build
-          uv run pyodide venv .venv-pyodide
+          uv run --locked --only-group pyodide-build pyodide venv .venv-pyodide
           source .venv-pyodide/bin/activate
           python -m pip install --upgrade pip
           python -m pip install refkit --no-index --find-links dist

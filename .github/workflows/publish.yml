@@ -181,10 +181,10 @@ jobs:
         id: pyodide-config
         run: |
           {
-            echo "rust-toolchain=$(uv run pyodide config get rust_toolchain)"
-            echo "emscripten-version=$(uv run pyodide config get emscripten_version)"
-            echo "pyodide-abi-version=$(uv run pyodide config get pyodide_abi_version)"
-            echo "rustflags=$(uv run pyodide config get rustflags)"
+            echo "rust-toolchain=$(uv run --locked --only-group pyodide-build pyodide config get rust_toolchain)"
+            echo "emscripten-version=$(uv run --locked --only-group pyodide-build pyodide config get emscripten_version)"
+            echo "pyodide-abi-version=$(uv run --locked --only-group pyodide-build pyodide config get pyodide_abi_version)"
+            echo "rustflags=$(uv run --locked --only-group pyodide-build pyodide config get rustflags)"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Emscripten
