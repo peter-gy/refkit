@@ -5,12 +5,14 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-refkit-pure:
@@ -25,6 +27,7 @@ jobs:
         with:
           python-version: "3.14"
           enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - run: uv build --package refkit --no-create-gitignore
 
@@ -52,6 +55,7 @@ jobs:
         with:
           python-version: "3.11"
           enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - uses: PyO3/maturin-action@v1
         with:
@@ -83,8 +87,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+          cache-dependency-glob: uv.lock
 
-      - run: uv sync --only-group pyodide-build
+      - run: uv sync --locked --only-group pyodide-build
 
       - name: Get Pyodide config
         id: pyodide-config
@@ -131,6 +136,31 @@ jobs:
           name: refkit_core_pypi_files_pyemscripten_${{ matrix.python-version }}
           path: packages/refkit-core-py/dist
 
+  build-polars-refkit-cpython:
+    name: polars-refkit / Build CPython wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: packages/polars-refkit
+          args: --release --out dist --interpreter 3.11
+          sccache: true
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: polars_refkit_pypi_files_Linux_cp311
+          path: packages/polars-refkit/dist
+
   test-pyemscripten:
     name: refkit / Test Pyodide install (${{ matrix.python-version }})
     needs:
@@ -151,6 +181,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - uses: actions/download-artifact@v8
         with:
@@ -163,7 +194,7 @@ jobs:
           path: dist
 
       - run: |
-          uv sync --only-group pyodide-build
+          uv sync --locked --only-group pyodide-build
           uv run pyodide venv .venv-pyodide
           source .venv-pyodide/bin/activate
           python -m pip install --upgrade pip
@@ -171,7 +202,7 @@ jobs:
           python .github/pyodide/smoke_refkit.py
 
   test-cpython-wheels:
-    name: refkit / Test CPython wheels (${{ matrix.os }})
+    name: refkit / Test CPython wheels (${{ matrix.os }}, py${{ matrix.python-version }})
     needs:
       - build-refkit-pure
       - build-refkit-core-cpython
@@ -182,10 +213,22 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact-os: Linux
+            python-version: "3.11"
+          - os: ubuntu-latest
+            artifact-os: Linux
+            python-version: "3.14"
           - os: macos-latest
             artifact-os: macOS
+            python-version: "3.11"
+          - os: macos-latest
+            artifact-os: macOS
+            python-version: "3.14"
           - os: windows-latest
             artifact-os: Windows
+            python-version: "3.11"
+          - os: windows-latest
+            artifact-os: Windows
+            python-version: "3.14"
     steps:
       - uses: actions/checkout@v6
         with:
@@ -193,8 +236,9 @@ jobs:
 
       - uses: astral-sh/setup-uv@v8.2.0
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
           enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - uses: actions/download-artifact@v8
         with:
@@ -207,73 +251,45 @@ jobs:
           path: dist
 
       - run: |
-          python -m pip install --upgrade pip
-          python -m pip install refkit --no-index --find-links dist
-          python .github/pyodide/smoke_refkit.py
+          uv run --no-project --python "${{ matrix.python-version }}" --no-index --find-links dist --with refkit python .github/pyodide/smoke_refkit.py
 
-  release-refkit-core:
-    name: refkit-core / Publish
-    if: startsWith(github.ref, 'refs/tags/')
-    needs:
-      - build-refkit-core-cpython
-      - build-refkit-core-pyemscripten
-      - test-cpython-wheels
-      - test-pyemscripten
+  test-polars-refkit-cpython:
+    name: polars-refkit / Test CPython wheel (py${{ matrix.python-version }})
+    needs: build-polars-refkit-cpython
     runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: read
-      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.11"
+          - "3.14"
     steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
       - uses: astral-sh/setup-uv@v8.2.0
         with:
-          python-version: "3.14"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - uses: actions/download-artifact@v8
         with:
-          pattern: refkit_core_pypi_files_*
-          merge-multiple: true
-          path: refkit-core-dist
+          name: polars_refkit_pypi_files_Linux_cp311
+          path: dist
 
-      - run: |
-          uv sync --only-group build
-          for whl in refkit-core-dist/*.whl
-          do
-            unzip -qt "$whl"
-          done
-          uv run twine check --strict refkit-core-dist/*
-          uv publish --trusted-publishing always refkit-core-dist/*
+      - shell: bash
+        run: |
+          wheels=(dist/polars_refkit-*.whl)
+          uv run --no-project --python "${{ matrix.python-version }}" --with "${wheels[0]}" python - <<'PY'
+          import polars as pl
+          import polars_refkit
 
-  release-refkit:
-    name: refkit / Publish
-    if: startsWith(github.ref, 'refs/tags/')
-    needs:
-      - build-refkit-pure
-      - release-refkit-core
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - uses: astral-sh/setup-uv@v8.2.0
-        with:
-          python-version: "3.14"
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: refkit_pypi_files
-          path: refkit-dist
-
-      - run: |
-          uv sync --only-group build
-          uv run twine check --strict refkit-dist/*
-          uv publish --trusted-publishing always refkit-dist/*
+          assert polars_refkit
+          df = pl.DataFrame(
+              {
+                  "bibtex": [
+                      "@article{doe2024, title={Fast Citations}, year={2024}}",
+                  ],
+              }
+          )
+          out = df.select(count=pl.col("bibtex").refkit.entry_count())
+          assert out.item() == 1
+          PY

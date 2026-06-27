@@ -1,0 +1,335 @@
+name: Release Tests
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: "Package artifact set to test"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-package:
+    name: Validate package selection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check package input
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          case "$PACKAGE" in
+            refkit-core|refkit|polars-refkit) ;;
+            *) echo "Unknown release test package: $PACKAGE" >&2; exit 1 ;;
+          esac
+
+  test-refkit-core-cpython:
+    name: refkit-core / Test CPython wheel (${{ matrix.os }}, py${{ matrix.python-version }})
+    if: inputs.package == 'refkit-core'
+    needs: validate-package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact-os: Linux
+            python-version: "3.11"
+          - os: ubuntu-latest
+            artifact-os: Linux
+            python-version: "3.14"
+          - os: macos-latest
+            artifact-os: macOS
+            python-version: "3.11"
+          - os: macos-latest
+            artifact-os: macOS
+            python-version: "3.14"
+          - os: windows-latest
+            artifact-os: Windows
+            python-version: "3.11"
+          - os: windows-latest
+            artifact-os: Windows
+            python-version: "3.14"
+    steps:
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+
+      - name: Download wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_refkit_core_cpython_${{ matrix.artifact-os }}
+          path: dist
+
+      - name: Test installed package
+        shell: bash
+        run: |
+          uv run --no-project --python "${{ matrix.python-version }}" --no-index --find-links dist --with refkit-core python - <<'PY'
+          import refkit_core as core
+
+          assert core.__version__
+          assert core.build_info
+          library = core.Library.parse_bibtex(
+              "@article{doe2024, title={Fast Citations}, year={2024}}",
+              recovery="error",
+          )
+          assert len(library) == 1
+          PY
+
+  test-refkit-core-pyemscripten:
+    name: refkit-core / Test PyEmscripten wheel
+    if: inputs.package == 'refkit-core'
+    needs: validate-package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.14"
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+
+      - name: Download wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_refkit_core_pyemscripten_3.14
+          path: dist
+
+      - name: Test installed package
+        run: |
+          uv sync --locked --only-group pyodide-build
+          uv run pyodide venv .venv-pyodide
+          source .venv-pyodide/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install refkit-core --no-index --no-deps --find-links dist --force-reinstall
+          python - <<'PY'
+          import refkit_core as core
+
+          assert core.__version__
+          assert core.build_info
+          PY
+
+  test-refkit-core-sdist:
+    name: refkit-core / Test sdist rebuild
+    if: inputs.package == 'refkit-core'
+    needs: validate-package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.11"
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+
+      - name: Download sdist
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_refkit_core_sdist
+          path: dist
+
+      - name: Build and import from sdist
+        shell: bash
+        run: |
+          sdist=(dist/refkit_core-*.tar.gz)
+          uv run --no-project --python "3.11" --with "${sdist[0]}" python - <<'PY'
+          import refkit_core as core
+
+          assert core.__version__
+          PY
+
+  test-refkit-cpython:
+    name: refkit / Test CPython install (${{ matrix.os }}, py${{ matrix.python-version }})
+    if: inputs.package == 'refkit'
+    needs: validate-package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact-os: Linux
+            python-version: "3.11"
+          - os: ubuntu-latest
+            artifact-os: Linux
+            python-version: "3.14"
+          - os: macos-latest
+            artifact-os: macOS
+            python-version: "3.11"
+          - os: macos-latest
+            artifact-os: macOS
+            python-version: "3.14"
+          - os: windows-latest
+            artifact-os: Windows
+            python-version: "3.11"
+          - os: windows-latest
+            artifact-os: Windows
+            python-version: "3.14"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+
+      - name: Download refkit distribution
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_refkit_dist
+          path: dist
+
+      - name: Download refkit-core wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_refkit_core_cpython_${{ matrix.artifact-os }}
+          path: dist
+
+      - name: Test installed package
+        shell: bash
+        run: |
+          uv run --no-project --python "${{ matrix.python-version }}" --no-index --find-links dist --with refkit python .github/pyodide/smoke_refkit.py
+
+  test-refkit-pyemscripten:
+    name: refkit / Test PyEmscripten install
+    if: inputs.package == 'refkit'
+    needs: validate-package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.14"
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+
+      - name: Download refkit distribution
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_refkit_dist
+          path: dist
+
+      - name: Download refkit-core wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_refkit_core_pyemscripten_3.14
+          path: dist
+
+      - name: Test installed package
+        run: |
+          uv sync --locked --only-group pyodide-build
+          uv run pyodide venv .venv-pyodide
+          source .venv-pyodide/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install refkit --no-index --find-links dist --force-reinstall
+          python .github/pyodide/smoke_refkit.py
+
+  test-polars-refkit-cpython:
+    name: polars-refkit / Test CPython wheel (${{ matrix.os }}, py${{ matrix.python-version }})
+    if: inputs.package == 'polars-refkit'
+    needs: validate-package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact-os: Linux
+            python-version: "3.11"
+          - os: ubuntu-latest
+            artifact-os: Linux
+            python-version: "3.14"
+          - os: macos-latest
+            artifact-os: macOS
+            python-version: "3.11"
+          - os: macos-latest
+            artifact-os: macOS
+            python-version: "3.14"
+          - os: windows-latest
+            artifact-os: Windows
+            python-version: "3.11"
+          - os: windows-latest
+            artifact-os: Windows
+            python-version: "3.14"
+    steps:
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+
+      - name: Download wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_polars_refkit_cpython_${{ matrix.artifact-os }}
+          path: dist
+
+      - name: Test installed package
+        shell: bash
+        run: |
+          wheels=(dist/polars_refkit-*.whl)
+          uv run --no-project --python "${{ matrix.python-version }}" --with "${wheels[0]}" python - <<'PY'
+          import polars as pl
+          import polars_refkit
+
+          assert polars_refkit
+          df = pl.DataFrame(
+              {
+                  "bibtex": [
+                      "@article{doe2024, title={Fast Citations}, year={2024}}",
+                  ],
+              }
+          )
+          out = df.select(count=pl.col("bibtex").refkit.entry_count())
+          assert out.item() == 1
+          PY
+
+  test-polars-refkit-sdist:
+    name: polars-refkit / Test sdist rebuild
+    if: inputs.package == 'polars-refkit'
+    needs: validate-package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.11"
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+
+      - name: Download sdist
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release_polars_refkit_sdist
+          path: dist
+
+      - name: Build and import from sdist
+        shell: bash
+        run: |
+          sdist=(dist/polars_refkit-*.tar.gz)
+          uv run --no-project --python "3.11" --with "${sdist[0]}" python - <<'PY'
+          import polars_refkit
+
+          assert polars_refkit
+          PY
