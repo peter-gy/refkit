@@ -1,7 +1,3 @@
-.PHONY: sync
-sync:
-	uv sync --all-packages --group dev
-
 .PHONY: format
 format:
 	uv run ruff check --fix .
@@ -44,6 +40,42 @@ rust-floor:
 .PHONY: clean-build
 clean-build:
 	rm -rf dist target/wheels
+
+.PHONY: clean
+clean:
+	rm -rf \
+		dist \
+		wheels \
+		build \
+		target \
+		htmlcov \
+		.coverage \
+		.pytest_cache \
+		.ruff_cache \
+		.mypy_cache \
+		.pyrefly \
+		.ty \
+		.tox \
+		.nox \
+		__pycache__ \
+		*.egg-info
+	find benchmark crates docs packages \
+		\( -name __pycache__ \
+		-o -name '*.egg-info' \
+		-o -name .pytest_cache \
+		-o -name .ruff_cache \
+		-o -name .mypy_cache \
+		-o -name .pyrefly \
+		-o -name .ty \
+		-o -name .tox \
+		-o -name .nox \) \
+		-type d -prune -exec rm -rf {} +
+	find benchmark crates docs packages \
+		\( -name '*.pyc' -o -name '*.pyo' -o -name '*.so' \) \
+		-type f -delete
+	@if [ -d benchmark/results ]; then \
+		find benchmark/results -mindepth 1 ! -name .gitkeep -exec rm -rf {} +; \
+	fi
 
 .PHONY: build
 build: clean-build
