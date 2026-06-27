@@ -4,13 +4,13 @@
 
 ## Install And Build
 
-`refkit-bench` is a uv workspace package. Its dependencies live in `benchmark/pyproject.toml`.
+`refkit-bench` is a uv workspace package. Its dependencies live in `packages/refkit-bench/pyproject.toml`.
 
 Build the native extensions in release mode before collecting timing numbers:
 
 ```bash
 uv sync --all-packages --group dev
-uv run maturin develop --release --manifest-path packages/refkit/Cargo.toml
+uv run maturin develop --release --manifest-path packages/refkit-core/Cargo.toml
 uv run maturin develop --release --manifest-path packages/polars-refkit/Cargo.toml
 ```
 
@@ -29,7 +29,7 @@ uv run --package refkit-bench python -m refkit_bench.runner \
   --lane input.bibtex \
   --rounds 3 \
   --warmups 1 \
-  --json benchmark/results/smoke.json
+  --json packages/refkit-bench/results/smoke.json
 ```
 
 Run the full suite and write JSON plus CSV output:
@@ -40,11 +40,11 @@ uv run --package refkit-bench python -m refkit_bench.runner \
   --input all \
   --rounds 5 \
   --warmups 2 \
-  --json benchmark/results/latest.json \
-  --csv benchmark/results/latest.csv
+  --json packages/refkit-bench/results/latest.json \
+  --csv packages/refkit-bench/results/latest.csv
 ```
 
-Generated result files belong in `benchmark/results/`. Commit benchmark code and audited fixtures. Leave local result files ignored.
+Generated result files belong in `packages/refkit-bench/results/`. Commit benchmark code and audited fixtures. Leave local result files ignored.
 
 ## Lane Model
 

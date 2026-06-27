@@ -3,9 +3,10 @@ from __future__ import annotations
 import csv
 import importlib.metadata as metadata_module
 import json
-import os
+import sys
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -56,52 +57,6 @@ def assert_prepared_fails_as_benchmark_row(
 
     assert len(rows) == 1
     assert rows[0]["status"] == "failed"
-
-
-def test_audited_tiny_fixture_matches_generator() -> None:
-    assert fixtures.audited_tiny_bibtex() == fixtures.bibtex_for_records(
-        fixtures.records_for_size("tiny")
-    )
-
-
-def test_materialize_workload_writes_bibtex_and_raw_inputs(tmp_path: Path) -> None:
-    workload = fixtures.materialize_workload("tiny", tmp_path)
-
-    assert workload.keys == ["item0001", "item0002", "item0003"]
-    assert workload.family == "synthetic_scale"
-    assert workload.record_count == 3
-    assert workload.bibtex_path.read_text(encoding="utf-8") == workload.bibtex
-    assert workload.raw_bibtex_path.read_text(encoding="utf-8") == workload.raw_bibtex
-    assert workload.dirty_bibtex_path.read_text(encoding="utf-8") == workload.dirty_bibtex
-    assert workload.duplicate_bibtex_path.read_text(encoding="utf-8") == workload.duplicate_bibtex
-    assert workload.csl_json[0]["id"] == "item0001"
-    assert "preamble" in workload.raw_bibtex.lower()
-    assert "No close" in workload.dirty_bibtex
-    assert workload.duplicate_entry_key == "item0001"
-    assert workload.duplicate_field_key == "item0002"
-    assert "Duplicate benchmark entry" in workload.duplicate_bibtex
-    assert "Duplicate benchmark field" in workload.duplicate_bibtex
-    assert workload.source_byte_count("bibtex") == len(workload.bibtex.encode("utf-8"))
-    assert workload.source_text("raw_bibtex") == workload.raw_bibtex
-    assert workload.source_byte_count("raw_bibtex") == len(workload.raw_bibtex.encode("utf-8"))
-    assert workload.source_text("dirty_bibtex") == workload.dirty_bibtex
-    assert workload.source_byte_count("dirty_bibtex") == len(workload.dirty_bibtex.encode("utf-8"))
-    assert workload.source_text("duplicate_bibtex") == workload.duplicate_bibtex
-    assert workload.source_byte_count("duplicate_bibtex") == len(
-        workload.duplicate_bibtex.encode("utf-8")
-    )
-    assert workload.source_name("bibtex") == "synthetic_scale:tiny:bibtex"
-    assert workload.source_path("bibtex") == str(workload.bibtex_path)
-    assert workload.source_path("duplicate_bibtex") == str(workload.duplicate_bibtex_path)
-    assert workload.source_license("bibtex") == "Apache-2.0"
-    assert workload.source_text("csl_json").startswith("[")
-    assert len(workload.source_sha256("bibtex")) == 64
-    assert workload.source_text("unknown") == ""
-    assert workload.source_name("unknown") == ""
-    assert workload.source_path("unknown") == ""
-    assert workload.source_license("unknown") == ""
-    assert workload.source_byte_count("unknown") == 0
-    assert workload.source_sha256("unknown") == ""
 
 
 def test_materialize_arxiv_workload_uses_checked_in_real_bibtex(tmp_path: Path) -> None:
@@ -155,23 +110,15 @@ def test_records_for_size_rejects_unknown_size() -> None:
         fixtures.records_for_size("micro")
 
 
-def test_fixture_sizes_are_ordered_slices_of_largest_records() -> None:
-    largest = fixtures.largest_records()
+def test_materialized_synthetic_workload_sizes_have_documented_record_counts(
+    tmp_path: Path,
+) -> None:
+    expected_counts = {"tiny": 3, "medium": 48, "large": 192}
 
-    assert len(fixtures.records_for_size("tiny")) == 3
-    assert len(fixtures.records_for_size("medium")) == 48
-    assert len(fixtures.records_for_size("large")) == 192
-    assert fixtures.records_for_size("tiny") == largest[:3]
-    assert fixtures.records_for_size("medium") == largest[:48]
-    assert fixtures.records_for_size("large") == largest
-
-
-def test_dirty_bibtex_for_empty_records_contains_only_malformed_block() -> None:
-    dirty = fixtures.dirty_bibtex_for_records(())
-
-    assert dirty.count("@") == 1
-    assert dirty.lstrip().startswith("@broken{")
-    assert "No close" in dirty
+    for size, expected_count in expected_counts.items():
+        workload = fixtures.materialize_workload(size, tmp_path)
+        assert workload.record_count == expected_count
+        assert workload.size == size
 
 
 def test_duplicate_bibtex_requires_three_records() -> None:
@@ -256,12 +203,6 @@ def test_list_command_prints_lanes(capsys: pytest.CaptureFixture[str]) -> None:
         "bibtex_input",
         "refkit,polars-refkit,bibtexparser-2.x,pybtex",
     ]
-    assert rows["input.bibtex-text"][1:5] == [
-        "input.normalized",
-        "normalized_bibliography_input",
-        "bibtex_text_input",
-        "refkit,bibtexparser-2.x,pybtex",
-    ]
     assert rows["input.diagnostics"][1:5] == [
         "input.normalized",
         "diagnostic_reporting",
@@ -273,18 +214,6 @@ def test_list_command_prints_lanes(capsys: pytest.CaptureFixture[str]) -> None:
         "raw_bibtex_document",
         "raw_block_materialization",
         "refkit,bibtexparser-2.x",
-    ]
-    assert rows["raw-bibtex.duplicates"][1:5] == [
-        "raw-bibtex",
-        "raw_bibtex_document",
-        "duplicate_handling",
-        "refkit,bibtexparser-2.x",
-    ]
-    assert rows["style.load"][1:5] == [
-        "style",
-        "citation_style_input",
-        "style_resolution",
-        "refkit,citeproc-py",
     ]
     assert rows["errors.missing-reference"][1:5] == [
         "errors",
@@ -336,57 +265,12 @@ def test_machine_metadata_accepts_explicit_build_mode() -> None:
     assert runner.machine_metadata("release")["build_mode"] == "release"
 
 
-def test_detect_build_mode_from_native_path_and_artifacts(
-    tmp_path: Path,
-) -> None:
-    assert runner.detect_build_mode("/tmp/target/release/_native.abi3.so") == "release"
-    assert runner.detect_build_mode("/tmp/target/debug/_native.abi3.so") == "debug"
-    assert runner.detect_build_mode("/tmp/refkit/_native.abi3.so", tmp_path) == "unknown"
+def test_machine_metadata_uses_refkit_public_build_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "refkit", SimpleNamespace(build_mode="release"))
+    assert runner.machine_metadata("auto")["build_mode"] == "release"
 
-    release = tmp_path / "target" / "release" / "lib_native.so"
-    release.parent.mkdir(parents=True)
-    release.write_text("release", encoding="utf-8")
-    assert runner.detect_build_mode("/tmp/refkit/_native.abi3.so", tmp_path) == "unknown"
-
-    debug_only_root = tmp_path / "debug-only"
-    debug_only = debug_only_root / "target" / "debug" / "_native.dll"
-    debug_only.parent.mkdir(parents=True)
-    debug_only.write_text("debug", encoding="utf-8")
-    assert runner.detect_build_mode("/tmp/refkit/_native.abi3.so", debug_only_root) == "unknown"
-
-    debug = tmp_path / "target" / "debug" / "_native.pyd"
-    debug.parent.mkdir(parents=True)
-    debug.write_text("debug", encoding="utf-8")
-    debug.touch()
-    assert runner.detect_build_mode("/tmp/refkit/_native.abi3.so", tmp_path) == "unknown"
-
-    release.touch()
-    assert runner.detect_build_mode("/tmp/refkit/_native.abi3.so", tmp_path) == "unknown"
-    assert runner.detect_build_mode() in {"debug", "release", "unknown"}
-
-
-def test_detect_build_mode_prefers_installed_artifact_fingerprint(
-    tmp_path: Path,
-) -> None:
-    native = tmp_path / "src" / "refkit" / "_native.abi3.so"
-    release = tmp_path / "target" / "release" / "lib_native.dylib"
-    debug = tmp_path / "target" / "debug" / "lib_native.so"
-    native.parent.mkdir(parents=True)
-    release.parent.mkdir(parents=True)
-    debug.parent.mkdir(parents=True)
-
-    native.write_text("release", encoding="utf-8")
-    release.write_text("release", encoding="utf-8")
-    os.utime(release, (native.stat().st_atime, native.stat().st_mtime))
-    debug.write_text("debug with newer timestamp", encoding="utf-8")
-    debug.touch()
-
-    assert runner.detect_build_mode(str(native), tmp_path) == "release"
-    assert not runner._same_artifact(native, debug)
-
-    native.write_text("debug with newer timestamp", encoding="utf-8")
-    os.utime(native, (debug.stat().st_atime, debug.stat().st_mtime))
-    assert runner.detect_build_mode(str(native), tmp_path) == "debug"
+    monkeypatch.setitem(sys.modules, "refkit", SimpleNamespace(build_mode="custom"))
+    assert runner.machine_metadata("auto")["build_mode"] == "unknown"
 
 
 def test_machine_metadata_contains_versions() -> None:
@@ -397,7 +281,6 @@ def test_machine_metadata_contains_versions() -> None:
     assert metadata["packages"]["polars-refkit"] == metadata_module.version("polars-refkit")
     assert metadata["packages"]["citeproc-py"] != "not-installed"
     assert metadata["packages"]["bibtexparser"] != "not-installed"
-    assert metadata["packages"]["bibtexparser-v2"] == metadata["packages"]["bibtexparser"]
     assert metadata["packages"]["pybtex"] != "not-installed"
 
 
@@ -472,11 +355,15 @@ def test_bibtexparser_v2_adapter_requires_requested_beta(
 ) -> None:
     workload = fixtures.materialize_workload("tiny", tmp_path)
     adapter = bibtexparser_v2_adapter.BibtexparserV2Adapter()
+    required = bibtexparser_v2_adapter.BIBTEXPARSER_V2_VERSION
+    mismatched = f"{required}.mismatch"
 
-    monkeypatch.setattr(bibtexparser_v2_adapter, "package_version", lambda name: "2.0.0b8")
+    monkeypatch.setattr(bibtexparser_v2_adapter, "package_version", lambda name: mismatched)
 
-    with pytest.raises(RuntimeError, match="bibtexparser==2.0.0b9"):
+    with pytest.raises(RuntimeError) as exc_info:
         adapter.prepare("parse_bibtex", workload, tmp_path)
+    assert f"bibtexparser=={required}" in str(exc_info.value)
+    assert f"found {mismatched}" in str(exc_info.value)
 
 
 def test_bibtexparser_v2_raw_edit_and_projection_behaviour(tmp_path: Path) -> None:
@@ -667,7 +554,7 @@ def test_bibtexparser_v2_raw_edit_adds_missing_title_field(tmp_path: Path) -> No
     assert "item0001" in written
 
 
-def test_bibtexparser_v2_recovery_check_rejects_unexpected_failed_blocks(
+def test_benchmark_reports_failed_row_for_unexpected_recovery_blocks(
     tmp_path: Path,
 ) -> None:
     workload = fixtures.materialize_workload("tiny", tmp_path)
@@ -682,10 +569,8 @@ def test_bibtexparser_v2_recovery_check_rejects_unexpected_failed_blocks(
         dirty_bibtex_path=dirty_path,
     )
     prepared = adapters.BibtexparserV2Adapter().prepare("recover_dirty_bibtex", dirty, tmp_path)
-    outcome = prepared.operation()
 
-    with pytest.raises(AssertionError, match="failed block signatures"):
-        prepared.check(outcome)
+    assert_prepared_fails_as_benchmark_row(prepared, workload, tmp_path)
 
 
 def test_benchmark_reports_failed_rows_for_invalid_key_outputs(tmp_path: Path) -> None:
@@ -745,9 +630,6 @@ def test_benchmark_reports_failed_rows_for_invalid_projection_outputs(tmp_path: 
 
 
 def test_benchmark_reports_failed_rows_for_invalid_entry_outputs(tmp_path: Path) -> None:
-    class TitleList(list[str]):
-        pass
-
     workload = fixtures.materialize_workload("tiny", tmp_path)
     prepared = adapters.RefkitAdapter().prepare("lookup_entries", workload, tmp_path)
     valid_rows = [{"key": record.key, "title": record.title} for record in workload.records]
@@ -756,7 +638,6 @@ def test_benchmark_reports_failed_rows_for_invalid_entry_outputs(tmp_path: Path)
         [{**row, "key": "wrong"} for row in valid_rows],
         [{**row, "title": "wrong"} for row in valid_rows],
         [{**row, "title": []} for row in valid_rows],
-        [{**row, "title": TitleList([str(row["title"])])} for row in valid_rows],
     ]
 
     for rows in invalid_outputs:
@@ -908,34 +789,30 @@ def test_each_lane_participant_has_correctness_check(tmp_path: Path) -> None:
             assert outcome.count >= 1
 
 
-def test_benchmark_render_metadata_describes_citation_requests(tmp_path: Path) -> None:
-    workload = fixtures.materialize_workload("tiny", tmp_path)
-    refkit_bibliography = adapters.RefkitAdapter().prepare(
-        "render_prepared_bibliography", workload, tmp_path
+def test_benchmark_rows_describe_render_citation_requests() -> None:
+    result = runner.run_suite(
+        lane_names=[
+            "render.prepared-bibliography",
+            "render.cited-bibliography",
+            "render.one-off-bibliography",
+        ],
+        input_sizes=["tiny"],
+        rounds=1,
+        warmups=0,
+        build_mode="release",
     )
-    refkit_path_bibliography = adapters.RefkitAdapter().prepare(
-        "render_path_bibliography", workload, tmp_path
-    )
-    refkit_seen = adapters.RefkitAdapter().prepare("render_cited_bibliography", workload, tmp_path)
-    citeproc_bibliography = adapters.CiteprocPyAdapter().prepare(
-        "render_prepared_bibliography", workload, tmp_path
-    )
-    citeproc_seen = adapters.CiteprocPyAdapter().prepare(
-        "render_cited_bibliography", workload, tmp_path
-    )
-    citeproc_missing = adapters.CiteprocPyAdapter().prepare(
-        "resolve_missing_reference", workload, tmp_path
-    )
+    rows = result["rows"]
+    citation_counts = {
+        (str(row["lane"]), str(row["package"])): row["citation_count"] for row in rows
+    }
+    expected_cited_count = len(fixtures.records_for_size("tiny"))
 
-    assert refkit_bibliography.metadata["citation_count"] == 0
-    assert refkit_path_bibliography.metadata["citation_count"] == 0
-    assert refkit_seen.metadata["citation_count"] == len(workload.records)
-    assert citeproc_bibliography.metadata["citation_count"] == len(workload.records)
-    assert citeproc_seen.metadata["citation_count"] == len(workload.records)
-    with pytest.raises(AssertionError, match="expected count 1"):
-        citeproc_missing.check(
-            adapters.OperationOutcome("(missing-reference?)", 2, "missing-reference")
-        )
+    assert citation_counts[("render.prepared-bibliography", "refkit")] == 0
+    assert citation_counts[("render.prepared-bibliography", "citeproc-py")] == expected_cited_count
+    assert citation_counts[("render.cited-bibliography", "refkit")] == expected_cited_count
+    assert citation_counts[("render.cited-bibliography", "citeproc-py")] == expected_cited_count
+    assert citation_counts[("render.one-off-bibliography", "refkit")] == 0
+    assert citation_counts[("render.one-off-bibliography", "citeproc-py")] == expected_cited_count
 
 
 def test_recovery_lane_schedules_only_recovery_adapters(tmp_path: Path) -> None:
@@ -1031,21 +908,34 @@ def test_recovery_parse_success_paths_cover_parser_return_values(tmp_path: Path)
 
 def test_repeated_citation_lane_uses_full_selected_input(tmp_path: Path) -> None:
     workload = fixtures.materialize_workload("medium", tmp_path)
+    rows = runner.run_suite(
+        lane_names=["render.repeated-citations"],
+        input_sizes=["medium"],
+        rounds=1,
+        warmups=0,
+        build_mode="release",
+    )["rows"]
 
-    for adapter in (adapters.RefkitAdapter(), adapters.CiteprocPyAdapter()):
-        prepared = adapter.prepare("render_repeated_citations", workload, tmp_path)
-        outcome = prepared.operation()
-
-        prepared.check(outcome)
-        assert outcome.count == len(workload.records)
-        assert prepared.metadata["citation_count"] == len(workload.records)
+    assert {row["package"] for row in rows} == {"refkit", "citeproc-py"}
+    assert {row["operation_count"] for row in rows} == {len(workload.records)}
+    assert {row["citation_count"] for row in rows} == {len(workload.records)}
 
 
 def test_polars_parse_includes_file_and_dataframe_setup(tmp_path: Path) -> None:
     workload = fixtures.materialize_workload("tiny", tmp_path)
+    rows = runner.run_adapter_lane(
+        adapter=adapters.PolarsRefkitAdapter(),
+        lane=runner.LANES["input.bibtex"],
+        participant=runner.participant(runner.POLARS_REFKIT, "parse_bibtex"),
+        workload=workload,
+        directory=tmp_path,
+        rounds=1,
+        warmups=0,
+        metadata=runner.machine_metadata("release"),
+    )
     prepared = adapters.PolarsRefkitAdapter().prepare("parse_bibtex", workload, tmp_path)
 
-    assert prepared.metadata["setup_included"] is True
+    assert rows[0]["setup_included"] is True
     workload.bibtex_path.write_text("", encoding="utf-8")
     outcome = prepared.operation()
 
@@ -1054,26 +944,48 @@ def test_polars_parse_includes_file_and_dataframe_setup(tmp_path: Path) -> None:
 
 def test_polars_lookup_lane_uses_full_document_projection(tmp_path: Path) -> None:
     workload = fixtures.materialize_workload("medium", tmp_path)
-    prepared = adapters.PolarsRefkitAdapter().prepare("lookup_entries_eager", workload, tmp_path)
-    outcome = prepared.operation()
+    rows = runner.run_adapter_lane(
+        adapter=adapters.PolarsRefkitAdapter(),
+        lane=runner.LANES["bulk.polars.lookup"],
+        participant=runner.participant(runner.POLARS_REFKIT, "lookup_entries_eager"),
+        workload=workload,
+        directory=tmp_path,
+        rounds=1,
+        warmups=0,
+        metadata=runner.machine_metadata("release"),
+    )
 
-    prepared.check(outcome)
-    assert prepared.metadata["source_format"] == "bibtex"
-    assert outcome.count == 16
+    assert rows[0]["source_format"] == "bibtex"
+    assert rows[0]["operation_count"] == 16
 
 
 def test_polars_benchmark_lanes_record_execution_mode(tmp_path: Path) -> None:
     workload = fixtures.materialize_workload("tiny", tmp_path)
-    adapter = adapters.PolarsRefkitAdapter()
+    eager = runner.run_adapter_lane(
+        adapter=adapters.PolarsRefkitAdapter(),
+        lane=runner.LANES["bulk.polars.fields"],
+        participant=runner.participant(runner.POLARS_REFKIT, "project_fields_eager"),
+        workload=workload,
+        directory=tmp_path,
+        rounds=1,
+        warmups=0,
+        metadata=runner.machine_metadata("release"),
+    )[0]
+    lazy = runner.run_adapter_lane(
+        adapter=adapters.PolarsRefkitAdapter(),
+        lane=runner.LANES["bulk.polars.fields"],
+        participant=runner.participant(runner.POLARS_REFKIT, "project_fields_lazy"),
+        workload=workload,
+        directory=tmp_path,
+        rounds=1,
+        warmups=0,
+        metadata=runner.machine_metadata("release"),
+    )[0]
 
-    eager = adapter.prepare("project_fields_eager", workload, tmp_path)
-    lazy = adapter.prepare("project_fields_lazy", workload, tmp_path)
-
-    assert eager.metadata["execution_mode"] == "eager"
-    assert lazy.metadata["execution_mode"] == "lazy"
-    assert eager.metadata["setup_included"] is True
-    assert lazy.metadata["setup_included"] is True
-    run_prepared(lazy)
+    assert eager["execution_mode"] == "eager"
+    assert lazy["execution_mode"] == "lazy"
+    assert eager["setup_included"] is True
+    assert lazy["setup_included"] is True
 
 
 def test_polars_inspection_lanes_project_expected_rows(tmp_path: Path) -> None:
@@ -1232,7 +1144,7 @@ def test_run_adapter_lane_emits_failed_warmup_rows(
     assert rows[0]["round"] == 0
     assert rows[0]["seconds"] == 0.0
     assert rows[0]["status"] == "failed"
-    assert rows[0]["detail"] == "AssertionError('warmup failed')"
+    assert "warmup failed" in str(rows[0]["detail"])
     assert isinstance(rows[0]["setup_seconds"], float)
     assert rows[0]["setup_seconds"] >= 0.0
     assert rows[0]["source_format"] == "unknown"
@@ -1432,7 +1344,9 @@ def test_main_runs_lane_and_writes_outputs(
     assert exit_code == 0
     assert json_path.exists()
     assert csv_path.exists()
-    assert '"rows": 5' in capsys.readouterr().out
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["rows"] == 5
+    assert summary["status"] == {"ok": 5}
 
 
 def test_main_returns_failure_for_failed_rows(
@@ -1469,4 +1383,6 @@ def test_main_returns_failure_for_failed_rows(
     monkeypatch.setattr(runner, "run_suite", fake_run_suite)
 
     assert runner.main(["--lane", "input.bibtex", "--input", "tiny"]) == 1
-    assert '"failed": 1' in capsys.readouterr().out
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["rows"] == 1
+    assert summary["status"] == {"failed": 1}

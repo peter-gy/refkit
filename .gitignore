@@ -10,8 +10,8 @@ target/
 .coverage
 .pytest_cache/
 .ruff_cache/
-benchmark/results/*
-!benchmark/results/.gitkeep
+packages/refkit-bench/results/*
+!packages/refkit-bench/results/.gitkeep
 
 # Virtual environments
 .venv

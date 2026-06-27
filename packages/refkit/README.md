@@ -8,7 +8,10 @@
 pip install refkit
 ```
 
-`refkit` supports CPython 3.11 through 3.14. Wheels use the Python 3.11 stable ABI.
+`refkit` is pure Python and depends on the exact matching `refkit-core` release.
+`refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`, including PyEmscripten wheels for the Python 3.14 Pyodide runtime.
+
+`refkit` supports CPython 3.11 through 3.14. Native wheels from `refkit-core` use the Python 3.11 stable ABI.
 
 ## Render A Citation
 
@@ -205,7 +208,7 @@ out = df.select(
 
 ```bash
 uv sync --all-packages --group dev
-uv run maturin develop --manifest-path packages/refkit/Cargo.toml
+uv run maturin develop --manifest-path packages/refkit-core/Cargo.toml
 uv run pytest packages/refkit/tests --no-cov
 ```
 

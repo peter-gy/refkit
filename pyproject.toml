@@ -6,6 +6,7 @@ license = "Apache-2.0"
 dependencies = [
     "polars-refkit",
     "refkit",
+    "refkit-core",
 ]
 
 [tool.uv]
@@ -15,10 +16,12 @@ package = false
 refkit-bench = { workspace = true }
 polars-refkit = { workspace = true }
 refkit = { workspace = true }
+refkit-core = { workspace = true }
 
 [tool.uv.workspace]
 members = [
-    "benchmark",
+    "packages/refkit-bench",
+    "packages/refkit-core",
     "packages/refkit",
     "packages/polars-refkit",
 ]
@@ -33,12 +36,18 @@ dev = [
     "ruff>=0.15.16",
     "ty>=0.0.46",
 ]
+build = [
+    "twine>=6.2",
+]
+pyodide-build = [
+    "pyodide-build",
+]
 
 [tool.pytest.ini_options]
 testpaths = [
     "packages/refkit/tests",
     "packages/polars-refkit/tests",
-    "benchmark/tests",
+    "packages/refkit-bench/tests",
 ]
 addopts = [
     "--cov=refkit",
@@ -51,7 +60,7 @@ addopts = [
 
 [tool.coverage.run]
 omit = [
-    "benchmark/tests/*",
+    "packages/refkit-bench/tests/*",
     "packages/refkit/tests/*",
     "packages/polars-refkit/tests/*",
 ]
@@ -59,11 +68,12 @@ omit = [
 [tool.pyrefly]
 project-includes = [
     "packages/refkit/src/refkit",
+    "packages/refkit-core/src/refkit_core",
     "packages/refkit/tests",
     "packages/polars-refkit/polars_refkit",
     "packages/polars-refkit/tests",
-    "benchmark/src/refkit_bench",
-    "benchmark/tests",
+    "packages/refkit-bench/src/refkit_bench",
+    "packages/refkit-bench/tests",
 ]
 project-excludes = [
     "**/__pycache__",
@@ -76,8 +86,9 @@ project-excludes = [
 ]
 python-version = "3.11"
 search-path = [
-    "benchmark/src",
+    "packages/refkit-bench/src",
     "packages/refkit/src",
+    "packages/refkit-core/src",
     "packages/polars-refkit",
 ]
 
@@ -103,10 +114,11 @@ select = [
 [tool.ruff.lint.isort]
 known-first-party = [
     "refkit_bench",
+    "refkit_core",
     "polars_refkit",
     "refkit",
     "tests",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"benchmark/src/refkit_bench/runner.py" = ["T201"]
+"packages/refkit-bench/src/refkit_bench/runner.py" = ["T201"]

@@ -1,11 +1,11 @@
 [package]
-name = "refkit"
+name = "refkit-core-python"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 readme = "README.md"
-description = "Python bindings for fast citation parsing, rendering, and BibTeX editing"
+description = "Native Python bindings for refkit"
 repository.workspace = true
 include = [
     "/Cargo.toml",
@@ -13,11 +13,10 @@ include = [
     "/pyproject.toml",
     "/README.md",
     "/src",
-    "/tests",
 ]
 
 [lib]
-name = "_native"
+name = "_refkit_core"
 crate-type = ["cdylib", "rlib"]
 
 [features]

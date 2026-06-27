@@ -51,7 +51,7 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.sdist.force-include]
-"../data/arxiv-wild/references-subset.bib" = "src/refkit_bench/data/arxiv-wild/references-subset.bib"
+"../../data/arxiv-wild/references-subset.bib" = "src/refkit_bench/data/arxiv-wild/references-subset.bib"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/refkit_bench"]

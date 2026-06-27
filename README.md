@@ -9,7 +9,11 @@ pip install refkit
 pip install polars-refkit
 ```
 
-Both packages are versioned as `0.0.1` and support CPython 3.11 through 3.14. Wheels use the Python 3.11 stable ABI.
+`refkit` is a pure Python package with an exact dependency on `refkit-core`.
+`refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`.
+Installing `refkit` also installs the matching native wheel for the current Python platform.
+
+`refkit`, `refkit-core`, and `polars-refkit` are versioned as `0.0.1` and support CPython 3.11 through 3.14. Native wheels use the Python 3.11 stable ABI. `refkit-core` also publishes PyEmscripten wheels for the Python 3.14 Pyodide runtime.
 
 ## Render Citations From Python
 
@@ -99,9 +103,10 @@ out = df.select(
 
 ## Choose A Package
 
-| Package | Import | Use it for |
+| Package | Entry point | Use it for |
 | --- | --- | --- |
 | `refkit` | `import refkit as rk` | Citation rendering, normalized library access, selectors, and raw BibTeX editing. |
+| `refkit-core` | Installed by `refkit` | Native Rust/PyO3 implementation used by `refkit`, including Pyodide-compatible wheels. |
 | `polars-refkit` | `import polars_refkit as prk` | BibTeX parsing, inspection, and rendering inside eager or lazy Polars plans. |
 | `refkit-bench` | `python -m refkit_bench.runner` | Repository benchmark lanes for parser, renderer, raw BibTeX, and Polars workflows. |
 
@@ -123,15 +128,18 @@ out = df.select(
 
 The Python packages are adapters over that core:
 
-- `refkit` owns PyO3 classes, Python exceptions, GIL release, and Python value conversion.
+- `refkit-core` owns PyO3 classes, Python exceptions, GIL release, Python value conversion, and PyEmscripten wheel builds.
+- `refkit` is pure Python. It pins one exact `refkit-core` version and rejects a mismatched core at import time.
 - `polars-refkit` owns expression registration, dtypes, broadcasting, null mapping, eager and lazy execution, and dataframe diagnostics.
 
 ## Package Docs
 
 - [refkit Python API](packages/refkit/README.md)
+- [refkit-core native package](packages/refkit-core/README.md)
 - [polars-refkit expressions](packages/polars-refkit/README.md)
-- [refkit benchmark runner](benchmark/README.md)
+- [refkit benchmark runner](packages/refkit-bench/README.md)
 - [API contracts](docs/api-contracts.md)
+- [Pyodide packaging](docs/pyodide.md)
 - [Migration guide](docs/migration.md)
 - [Feature matrix](docs/feature-matrix.md)
 
@@ -139,7 +147,7 @@ The Python packages are adapters over that core:
 
 ```bash
 uv sync --all-packages --group dev
-uv run maturin develop --manifest-path packages/refkit/Cargo.toml
+uv run maturin develop --manifest-path packages/refkit-core/Cargo.toml
 uv run maturin develop --manifest-path packages/polars-refkit/Cargo.toml
 uv run pytest
 ```

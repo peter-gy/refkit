@@ -1,0 +1,279 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-refkit-pure:
+    name: refkit / Build pure Python wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - run: uv build --package refkit --no-create-gitignore
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: refkit_pypi_files
+          path: dist/refkit-*
+
+  build-refkit-core-cpython:
+    name: refkit-core / Build CPython wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: packages/refkit-core
+          args: --release --out dist --interpreter 3.11
+          sccache: true
+
+      - run: python -c "from pathlib import Path; print('\\n'.join(p.name for p in Path('packages/refkit-core/dist').iterdir()))"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: refkit_core_pypi_files_${{ runner.os }}_cp311
+          path: packages/refkit-core/dist
+
+  build-refkit-core-pyemscripten:
+    name: refkit-core / Build PyEmscripten (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.14"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - run: uv sync --only-group pyodide-build
+
+      - name: Get Pyodide config
+        id: pyodide-config
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+
+          keys = {
+              "rust-toolchain": "rust_toolchain",
+              "emscripten-version": "emscripten_version",
+              "pyodide-abi-version": "pyodide_abi_version",
+              "rustflags": "rustflags",
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              for output_name, config_name in keys.items():
+                  value = subprocess.check_output(
+                      ["uv", "run", "pyodide", "config", "get", config_name],
+                      text=True,
+                  ).strip()
+                  print(f"{output_name}={value}", file=output)
+          PY
+
+      - uses: emscripten-core/setup-emsdk@v16
+        with:
+          version: ${{ steps.pyodide-config.outputs.emscripten-version }}
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        env:
+          CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide-config.outputs.rustflags }}
+          MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide-config.outputs.pyodide-abi-version }}
+        with:
+          working-directory: packages/refkit-core
+          target: wasm32-unknown-emscripten
+          args: --release --out dist --interpreter ${{ matrix.python-version }}
+          rust-toolchain: ${{ steps.pyodide-config.outputs.rust-toolchain }}
+          sccache: true
+
+      - run: ls -lh packages/refkit-core/dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: refkit_core_pypi_files_pyemscripten_${{ matrix.python-version }}
+          path: packages/refkit-core/dist
+
+  test-pyemscripten:
+    name: refkit / Test Pyodide install (${{ matrix.python-version }})
+    needs:
+      - build-refkit-pure
+      - build-refkit-core-pyemscripten
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.14"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: refkit_core_pypi_files_pyemscripten_${{ matrix.python-version }}
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: refkit_pypi_files
+          path: dist
+
+      - run: |
+          uv sync --only-group pyodide-build
+          uv run pyodide venv .venv-pyodide
+          source .venv-pyodide/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install refkit --no-index --find-links dist
+          python .github/pyodide/smoke_refkit.py
+
+  test-cpython-wheels:
+    name: refkit / Test CPython wheels (${{ matrix.os }})
+    needs:
+      - build-refkit-pure
+      - build-refkit-core-cpython
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact-os: Linux
+          - os: macos-latest
+            artifact-os: macOS
+          - os: windows-latest
+            artifact-os: Windows
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: refkit_core_pypi_files_${{ matrix.artifact-os }}_cp311
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: refkit_pypi_files
+          path: dist
+
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install refkit --no-index --find-links dist
+          python .github/pyodide/smoke_refkit.py
+
+  release-refkit-core:
+    name: refkit-core / Publish
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - build-refkit-core-cpython
+      - build-refkit-core-pyemscripten
+      - test-cpython-wheels
+      - test-pyemscripten
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.14"
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: refkit_core_pypi_files_*
+          merge-multiple: true
+          path: refkit-core-dist
+
+      - run: |
+          uv sync --only-group build
+          for whl in refkit-core-dist/*.whl
+          do
+            unzip -qt "$whl"
+          done
+          uv run twine check --strict refkit-core-dist/*
+          uv publish --trusted-publishing always refkit-core-dist/*
+
+  release-refkit:
+    name: refkit / Publish
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - build-refkit-pure
+      - release-refkit-core
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: "3.14"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: refkit_pypi_files
+          path: refkit-dist
+
+      - run: |
+          uv sync --only-group build
+          uv run twine check --strict refkit-dist/*
+          uv publish --trusted-publishing always refkit-dist/*

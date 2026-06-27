@@ -1,7 +1,7 @@
 [project]
-name = "refkit"
+name = "refkit-core"
 version = "0.0.1"
-description = "Fast Python citation parsing, rendering, and BibTeX editing backed by Rust"
+description = "Native core for refkit citation parsing, rendering, and BibTeX editing"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -21,22 +21,16 @@ classifiers = [
     "Programming Language :: Rust",
     "Typing :: Typed",
 ]
-dependencies = [
-    "refkit-core==0.0.1",
-]
+dependencies = []
 
 [build-system]
-requires = ["hatchling>=1.27"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
 
-[tool.hatch.build.targets.sdist]
-only-include = [
-    "LICENSE",
-    "README.md",
-    "pyproject.toml",
-    "src/refkit",
-    "tests",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/refkit"]
+[tool.maturin]
+python-source = "src"
+module-name = "refkit_core._refkit_core"
+bindings = "pyo3"
+features = ["extension-module"]
+editable-profile = "dev"
+strip = true

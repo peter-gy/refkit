@@ -20,10 +20,10 @@ use refkit_core::{
 };
 use rendered::Rendered;
 
-create_exception!(refkit, RefkitError, PyException);
-create_exception!(refkit, MissingReferenceError, RefkitError);
+create_exception!(refkit_core, RefkitError, PyException);
+create_exception!(refkit_core, MissingReferenceError, RefkitError);
 
-#[pyclass(module = "refkit", skip_from_py_object)]
+#[pyclass(module = "refkit_core", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Library {
     inner: Arc<CoreLibrary>,
@@ -199,7 +199,7 @@ impl Library {
     }
 }
 
-#[pyclass(module = "refkit", skip_from_py_object)]
+#[pyclass(module = "refkit_core", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Entry {
     data: Arc<EntryData>,
@@ -270,7 +270,7 @@ fn parse_recovery_policy(recovery: &str) -> PyResult<(bool, bool)> {
     }
 }
 
-#[pyclass(module = "refkit", skip_from_py_object)]
+#[pyclass(module = "refkit_core", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Style {
     id: String,
@@ -325,7 +325,7 @@ impl Style {
     }
 }
 
-#[pyclass(module = "refkit", skip_from_py_object)]
+#[pyclass(module = "refkit_core", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Locale {
     code: String,
@@ -360,7 +360,7 @@ impl Locale {
     }
 }
 
-#[pyclass(module = "refkit", skip_from_py_object)]
+#[pyclass(module = "refkit_core", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Cite {
     #[pyo3(get)]
@@ -393,7 +393,7 @@ impl Cite {
     }
 }
 
-#[pyclass(module = "refkit", skip_from_py_object)]
+#[pyclass(module = "refkit_core", skip_from_py_object)]
 #[derive(Clone)]
 pub struct CitationGroup {
     cites: Vec<Cite>,
@@ -427,7 +427,7 @@ impl CitationGroup {
     }
 }
 
-#[pyclass(module = "refkit", skip_from_py_object)]
+#[pyclass(module = "refkit_core", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Citation {
     #[pyo3(get)]
@@ -611,7 +611,7 @@ fn normalized_number_to_py(py: Python<'_>, value: &serde_json::Number) -> PyResu
     }
 }
 
-#[pyclass(module = "refkit", skip_from_py_object)]
+#[pyclass(module = "refkit_core", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Document {
     inner: CoreDocument,
@@ -685,7 +685,7 @@ impl Document {
     }
 }
 
-#[pyclass(module = "refkit", skip_from_py_object)]
+#[pyclass(module = "refkit_core", skip_from_py_object)]
 pub struct RenderedDocument {
     citation_ids: Vec<String>,
     citations: Vec<Rendered>,
@@ -871,9 +871,11 @@ fn json_to_py(py: Python<'_>, value: &str) -> PyResult<Py<PyAny>> {
 }
 
 #[pymodule(gil_used = true)]
-fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _refkit_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add("build_info", build_info())?;
+    m.add("build_mode", build_mode())?;
     m.add("RefkitError", py.get_type::<RefkitError>())?;
     m.add(
         "MissingReferenceError",
@@ -891,4 +893,21 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Rendered>()?;
     raw::register(m)?;
     Ok(())
+}
+
+fn build_info() -> String {
+    format!(
+        "refkit-core {} ({}, {})",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    )
+}
+
+fn build_mode() -> &'static str {
+    if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    }
 }

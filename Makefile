@@ -22,7 +22,7 @@ test:
 
 .PHONY: benchmark-test
 benchmark-test:
-	uv run --package refkit-bench pytest benchmark/tests
+	uv run --package refkit-bench pytest packages/refkit-bench/tests
 
 .PHONY: rust
 rust:
@@ -45,11 +45,13 @@ clean-build:
 clean:
 	rm -rf \
 		dist \
+		dist-pyodide \
 		wheels \
 		build \
 		target \
 		htmlcov \
 		.coverage \
+		*.profraw \
 		.pytest_cache \
 		.ruff_cache \
 		.mypy_cache \
@@ -59,7 +61,7 @@ clean:
 		.nox \
 		__pycache__ \
 		*.egg-info
-	find benchmark crates docs packages \
+	find crates docs packages \
 		\( -name __pycache__ \
 		-o -name '*.egg-info' \
 		-o -name .pytest_cache \
@@ -68,13 +70,14 @@ clean:
 		-o -name .pyrefly \
 		-o -name .ty \
 		-o -name .tox \
-		-o -name .nox \) \
+		-o -name .nox \
+		-o -name .pyodide_build \) \
 		-type d -prune -exec rm -rf {} +
-	find benchmark crates docs packages \
-		\( -name '*.pyc' -o -name '*.pyo' -o -name '*.so' \) \
+	find crates docs packages \
+		\( -name '*.pyc' -o -name '*.pyo' -o -name '*.so' -o -name '*.profraw' \) \
 		-type f -delete
-	@if [ -d benchmark/results ]; then \
-		find benchmark/results -mindepth 1 ! -name .gitkeep -exec rm -rf {} +; \
+	@if [ -d packages/refkit-bench/results ]; then \
+		find packages/refkit-bench/results -mindepth 1 ! -name .gitkeep -exec rm -rf {} +; \
 	fi
 
 .PHONY: build

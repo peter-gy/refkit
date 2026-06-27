@@ -21,13 +21,6 @@ from refkit_bench.adapters import (
 )
 from refkit_bench.fixtures import WORKLOAD_NAMES, materialize_workload
 
-NATIVE_ARTIFACT_NAMES = (
-    "lib_native.dylib",
-    "lib_native.so",
-    "_native.dll",
-    "_native.pyd",
-)
-
 RESULT_FIELDS = [
     "lane",
     "group",
@@ -775,7 +768,6 @@ def machine_metadata(build_mode: str = "auto") -> Metadata:
             "polars-refkit": package_version("polars-refkit"),
             "citeproc-py": package_version("citeproc-py"),
             "bibtexparser": package_version("bibtexparser"),
-            "bibtexparser-v2": package_version("bibtexparser"),
             "citeproc-py-styles": package_version("citeproc-py-styles"),
             "pybtex": package_version("pybtex"),
         },
@@ -802,42 +794,13 @@ def refkit_commit() -> str:
     return completed.stdout.strip() or "unknown"
 
 
-def detect_build_mode(native_file: str | None = None, artifact_root: Path | None = None) -> str:
-    if native_file is None:
-        try:
-            import refkit._native as native
-        except Exception:  # pragma: no cover
-            return "unknown"
-        native_file = getattr(native, "__file__", "")
-
-    native_path = Path(native_file)
-    parts = set(native_path.parts)
-    if "release" in parts:
-        return "release"
-    if "debug" in parts:
-        return "debug"
-
-    root = artifact_root if artifact_root is not None else Path(".")
-    release_artifacts = _native_artifact_candidates(root, "release")
-    debug_artifacts = _native_artifact_candidates(root, "debug")
-    if any(_same_artifact(native_path, artifact) for artifact in release_artifacts):
-        return "release"
-    if any(_same_artifact(native_path, artifact) for artifact in debug_artifacts):
-        return "debug"
-    return "unknown"
-
-
-def _native_artifact_candidates(root: Path, profile: str) -> list[Path]:
-    directory = root / "target" / profile
-    return [directory / name for name in NATIVE_ARTIFACT_NAMES]
-
-
-def _same_artifact(left: Path, right: Path) -> bool:
-    if not left.exists() or not right.exists():
-        return False
-    left_stat = left.stat()
-    right_stat = right.stat()
-    return left_stat.st_size == right_stat.st_size and left_stat.st_mtime == right_stat.st_mtime
+def detect_build_mode() -> str:
+    try:
+        import refkit as rk
+    except Exception:  # pragma: no cover
+        return "unknown"
+    build_mode = getattr(rk, "build_mode", "")
+    return build_mode if build_mode in {"debug", "release"} else "unknown"
 
 
 def print_lane_list() -> None:

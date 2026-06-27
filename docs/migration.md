@@ -2,6 +2,26 @@
 
 Refkit replaces the common split between a CSL renderer and a BibTeX repair library with one Python API backed by Rust.
 
+## Package Split
+
+Install `refkit` for Python citation workflows:
+
+```bash
+pip install refkit
+```
+
+`refkit` is pure Python and depends on `refkit-core==0.0.1`.
+`refkit-core` contains the native Rust/PyO3 extension as `refkit_core._refkit_core`.
+Importing `refkit` checks that the installed `refkit-core` version matches the version required by `refkit`.
+
+```python
+import refkit as rk
+
+assert rk.check_refkit_core_version()
+```
+
+Runtime metadata such as `rk.build_info` and `rk.build_mode` is available from the `refkit` package.
+
 ## From citeproc-py
 
 Use `Library`, `Style`, and `Document` for the main render flow.

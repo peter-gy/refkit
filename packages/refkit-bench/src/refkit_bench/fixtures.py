@@ -18,7 +18,7 @@ ARXIV_WORKLOAD_FAMILY = "arxiv_wild_subset"
 ARXIV_WORKLOAD_SOURCE_LICENSE = "mixed-arxiv-source-licenses"
 
 JOURNAL = "Journal of Citation Benchmarks"
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 ARXIV_SUBSET_PATH = REPO_ROOT / "data" / "arxiv-wild" / "references-subset.bib"
 PACKAGED_ARXIV_SUBSET_PATH = (
     Path(__file__).resolve().parent / "data" / "arxiv-wild" / "references-subset.bib"
@@ -231,29 +231,26 @@ def raw_bibtex_for_records(records: tuple[Record, ...]) -> str:
 
 def dirty_bibtex_for_records(records: tuple[Record, ...]) -> str:
     entries = [_bibtex_entry(record) for record in records]
-    if entries:
-        first = records[0]
-        entries[0] = (
-            f"@article{{{first.key},\n"
-            f"  author = {{{first.family}, {first.given}}},\n"
-            f"  title = {{{first.title}}},\n"
-            "  journal = JMLR # { Extra},\n"
-            f"  year = {{{first.year}}},\n"
-            "  month = {16},\n"
-            f"  volume = {{{first.volume}}},\n"
-            f"  pages = {{{first.page_start}-{first.page_end}}},\n"
-            f"  doi = {{{first.doi}}}\n"
-            "}"
-        )
-    duplicate = ""
-    if records:
-        duplicate = (
-            "\n\n"
-            f"@article{{{records[0].key},\n"
-            "  title = {Duplicate benchmark record},\n"
-            "  year = {2024}\n"
-            "}\n"
-        )
+    first = records[0]
+    entries[0] = (
+        f"@article{{{first.key},\n"
+        f"  author = {{{first.family}, {first.given}}},\n"
+        f"  title = {{{first.title}}},\n"
+        "  journal = JMLR # { Extra},\n"
+        f"  year = {{{first.year}}},\n"
+        "  month = {16},\n"
+        f"  volume = {{{first.volume}}},\n"
+        f"  pages = {{{first.page_start}-{first.page_end}}},\n"
+        f"  doi = {{{first.doi}}}\n"
+        "}"
+    )
+    duplicate = (
+        "\n\n"
+        f"@article{{{records[0].key},\n"
+        "  title = {Duplicate benchmark record},\n"
+        "  year = {2024}\n"
+        "}\n"
+    )
     return "\n\n".join(entries) + "\n\n@broken{missing,\n  title = {No close}\n" + duplicate
 
 
@@ -305,10 +302,6 @@ def csl_json_for_records(records: tuple[Record, ...]) -> list[dict[str, object]]
             item["DOI"] = record.doi
         items.append(item)
     return items
-
-
-def audited_tiny_bibtex() -> str:
-    return (Path(__file__).parent / "data" / "tiny.bib").read_text(encoding="utf-8")
 
 
 def arxiv_bibtex() -> str:

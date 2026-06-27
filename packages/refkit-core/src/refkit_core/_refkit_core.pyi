@@ -102,6 +102,8 @@ _RawBlock: TypeAlias = (
 )
 
 __version__: str
+build_info: str
+build_mode: Literal["debug", "release"]
 _RecoveryMode: TypeAlias = Literal["error", "report"]
 
 class RefkitError(Exception): ...

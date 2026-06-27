@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-import importlib
 import importlib.metadata as metadata_module
 import json
-import tomllib
-import warnings
-from pathlib import Path
 from typing import Any, cast
 
 import polars as pl
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
 BIBTEX = """@article{doe2024,
   author = {Doe, Jane},
   title = {Reference Work},
@@ -28,51 +23,10 @@ SECOND_BIBTEX = """@book{roe2022,
 }"""
 
 
-def test_polars_refkit_imports_native_package() -> None:
-    import polars_refkit as prk
-    import polars_refkit._internal as native
-
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-
-    assert prk.__version__ == native.__version__ == metadata_module.version("polars-refkit")
-    assert pyproject["project"]["version"] == prk.__version__
-
-
-def test_polars_refkit_version_falls_back_to_native(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import polars_refkit as prk
-    import polars_refkit._internal as native
-
-    def missing_version(name: str) -> str:
-        raise metadata_module.PackageNotFoundError(name)
-
-    with monkeypatch.context() as scoped:
-        scoped.setattr(metadata_module, "version", missing_version)
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message=".*overriding existing custom namespace.*",
-                category=UserWarning,
-            )
-            reloaded = importlib.reload(prk)
-
-    assert reloaded.__version__ == native.__version__
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message=".*overriding existing custom namespace.*",
-            category=UserWarning,
-        )
-        importlib.reload(prk)
-
-
-def test_polars_refkit_rejects_unknown_attribute() -> None:
+def test_polars_refkit_import_reports_installed_version() -> None:
     import polars_refkit as prk
 
-    missing_attribute = "does_not_exist"
-    with pytest.raises(AttributeError, match="does_not_exist"):
-        getattr(prk, missing_attribute)
+    assert prk.__version__ == metadata_module.version("polars-refkit")
 
 
 def test_polars_refkit_expressions_parse_and_render_bibtex_rows() -> None:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _metadata_version
 from pathlib import Path
 from typing import Any, Literal, TypeAlias
@@ -11,16 +10,11 @@ from typing import Any, Literal, TypeAlias
 import polars as pl
 from polars.plugins import register_plugin_function
 
-from ._internal import __version__ as _native_version
-
 PLUGIN_PATH = Path(__file__).parent
 RecoveryMode: TypeAlias = Literal["error", "report"]
 ColumnExpr: TypeAlias = str | pl.Expr
 
-try:
-    __version__ = _metadata_version("polars-refkit")
-except PackageNotFoundError:
-    __version__ = _native_version
+__version__ = _metadata_version("polars-refkit")
 
 __all__ = [
     "__version__",
@@ -704,7 +698,3 @@ def _parse_into_expr(expr: ColumnExpr) -> pl.Expr:
     if isinstance(expr, str):
         return pl.col(expr)
     return pl.lit(expr)
-
-
-def __getattr__(name: str) -> Any:
-    raise AttributeError(f"module 'polars_refkit' has no attribute {name!r}")

@@ -2076,22 +2076,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "refkit"
-version = "0.0.1"
-dependencies = [
- "pyo3",
- "refkit-core",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "refkit-core"
 version = "0.0.1"
 dependencies = [
  "biblatex",
  "hayagriva",
  "indexmap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "refkit-core-python"
+version = "0.0.1"
+dependencies = [
+ "pyo3",
+ "refkit-core",
  "serde",
  "serde_json",
 ]

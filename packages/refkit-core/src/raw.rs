@@ -17,7 +17,7 @@ use refkit_core::{
 
 type SharedDocument = Rc<RefCell<RawDocument>>;
 
-#[pyclass(module = "refkit", unsendable)]
+#[pyclass(module = "refkit_core", unsendable)]
 pub struct BibDocument {
     doc: SharedDocument,
 }
@@ -106,7 +106,7 @@ impl BibDocument {
     }
 }
 
-#[pyclass(module = "refkit", unsendable)]
+#[pyclass(module = "refkit_core", unsendable)]
 pub struct BibEntryMap {
     doc: SharedDocument,
 }
@@ -196,7 +196,7 @@ impl BibEntryMap {
     }
 }
 
-#[pyclass(module = "refkit", unsendable)]
+#[pyclass(module = "refkit_core", unsendable)]
 pub struct BibEntry {
     doc: SharedDocument,
     entry_id: RawEntryId,
@@ -249,7 +249,7 @@ impl BibEntry {
     }
 }
 
-#[pyclass(module = "refkit", unsendable)]
+#[pyclass(module = "refkit_core", unsendable)]
 pub struct BibFieldMap {
     doc: SharedDocument,
     entry_id: RawEntryId,
@@ -360,7 +360,7 @@ impl BibFieldMap {
     }
 }
 
-#[pyclass(module = "refkit", unsendable)]
+#[pyclass(module = "refkit_core", unsendable)]
 pub struct BibField {
     doc: SharedDocument,
     entry_id: RawEntryId,

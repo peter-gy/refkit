@@ -1,20 +1,18 @@
 from __future__ import annotations
 
 import importlib
-import importlib.metadata as metadata_module
 import sys
 import threading
-import tomllib
 from collections.abc import Callable, Iterator
 from importlib import metadata
 from pathlib import Path
 from time import sleep
+from types import ModuleType
 from typing import Any, TypeVar, cast
 
 import pytest
 
 import refkit as rk
-import refkit._native as native
 
 ROOT = Path(__file__).parent.parent
 WORKSPACE = ROOT.parent.parent
@@ -348,34 +346,26 @@ def test_entry_parent_chains_preserve_nested_hayagriva_parents() -> None:
     assert entry.parents[0].parents[0].entry_type == "Anthology"
 
 
-def test_version_and_missing_module_attribute() -> None:
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    cargo = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
-    workspace_cargo = tomllib.loads((WORKSPACE / "Cargo.toml").read_text(encoding="utf-8"))
-
-    assert rk.__version__ == native.__version__ == metadata.version("refkit")
-    assert pyproject["project"]["version"] == rk.__version__
-    assert cargo["package"]["version"]["workspace"] is True
-    assert workspace_cargo["workspace"]["package"]["version"] == rk.__version__
-    assert pyproject["project"]["requires-python"] == ">=3.11,<3.15"
-    assert cargo["package"]["rust-version"]["workspace"] is True
-
-    missing_attribute = "does_not_exist"
-    with pytest.raises(AttributeError, match="has no attribute"):
-        getattr(rk, missing_attribute)
-
-
-def test_source_tree_import_falls_back_to_native_version(monkeypatch: pytest.MonkeyPatch) -> None:
-    def missing_version(name: str) -> str:
-        raise metadata_module.PackageNotFoundError(name)
-
-    with monkeypatch.context() as scoped:
-        scoped.setattr(metadata_module, "version", missing_version)
-        reloaded = importlib.reload(rk)
-
-    assert reloaded.__version__ == native.__version__
-    importlib.reload(rk)
+def test_refkit_import_reports_runtime_core_metadata() -> None:
     assert rk.__version__ == metadata.version("refkit")
+    assert rk.check_refkit_core_version()
+    assert rk.build_info.startswith(f"refkit-core {metadata.version('refkit-core')}")
+    assert rk.build_mode in {"debug", "release"}
+
+
+def test_refkit_import_rejects_mismatched_core_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    required_core_version = metadata.version("refkit-core")
+    mismatched_core = ModuleType("refkit_core")
+    cast(Any, mismatched_core).__version__ = f"{required_core_version}.mismatch"
+
+    monkeypatch.setitem(sys.modules, "refkit_core", mismatched_core)
+    monkeypatch.delitem(sys.modules, "refkit")
+    monkeypatch.syspath_prepend(str(ROOT / "src"))
+    try:
+        with pytest.raises(SystemError, match=f"requires {required_core_version}"):
+            importlib.import_module("refkit")
+    finally:
+        sys.modules["refkit"] = rk
 
 
 def test_rendered_html_escapes_bibliography_data(tmp_path: Path) -> None:

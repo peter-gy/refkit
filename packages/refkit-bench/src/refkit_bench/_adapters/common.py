@@ -301,10 +301,8 @@ def _lookup_keys(workload: Workload) -> list[str]:
 
 
 def _first(value: object) -> object:
-    if isinstance(value, list) and type(value) is list:
-        return value[0] if value else None
     if isinstance(value, list):
-        return str(value)
+        return value[0] if value else None
     return value
 
 

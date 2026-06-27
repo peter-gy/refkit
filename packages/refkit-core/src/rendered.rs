@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use crate::json_to_py;
 use refkit_core::{RenderedFormatting, RenderedNode, RenderedRecord, quoted};
 
-#[pyclass(module = "refkit", skip_from_py_object)]
+#[pyclass(module = "refkit_core", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Rendered {
     record: Arc<RenderedRecord>,
