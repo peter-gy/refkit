@@ -54,8 +54,7 @@ jobs:
       - uses: astral-sh/setup-uv@v8.2.0
         with:
           python-version: "3.11"
-          enable-cache: true
-          cache-dependency-glob: uv.lock
+          enable-cache: false
 
       - uses: PyO3/maturin-action@v1
         with:
@@ -147,8 +146,7 @@ jobs:
       - uses: astral-sh/setup-uv@v8.2.0
         with:
           python-version: "3.11"
-          enable-cache: true
-          cache-dependency-glob: uv.lock
+          enable-cache: false
 
       - uses: PyO3/maturin-action@v1
         with:
