@@ -22,13 +22,13 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "polars>=1.41,<1.42",
+    "polars>=1.29",
 ]
 
 [build-system]
 requires = [
     "maturin>=1.9,<2",
-    "polars>=1.41,<1.42",
+    "polars>=1.29",
 ]
 build-backend = "maturin"
 

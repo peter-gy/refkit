@@ -966,7 +966,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "polars", specifier = ">=1.41,<1.42" }]
+requires-dist = [{ name = "polars", specifier = ">=1.29" }]
 
 [[package]]
 name = "polars-runtime-32"
@@ -1459,7 +1459,7 @@ requires-dist = [
     { name = "bibtexparser", specifier = "==2.0.0b9" },
     { name = "citeproc-py", specifier = ">=0.9.3" },
     { name = "citeproc-py-styles", specifier = ">=0.1.5" },
-    { name = "polars", specifier = ">=1.41,<1.42" },
+    { name = "polars", specifier = ">=1.29" },
     { name = "polars-refkit", editable = "packages/polars-refkit" },
     { name = "pybtex", specifier = ">=0.26,<0.27" },
     { name = "refkit", editable = "packages/refkit" },

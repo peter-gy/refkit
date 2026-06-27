@@ -8,7 +8,7 @@
 pip install polars-refkit
 ```
 
-`polars-refkit` requires Polars `>=1.41,<1.42` and supports CPython 3.11 through 3.14.
+`polars-refkit` requires Polars `>=1.29` and supports CPython 3.11 through 3.14.
 
 ## Render And Inspect Rows
 
