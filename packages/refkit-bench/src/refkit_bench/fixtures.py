@@ -11,17 +11,15 @@ SIZES: dict[str, int] = {
     "large": 192,
 }
 LARGEST_SIZE = "large"
-WORKLOAD_NAMES = (*SIZES, "arxiv")
+WORKLOAD_NAMES = (*SIZES, "real")
 WORKLOAD_FAMILY = "synthetic_scale"
 WORKLOAD_SOURCE_LICENSE = "Apache-2.0"
-ARXIV_WORKLOAD_FAMILY = "arxiv_wild_subset"
-ARXIV_WORKLOAD_SOURCE_LICENSE = "mixed-arxiv-source-licenses"
+REAL_WORKLOAD_FAMILY = "real_bibliography_subset"
+REAL_WORKLOAD_SOURCE_LICENSE = "mixed-source-licenses"
 
 JOURNAL = "Journal of Citation Benchmarks"
-REPO_ROOT = Path(__file__).resolve().parents[4]
-ARXIV_SUBSET_PATH = REPO_ROOT / "data" / "arxiv-wild" / "references-subset.bib"
-PACKAGED_ARXIV_SUBSET_PATH = (
-    Path(__file__).resolve().parent / "data" / "arxiv-wild" / "references-subset.bib"
+REAL_BIBLIOGRAPHY_PATH = (
+    Path(__file__).resolve().parent / "data" / "real-bibliography" / "references.bib"
 )
 
 
@@ -143,8 +141,8 @@ def largest_records() -> tuple[Record, ...]:
 
 
 def materialize_workload(size: str, directory: Path) -> Workload:
-    if size == "arxiv":
-        return materialize_arxiv_workload(directory)
+    if size == "real":
+        return materialize_real_workload(directory)
 
     records = records_for_size(size)
     bibtex = bibtex_for_records(records)
@@ -181,22 +179,22 @@ def materialize_workload(size: str, directory: Path) -> Workload:
     )
 
 
-def materialize_arxiv_workload(directory: Path) -> Workload:
-    bibtex = arxiv_bibtex()
+def materialize_real_workload(directory: Path) -> Workload:
+    bibtex = real_bibtex()
     raw_bibtex = bibtex
     dirty_bibtex = bibtex
-    records = arxiv_records()
+    records = real_records()
     duplicate_bibtex = duplicate_bibtex_for_records(records)
-    bibtex_path = directory / "arxiv.bib"
-    raw_bibtex_path = directory / "arxiv-raw.bib"
-    dirty_bibtex_path = directory / "arxiv-dirty.bib"
-    duplicate_bibtex_path = directory / "arxiv-duplicates.bib"
+    bibtex_path = directory / "real.bib"
+    raw_bibtex_path = directory / "real-raw.bib"
+    dirty_bibtex_path = directory / "real-dirty.bib"
+    duplicate_bibtex_path = directory / "real-duplicates.bib"
     bibtex_path.write_text(bibtex, encoding="utf-8")
     raw_bibtex_path.write_text(raw_bibtex, encoding="utf-8")
     dirty_bibtex_path.write_text(dirty_bibtex, encoding="utf-8")
     duplicate_bibtex_path.write_text(duplicate_bibtex, encoding="utf-8")
     return Workload(
-        size="arxiv",
+        size="real",
         records=records,
         bibtex=bibtex,
         raw_bibtex=raw_bibtex,
@@ -207,8 +205,8 @@ def materialize_arxiv_workload(directory: Path) -> Workload:
         raw_bibtex_path=raw_bibtex_path,
         dirty_bibtex_path=dirty_bibtex_path,
         duplicate_bibtex_path=duplicate_bibtex_path,
-        family_name=ARXIV_WORKLOAD_FAMILY,
-        source_license_name=ARXIV_WORKLOAD_SOURCE_LICENSE,
+        family_name=REAL_WORKLOAD_FAMILY,
+        source_license_name=REAL_WORKLOAD_SOURCE_LICENSE,
         raw_preservation_terms=("Real BibTeX subset",),
         duplicate_entry_key=records[0].key,
         duplicate_field_key=records[1].key,
@@ -304,21 +302,19 @@ def csl_json_for_records(records: tuple[Record, ...]) -> list[dict[str, object]]
     return items
 
 
-def arxiv_bibtex() -> str:
-    return arxiv_subset_path().read_text(encoding="utf-8")
+def real_bibtex() -> str:
+    return real_bibliography_path().read_text(encoding="utf-8")
 
 
-def arxiv_subset_path() -> Path:
-    if ARXIV_SUBSET_PATH.exists():
-        return ARXIV_SUBSET_PATH
-    if PACKAGED_ARXIV_SUBSET_PATH.exists():
-        return PACKAGED_ARXIV_SUBSET_PATH
-    raise FileNotFoundError("arxiv workload fixture is missing")
+def real_bibliography_path() -> Path:
+    if REAL_BIBLIOGRAPHY_PATH.exists():
+        return REAL_BIBLIOGRAPHY_PATH
+    raise FileNotFoundError("real bibliography fixture is missing")
 
 
-def arxiv_records() -> tuple[Record, ...]:
+def real_records() -> tuple[Record, ...]:
     return (
-        _arxiv_record(
+        _real_record(
             "ijcai2019p684",
             "Chen",
             "Huimin",
@@ -342,7 +338,7 @@ def arxiv_records() -> tuple[Record, ...]:
             ),
             citation_text="(Chen et al., 2019)",
         ),
-        _arxiv_record(
+        _real_record(
             "10.1145/3325887",
             "Liu",
             "Dayiheng",
@@ -359,7 +355,7 @@ def arxiv_records() -> tuple[Record, ...]:
             ),
             citation_text="(Liu et al., 2019)",
         ),
-        _arxiv_record(
+        _real_record(
             "Kimi_K2.5",
             "Team",
             "Kimi",
@@ -371,7 +367,7 @@ def arxiv_records() -> tuple[Record, ...]:
             authors=(("Team", "Kimi"),),
             citation_text="(Team, 2026)",
         ),
-        _arxiv_record(
+        _real_record(
             "DeepSeek-V3.2",
             "DeepSeek-AI",
             "",
@@ -382,7 +378,7 @@ def arxiv_records() -> tuple[Record, ...]:
             authors=(("DeepSeek-AI", ""),),
             citation_text="(DeepSeek-AI, 2025)",
         ),
-        _arxiv_record(
+        _real_record(
             "DeepResearchGym",
             "Coelho",
             "João",
@@ -400,7 +396,7 @@ def arxiv_records() -> tuple[Record, ...]:
             authors=(("Coelho", "João"), ("Ning", "Jingjie"), ("Chang", "Michael")),
             citation_text="(Coelho et al., 2025)",
         ),
-        _arxiv_record(
+        _real_record(
             "BioAgent_Bench",
             "Fa",
             "Dionizije",
@@ -412,7 +408,7 @@ def arxiv_records() -> tuple[Record, ...]:
             authors=(("Fa", "Dionizije"), ("Culjak", "Marko"), ("Pando", "Bruno")),
             citation_text="(Fa et al., 2026)",
         ),
-        _arxiv_record(
+        _real_record(
             "AutoEnv",
             "Zhang",
             "Jiayi",
@@ -423,7 +419,7 @@ def arxiv_records() -> tuple[Record, ...]:
             authors=(("Zhang", "Jiayi"), ("Peng", "Yiran"), ("Kong", "Fanqi")),
             citation_text="(Zhang et al., 2025)",
         ),
-        _arxiv_record(
+        _real_record(
             "AgentSynth",
             "Xie",
             "Jingxu",
@@ -434,7 +430,7 @@ def arxiv_records() -> tuple[Record, ...]:
             authors=(("Xie", "Jingxu"), ("Xu", "Dylan"), ("Zhao", "Xuandong")),
             citation_text="(Xie et al., 2025)",
         ),
-        _arxiv_record(
+        _real_record(
             "AutoForge",
             "Cai",
             "Shihao",
@@ -445,7 +441,7 @@ def arxiv_records() -> tuple[Record, ...]:
             authors=(("Cai", "Shihao"), ("Fang", "Runnan"), ("Wu", "Jialong")),
             citation_text="(Cai et al., 2025)",
         ),
-        _arxiv_record(
+        _real_record(
             "EnvScaler",
             "Song",
             "Xiaoshuai",
@@ -463,7 +459,7 @@ def arxiv_records() -> tuple[Record, ...]:
             authors=(("Song", "Xiaoshuai"), ("Chang", "Haofei"), ("Feng", "Xiaodong")),
             citation_text="(Song et al., 2026)",
         ),
-        _arxiv_record(
+        _real_record(
             "TaskCraft",
             "Shi",
             "Dingfeng",
@@ -474,7 +470,7 @@ def arxiv_records() -> tuple[Record, ...]:
             authors=(("Shi", "Dingfeng"), ("Cao", "Jingyi"), ("Chen", "Qianben")),
             citation_text="(Shi et al., 2025)",
         ),
-        _arxiv_record(
+        _real_record(
             "Agent2World",
             "Hu",
             "Mengkang",
@@ -491,7 +487,7 @@ def arxiv_records() -> tuple[Record, ...]:
     )
 
 
-def _arxiv_record(
+def _real_record(
     key: str,
     family: str,
     given: str,

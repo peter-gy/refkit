@@ -208,7 +208,7 @@ out = df.select(
 
 ```bash
 uv sync --all-packages --group dev
-uv run maturin develop --manifest-path packages/refkit-core/Cargo.toml
+(cd packages/refkit-core-py && uv run maturin develop)
 uv run pytest packages/refkit/tests --no-cov
 ```
 
@@ -224,4 +224,4 @@ make build
 
 ## License
 
-`refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE](LICENSE).
+`refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE](LICENSE). See [NOTICE](NOTICE) for upstream citation and bibliography component acknowledgements.

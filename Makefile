@@ -2,14 +2,14 @@
 format:
 	uv run ruff check --fix .
 	uv run ruff format .
-	cargo fmt
+	cargo fmt --manifest-path packages/refkit-core-rs/Cargo.toml --all
 
 .PHONY: lint
 lint:
 	uv run ruff check .
 	uv run ruff format --check .
-	cargo fmt --check
-	cargo clippy --workspace --all-targets --all-features -- -D warnings
+	cargo fmt --manifest-path packages/refkit-core-rs/Cargo.toml --all --check
+	cargo clippy --manifest-path packages/refkit-core-rs/Cargo.toml --workspace --all-targets --all-features -- -D warnings
 
 .PHONY: typecheck
 typecheck:
@@ -26,8 +26,8 @@ benchmark-test:
 
 .PHONY: rust
 rust:
-	cargo check --workspace
-	cargo test --workspace
+	cargo check --manifest-path packages/refkit-core-rs/Cargo.toml --workspace
+	cargo test --manifest-path packages/refkit-core-rs/Cargo.toml --workspace
 
 .PHONY: rust-floor
 rust-floor:
@@ -35,11 +35,11 @@ rust-floor:
 		echo "Network access: installing Rust 1.85 with rustup."; \
 		rustup toolchain install 1.85 --profile minimal; \
 	fi
-	rustup run 1.85 cargo check --locked --workspace
+	rustup run 1.85 cargo check --manifest-path packages/refkit-core-rs/Cargo.toml --locked --workspace
 
 .PHONY: clean-build
 clean-build:
-	rm -rf dist target/wheels
+	rm -rf dist target/wheels packages/refkit-core-rs/target packages/refkit-core-py/dist packages/polars-refkit/dist
 
 .PHONY: clean
 clean:
@@ -49,6 +49,9 @@ clean:
 		wheels \
 		build \
 		target \
+		packages/refkit-core-rs/target \
+		packages/refkit-core-py/dist \
+		packages/polars-refkit/dist \
 		htmlcov \
 		.coverage \
 		*.profraw \
@@ -61,7 +64,7 @@ clean:
 		.nox \
 		__pycache__ \
 		*.egg-info
-	find crates docs packages \
+	find docs packages \
 		\( -name __pycache__ \
 		-o -name '*.egg-info' \
 		-o -name .pytest_cache \
@@ -71,9 +74,10 @@ clean:
 		-o -name .ty \
 		-o -name .tox \
 		-o -name .nox \
+		-o -name target \
 		-o -name .pyodide_build \) \
 		-type d -prune -exec rm -rf {} +
-	find crates docs packages \
+	find docs packages \
 		\( -name '*.pyc' -o -name '*.pyo' -o -name '*.so' -o -name '*.profraw' \) \
 		-type f -delete
 	@if [ -d packages/refkit-bench/results ]; then \

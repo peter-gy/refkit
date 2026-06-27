@@ -17,7 +17,16 @@ import refkit as rk
 ROOT = Path(__file__).parent.parent
 WORKSPACE = ROOT.parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
-ARXIV_FIXTURE = WORKSPACE / "data" / "arxiv-wild" / "references-subset.bib"
+REAL_BIBLIOGRAPHY_FIXTURE = (
+    WORKSPACE
+    / "packages"
+    / "refkit-bench"
+    / "src"
+    / "refkit_bench"
+    / "data"
+    / "real-bibliography"
+    / "references.bib"
+)
 T = TypeVar("T")
 
 
@@ -180,13 +189,13 @@ def test_one_off_helpers_accept_loaded_style_objects() -> None:
     assert "Doe" in bibliography.text
 
 
-def test_real_arxiv_bibtex_fixture_parses_inspects_and_renders() -> None:
-    library = rk.Library.read(ARXIV_FIXTURE, recovery="report")
-    raw = rk.BibDocument.read(ARXIV_FIXTURE)
+def test_real_bibliography_fixture_parses_inspects_and_renders() -> None:
+    library = rk.Library.read(REAL_BIBLIOGRAPHY_FIXTURE, recovery="report")
+    raw = rk.BibDocument.read(REAL_BIBLIOGRAPHY_FIXTURE)
     rows = {row["key"]: row for row in library.project(["key", "title", "doi", "volume"])}
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
     bibliography = doc.full_bibliography()
-    one_off = rk.cite(ARXIV_FIXTURE, "Kimi_K2.5", style="apa")
+    one_off = rk.cite(REAL_BIBLIOGRAPHY_FIXTURE, "Kimi_K2.5", style="apa")
 
     assert len(library) == 12
     assert library.diagnostics == []

@@ -4,14 +4,10 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-readme = "README.md"
 description = "Native Python bindings for refkit"
 repository.workspace = true
 include = [
     "/Cargo.toml",
-    "/LICENSE",
-    "/pyproject.toml",
-    "/README.md",
     "/src",
 ]
 
@@ -25,7 +21,7 @@ extension-module = ["pyo3/extension-module", "pyo3/abi3-py311"]
 
 [dependencies]
 pyo3 = "0.28.2"
-refkit-core = { path = "../../crates/refkit-core" }
+refkit-core = { path = "../core" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 

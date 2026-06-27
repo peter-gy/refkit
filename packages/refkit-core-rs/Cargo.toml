@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "crates/refkit-core",
-    "packages/refkit-core",
-    "packages/polars-refkit",
+    "core",
+    "refkit-core-py",
+    "polars-refkit",
 ]
 resolver = "3"
 

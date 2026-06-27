@@ -159,9 +159,9 @@ class CiteprocPyAdapter(PackageAdapter):
     def prepare_render_path_bibliography(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
-        if workload.family == "arxiv_wild_subset":
+        if workload.family == "real_bibliography_subset":
             raise MissingBenchmarkOperation(
-                "citeproc-py BibTeX source expands this real arXiv subset into "
+                "citeproc-py BibTeX source expands this real bibliography subset into "
                 "non-entry bibliography rows"
             )
 

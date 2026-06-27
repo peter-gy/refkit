@@ -59,18 +59,18 @@ def assert_prepared_fails_as_benchmark_row(
     assert rows[0]["status"] == "failed"
 
 
-def test_materialize_arxiv_workload_uses_checked_in_real_bibtex(tmp_path: Path) -> None:
-    workload = fixtures.materialize_workload("arxiv", tmp_path)
+def test_materialize_real_workload_uses_packaged_bibtex(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("real", tmp_path)
 
-    assert workload.family == "arxiv_wild_subset"
+    assert workload.family == "real_bibliography_subset"
     assert workload.record_count == 12
     assert workload.keys[:3] == ["ijcai2019p684", "10.1145/3325887", "Kimi_K2.5"]
     assert workload.bibtex.startswith("% Real BibTeX subset")
     assert "DeepResearchGym" in workload.bibtex
     assert "Ancient–Modern Chinese Translation" in workload.bibtex
     assert workload.bibtex_path.read_text(encoding="utf-8") == workload.bibtex
-    assert workload.source_name("bibtex") == "arxiv_wild_subset:arxiv:bibtex"
-    assert workload.source_license("bibtex") == "mixed-arxiv-source-licenses"
+    assert workload.source_name("bibtex") == "real_bibliography_subset:real:bibtex"
+    assert workload.source_license("bibtex") == "mixed-source-licenses"
     assert workload.source_byte_count("bibtex") == len(workload.bibtex.encode("utf-8"))
     assert len(workload.source_sha256("bibtex")) == 64
     assert workload.duplicate_entry_key == "ijcai2019p684"
@@ -80,29 +80,23 @@ def test_materialize_arxiv_workload_uses_checked_in_real_bibtex(tmp_path: Path) 
     assert workload.csl_json[0]["type"] == "paper-conference"
 
 
-def test_arxiv_fixture_falls_back_to_packaged_data(
+def test_real_bibliography_resource_is_package_owned() -> None:
+    path = fixtures.real_bibliography_path()
+
+    assert path.name == "references.bib"
+    assert path.parent.name == "real-bibliography"
+    assert "refkit_bench" in path.parts
+    assert path.read_text(encoding="utf-8").startswith("% Real BibTeX subset")
+
+
+def test_real_bibliography_resource_reports_missing_data(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    packaged = tmp_path / "references-subset.bib"
-    packaged.write_text("% packaged arxiv fixture\n", encoding="utf-8")
+    monkeypatch.setattr(fixtures, "REAL_BIBLIOGRAPHY_PATH", tmp_path / "missing.bib")
 
-    monkeypatch.setattr(fixtures, "ARXIV_SUBSET_PATH", tmp_path / "missing-repo.bib")
-    monkeypatch.setattr(fixtures, "PACKAGED_ARXIV_SUBSET_PATH", packaged)
-
-    assert fixtures.arxiv_subset_path() == packaged
-    assert fixtures.arxiv_bibtex() == "% packaged arxiv fixture\n"
-
-
-def test_arxiv_fixture_reports_missing_data(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(fixtures, "ARXIV_SUBSET_PATH", tmp_path / "missing-repo.bib")
-    monkeypatch.setattr(fixtures, "PACKAGED_ARXIV_SUBSET_PATH", tmp_path / "missing-package.bib")
-
-    with pytest.raises(FileNotFoundError, match="arxiv workload fixture is missing"):
-        fixtures.arxiv_subset_path()
+    with pytest.raises(FileNotFoundError, match="real bibliography fixture is missing"):
+        fixtures.real_bibliography_path()
 
 
 def test_records_for_size_rejects_unknown_size() -> None:
@@ -173,12 +167,12 @@ def test_select_lanes_rejects_unknown_group() -> None:
 
 
 def test_select_inputs_defaults_and_deduplicates() -> None:
-    assert runner.select_inputs(None) == ["tiny", "medium", "large", "arxiv"]
+    assert runner.select_inputs(None) == ["tiny", "medium", "large", "real"]
     assert runner.select_inputs(["tiny", "all", "tiny"]) == [
         "tiny",
         "medium",
         "large",
-        "arxiv",
+        "real",
     ]
 
 
@@ -400,11 +394,11 @@ def test_raw_block_and_duplicate_lanes_expose_public_signals(tmp_path: Path) -> 
             ("duplicate_field", "item0002", "title"),
         }
 
-    arxiv = fixtures.materialize_workload("arxiv", tmp_path)
-    arxiv_blocks = run_prepared(
-        adapters.RefkitAdapter().prepare("materialize_raw_blocks", arxiv, tmp_path)
+    real = fixtures.materialize_workload("real", tmp_path)
+    real_blocks = run_prepared(
+        adapters.RefkitAdapter().prepare("materialize_raw_blocks", real, tmp_path)
     )
-    assert arxiv_blocks.count >= len(arxiv.records)
+    assert real_blocks.count >= len(real.records)
 
 
 def test_bibtexparser_raw_block_lane_reports_failed_blocks(tmp_path: Path) -> None:
@@ -1024,11 +1018,11 @@ def test_run_adapter_lane_emits_unsupported_rows_for_missing_operation(tmp_path:
     assert "benchmark operation" in str(rows[0]["detail"])
 
 
-def test_real_arxiv_workload_records_citeproc_bibtex_path_limitation(
+def test_real_workload_records_citeproc_bibtex_path_limitation(
     tmp_path: Path,
 ) -> None:
     metadata = runner.machine_metadata("release")
-    workload = fixtures.materialize_workload("arxiv", tmp_path)
+    workload = fixtures.materialize_workload("real", tmp_path)
     rows = runner.run_adapter_lane(
         adapter=adapters.CiteprocPyAdapter(),
         lane=runner.LANES["render.one-off-bibliography"],
@@ -1042,8 +1036,8 @@ def test_real_arxiv_workload_records_citeproc_bibtex_path_limitation(
 
     assert len(rows) == 1
     assert rows[0]["status"] == "unsupported"
-    assert rows[0]["input"] == "arxiv"
-    assert rows[0]["workload_family"] == "arxiv_wild_subset"
+    assert rows[0]["input"] == "real"
+    assert rows[0]["workload_family"] == "real_bibliography_subset"
     assert "non-entry bibliography rows" in str(rows[0]["detail"])
 
 
@@ -1242,7 +1236,7 @@ def test_run_suite_writes_only_scheduled_lane_rows() -> None:
             assert row["execution_mode"] in {"eager", "lazy"}
 
 
-def test_run_suite_exercises_real_arxiv_workload() -> None:
+def test_run_suite_exercises_real_workload() -> None:
     result = runner.run_suite(
         lane_names=[
             "input.bibtex-text",
@@ -1250,7 +1244,7 @@ def test_run_suite_exercises_real_arxiv_workload() -> None:
             "render.prepared-citation",
             "bulk.polars.bibliography",
         ],
-        input_sizes=["arxiv"],
+        input_sizes=["real"],
         rounds=1,
         warmups=0,
         build_mode="release",
@@ -1259,10 +1253,10 @@ def test_run_suite_exercises_real_arxiv_workload() -> None:
 
     assert rows
     assert {row["status"] for row in rows} == {"ok"}
-    assert {row["input"] for row in rows} == {"arxiv"}
-    assert {row["workload_family"] for row in rows} == {"arxiv_wild_subset"}
+    assert {row["input"] for row in rows} == {"real"}
+    assert {row["workload_family"] for row in rows} == {"real_bibliography_subset"}
     assert {row["record_count"] for row in rows} == {12}
-    assert all(row["source_license"] == "mixed-arxiv-source-licenses" for row in rows)
+    assert all(row["source_license"] == "mixed-source-licenses" for row in rows)
     assert any(row["package"] == "citeproc-py" for row in rows)
     assert any(row["package"] == "polars-refkit" for row in rows)
 

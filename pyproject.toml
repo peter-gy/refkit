@@ -21,7 +21,7 @@ refkit-core = { workspace = true }
 [tool.uv.workspace]
 members = [
     "packages/refkit-bench",
-    "packages/refkit-core",
+    "packages/refkit-core-py",
     "packages/refkit",
     "packages/polars-refkit",
 ]
@@ -68,7 +68,7 @@ omit = [
 [tool.pyrefly]
 project-includes = [
     "packages/refkit/src/refkit",
-    "packages/refkit-core/src/refkit_core",
+    "packages/refkit-core-py/src/refkit_core",
     "packages/refkit/tests",
     "packages/polars-refkit/polars_refkit",
     "packages/polars-refkit/tests",
@@ -88,7 +88,7 @@ python-version = "3.11"
 search-path = [
     "packages/refkit-bench/src",
     "packages/refkit/src",
-    "packages/refkit-core/src",
+    "packages/refkit-core-py/src",
     "packages/polars-refkit",
 ]
 

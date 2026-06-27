@@ -4,7 +4,7 @@ version = "0.0.1"
 description = "Polars expression plugin for refkit citation and BibTeX workflows"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 authors = [
     { name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }
 ]
@@ -33,6 +33,7 @@ requires = [
 build-backend = "maturin"
 
 [tool.maturin]
+manifest-path = "../refkit-core-rs/polars-refkit/Cargo.toml"
 module-name = "polars_refkit._internal"
 bindings = "pyo3"
 features = ["extension-module"]

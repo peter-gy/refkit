@@ -11,7 +11,7 @@ import pytest
 
 ROOT = Path(__file__).resolve()
 REFKIT_SRC = str(ROOT.parents[1] / "src")
-CORE_SRC = str(ROOT.parents[2] / "refkit-core" / "src")
+CORE_SRC = str(ROOT.parents[2] / "refkit-core-py" / "src")
 
 CORE_EXPORTS = (
     "BibDocument",

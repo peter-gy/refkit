@@ -149,10 +149,10 @@ Use `polars-refkit` when BibTeX source lives in a dataframe and the result shoul
 
 ```bash
 uv sync --all-packages --group dev
-uv run maturin develop --manifest-path packages/polars-refkit/Cargo.toml
+(cd packages/polars-refkit && uv run maturin develop)
 uv run pytest packages/polars-refkit/tests --no-cov
 ```
 
 ## License
 
-`polars-refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE](LICENSE).
+`polars-refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE](LICENSE). See [NOTICE](NOTICE) for upstream citation and bibliography component acknowledgements.

@@ -27,7 +27,8 @@ CI passes those values to `emscripten-core/setup-emsdk` and `maturin`:
 ```bash
 CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS="$(pyodide config get rustflags)"
 MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION="$(pyodide config get pyodide_abi_version)"
-maturin build --release --manifest-path packages/refkit-core/Cargo.toml \
+cd packages/refkit-core-py
+maturin build --release \
   --target wasm32-unknown-emscripten \
   --interpreter 3.14
 ```

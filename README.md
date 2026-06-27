@@ -124,7 +124,8 @@ out = df.select(
 
 ## Architecture
 
-`crates/refkit-core` owns the platform-independent work: parsing, recovery, normalized records, raw BibTeX blocks, style preparation, document rendering, rendered trees, and shared error records.
+`packages/refkit-core-rs` is the Rust workspace.
+Its `core` crate owns the platform-independent work: parsing, recovery, normalized records, raw BibTeX blocks, style preparation, document rendering, rendered trees, and shared error records.
 
 The Python packages are adapters over that core:
 
@@ -135,7 +136,7 @@ The Python packages are adapters over that core:
 ## Package Docs
 
 - [refkit Python API](packages/refkit/README.md)
-- [refkit-core native package](packages/refkit-core/README.md)
+- [refkit-core native package](packages/refkit-core-py/README.md)
 - [polars-refkit expressions](packages/polars-refkit/README.md)
 - [refkit benchmark runner](packages/refkit-bench/README.md)
 - [API contracts](docs/api-contracts.md)
@@ -147,8 +148,8 @@ The Python packages are adapters over that core:
 
 ```bash
 uv sync --all-packages --group dev
-uv run maturin develop --manifest-path packages/refkit-core/Cargo.toml
-uv run maturin develop --manifest-path packages/polars-refkit/Cargo.toml
+(cd packages/refkit-core-py && uv run maturin develop)
+(cd packages/polars-refkit && uv run maturin develop)
 uv run pytest
 ```
 
@@ -164,4 +165,4 @@ make build
 
 ## License
 
-The packages are licensed under the Apache License, Version 2.0.
+The packages are licensed under the Apache License, Version 2.0. See [NOTICE](NOTICE) for upstream citation and bibliography component acknowledgements.

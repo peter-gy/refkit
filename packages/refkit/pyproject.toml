@@ -4,7 +4,7 @@ version = "0.0.1"
 description = "Fast Python citation parsing, rendering, and BibTeX editing backed by Rust"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "NOTICE"]
 authors = [
     { name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }
 ]
@@ -32,6 +32,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.sdist]
 only-include = [
     "LICENSE",
+    "NOTICE",
     "README.md",
     "pyproject.toml",
     "src/refkit",

@@ -10,8 +10,8 @@ Build the native extensions in release mode before collecting timing numbers:
 
 ```bash
 uv sync --all-packages --group dev
-uv run maturin develop --release --manifest-path packages/refkit-core/Cargo.toml
-uv run maturin develop --release --manifest-path packages/polars-refkit/Cargo.toml
+(cd packages/refkit-core-py && uv run maturin develop --release)
+(cd packages/polars-refkit && uv run maturin develop --release)
 ```
 
 ## Run Benchmarks
@@ -95,16 +95,20 @@ The benchmark uses generated scale fixtures and one real corpus fixture.
 | Input | Source |
 | --- | --- |
 | `tiny`, `medium`, `large` | Deterministic ordered slices of the generated record set. |
-| `arxiv` | `data/arxiv-wild/references-subset.bib`, a compact subset copied from public arXiv source bibliographies used by parser stress tests. |
+| `real` | `src/refkit_bench/data/real-bibliography/references.bib`, a compact real-world BibTeX subset used by parser stress tests. |
 
 Each workload has five source forms:
 
 | Source form | Meaning |
 | --- | --- |
 | `bibtex` | Clean BibTeX for the selected workload. |
-| `raw_bibtex` | BibTeX with comments, a string definition, and a preamble for generated workloads. The arXiv workload uses the same real BibTeX as its raw input. |
-| `dirty_bibtex` | Generated BibTeX with malformed input, a duplicate key, invalid month, and unresolved abbreviation. The arXiv workload uses the same real BibTeX because it is a clean corpus slice. |
+| `raw_bibtex` | BibTeX with comments, a string definition, and a preamble for generated workloads. The real bibliography workload uses the same real BibTeX as its raw input. |
+| `dirty_bibtex` | Generated BibTeX with malformed input, a duplicate key, invalid month, and unresolved abbreviation. The real bibliography workload uses the same real BibTeX because it is a clean corpus slice. |
 | `duplicate_bibtex` | Generated BibTeX with a duplicate entry key and a duplicate field in separate entries. |
 | `csl_json` | CSL JSON used by citeproc-py prepared render lanes. |
 
 `refkit-bench` installs `bibtexparser==2.0.0b9`, `citeproc-py>=0.9.3`, and `pybtex>=0.26,<0.27` as comparison points.
+
+## License
+
+`refkit-bench` is licensed under the Apache License, Version 2.0, available in [LICENSE](LICENSE). See [NOTICE](NOTICE) for upstream citation and bibliography component acknowledgements.
