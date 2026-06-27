@@ -10,7 +10,7 @@ Build the native extensions in release mode before collecting timing numbers:
 
 ```bash
 uv sync --all-packages --group dev
-(cd packages/refkit-core-py && uv run maturin develop --release)
+(cd packages/refkit-core && uv run maturin develop --release)
 (cd packages/polars-refkit && uv run maturin develop --release)
 ```
 

@@ -63,7 +63,7 @@ The current Pyodide lane targets Python 3.14 and the `pyemscripten_2026_0_wasm32
 
 ```bash
 uv sync --all-packages --group dev
-(cd packages/refkit-core-py && uv run maturin develop)
+(cd packages/refkit-core && uv run maturin develop)
 uv run pytest packages/refkit/tests --no-cov
 ```
 

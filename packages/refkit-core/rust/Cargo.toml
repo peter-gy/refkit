@@ -1,5 +1,5 @@
 [package]
-name = "refkit-core-python"
+name = "refkit-core-native"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -21,7 +21,7 @@ extension-module = ["pyo3/extension-module", "pyo3/abi3-py311"]
 
 [dependencies]
 pyo3 = "0.28.2"
-refkit-core = { path = "../core" }
+refkit-core = { path = "../../../crates/refkit-core" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 

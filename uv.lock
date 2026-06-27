@@ -1438,7 +1438,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "refkit-core", editable = "packages/refkit-core-py" }]
+requires-dist = [{ name = "refkit-core", editable = "packages/refkit-core" }]
 
 [[package]]
 name = "refkit-bench"
@@ -1468,7 +1468,7 @@ requires-dist = [
 [[package]]
 name = "refkit-core"
 version = "0.0.1"
-source = { editable = "packages/refkit-core-py" }
+source = { editable = "packages/refkit-core" }
 
 [[package]]
 name = "refkit-workspace"
@@ -1502,7 +1502,7 @@ pyodide-build = [
 requires-dist = [
     { name = "polars-refkit", editable = "packages/polars-refkit" },
     { name = "refkit", editable = "packages/refkit" },
-    { name = "refkit-core", editable = "packages/refkit-core-py" },
+    { name = "refkit-core", editable = "packages/refkit-core" },
 ]
 
 [package.metadata.requires-dev]

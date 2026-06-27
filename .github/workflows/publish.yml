@@ -47,9 +47,9 @@ jobs:
           release_version = tag[1:] if tag.startswith("v") else tag
           version_files = {
               "refkit": Path("packages/refkit/pyproject.toml"),
-              "refkit-core": Path("packages/refkit-core-py/pyproject.toml"),
+              "refkit-core": Path("packages/refkit-core/pyproject.toml"),
               "polars-refkit": Path("packages/polars-refkit/pyproject.toml"),
-              "refkit-core-rs": Path("packages/refkit-core-rs/Cargo.toml"),
+              "rust-workspace": Path("Cargo.toml"),
           }
           dependency_pins = {
               "refkit": {
@@ -137,22 +137,22 @@ jobs:
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
-          working-directory: packages/refkit-core-py
+          working-directory: packages/refkit-core
           args: --release --out dist --interpreter 3.11
           sccache: false
 
       - name: Check metadata
-        run: uvx twine check --strict packages/refkit-core-py/dist/*
+        run: uvx twine check --strict packages/refkit-core/dist/*
 
       - name: Upload wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release_refkit_core_cpython_${{ runner.os }}
-          path: packages/refkit-core-py/dist/*.whl
+          path: packages/refkit-core/dist/*.whl
           retention-days: 7
           if-no-files-found: error
 
-  build-refkit-core-pyemscripten:
+  build-refkit-core-wasm:
     name: refkit-core / Build PyEmscripten wheel (${{ matrix.python-version }})
     needs: check-release-version
     runs-on: ubuntu-latest
@@ -199,20 +199,20 @@ jobs:
           CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide-config.outputs.rustflags }}
           MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide-config.outputs.pyodide-abi-version }}
         with:
-          working-directory: packages/refkit-core-py
+          working-directory: packages/refkit-core
           target: wasm32-unknown-emscripten
           args: --release --out dist --interpreter ${{ matrix.python-version }}
           rust-toolchain: ${{ steps.pyodide-config.outputs.rust-toolchain }}
           sccache: false
 
       - name: Check metadata
-        run: uvx twine check --strict packages/refkit-core-py/dist/*
+        run: uvx twine check --strict packages/refkit-core/dist/*
 
       - name: Upload wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release_refkit_core_pyemscripten_${{ matrix.python-version }}
-          path: packages/refkit-core-py/dist/*.whl
+          path: packages/refkit-core/dist/*.whl
           retention-days: 7
           if-no-files-found: error
 
@@ -221,7 +221,7 @@ jobs:
     needs:
       - build-refkit-core-sdist
       - build-refkit-core-cpython
-      - build-refkit-core-pyemscripten
+      - build-refkit-core-wasm
     uses: ./.github/workflows/release-tests.yml
     with:
       package: refkit-core
@@ -232,7 +232,7 @@ jobs:
       - check-release-version
       - build-refkit-core-sdist
       - build-refkit-core-cpython
-      - build-refkit-core-pyemscripten
+      - build-refkit-core-wasm
       - test-refkit-core
     runs-on: ubuntu-latest
     environment: release
@@ -320,7 +320,7 @@ jobs:
     needs:
       - build-refkit
       - build-refkit-core-cpython
-      - build-refkit-core-pyemscripten
+      - build-refkit-core-wasm
     uses: ./.github/workflows/release-tests.yml
     with:
       package: refkit

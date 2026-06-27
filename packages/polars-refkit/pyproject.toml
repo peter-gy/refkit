@@ -33,7 +33,7 @@ requires = [
 build-backend = "maturin"
 
 [tool.maturin]
-manifest-path = "../refkit-core-rs/polars-refkit/Cargo.toml"
+manifest-path = "rust/Cargo.toml"
 module-name = "polars_refkit._internal"
 bindings = "pyo3"
 features = ["extension-module"]

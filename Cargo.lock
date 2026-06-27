@@ -2087,7 +2087,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "refkit-core-python"
+name = "refkit-core-native"
 version = "0.0.1"
 dependencies = [
  "pyo3",

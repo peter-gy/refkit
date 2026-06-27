@@ -208,7 +208,7 @@ out = df.select(
 
 ```bash
 uv sync --all-packages --group dev
-(cd packages/refkit-core-py && uv run maturin develop)
+(cd packages/refkit-core && uv run maturin develop)
 uv run pytest packages/refkit/tests --no-cov
 ```
 

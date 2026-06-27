@@ -9,7 +9,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyModule;
 use serde_json::{Value, json};
 
-use crate::{RefkitError, json_to_py};
+use crate::conversion::json_to_py;
+use crate::errors::RefkitError;
 use refkit_core::{
     RawBlockInfo, RawDocument, RawEditError, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo,
     quoted, read_bibliography_text,

@@ -2,14 +2,14 @@
 format:
 	uv run ruff check --fix .
 	uv run ruff format .
-	cargo fmt --manifest-path packages/refkit-core-rs/Cargo.toml --all
+	cargo fmt --all
 
 .PHONY: lint
 lint:
 	uv run ruff check .
 	uv run ruff format --check .
-	cargo fmt --manifest-path packages/refkit-core-rs/Cargo.toml --all --check
-	cargo clippy --manifest-path packages/refkit-core-rs/Cargo.toml --workspace --all-targets --all-features -- -D warnings
+	cargo fmt --all --check
+	cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 .PHONY: typecheck
 typecheck:
@@ -26,8 +26,8 @@ benchmark-test:
 
 .PHONY: rust
 rust:
-	cargo check --manifest-path packages/refkit-core-rs/Cargo.toml --workspace
-	cargo test --manifest-path packages/refkit-core-rs/Cargo.toml --workspace
+	cargo check --workspace
+	cargo test --workspace
 
 .PHONY: rust-floor
 rust-floor:
@@ -35,11 +35,11 @@ rust-floor:
 		echo "Network access: installing Rust 1.85 with rustup."; \
 		rustup toolchain install 1.85 --profile minimal; \
 	fi
-	rustup run 1.85 cargo check --manifest-path packages/refkit-core-rs/Cargo.toml --locked --workspace
+	rustup run 1.85 cargo check --locked --workspace
 
 .PHONY: clean-build
 clean-build:
-	rm -rf dist target/wheels packages/refkit-core-rs/target packages/refkit-core-py/dist packages/polars-refkit/dist
+	rm -rf dist target/wheels target packages/refkit-core/dist packages/polars-refkit/dist
 
 .PHONY: clean
 clean:
@@ -49,8 +49,8 @@ clean:
 		wheels \
 		build \
 		target \
-		packages/refkit-core-rs/target \
-		packages/refkit-core-py/dist \
+		target \
+		packages/refkit-core/dist \
 		packages/polars-refkit/dist \
 		htmlcov \
 		.coverage \

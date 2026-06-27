@@ -58,18 +58,18 @@ jobs:
 
       - uses: PyO3/maturin-action@v1
         with:
-          working-directory: packages/refkit-core-py
+          working-directory: packages/refkit-core
           args: --release --out dist --interpreter 3.11
           sccache: true
 
-      - run: python -c "from pathlib import Path; print('\\n'.join(p.name for p in Path('packages/refkit-core-py/dist').iterdir()))"
+      - run: python -c "from pathlib import Path; print('\\n'.join(p.name for p in Path('packages/refkit-core/dist').iterdir()))"
 
       - uses: actions/upload-artifact@v7
         with:
           name: refkit_core_pypi_files_${{ runner.os }}_cp311
-          path: packages/refkit-core-py/dist
+          path: packages/refkit-core/dist
 
-  build-refkit-core-pyemscripten:
+  build-refkit-core-wasm:
     name: refkit-core / Build PyEmscripten (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
@@ -132,18 +132,18 @@ jobs:
           CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide-config.outputs.rustflags }}
           MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide-config.outputs.pyodide-abi-version }}
         with:
-          working-directory: packages/refkit-core-py
+          working-directory: packages/refkit-core
           target: wasm32-unknown-emscripten
           args: --release --out dist --interpreter ${{ matrix.python-version }}
           rust-toolchain: ${{ steps.pyodide-config.outputs.rust-toolchain }}
           sccache: true
 
-      - run: ls -lh packages/refkit-core-py/dist
+      - run: ls -lh packages/refkit-core/dist
 
       - uses: actions/upload-artifact@v7
         with:
           name: refkit_core_pypi_files_pyemscripten_${{ matrix.python-version }}
-          path: packages/refkit-core-py/dist
+          path: packages/refkit-core/dist
 
   build-polars-refkit-cpython:
     name: polars-refkit / Build CPython wheel
@@ -173,7 +173,7 @@ jobs:
     name: refkit / Test Pyodide install (${{ matrix.python-version }})
     needs:
       - build-refkit-pure
-      - build-refkit-core-pyemscripten
+      - build-refkit-core-wasm
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

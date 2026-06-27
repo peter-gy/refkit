@@ -82,7 +82,7 @@ jobs:
           assert len(library) == 1
           PY
 
-  test-refkit-core-pyemscripten:
+  test-refkit-core-wasm:
     name: refkit-core / Test PyEmscripten wheel
     if: inputs.package == 'refkit-core'
     needs: validate-package

@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use serde_json::{Value, json};
 
-use crate::json_to_py;
+use crate::conversion::json_to_py;
 use refkit_core::{RenderedFormatting, RenderedNode, RenderedRecord, quoted};
 
 #[pyclass(module = "refkit_core", skip_from_py_object)]

@@ -4,66 +4,20 @@ use pyo3_polars::derive::polars_expr;
 use pyo3_polars::export::polars_arrow::array::IntoBoxedArray;
 use pyo3_polars::export::polars_arrow::bitmap::Bitmap;
 use refkit_core::{
-    CoreLibrary, NormalizedEntry, NormalizedValue, PreparedStyle, ProjectField, RenderedOutput,
-    load_prepared_style, parse_bibtex_report_source, parse_project_field,
-    render_library_bibliography, render_library_citation, render_library_citation_each,
-    render_library_citation_group,
+    CoreLibrary, PreparedStyle, RenderedOutput, render_library_bibliography,
+    render_library_citation, render_library_citation_each, render_library_citation_group,
 };
-use serde::Deserialize;
-use serde_json::Value;
 
-#[derive(Debug, Deserialize)]
-struct ParseKwargs {
-    strict: bool,
-}
+use super::RenderKwargs;
+use super::broadcast::{
+    broadcast_get, broadcast_len, load_style, parse_broadcast_library, parse_value_library_source,
+};
+use super::dtypes::{keys_output, rendered_list_output, rendered_output, rendered_struct_dtype};
 
-#[derive(Debug, Deserialize)]
-struct EntriesKwargs {
-    strict: bool,
-    fields: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct RenderKwargs {
-    style: String,
-    locale: String,
-    strict: bool,
-    all: bool,
-}
-
-fn keys_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
-    Ok(Field::new(
-        field.name,
-        DataType::List(Box::new(DataType::String)),
-    ))
-}
-
-fn entries_output(input_fields: &[Field], kwargs: EntriesKwargs) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
-    let field_names = kwargs.fields.iter().map(String::as_str).collect::<Vec<_>>();
-    Ok(Field::new(
-        field.name,
-        DataType::List(Box::new(entry_struct_dtype(&field_names))),
-    ))
-}
-
-fn rendered_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
-    Ok(Field::new(field.name, rendered_struct_dtype()))
-}
-
-fn rendered_list_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
-    Ok(Field::new(
-        field.name,
-        DataType::List(Box::new(rendered_struct_dtype())),
-    ))
-}
-
-fn parse_report_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
-    Ok(Field::new(field.name, parse_report_struct_dtype()))
+#[derive(Clone, Copy)]
+enum RenderedField {
+    Text,
+    Html,
 }
 
 #[polars_expr(output_type=String)]
@@ -109,6 +63,21 @@ fn cite_group_html(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Seri
 #[polars_expr(output_type_func=rendered_output)]
 fn cite_group_rendered(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
     render_citation_group_struct(inputs, kwargs, "cite_group_rendered")
+}
+
+#[polars_expr(output_type=String)]
+fn full_bibliography_html(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
+    render_bibliography_field(inputs, kwargs, RenderedField::Html)
+}
+
+#[polars_expr(output_type=String)]
+fn full_bibliography_text(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
+    render_bibliography_field(inputs, kwargs, RenderedField::Text)
+}
+
+#[polars_expr(output_type_func=rendered_output)]
+fn full_bibliography_rendered(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
+    render_bibliography_struct(inputs, kwargs, "full_bibliography_rendered")
 }
 
 fn render_citation_field(
@@ -230,21 +199,6 @@ fn render_citation_group_field(
     Ok(output.into_series())
 }
 
-#[polars_expr(output_type=String)]
-fn full_bibliography_html(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
-    render_bibliography_field(inputs, kwargs, RenderedField::Html)
-}
-
-#[polars_expr(output_type=String)]
-fn full_bibliography_text(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
-    render_bibliography_field(inputs, kwargs, RenderedField::Text)
-}
-
-#[polars_expr(output_type_func=rendered_output)]
-fn full_bibliography_rendered(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series> {
-    render_bibliography_struct(inputs, kwargs, "full_bibliography_rendered")
-}
-
 fn render_bibliography_field(
     inputs: &[Series],
     kwargs: RenderKwargs,
@@ -265,213 +219,6 @@ fn render_bibliography_field(
         })
         .collect::<StringChunked>();
     Ok(output.into_series())
-}
-
-#[polars_expr(output_type=UInt32)]
-fn entry_count(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let output = bibtex
-        .iter()
-        .map(|value| {
-            value.and_then(|source| {
-                parse_value_library_source(source, kwargs.strict)
-                    .ok()
-                    .and_then(|library| u32::try_from(library.len()).ok())
-            })
-        })
-        .collect::<UInt32Chunked>();
-    Ok(output.into_series())
-}
-
-#[polars_expr(output_type_func=keys_output)]
-fn keys(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let mut builder = ListStringChunkedBuilder::new("keys".into(), bibtex.len(), bibtex.len() * 2);
-
-    for value in bibtex.iter() {
-        let Some(source) = value else {
-            builder.append_null();
-            continue;
-        };
-        match parse_value_library_source(source, kwargs.strict) {
-            Ok(library) => {
-                builder.append_values_iter(library.keys().iter().map(String::as_str));
-            }
-            Err(_) => builder.append_null(),
-        }
-    }
-
-    Ok(builder.finish().into_series())
-}
-
-#[polars_expr(output_type_func=keys_output)]
-fn diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let mut builder =
-        ListStringChunkedBuilder::new("diagnostics".into(), bibtex.len(), bibtex.len());
-
-    for value in bibtex.iter() {
-        let Some(source) = value else {
-            builder.append_null();
-            continue;
-        };
-        let report = parse_bibtex_report_source(source, kwargs.strict);
-        builder.append_values_iter(report.diagnostics.iter().map(String::as_str));
-    }
-
-    Ok(builder.finish().into_series())
-}
-
-#[polars_expr(output_type_func=parse_report_output)]
-fn parse_report(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let mut ok = Vec::with_capacity(bibtex.len());
-    let mut entry_count = Vec::with_capacity(bibtex.len());
-    let mut keys = ListStringChunkedBuilder::new("keys".into(), bibtex.len(), bibtex.len() * 2);
-    let mut diagnostics =
-        ListStringChunkedBuilder::new("diagnostics".into(), bibtex.len(), bibtex.len());
-
-    for value in bibtex.iter() {
-        let Some(source) = value else {
-            ok.push(None);
-            entry_count.push(None);
-            keys.append_null();
-            diagnostics.append_null();
-            continue;
-        };
-        let report = parse_bibtex_report_source(source, kwargs.strict);
-        ok.push(Some(report.ok));
-        entry_count.push(
-            report
-                .entry_count
-                .and_then(|count| u32::try_from(count).ok()),
-        );
-        match report.keys {
-            Some(keys_value) => keys.append_values_iter(keys_value.iter().map(String::as_str)),
-            None => keys.append_null(),
-        }
-        diagnostics.append_values_iter(report.diagnostics.iter().map(String::as_str));
-    }
-
-    let fields = [
-        BooleanChunked::from_iter_options("ok".into(), ok.into_iter()).into_series(),
-        UInt32Chunked::from_iter_options("entry_count".into(), entry_count.into_iter())
-            .into_series(),
-        keys.finish().into_series(),
-        diagnostics.finish().into_series(),
-    ];
-    Ok(
-        StructChunked::from_series("parse_report".into(), bibtex.len(), fields.iter())?
-            .into_series(),
-    )
-}
-
-#[polars_expr(output_type=Boolean)]
-fn can_parse(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let output = bibtex
-        .iter()
-        .map(|value| value.map(|source| parse_value_library_source(source, kwargs.strict).is_ok()))
-        .collect::<BooleanChunked>();
-    Ok(output.into_series())
-}
-
-#[polars_expr(output_type=Boolean)]
-fn has_diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let output = bibtex
-        .iter()
-        .map(|value| {
-            value.map(|source| {
-                !parse_bibtex_report_source(source, kwargs.strict)
-                    .diagnostics
-                    .is_empty()
-            })
-        })
-        .collect::<BooleanChunked>();
-    Ok(output.into_series())
-}
-
-#[polars_expr(output_type_func_with_kwargs=entries_output)]
-fn entries(inputs: &[Series], kwargs: EntriesKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let fields = parse_project_fields(&kwargs.fields).map_err(compute_error)?;
-    let field_names = kwargs.fields.iter().map(String::as_str).collect::<Vec<_>>();
-    let mut builder = AnonymousOwnedListBuilder::new(
-        "entries".into(),
-        bibtex.len(),
-        Some(entry_struct_dtype(&field_names)),
-    );
-
-    for value in bibtex.iter() {
-        let Some(source) = value else {
-            builder.append_null();
-            continue;
-        };
-        match parse_value_library_source(source, kwargs.strict) {
-            Ok(library) => {
-                let records = library
-                    .project_records(&fields, None)
-                    .map_err(compute_error)?;
-                let entries = entry_records_to_struct_series(records, &field_names)?;
-                builder.append_series(&entries)?;
-            }
-            Err(_) => builder.append_null(),
-        }
-    }
-
-    Ok(builder.finish().into_series())
-}
-
-#[polars_expr(output_type=String)]
-fn to_hayagriva_json(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    bibtex_to_normalized_json(inputs, kwargs)
-}
-
-fn bibtex_to_normalized_json(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let output = bibtex
-        .iter()
-        .map(|value| {
-            let source = value?;
-            let library = parse_value_library_source(source, kwargs.strict).ok()?;
-            library.normalized_entries().ok().and_then(|entries| {
-                serde_json::to_string(&normalized_entries_to_json(&entries)).ok()
-            })
-        })
-        .collect::<StringChunked>();
-    Ok(output.into_series())
-}
-
-fn normalized_entries_to_json(entries: &[NormalizedEntry]) -> Vec<Value> {
-    entries
-        .iter()
-        .map(|entry| normalized_value_to_json(&entry.value))
-        .collect()
-}
-
-fn normalized_value_to_json(value: &NormalizedValue) -> Value {
-    match value {
-        NormalizedValue::Null => Value::Null,
-        NormalizedValue::Bool(value) => Value::Bool(*value),
-        NormalizedValue::Number(value) => Value::Number(value.clone()),
-        NormalizedValue::String(value) => Value::String(value.clone()),
-        NormalizedValue::Array(values) => {
-            Value::Array(values.iter().map(normalized_value_to_json).collect())
-        }
-        NormalizedValue::Object(values) => Value::Object(
-            values
-                .iter()
-                .map(|(key, value)| (key.clone(), normalized_value_to_json(value)))
-                .collect(),
-        ),
-    }
-}
-
-#[derive(Clone, Copy)]
-enum RenderedField {
-    Text,
-    Html,
 }
 
 fn render_citation_struct(
@@ -724,107 +471,9 @@ fn rendered_outputs_to_struct_series(
     .into_series())
 }
 
-fn entry_records_to_struct_series(
-    records: Vec<Vec<Option<String>>>,
-    field_names: &[&str],
-) -> PolarsResult<Series> {
-    let fields = field_names
-        .iter()
-        .enumerate()
-        .map(|(field_index, field_name)| {
-            StringChunked::from_iter_options(
-                (*field_name).into(),
-                records
-                    .iter()
-                    .map(move |record| record[field_index].as_deref()),
-            )
-            .into_series()
-        })
-        .collect::<Vec<_>>();
-    StructChunked::from_series("entry".into(), records.len(), fields.iter())
-        .map(|entries| entries.into_series())
-}
-
-fn entry_struct_dtype(field_names: &[&str]) -> DataType {
-    DataType::Struct(
-        field_names
-            .iter()
-            .map(|field| Field::new((*field).into(), DataType::String))
-            .collect(),
-    )
-}
-
-fn rendered_struct_dtype() -> DataType {
-    DataType::Struct(vec![
-        Field::new("text".into(), DataType::String),
-        Field::new("html".into(), DataType::String),
-    ])
-}
-
-fn parse_report_struct_dtype() -> DataType {
-    DataType::Struct(vec![
-        Field::new("ok".into(), DataType::Boolean),
-        Field::new("entry_count".into(), DataType::UInt32),
-        Field::new("keys".into(), DataType::List(Box::new(DataType::String))),
-        Field::new(
-            "diagnostics".into(),
-            DataType::List(Box::new(DataType::String)),
-        ),
-    ])
-}
-
 fn rendered_field(rendered: RenderedOutput, field: RenderedField) -> String {
     match field {
         RenderedField::Text => rendered.text,
         RenderedField::Html => rendered.html,
     }
-}
-
-fn parse_value_library_source(source: &str, strict: bool) -> Result<CoreLibrary, String> {
-    CoreLibrary::parse_bibtex(source, strict)
-}
-
-fn parse_project_fields(fields: &[String]) -> Result<Vec<ProjectField>, String> {
-    fields
-        .iter()
-        .map(|field| parse_project_field(field))
-        .collect()
-}
-
-fn parse_broadcast_library(bibtex: &StringChunked, strict: bool) -> Option<CoreLibrary> {
-    if bibtex.len() != 1 {
-        return None;
-    }
-    parse_value_library_source(bibtex.get(0)?, strict).ok()
-}
-
-fn load_style(name: &str) -> PolarsResult<std::sync::Arc<PreparedStyle>> {
-    load_prepared_style(name).map_err(|err| compute_error(err.to_string()))
-}
-
-fn broadcast_len(left: usize, right: usize, operation: &str) -> PolarsResult<usize> {
-    if left == right {
-        return Ok(left);
-    }
-    if left == 1 {
-        return Ok(right);
-    }
-    if right == 1 {
-        return Ok(left);
-    }
-    polars_bail!(
-        ComputeError:
-        "{} input lengths must match or broadcast one side, got bibtex={} and key={}",
-        operation,
-        left,
-        right
-    )
-}
-
-fn broadcast_get(values: &StringChunked, index: usize) -> Option<&str> {
-    values.get(if values.len() == 1 { 0 } else { index })
-}
-
-fn compute_error(err: String) -> PolarsError {
-    PolarsError::ComputeError(err.into())
 }
