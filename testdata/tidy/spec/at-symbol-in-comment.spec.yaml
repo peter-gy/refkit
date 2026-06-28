@@ -1,0 +1,13 @@
+title: "@ in comment"
+input: |
+  @blah @article{foo,foo=bar}
+  foo@blah @article{bar,foo=bar}
+expected: |
+  @blah
+  @article{foo,
+    foo           = bar
+  }
+  foo@blah
+  @article{bar,
+    foo           = bar
+  }

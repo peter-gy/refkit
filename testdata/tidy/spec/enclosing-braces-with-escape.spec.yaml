@@ -1,0 +1,14 @@
+# https://github.com/FlamingTempura/bibtex-tidy/issues/406
+title: enclosing braces should work with escapes
+options:
+  enclosingBraces: true
+input: |
+  @article{foo,
+    title         = {{bar \& baz}},
+    author={Garc{\'\i}a-Patr{\'o}n, Ra{\'u}l and Renema, Jelmer J and Shchesnovich, Valery}
+  }
+expected: |
+  @article{foo,
+    title         = {{bar \& baz}},
+    author        = {Garc{\'\i}a-Patr{\'o}n, Ra{\'u}l and Renema, Jelmer J and Shchesnovich, Valery}
+  }

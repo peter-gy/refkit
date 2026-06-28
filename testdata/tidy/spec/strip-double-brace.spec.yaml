@@ -1,0 +1,20 @@
+title: strip double braces
+options:
+  stripEnclosingBraces: true
+input: |
+  @inproceedings{Smith2009,
+      author="Caroline JA Smith",
+      year=2009,
+      month=dec,
+      title={{Quantum somethings}},journal={Journal of {B}lah},
+      booktitle={JOURNAL OF SOMETHINGS}
+    }
+expected: |
+  @inproceedings{Smith2009,
+    author        = "Caroline JA Smith",
+    year          = 2009,
+    month         = dec,
+    title         = {Quantum somethings},
+    journal       = {Journal of {B}lah},
+    booktitle     = {JOURNAL OF SOMETHINGS}
+  }

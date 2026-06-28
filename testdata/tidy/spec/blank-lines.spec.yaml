@@ -1,0 +1,23 @@
+title: insert blank lines between blocks
+options:
+  blankLines: true
+input: |
+  @preamble{Foo}
+  Comment
+  @article{foo,
+    title={Foo}
+  }
+  @article{bar,
+    title={Bar}
+  }
+expected: |
+  @preamble{Foo}
+
+  Comment
+  @article{foo,
+    title         = {Foo}
+  }
+
+  @article{bar,
+    title         = {Bar}
+  }

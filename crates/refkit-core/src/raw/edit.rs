@@ -1,8 +1,8 @@
 use std::ops::Range;
 
 use super::{
-    RawBlock, RawDocumentData, RawEditError, RawEntryData, RawFieldData, RawValueMode,
-    is_safe_bare_value,
+    RawBlock, RawDocumentData, RawEditError, RawEntryData, RawFieldData, RawValueAtom,
+    RawValueMode, is_safe_bare_value,
 };
 use crate::quoted;
 
@@ -20,6 +20,7 @@ pub fn set_raw_field_value(
 
     validate_field_value(&value, field.value_mode).map_err(RawEditError::InvalidValue)?;
     field.value = value;
+    field.value_atoms = edited_value_atoms(&field.value, field.value_mode);
     field.changed = true;
     Ok(())
 }
@@ -94,6 +95,7 @@ fn render_field_value(field: &RawFieldData) -> String {
         RawValueMode::Bare if !is_safe_bare_value(&field.value) => {
             format!("{{{}}}", field.value)
         }
+        RawValueMode::Missing => String::new(),
         RawValueMode::Expression => format!("{{{}}}", field.value),
         RawValueMode::Bare | RawValueMode::Braced | RawValueMode::Quoted => field.value.clone(),
     }
@@ -102,10 +104,25 @@ fn render_field_value(field: &RawFieldData) -> String {
 fn validate_field_value(value: &str, value_mode: RawValueMode) -> Result<(), String> {
     match value_mode {
         RawValueMode::Bare if is_safe_bare_value(value) => Ok(()),
+        RawValueMode::Missing if value.is_empty() => Ok(()),
+        RawValueMode::Missing => {
+            Err("BibTeX field without an assignment cannot be edited to a value".to_string())
+        }
         RawValueMode::Bare | RawValueMode::Braced | RawValueMode::Expression => {
             validate_braced_field_value(value)
         }
         RawValueMode::Quoted => validate_quoted_field_value(value),
+    }
+}
+
+fn edited_value_atoms(value: &str, value_mode: RawValueMode) -> Vec<RawValueAtom> {
+    if value_mode == RawValueMode::Missing && value.is_empty() {
+        Vec::new()
+    } else {
+        vec![RawValueAtom {
+            value: value.to_string(),
+            value_mode,
+        }]
     }
 }
 

@@ -1,0 +1,14 @@
+# https://github.com/FlamingTempura/bibtex-tidy/issues/410
+title: enclosing braces in text
+options:
+  enclosingBraces: true
+input: |
+  @article{Foo,
+    author = "Foo",
+  	title = {Bar \textit{foo\textasteriskcentered}}
+  }
+expected: |
+  @article{Foo,
+    author        = "Foo",
+    title         = {{Bar \textit{foo\textasteriskcentered}}}
+  }

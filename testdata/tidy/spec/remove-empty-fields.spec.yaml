@@ -1,0 +1,25 @@
+title: remove empty fields
+options:
+  removeEmptyFields: true
+input: |
+  @ARTICLE {feinberg1983technique,
+      number={1},
+      title={A technique for radiolabeling DNA restriction endonuclease fragments to high specific activity},
+    author="Feinberg, Andrew P and Vogelstein, Bert",
+      journal    = {Analytical biochemistry},
+      volume = 132,
+      pages={},
+      year={},
+      day,
+      month={aug},
+      publisher={Elsevier},}
+expected: |
+  @article{feinberg1983technique,
+    number        = {1},
+    title         = {A technique for radiolabeling DNA restriction endonuclease fragments to high specific activity},
+    author        = "Feinberg, Andrew P and Vogelstein, Bert",
+    journal       = {Analytical biochemistry},
+    volume        = 132,
+    month         = {aug},
+    publisher     = {Elsevier}
+  }

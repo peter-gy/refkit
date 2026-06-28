@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/bibtex-tidy-rs",
     "crates/refkit-core",
     "packages/refkit-core/rust",
 ]

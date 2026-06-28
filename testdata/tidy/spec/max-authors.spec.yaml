@@ -1,0 +1,17 @@
+title: maximum number of authors
+options:
+  maxAuthors: 4
+input: |
+  @ARTICLE {test,
+    author={Saija Meryem and Kamal Tel and Erika Graziano and Steve Naliaka and Vilmar Kaveri and Yaƙubu Paisley and Daniel Ayaz and Lenore Siemowit and Damian Nurbek and Moreno Kristine and Kortney Tatiana and Zosimos Concepta and Gebahard Jean-Charles and Lamija Nagendra and Liidia Nunziatina and Mattias Erika and Zorione Dona and Gyeong-Suk Netanyahu and Shaniqua Oier and Kiley Mehrnaz and Şan Christina and Stefanie Puleng and Regīna Kristofor and Pancratius Grigori and Viktor Ami and Walter Enya and Coeus Ariah and Rosalía Cyrilla and Iomhar Lyyti and Birgit Costantino}
+  }
+  @ARTICLE {test2,
+    author={Saija Meryem and Kamal Tel}
+  }
+expected: |
+  @article{test,
+    author        = {Saija Meryem and Kamal Tel and Erika Graziano and Steve Naliaka and others}
+  }
+  @article{test2,
+    author        = {Saija Meryem and Kamal Tel}
+  }

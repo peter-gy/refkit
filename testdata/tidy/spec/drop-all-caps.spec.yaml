@@ -1,0 +1,24 @@
+title: drop all caps
+options:
+  dropAllCaps: true
+input: |
+  @inproceedings{Smith2009,
+      author="Caroline JA Smith",
+      year=2009,
+      month=dec,
+      title={{Quantum somethings}},journal={Journal of {B}lah},
+      booktitle={JOURNAL OF SOMETHINGS},
+    url={http://example.com/something_with/unusual?characters=faoo#bar},
+    volume = {VOLUME VII}
+    }
+expected: |
+  @inproceedings{Smith2009,
+    author        = "Caroline JA Smith",
+    year          = 2009,
+    month         = dec,
+    title         = {{Quantum somethings}},
+    journal       = {Journal of {B}lah},
+    booktitle     = {Journal Of Somethings},
+    url           = {http://example.com/something_with/unusual?characters=faoo#bar},
+    volume        = {Volume VII}
+  }

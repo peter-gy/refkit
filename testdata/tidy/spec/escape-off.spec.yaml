@@ -1,0 +1,13 @@
+title: do not escape special characters
+options:
+  escape: false
+input: |
+  @misc{q,
+    author = {Chars \", _, $, @, &, é, ɛ, ū, {"}},
+    title = {Math expression $\\alpha$ stay unescaped}
+  }
+expected: |
+  @misc{q,
+    author        = {Chars \", _, $, @, &, é, ɛ, ū, {"}},
+    title         = {Math expression $\\alpha$ stay unescaped}
+  }

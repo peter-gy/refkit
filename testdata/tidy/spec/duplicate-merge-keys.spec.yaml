@@ -1,0 +1,29 @@
+title: merge duplicates (combine)
+options:
+  merge: combine
+  duplicates:
+    - key
+input: |
+  @book{sweig42,
+  	title        = {The impossible book},
+  	author       = {Stefa{n} Sweig},
+  	year         = 1942,
+  	month        = mar,
+  	publisher    = {Dead Poet Society}
+  }
+  @book{sweig42,
+  	title        = {Foo},
+  	author       = {Bar},
+  	n = 1
+  }
+expected: |
+  @book{sweig42,
+    title         = {The impossible book},
+    author        = {Stefa{n} Sweig},
+    year          = 1942,
+    month         = mar,
+    publisher     = {Dead Poet Society},
+    n             = 1
+  }
+warnings:
+  - code: DUPLICATE_ENTRY

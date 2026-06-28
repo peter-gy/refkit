@@ -1,0 +1,15 @@
+title: remove enclosing braces from specific fields
+options:
+  removeBraces:
+    - title
+    - shorttitle
+input: |
+  @ARTICLE {quant,
+    title         = {Quantifying {Madness} in {Green {Leaf}} Ants},
+    shorttitle    = {Quantifying \\textbf{Madness} in {Green {Leaf}} Ants}
+  }
+expected: |
+  @article{quant,
+    title         = {Quantifying Madness in Green Leaf Ants},
+    shorttitle    = {Quantifying \\textbf{Madness} in Green Leaf Ants}
+  }

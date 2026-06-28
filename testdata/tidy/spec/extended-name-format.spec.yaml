@@ -1,0 +1,7 @@
+# just check it parses
+title: extended name format (BibLaTeX)
+input: |
+  @CUSTOMD{LDN3,
+    OPTIONS     = {labelalphanametemplatename=customd},
+    AUTHOR	    = {Vela, Luis and given={Ura Ru}, family={Juan}, suffix={Sr}, prefix={von}},
+  }

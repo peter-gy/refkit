@@ -1,0 +1,13 @@
+title: empty key
+input: |
+  @article{
+    title = "A year of trees",
+    volume = {5},
+    number = 6
+  }
+expected: |
+  @article{
+    title         = "A year of trees",
+    volume        = {5},
+    number        = 6
+  }

@@ -1,0 +1,23 @@
+[package]
+name = "bibtex-tidy-rs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Rust BibTeX formatter compatible with bibtex-tidy behavior"
+repository.workspace = true
+publish = false
+include = [
+    "/Cargo.toml",
+    "/README.md",
+    "/NOTICE",
+    "/src",
+]
+
+[dependencies]
+refkit-core = { version = "0.0.2", path = "../refkit-core" }
+
+[dev-dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_yaml = "0.9.34"
+walkdir = "2.5.0"

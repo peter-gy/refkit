@@ -1,0 +1,14 @@
+# https://github.com/FlamingTempura/bibtex-tidy/issues/423
+title: enclosing braces should keep braces directly around commands
+options:
+  enclosingBraces: true
+input: |
+  @incollection{BlattelMink2021,
+  	title = {{Das Innovationsverst{\"a}ndnis von Joseph A. Schumpeter}},
+  	author = {Bl{\"a}ttel-Mink, Birgit},
+  }
+expected: |
+  @incollection{BlattelMink2021,
+    title         = {{Das Innovationsverst{\"a}ndnis von Joseph A. Schumpeter}},
+    author        = {Bl{\"a}ttel-Mink, Birgit}
+  }

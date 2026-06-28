@@ -26,8 +26,10 @@ pub(super) fn parse_library_path(
         )),
         None => Err("bibliography path has no extension".to_string()),
     }?;
-    if diagnostics && let Some(diagnostic) = text.diagnostic {
-        parsed.diagnostics.insert(0, diagnostic);
+    if diagnostics {
+        if let Some(diagnostic) = text.diagnostic {
+            parsed.diagnostics.insert(0, diagnostic);
+        }
     }
     Ok(parsed)
 }

@@ -1,0 +1,13 @@
+# See https://github.com/sciunto-org/python-bibtexparser/issues/124
+title: "@ in title"
+input: |
+  @article{ art,
+  Author = {No, one},
+  Title = {{Blah blah blah blah blah blah blah blah blah blah blah blah blah blah
+    @blah blah blah blah blah.}},
+  }
+expected: |
+  @article{art,
+    author        = {No, one},
+    title         = {{Blah blah blah blah blah blah blah blah blah blah blah blah blah blah \@blah blah blah blah blah.}}
+  }

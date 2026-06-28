@@ -1,0 +1,20 @@
+
+title: duplicate DOI warnings
+options:
+  duplicates:
+    - doi
+input: |
+  @article{a,
+  	title={foo},
+  	doi=1
+  }
+  @article{b,
+  	title={bar},
+  	doi=1
+  }
+  @article{c,
+  	title={moo},
+  	doi=123
+  }
+warnings:
+  - {}

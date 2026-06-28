@@ -1,0 +1,8 @@
+bibtex-tidy-rs
+
+This crate ports non-CLI formatting behavior from bibtex-tidy.
+
+- bibtex-tidy: BibTeX formatting, transform, duplicate, and key-generation behavior. License: MIT. Source: https://github.com/FlamingTempura/bibtex-tidy
+
+The upstream test specifications and corpus are vendored under `testdata/tidy`
+for compatibility testing and future benchmark reuse.

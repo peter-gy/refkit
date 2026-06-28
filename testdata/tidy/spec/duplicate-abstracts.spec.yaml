@@ -1,0 +1,20 @@
+title: duplicate abstract warnings
+options:
+  duplicates:
+    - abstract
+input: |
+  @article{a,
+  	title={foo},
+  	abstract="  something blah BLAH."
+  }
+  @article{b,
+  	title={bar},
+  	abstract={Something blah blah}
+  }
+  @article{c,
+  	title={bar},
+  	abstract={Something completely different}
+  }
+warnings:
+  - {}
+

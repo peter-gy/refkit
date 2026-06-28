@@ -15,7 +15,11 @@ pub fn sanitize_biblatex_for_library(
     let mut output = String::with_capacity(source.len());
     let mut diagnostics = Vec::new();
     let mut seen_entries = BTreeSet::new();
-    for block in &data.blocks {
+    for (index, block) in data.blocks.iter().enumerate() {
+        if block_starts_inside_percent_comment(source, &data.blocks, index) {
+            preserve_line_break_from_skipped_block(source, block, &mut output);
+            continue;
+        }
         match block {
             RawBlock::Whitespace { raw, .. }
             | RawBlock::Comment { raw, .. }
@@ -34,19 +38,22 @@ pub fn sanitize_biblatex_for_library(
                                 entry.span.end
                             ),
                         );
-                    } else if validate_entries && let Err(err) = RawBibliography::parse(&entry.raw)
-                    {
-                        push_diagnostic(
-                            &mut diagnostics,
-                            collect_diagnostics,
-                            format!(
-                                "ignored BibTeX entry {} at {}..{} because syntax validation failed: {}",
-                                quoted(&entry.key),
-                                entry.span.start,
-                                entry.span.end,
-                                err
-                            ),
-                        );
+                    } else if validate_entries {
+                        if let Err(err) = RawBibliography::parse(&entry.raw) {
+                            push_diagnostic(
+                                &mut diagnostics,
+                                collect_diagnostics,
+                                format!(
+                                    "ignored BibTeX entry {} at {}..{} because syntax validation failed: {}",
+                                    quoted(&entry.key),
+                                    entry.span.start,
+                                    entry.span.end,
+                                    err
+                                ),
+                            );
+                        } else {
+                            output.push_str(&entry.raw);
+                        }
                     } else {
                         output.push_str(&entry.raw);
                     }
@@ -91,7 +98,11 @@ pub fn sanitize_biblatex_for_library_literals(
     let mut diagnostics = Vec::new();
     let mut seen_entries = BTreeSet::new();
 
-    for block in &data.blocks {
+    for (index, block) in data.blocks.iter().enumerate() {
+        if block_starts_inside_percent_comment(source, &data.blocks, index) {
+            preserve_line_break_from_skipped_block(source, block, &mut output);
+            continue;
+        }
         match block {
             RawBlock::Whitespace { raw, .. }
             | RawBlock::Comment { raw, .. }
@@ -149,6 +160,45 @@ pub fn sanitize_biblatex_for_library_literals(
     }
 
     (output, diagnostics)
+}
+
+fn block_starts_inside_percent_comment(source: &str, blocks: &[RawBlock], index: usize) -> bool {
+    let Some(block) = blocks.get(index) else {
+        return false;
+    };
+    if matches!(block, RawBlock::Whitespace { .. }) && block_text(source, block).contains('\n') {
+        return false;
+    }
+    let block_start = block.span().start;
+    for block in blocks[..index].iter().rev() {
+        if block.span().end > block_start {
+            continue;
+        }
+        let raw = block_text(source, block);
+        match block {
+            RawBlock::Comment { raw: comment, .. }
+                if comment.trim_start().starts_with('%') && !raw.contains('\n') =>
+            {
+                return true;
+            }
+            _ => {
+                if raw.contains('\n') {
+                    return false;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn block_text<'a>(source: &'a str, block: &RawBlock) -> &'a str {
+    source.get(block.span().clone()).unwrap_or_default()
+}
+
+fn preserve_line_break_from_skipped_block(source: &str, block: &RawBlock, output: &mut String) {
+    if block_text(source, block).contains('\n') && !output.ends_with('\n') {
+        output.push('\n');
+    }
 }
 
 fn render_literal_entry(entry: &RawEntryData, output: &mut String) {

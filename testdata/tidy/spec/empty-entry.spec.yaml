@@ -1,0 +1,13 @@
+title: empty entry
+input: |
+  @misc{emptyref,
+    
+  }
+  @misc{emptyref2
+    
+  }
+expected: |
+  @misc{emptyref,
+  }
+  @misc{emptyref2,
+  }

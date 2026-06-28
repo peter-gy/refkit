@@ -1,0 +1,87 @@
+@XDATA{macmillan:pub,
+  IDS       = {macmillan:pubALIAS},
+  PUBLISHER = {Macmillan}
+}
+
+@XDATA{macmillan:loc,
+  LOCATION = {New York and London},
+  NOTE     = {A Note} 
+}
+
+@XDATA{macmillan,
+  IDS   = {macmillanalias},
+  XDATA = {macmillan:pubALIAS, macmillan:loc}
+}
+
+
+@BOOK{xd1,
+  AUTHOR        = {Edward Ellington},
+  DATE          = {2007},
+  XDATA         = {macmillanalias, missingxd}
+}
+
+@BOOK{xd2,
+  AUTHOR        = {Peter Pillington},
+  DATE          = {2003},
+  PUBLISHER     = {Routledge},
+  XDATA         = {macmillan:loc, bltxxd1}
+}
+
+% Loop detection test
+@BOOK{xd3,
+  AUTHOR        = {Edward Ellington},
+  DATE          = {1923},
+  XDATA         = {loop}
+}
+
+@XDATA{loop:1,
+  NOTE = {Note}
+}
+
+@XDATA{loop:2,
+  XDATA = {loop:3}
+}
+
+@XDATA{loop:3,
+  XDATA = {loop}
+}
+
+@XDATA{loop,
+  XDATA = {loop:1, loop:2}
+}
+
+@XDATA{gxd2,
+  AUTHOR = {Brian Bloom and Arthur Anderson},
+  EDITOR = {William Wool and xdata=gxd4-editor}
+}
+
+@XDATA{gxd3,
+  LOCATION = {A and C}
+}
+
+@XDATA{gxd4,
+  EDITOR = {Frank Frill},
+  TITLE =  {Some title}
+}
+
+% Granular loop detection XDATA test
+@BOOK{lxd1,
+  AUTHOR = {Simon Smith and xdata=lxd1:loop-author},
+  EDITOR = {xdata=lxd3:loop-editor}
+}
+
+@XDATA{lxd1:loop,
+  AUTHOR = {xdata=lxd2:loop-author}
+}
+
+@XDATA{lxd2:loop,
+  AUTHOR = {xdata=lxd1:loop-author}
+}
+
+@XDATA{lxd3:loop,
+  EDITOR = {xdata=lxd4:loop-editor-1}
+}
+
+@XDATA{lxd4:loop,
+  EDITOR = {xdata=lxd4:loop-editor-1}
+}

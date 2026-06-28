@@ -1,0 +1,16 @@
+title: duplicate key warnings
+options:
+  duplicates:
+    - key
+input: |
+  @article{foo,
+  	title={foo}
+  }
+  @article{foo,
+  	title={foo}
+  }
+  @article{bar,
+  	title={bar}
+  }
+warnings:
+  - {}

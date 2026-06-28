@@ -1,0 +1,120 @@
+title: abbreviate months (numeric, braced)
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = {3} }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = mar
+  }
+...
+title: abbreviate months (numeric)
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = 3 }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = mar
+  }
+...
+title: abbreviate months (numeric, quoted)
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = "3" }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = mar
+  }
+...
+title: abbreviate months (shorthand, quoted)
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = "mar" }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = mar
+  }
+...
+title: abbreviate months (shorthand, braced)
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = {mar} }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = mar
+  }
+...
+title: abbreviate months (shorthand)
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = mar }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = mar
+  }
+...
+title: abbreviate months (textual, quoted)
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = "March" }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = mar
+  }
+...
+title: abbreviate months (textual, braced)
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = {march} }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = mar
+  }
+...
+title: abbreviate months (textual, mixed case)
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = {MArCH} }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = mar
+  }
+...
+title: do not abbreviate invalid numeric month
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = {17} }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = {17}
+  }
+...
+title: do not abbreviate invalid textual month
+options:
+  months: true
+input: |
+  @article{foo, title={Foo}, month = "blah" }
+expected: |
+  @article{foo,
+    title         = {Foo},
+    month         = "blah"
+  }

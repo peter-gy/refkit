@@ -22,6 +22,7 @@ pub struct RawFieldData {
     pub name: String,
     pub value: String,
     pub value_mode: RawValueMode,
+    pub value_atoms: Vec<RawValueAtom>,
     pub span: Range<usize>,
     pub patch_span: Range<usize>,
     pub changed: bool,
@@ -32,7 +33,14 @@ pub enum RawValueMode {
     Bare,
     Braced,
     Expression,
+    Missing,
     Quoted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawValueAtom {
+    pub value: String,
+    pub value_mode: RawValueMode,
 }
 
 #[derive(Debug, Clone)]
@@ -113,6 +121,70 @@ pub struct RawEntryId(usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RawFieldId(usize);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawSyntaxDocument {
+    pub blocks: Vec<RawSyntaxBlock>,
+    pub entries: Vec<RawSyntaxEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RawSyntaxBlock {
+    Whitespace {
+        raw: String,
+        span: Range<usize>,
+    },
+    Comment {
+        raw: String,
+        span: Range<usize>,
+    },
+    Preamble {
+        raw: String,
+        value: String,
+        span: Range<usize>,
+    },
+    StringDef {
+        raw: String,
+        key: String,
+        value: String,
+        span: Range<usize>,
+    },
+    Entry {
+        id: RawEntryId,
+        key: String,
+        span: Range<usize>,
+    },
+    Failed {
+        raw: String,
+        error: String,
+        span: Range<usize>,
+    },
+    Other {
+        raw: String,
+        span: Range<usize>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawSyntaxEntry {
+    pub id: RawEntryId,
+    pub key: String,
+    pub kind: String,
+    pub fields: Vec<RawSyntaxField>,
+    pub span: Range<usize>,
+    pub raw: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawSyntaxField {
+    pub id: RawFieldId,
+    pub name: String,
+    pub value: String,
+    pub value_mode: RawValueMode,
+    pub value_atoms: Vec<RawValueAtom>,
+    pub span: Range<usize>,
+    pub patch_span: Range<usize>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawEntryInfo {
@@ -336,7 +408,9 @@ impl RawDocument {
             .blocks
             .iter()
             .filter_map(|block| match block {
-                RawBlock::StringDef { key, value, .. } => Some((key.clone(), value.clone())),
+                RawBlock::StringDef { key, value, .. } if !key.is_empty() => {
+                    Some((key.clone(), value.clone()))
+                }
                 _ => None,
             })
             .collect()
@@ -357,9 +431,45 @@ impl RawDocument {
         self.data.blocks.iter().map(raw_block_info).collect()
     }
 
+    pub fn syntax(&self) -> RawSyntaxDocument {
+        RawSyntaxDocument {
+            blocks: self.data.blocks.iter().map(raw_syntax_block).collect(),
+            entries: self
+                .data
+                .entry_blocks
+                .iter()
+                .enumerate()
+                .map(|(entry_id, entry)| raw_syntax_entry(RawEntryId(entry_id), entry))
+                .collect(),
+        }
+    }
+
     pub fn render(&self) -> Result<String, String> {
         render_raw_document(&self.data)
     }
+}
+
+pub fn normalize_raw_at_command(raw: &str) -> String {
+    let Some(rest) = raw.strip_prefix('@') else {
+        return raw.to_string();
+    };
+    let command_end = rest
+        .char_indices()
+        .find_map(|(index, ch)| {
+            if ch == '{' || ch == '(' || ch.is_whitespace() {
+                Some(index)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(rest.len());
+    let command = rest[..command_end].to_ascii_lowercase();
+    let tail = &rest[command_end..];
+    let tail = match tail.trim_start().chars().next() {
+        Some('{' | '(') => tail.trim_start(),
+        _ => tail,
+    };
+    format!("@{command}{tail}")
 }
 
 impl RawEntryId {
@@ -427,6 +537,73 @@ fn raw_block_info(block: &RawBlock) -> RawBlockInfo {
     }
 }
 
+fn raw_syntax_block(block: &RawBlock) -> RawSyntaxBlock {
+    match block {
+        RawBlock::Whitespace { raw, span } => RawSyntaxBlock::Whitespace {
+            raw: raw.clone(),
+            span: span.clone(),
+        },
+        RawBlock::Comment { raw, span } => RawSyntaxBlock::Comment {
+            raw: raw.clone(),
+            span: span.clone(),
+        },
+        RawBlock::Preamble { raw, value, span } => RawSyntaxBlock::Preamble {
+            raw: raw.clone(),
+            value: value.clone(),
+            span: span.clone(),
+        },
+        RawBlock::StringDef {
+            raw,
+            key,
+            value,
+            span,
+        } => RawSyntaxBlock::StringDef {
+            raw: raw.clone(),
+            key: key.clone(),
+            value: value.clone(),
+            span: span.clone(),
+        },
+        RawBlock::Entry { id, key, span } => RawSyntaxBlock::Entry {
+            id: RawEntryId(*id),
+            key: key.clone(),
+            span: span.clone(),
+        },
+        RawBlock::Failed { raw, error, span } => RawSyntaxBlock::Failed {
+            raw: raw.clone(),
+            error: error.clone(),
+            span: span.clone(),
+        },
+        RawBlock::Other { raw, span } => RawSyntaxBlock::Other {
+            raw: raw.clone(),
+            span: span.clone(),
+        },
+    }
+}
+
+fn raw_syntax_entry(id: RawEntryId, entry: &RawEntryData) -> RawSyntaxEntry {
+    RawSyntaxEntry {
+        id,
+        key: entry.key.clone(),
+        kind: entry.kind.clone(),
+        fields: entry
+            .field_blocks
+            .iter()
+            .enumerate()
+            .map(|(field_id, field)| RawSyntaxField {
+                id: RawFieldId(field_id),
+                name: field.name.clone(),
+                value: field.value.clone(),
+                value_mode: field.value_mode,
+                value_atoms: field.value_atoms.clone(),
+                span: field.span.clone(),
+                patch_span: field.patch_span.clone(),
+            })
+            .collect(),
+        span: entry.span.clone(),
+        raw: entry.raw.clone(),
+    }
+}
+
 pub fn unique_entry_id(doc: &RawDocumentData, key: &str) -> Result<Option<usize>, String> {
     let Some(entry_ids) = doc.entries.get(key) else {
         return Ok(None);
@@ -465,7 +642,9 @@ fn is_valid_entry_key(value: &str) -> bool {
 }
 
 fn is_entry_key_char(ch: char) -> bool {
-    !matches!(ch, ',' | '}') && !ch.is_control() && !ch.is_whitespace()
+    !matches!(ch, '#' | '%' | '{' | '}' | '~' | '$' | ',')
+        && !ch.is_control()
+        && !ch.is_whitespace()
 }
 
 fn is_valid_identifier(value: &str) -> bool {
@@ -474,6 +653,10 @@ fn is_valid_identifier(value: &str) -> bool {
         return false;
     };
     is_identifier_start(first) && chars.all(is_identifier_continue)
+}
+
+fn is_valid_field_name_char(ch: char) -> bool {
+    !matches!(ch, '=' | ',' | '{' | '}' | '(' | ')' | '[' | ']') && (!ch.is_control() || ch == '\t')
 }
 
 fn is_identifier_start(ch: char) -> bool {

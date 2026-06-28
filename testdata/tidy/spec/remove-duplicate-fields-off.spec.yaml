@@ -1,0 +1,18 @@
+title: remove duplicate fields off
+options:
+  removeDuplicateFields: false
+input: |
+  @book{test,
+  author = "Alan, Jo",
+  author = "Alan, Les",
+  year = {1990},
+  title = {Methods}
+  }
+expected: |
+  @book{test,
+    author        = "Alan, Jo",
+    author        = "Alan, Les",
+    year          = {1990},
+    title         = {Methods}
+  }
+

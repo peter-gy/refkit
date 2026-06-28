@@ -1,0 +1,13 @@
+title: remove empty fields
+input: |
+  @ARTICLE {test,
+    author   = aubert#" and "#Varacca,
+    journal = abc # { 123 },
+      title = "A"#"B"
+  }
+expected: |
+  @article{test,
+    author        = aubert # " and " # Varacca,
+    journal       = abc # { 123 },
+    title         = "A" # "B"
+  }

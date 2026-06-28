@@ -1,0 +1,25 @@
+title: spacing before first entry
+options:
+  tidyComments: false
+input: |
+  	@article{a,
+  		title = {Something},
+  		}
+
+  @article{b,
+  		title = {Something},
+  }
+
+  	@article{c,
+  		title = {Something},
+  	}
+expected: |
+  @article{a,
+    title         = {Something}
+  }
+  @article{b,
+    title         = {Something}
+  }
+  @article{c,
+    title         = {Something}
+  }

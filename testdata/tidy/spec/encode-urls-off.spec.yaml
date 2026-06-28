@@ -1,0 +1,11 @@
+title: do not encode urls
+options:
+  encodeUrls: false
+input: |
+  @inproceedings{Smith2009,
+    url={http://example.com/something_with/unusual?characters=faoo#bar}
+    }
+expected: |
+  @inproceedings{Smith2009,
+    url           = {http://example.com/something_with/unusual?characters=faoo#bar}
+  }

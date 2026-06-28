@@ -18,6 +18,8 @@ pub use library::{
 };
 pub use raw::{
     RawBlockInfo, RawDocument, RawEditError, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo,
+    RawSyntaxBlock, RawSyntaxDocument, RawSyntaxEntry, RawSyntaxField, RawValueAtom, RawValueMode,
+    normalize_raw_at_command,
 };
 pub use render::{
     RenderedOutput, bundled_locales, render_library_bibliography, render_library_citation,

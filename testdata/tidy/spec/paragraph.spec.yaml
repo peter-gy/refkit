@@ -1,0 +1,26 @@
+title: paragraphs in values
+options:
+  align: 20
+input: "
+  @ARTICLE {foobar,
+    title={Foo Bar},
+    abstract={
+      Paragraph 1\n
+      ...continued\n
+  \n\n
+      Paragraph 2\r\n\r\nParagraph 3\r\rParagraph 4
+    },
+  }"
+expected: |
+  @article{foobar,
+    title               = {Foo Bar},
+    abstract            = {
+      Paragraph 1 ...continued
+  
+      Paragraph 2
+  
+      Paragraph 3
+  
+      Paragraph 4
+    }
+  }

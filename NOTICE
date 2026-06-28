@@ -5,6 +5,7 @@ refkit uses citation and bibliography components from the Typst project ecosyste
 - Hayagriva: bibliography data modeling and CSL citation rendering. License: MIT OR Apache-2.0. Source: https://github.com/typst/hayagriva
 - biblatex: BibTeX and BibLaTeX parsing. License: MIT OR Apache-2.0. Source: https://github.com/typst/biblatex
 - citationberg: CSL style and locale parsing used through Hayagriva. License: MIT OR Apache-2.0. Source: https://github.com/typst/citationberg
+- bibtex-tidy: BibTeX formatting behavior and test corpus used by bibtex-tidy-rs. License: MIT. Source: https://github.com/FlamingTempura/bibtex-tidy
 
 Hayagriva and citationberg also acknowledge Citation Style Language style or
 locale resources under CC-BY-SA 3.0 in their upstream NOTICE files.
