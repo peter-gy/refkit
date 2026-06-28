@@ -65,7 +65,6 @@ def test_materialize_real_workload_uses_packaged_bibtex(tmp_path: Path) -> None:
     assert workload.family == "real_bibliography_subset"
     assert workload.record_count == 12
     assert workload.keys[:3] == ["ijcai2019p684", "10.1145/3325887", "Kimi_K2.5"]
-    assert workload.bibtex.startswith("% Real BibTeX subset")
     assert "DeepResearchGym" in workload.bibtex
     assert "Ancient–Modern Chinese Translation" in workload.bibtex
     assert workload.bibtex_path.read_text(encoding="utf-8") == workload.bibtex
@@ -86,7 +85,7 @@ def test_real_bibliography_resource_is_package_owned() -> None:
     assert path.name == "references.bib"
     assert path.parent.name == "real-bibliography"
     assert "refkit_bench" in path.parts
-    assert path.read_text(encoding="utf-8").startswith("% Real BibTeX subset")
+    assert path.is_file()
 
 
 def test_real_bibliography_resource_reports_missing_data(
@@ -137,13 +136,21 @@ def test_record_source_forms_omit_absent_optional_fields() -> None:
     bibtex = fixtures.bibtex_for_records((record,))
     csl = fixtures.csl_json_for_records((record,))[0]
 
+    assert "@article{minimal," in bibtex
+    assert "author = {Solo, Sam}" in bibtex
+    assert "title = {Minimal Reference}" in bibtex
+    assert "journal = {}" in bibtex
+    assert "year = {2024}" in bibtex
     assert "volume =" not in bibtex
     assert "pages =" not in bibtex
     assert "doi =" not in bibtex
-    assert "volume" not in csl
-    assert "page" not in csl
-    assert "DOI" not in csl
-    assert "container-title" not in csl
+    assert csl == {
+        "id": "minimal",
+        "type": "article-journal",
+        "title": "Minimal Reference",
+        "author": [{"family": "Solo", "given": "Sam"}],
+        "issued": {"date-parts": [[2024]]},
+    }
 
 
 def test_select_lanes_uses_explicit_lanes_before_group() -> None:

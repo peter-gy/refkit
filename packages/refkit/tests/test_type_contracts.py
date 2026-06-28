@@ -36,9 +36,9 @@ def test_type_checked_structured_return_samples() -> None:
 
     rendered = doc.render([rk.Citation("first", "doe2024")])
 
-    assert rendered_tree_kinds(rendered["first"])
-    assert all(start >= 0 for start in raw_block_starts(raw))
-    assert all(error for error in failed_block_errors(raw))
+    assert rendered_tree_kinds(rendered["first"]) == ["Text", "Element", "Text"]
+    assert raw_block_starts(raw)[0] == 0
+    assert failed_block_errors(raw) == ["entry ended before closing delimiter"]
     duplicate_raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")
     assert duplicate_entry_titles(duplicate_raw, "dup") == [
         "First Title",

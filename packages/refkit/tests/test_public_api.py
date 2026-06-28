@@ -200,10 +200,11 @@ def test_real_bibliography_fixture_parses_inspects_and_renders() -> None:
     assert len(library) == 12
     assert library.diagnostics == []
     assert len(raw.entries) == 12
-    assert raw.comments[0].startswith("% Real BibTeX subset")
     title = rows["DeepResearchGym"]["title"]
-    assert isinstance(title, str)
-    assert title.startswith("DeepResearchGym")
+    assert (
+        title == "DeepResearchGym: A Free, Transparent, and Reproducible Evaluation Sandbox "
+        "for Deep Research"
+    )
     assert rows["DeepResearchGym"]["doi"] == "10.48550/ARXIV.2505.19253"
     assert rows["ijcai2019p684"]["volume"] is None
     assert _render_one(doc, "ijcai2019p684").text == "(Chen et al., 2019)"
@@ -253,12 +254,11 @@ def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
 """,
     )
 
-    assert library
-    assert not library.is_empty()
     assert library.keys() == ["inline"]
-    entry = library.get("inline")
-    assert entry is not None
+    entry = cast(rk.Entry, library.get("inline"))
+    assert entry.key == "inline"
     assert entry.title == "Inline Source"
+    assert library["inline"].title == "Inline Source"
     assert library.get("missing") is None
     assert [entry.key for entry in library.get_many(["inline"])] == ["inline"]
     assert library.get_many(["inline"])[0].title == "Inline Source"
@@ -436,11 +436,16 @@ def test_bibliography_text_and_tree_include_second_field_labels() -> None:
     entry = cast(dict[str, Any], rendered.tree[0])
     first_field = cast(dict[str, Any], entry["first_field"])
 
-    assert rendered.text.startswith("[1]")
+    assert rendered.text == (
+        "[1] J. Doe, “Refkit for Bibliographies,” Journal of Citation Systems, "
+        "vol. 12, pp. 1–20, 2024, doi: 10.1234/refkit.2024."
+    )
     assert entry["kind"] == "bibliography-entry"
     assert first_field["kind"] == "Element"
     assert first_field["meta"] == "CitationNumber"
-    assert any(node.get("text") == "[1]" for node in _tree_nodes(first_field))
+    assert [
+        node.get("text") for node in _tree_nodes(first_field) if node.get("kind") == "Text"
+    ] == ["[1]"]
 
 
 def test_rendered_tree_exposes_documented_structured_keys() -> None:
@@ -454,7 +459,8 @@ def test_rendered_tree_exposes_documented_structured_keys() -> None:
     assert "children" in citation_tree[0]
     assert bibliography_tree[0]["kind"] == "bibliography-entry"
     assert bibliography_tree[0]["key"] == "doe2024"
-    assert bibliography_tree[0]["first_field"] is not None
+    first_field = cast(dict[str, Any], bibliography_tree[0]["first_field"])
+    assert first_field["kind"] == "Element"
     assert bibliography_tree[0]["children"][0]["kind"] == "Element"
 
 
@@ -485,8 +491,7 @@ def test_library_reads_yaml_and_selects_parent_periodical() -> None:
     library = rk.Library.read(FIXTURES / "parent.yaml")
     matches = library.select("article > periodical[volume]")
 
-    assert len(matches) == 1
-    assert matches[0].key == "doe2024"
+    assert [entry.key for entry in matches] == ["doe2024"]
     assert matches[0].title == "Refkit for Bibliographies"
     assert matches[0].parents[0].title == "Journal of Citation Systems"
 
@@ -574,7 +579,7 @@ def test_style_and_locale_loaders_cover_supported_sources() -> None:
     assert bundled.title == "APA Style 7th edition"
     assert from_xml.id == "xml"
     assert from_xml.title == "Refkit Note Fixture"
-    assert from_path.id.endswith("refkit-note.csl")
+    assert Path(from_path.id) == FIXTURES / "refkit-note.csl"
     assert from_path.title == "Refkit Note Fixture"
     assert locale.code == "en-US"
     assert "Doe" in _render_one(document, "doe2024").text
@@ -862,9 +867,11 @@ def test_library_non_strict_drops_malformed_string_definitions(tmp_path: Path) -
     library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
-    assert len(library.diagnostics) >= 3
-    assert any("syntax recovery" in item for item in library.diagnostics)
-    assert any("ignored string definition" in item for item in library.diagnostics)
+    assert len(library.diagnostics) == 4
+    assert library.diagnostics[0].startswith("syntax recovery could not pre-filter BibTeX entries")
+    assert [
+        diagnostic.startswith("ignored string definition") for diagnostic in library.diagnostics[1:]
+    ] == [True, True, True]
 
 
 def test_library_recovery_ignores_invalid_typed_fields() -> None:
@@ -1322,16 +1329,13 @@ def test_raw_bib_document_edits_duplicate_occurrences_without_losing_raw_blocks(
 
     raw.write(output)
 
-    text = output.read_text(encoding="utf-8")
-    assert "% duplicate raw fixture" in text
-    assert '@preamble{"Duplicate fixture"}' in text
-    assert "@string{j = {Journal of Duplicate Contracts}}" in text
-    assert "raw prose outside entries" in text
-    assert "@broken{bad" in text
-    assert "Corrected Second Field" in text
-    assert "Corrected Duplicate Entry" in text
-
     written = rk.BibDocument.read(output)
+    assert written.comments == ["% duplicate raw fixture\n"]
+    assert written.preamble == "Duplicate fixture"
+    assert written.strings["j"] == "Journal of Duplicate Contracts"
+    assert [block["raw"] for block in written.blocks if block["kind"] == "other"] == [
+        "raw prose outside entries\n\n"
+    ]
     written_first, written_second = written.entries.get_all("dup")
     assert [field.value for field in written_first.fields.get_all("title")] == [
         "First Title",
@@ -1339,7 +1343,7 @@ def test_raw_bib_document_edits_duplicate_occurrences_without_losing_raw_blocks(
     ]
     assert written_second.fields["title"].value == "Corrected Duplicate Entry"
     assert written.entries["later"].fields["title"].value == "Later Entry"
-    assert written.failed_blocks[0]["raw"].startswith("@broken{bad")
+    assert written.failed_blocks[0]["raw"] == "@broken{bad,\n  title = {No close}\n\n"
 
 
 def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path) -> None:
@@ -1347,7 +1351,7 @@ def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path)
     blocks = raw.blocks
     source = (FIXTURES / "raw.bib").read_text(encoding="utf-8")
 
-    assert raw.comments[0].startswith("% library comment")
+    assert raw.comments == ["% library comment\n", "% trailing comment\n"]
     assert raw.preamble == "BibTeX preamble"
     assert raw.strings["jcs"] == "Journal of Citation Systems"
     assert blocks[0]["kind"] == "comment"
@@ -1364,14 +1368,11 @@ def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path)
     output = tmp_path / "updated.bib"
     raw.write(output)
 
-    text = output.read_text()
-    assert "% library comment" in text
-    assert "@preamble" in text
-    assert "@string" in text
-    assert "@broken" in text
-    assert "Corrected title" in text
-    assert "journal = jcs" in text
     written = rk.BibDocument.read(output)
+    assert written.comments[:2] == ["% library comment\n", "% trailing comment\n"]
+    assert written.preamble == "BibTeX preamble"
+    assert written.strings["jcs"] == "Journal of Citation Systems"
+    assert written.failed_blocks[0]["raw"] == "@broken{missing,\n  title = {No close}\n"
     assert written.entries["doe2024"].fields["title"].value == "Corrected title"
     assert written.entries["doe2024"].fields["journal"].value == "jcs"
 
@@ -1379,8 +1380,11 @@ def test_raw_bib_document_preserves_blocks_and_writes_field_edit(tmp_path: Path)
 def test_raw_bib_document_preserves_typst_biblatex_blocks(tmp_path: Path) -> None:
     raw = rk.BibDocument.read(FIXTURES / "typst-raw.bib")
 
-    assert raw.comments[0].startswith("@comment")
-    assert any(comment.startswith("% Comments before") for comment in raw.comments)
+    assert raw.comments == [
+        "@comment{thisdoesntmatter,\n  does = {not matter}\n}",
+        "% Comments before the entry work\n",
+        "% A comment after the entry\n",
+    ]
     assert raw.strings["benchjournal"] == "Journal of Citation Benchmarks"
     assert raw.preamble == '"Reference " # "fixture"'
     assert raw.entries.unique_keys() == ["fischer2022equivalence", "roes2003belief"]
@@ -1392,15 +1396,17 @@ def test_raw_bib_document_preserves_typst_biblatex_blocks(tmp_path: Path) -> Non
     output = tmp_path / "typst-raw-out.bib"
     raw.write(output)
 
-    text = output.read_text(encoding="utf-8")
-    assert "@comment{thisdoesntmatter" in text
-    assert "% Comments before the entry work" in text
-    assert "@string{benchjournal" in text
-    assert '@preamble{"Reference " # "fixture"}' in text
-    assert "Edited belief title" in text
-    assert "@inproceedings{conigliocorbalan" in text
-    assert "author    {Marcelo Coniglio and Maria Corbalan}" in text
     written = rk.BibDocument.read(output)
+    assert written.comments == raw.comments
+    assert written.strings["benchjournal"] == "Journal of Citation Benchmarks"
+    assert written.preamble == '"Reference " # "fixture"'
+    assert written.failed_blocks[0]["raw"] == (
+        "@inproceedings{conigliocorbalan,\n"
+        "  author    {Marcelo Coniglio and Maria Corbalan},\n"
+        "  title     = {Sequent Calculi for Nonsense Logics},\n"
+        "  year      = {2012}\n"
+        "}"
+    )
     assert written.entries["roes2003belief"].fields["title"].value == "Edited belief title"
 
 
@@ -1418,35 +1424,26 @@ def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers(
     )
 
     assert raw.comments == ["% inline comment\n"]
-    assert raw.entries
-    assert not raw.entries.is_empty()
-    assert "inline" in raw.entries
-    assert "missing" not in raw.entries
-    entry = raw.entries.get_unique("inline")
-    assert entry is not None
+    assert raw.entries.unique_keys() == ["inline"]
+    entry = raw.entries["inline"]
     assert entry.key == "inline"
     assert raw.entries.get_unique("missing") is None
     assert [entry.key for entry in raw.entries.occurrences()] == ["inline"]
     assert [entry.key for entry in raw.entries.get_all("inline")] == ["inline"]
-    assert raw.entries["inline"].fields
-    assert not raw.entries["inline"].fields.is_empty()
-    title = raw.entries["inline"].fields.get_unique("title")
-    assert title is not None
+    assert entry.fields.unique_keys() == ["title"]
+    title = entry.fields["title"]
     assert title.name == "title"
     assert title.value == "Inline Raw"
-    assert [field.name for field in raw.entries["inline"].fields.occurrences()] == ["title"]
-    assert [field.value for field in raw.entries["inline"].fields.get_all("title")] == [
-        "Inline Raw"
-    ]
-    assert "title" in raw.entries["inline"].fields
-    assert "missing" not in raw.entries["inline"].fields
-    assert raw.entries["inline"].fields.get_unique("missing") is None
+    assert [field.name for field in entry.fields.occurrences()] == ["title"]
+    assert [field.value for field in entry.fields.get_all("title")] == ["Inline Raw"]
+    assert entry.fields.get_unique("missing") is None
     assert raw.failed_blocks
 
     output = tmp_path / "inline.bib"
     raw.write(output)
 
-    assert "@article{inline" in output.read_text(encoding="utf-8")
+    written = rk.BibDocument.read(output)
+    assert written.entries["inline"].fields["title"].value == "Inline Raw"
 
 
 def test_raw_bib_document_accepts_permissive_citation_keys() -> None:

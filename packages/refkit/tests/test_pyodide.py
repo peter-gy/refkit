@@ -54,13 +54,14 @@ def _fake_core_module(name: str, *, version: str) -> ModuleType:
 
 def test_mock_pyodide_sets_platform_and_stub_modules(mock_pyodide: Any) -> None:
     micropip = ModuleType("micropip")
+    previous_micropip = sys.modules.get("micropip")
 
     with mock_pyodide(micropip=micropip):
         assert sys.platform == "emscripten"
         assert importlib.import_module("pyodide") is sys.modules["pyodide"]
         assert importlib.import_module("micropip") is micropip
 
-    assert sys.modules.get("micropip") is not micropip
+    assert sys.modules.get("micropip") is previous_micropip
 
 
 def test_pyodide_env_fixture_sets_platform(pyodide_env: None) -> None:

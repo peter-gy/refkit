@@ -50,7 +50,6 @@ def test_polars_refkit_tidy_runtime_signatures_list_public_keywords() -> None:
         "curly",
         "numeric",
     ]
-    assert "bibtex_col" not in namespace_signature.parameters
     assert list(namespace_signature.parameters)[:3] == ["omit", "curly", "numeric"]
     assert top_level_signature.parameters["space"].default == 2
     assert top_level_signature.parameters["escape"].default is True
@@ -229,10 +228,13 @@ def test_polars_refkit_tidy_formats_rows_and_reports_warnings() -> None:
     ).to_dicts()[0]
 
     assert row["formatted"] == row["report"]["bibtex"]
-    assert row["formatted"].startswith("@article{\n")
-    assert "  title" in row["formatted"]
-    assert "  pages" in row["formatted"]
-    assert "{6--13}" in row["formatted"]
+    assert row["formatted"] == (
+        "@article{\n"
+        "  title         = {Fast Citations},\n"
+        "  year          = {2024},\n"
+        "  pages         = {6--13}\n"
+        "}\n"
+    )
     assert row["report"]["ok"] is True
     assert row["report"]["count"] == 1
     assert row["report"]["error"] is None
@@ -286,7 +288,13 @@ def test_polars_refkit_tidy_default_names_lazy_and_literal_inputs() -> None:
     )
 
     assert set(result.columns) == {"tidy_bibtex", "tidy_bibtex_report"}
-    assert result["tidy_bibtex"].item().startswith("@article{doe2024,")
+    assert result["tidy_bibtex"].item() == (
+        "@article{doe2024,\n"
+        "  title         = {Fast Citations},\n"
+        "  pages         = {6--13},\n"
+        "  year          = {2024}\n"
+        "}\n"
+    )
     assert result["tidy_bibtex_report"].item()["count"] == 1
 
 
@@ -300,8 +308,9 @@ def test_polars_refkit_tidy_invalid_rows_become_nulls_with_report_error() -> Non
         report=prk.tidy_bibtex_report("bibtex"),
     ).to_dicts()
 
-    assert rows[0]["formatted"].startswith("@article{doe2024,")
+    assert rows[0]["formatted"] == rows[0]["report"]["bibtex"]
     assert rows[0]["report"]["ok"] is True
+    assert rows[0]["report"]["count"] == 1
     assert rows[1]["formatted"] is None
     assert rows[1]["report"]["ok"] is False
     assert rows[1]["report"]["bibtex"] is None
@@ -347,15 +356,19 @@ def test_polars_refkit_tidy_rejects_invalid_static_options() -> None:
 def test_polars_refkit_tidy_accepts_representative_static_options() -> None:
     import polars_refkit as prk
 
-    source = """
-@article{old,
-  author={Doe, Jane and Roe, Richard},
-  title={Fast Citations},
-  journal={Journal of Citation Tests},
-  year={2024},
-  note={},
-  abstract={Drop me}
-}
+    long_abstract = (
+        "This study compares citation workflows across library catalogs, data tables, and "
+        "manuscript drafts with detailed notes on reproducible reference cleanup."
+    )
+    source = f"""
+@article{{old,
+  author={{Doe, Jane and Roe, Richard}},
+  title={{Fast Citations}},
+  journal={{Journal of Citation Tests}},
+  year={{2024}},
+  note={{}},
+  abstract={{{long_abstract}}}
+}}
 """
     row = (
         pl.DataFrame({"bibtex": [source]})
@@ -379,11 +392,33 @@ def test_polars_refkit_tidy_accepts_representative_static_options() -> None:
     )
 
     assert "    author =" in row["spaced"]
-    assert row["wrapped"].startswith("@article{old,")
+    assert row["wrapped"] == (
+        "@article{old,\n"
+        "  author        = {Doe, Jane and Roe, Richard},\n"
+        "  title         = {Fast Citations},\n"
+        "  journal       = {Journal of Citation Tests},\n"
+        "  year          = {2024},\n"
+        "  note          = {},\n"
+        "  abstract      = {\n"
+        "    This study compares citation workflows across library catalogs, data\n"
+        "    tables, and manuscript drafts with detailed notes on reproducible reference\n"
+        "    cleanup.\n"
+        "  }\n"
+        "}\n"
+    )
     assert "@article{doe2024," in row["custom_key"]
     assert "@article{doe2024fast," in row["default_key"]
-    assert "abstract" in row["omitted"]
-    assert "note" not in row["omitted"]
+    assert row["omitted"] == (
+        "@article{old,\n"
+        "  author        = {Doe, Jane and Roe, Richard},\n"
+        "  title         = {Fast Citations},\n"
+        "  journal       = {Journal of Citation Tests},\n"
+        "  year          = {2024},\n"
+        "  abstract      = {This study compares citation workflows across library catalogs, "
+        "data tables, and manuscript drafts with detailed notes on reproducible reference "
+        "cleanup.}\n"
+        "}\n"
+    )
     assert "title         = {Fast Citations}" in row["unwrapped_title"]
     assert "title         = {{Fast Citations}}" in row["enclosed_title"]
     assert row["no_merge"]["ok"] is True
@@ -416,7 +451,6 @@ def test_polars_refkit_tidy_duplicates_none_keeps_core_merge_defaults() -> None:
         warning.rule for warning in expected.warnings
     ]
     assert [warning["rule"] for warning in row["explicit"]["warnings"]] == ["doi"]
-    assert "second" not in row["formatted"]
 
 
 def test_polars_refkit_diagnostics_return_list_column() -> None:
@@ -509,10 +543,8 @@ def test_polars_refkit_cite_each_returns_ordered_list_outputs() -> None:
         rendered=prk.cite_each_rendered("bibtex", "keys", style="apa"),
     ).to_dicts()[0]
 
-    assert len(row["citations"]) == 2
-    assert "Doe" in row["citations"][0]
-    assert "Roe" in row["citations"][1]
-    assert "Doe" in row["citation_html"][0]
+    assert row["citations"] == ["(Doe, 2024)", "(Roe, 2022)"]
+    assert row["citation_html"] == ["(Doe, 2024)", "(Roe, 2022)"]
     assert row["rendered"][0]["text"] == row["citations"][0]
     assert row["rendered"][0]["html"] == row["citation_html"][0]
 
