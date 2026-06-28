@@ -49,6 +49,11 @@ pub(super) fn parse_report_output(input_fields: &[Field]) -> PolarsResult<Field>
     Ok(Field::new(field.name, parse_report_struct_dtype()))
 }
 
+pub(super) fn tidy_report_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    let field = input_fields[0].clone();
+    Ok(Field::new(field.name, tidy_report_struct_dtype()))
+}
+
 pub(super) fn entry_struct_dtype(field_names: &[&str]) -> DataType {
     DataType::Struct(
         field_names
@@ -74,6 +79,27 @@ fn parse_report_struct_dtype() -> DataType {
             "diagnostics".into(),
             DataType::List(Box::new(DataType::String)),
         ),
+    ])
+}
+
+pub(super) fn tidy_warning_struct_dtype() -> DataType {
+    DataType::Struct(vec![
+        Field::new("code".into(), DataType::String),
+        Field::new("rule".into(), DataType::String),
+        Field::new("message".into(), DataType::String),
+    ])
+}
+
+fn tidy_report_struct_dtype() -> DataType {
+    DataType::Struct(vec![
+        Field::new("ok".into(), DataType::Boolean),
+        Field::new("bibtex".into(), DataType::String),
+        Field::new("count".into(), DataType::UInt32),
+        Field::new(
+            "warnings".into(),
+            DataType::List(Box::new(tidy_warning_struct_dtype())),
+        ),
+        Field::new("error".into(), DataType::String),
     ])
 }
 

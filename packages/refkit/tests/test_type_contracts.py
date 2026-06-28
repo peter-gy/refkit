@@ -19,6 +19,10 @@ def failed_block_errors(raw: rk.BibDocument) -> list[str]:
     return [block["error"] for block in raw.failed_blocks]
 
 
+def tidy_warning_codes(result: rk.TidyResult) -> list[str]:
+    return [warning.code for warning in result.warnings]
+
+
 def duplicate_entry_titles(raw: rk.BibDocument, key: str) -> list[str]:
     return [
         field.value for entry in raw.entries.get_all(key) for field in entry.fields.get_all("title")
@@ -41,3 +45,8 @@ def test_type_checked_structured_return_samples() -> None:
         "Second Title",
         "Duplicate Entry",
     ]
+    tidied = rk.BibDocument.parse("@article{typed, title={Typed Contract}, year={2024}}\n").tidy(
+        options=rk.TidyOptions(strip_comments=True)
+    )
+    assert isinstance(tidied.bibtex, str)
+    assert tidy_warning_codes(tidied) == []

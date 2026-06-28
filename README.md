@@ -1,6 +1,6 @@
 # refkit
 
-`refkit` parses bibliography files, renders CSL citations, edits raw BibTeX, and applies the same Rust-backed capabilities to Polars columns.
+`refkit` parses bibliography files, renders CSL citations, formats and edits raw BibTeX, and applies Rust-backed bibliography capabilities to Polars columns.
 
 ## Install
 
@@ -13,7 +13,7 @@ pip install polars-refkit
 `refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`.
 Installing `refkit` also installs the matching native wheel for the current Python platform.
 
-`refkit`, `refkit-core`, and `polars-refkit` are versioned as `0.0.2` and support CPython 3.11 through 3.14. Native wheels use the Python 3.11 stable ABI. `refkit-core` and `polars-refkit` also publish PyEmscripten wheels for the Python 3.14 Pyodide runtime.
+The supported Python versions, wheel ABI, and Pyodide targets are declared in package metadata and release workflows.
 
 ## Render Citations From Python
 
@@ -73,6 +73,32 @@ rk.cite("refs.bib", "doe2024", style="ieee").text
 rk.full_bibliography("refs.bib", style="chicago-author-date").html
 ```
 
+## Format BibTeX From Python
+
+`tidy_bibtex` formats BibTeX text and returns `TidyResult` with the formatted source, warnings, and entry count.
+
+```python
+import refkit as rk
+
+result = rk.tidy_bibtex(
+    """
+@ARTICLE {doe2024,
+  pages={6-13},
+  year={2024},}
+"""
+)
+
+print(result.bibtex)
+print(result.count)
+```
+
+Use `TidyOptions` for formatting choices:
+
+```python
+options = rk.TidyOptions(sort_fields=True, wrap=88)
+tidied = rk.BibDocument.read("refs.bib").tidy(options=options)
+```
+
 ## Process BibTeX Columns In Polars
 
 ```python
@@ -93,13 +119,14 @@ out = df.select(
     each_citation=pl.col("bibtex").refkit.cite_each(pl.col("keys")),
     grouped_citation=pl.col("bibtex").refkit.cite_group(pl.col("keys")),
     bibliography=pl.col("bibtex").refkit.full_bibliography_html(),
+    formatted=pl.col("bibtex").refkit.tidy_bibtex(sort_fields=True),
     count=pl.col("bibtex").refkit.entry_count(),
     keys=pl.col("bibtex").refkit.keys(),
     entries=pl.col("bibtex").refkit.entries(),
 )
 ```
 
-`polars-refkit` runs inside the Polars expression engine. Each row is one BibTeX or BibLaTeX source. Strings name columns. Use `pl.lit(...)` for literal BibTeX or citation keys. Parse failures return null for value expressions, `can_parse` returns whether a row can produce a normalized library, and `has_diagnostics`, `diagnostics`, and `parse_report` expose parse messages.
+`polars-refkit` runs inside the Polars expression engine. Each row is one BibTeX or BibLaTeX source. Strings name columns. Use `pl.lit(...)` for literal BibTeX or citation keys. Parse or formatting failures return null for value expressions. `can_parse` returns whether a row can produce a normalized library, and `has_diagnostics`, `diagnostics`, `parse_report`, and `tidy_bibtex_report` expose row messages.
 
 ## Choose A Package
 
@@ -107,7 +134,7 @@ out = df.select(
 | --- | --- | --- |
 | `refkit` | `import refkit as rk` | Citation rendering, normalized library access, selectors, and raw BibTeX editing. |
 | `refkit-core` | Installed by `refkit` | Native Rust/PyO3 implementation used by `refkit`, including Pyodide-compatible wheels. |
-| `polars-refkit` | `import polars_refkit as prk` | BibTeX parsing, inspection, and rendering inside eager or lazy Polars plans. |
+| `polars-refkit` | `import polars_refkit as prk` | BibTeX parsing, formatting, inspection, and rendering inside eager or lazy Polars plans. |
 | `refkit-bench` | `python -m refkit_bench.runner` | Repository benchmark lanes for parser, renderer, raw BibTeX, and Polars workflows. |
 
 ## Capabilities
@@ -119,13 +146,13 @@ out = df.select(
 | Render bibliographies | `Document.cited_bibliography`, `Document.full_bibliography`, `full_bibliography` | `full_bibliography_text`, `full_bibliography_html`, `full_bibliography_rendered` |
 | Load CSL styles and locales | `Style.load`, `Style.from_path`, `Style.from_xml`, `Locale.load` | `style=` and `locale=` arguments |
 | Inspect entries | Mapping access, selectors, `project`, `to_dicts` | `keys`, `entries`, `to_hayagriva_json` |
-| Edit raw BibTeX | `BibDocument` | Use `refkit` for block-level edits |
+| Format and edit raw BibTeX | `tidy_bibtex`, `tidy_file`, `BibDocument` | `tidy_bibtex`, `tidy_bibtex_report` |
 | Export rendered output | `Rendered.text`, `Rendered.html`, `Rendered.tree` | string and struct expressions |
 
 ## Architecture
 
 The root Cargo workspace owns the shared Rust core and the `refkit-core` native adapter.
-`crates/refkit-core` contains the platform-independent work: parsing, recovery, normalized records, raw BibTeX blocks, style preparation, document rendering, rendered trees, and shared error records.
+`crates/refkit-core` contains the platform-independent work: parsing, recovery, normalized records, raw BibTeX blocks, BibTeX formatting, style preparation, document rendering, rendered trees, and shared error records.
 
 The Python packages are adapters over that core:
 

@@ -8,6 +8,7 @@ mod module;
 mod raw;
 mod rendered;
 mod style;
+mod tidy;
 
 use pyo3::prelude::*;
 use pyo3::types::PyModule;

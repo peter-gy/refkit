@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use refkit_core::{
+use crate::{
     RawEntryId, RawSyntaxDocument, RawSyntaxEntry, RawSyntaxField, RawValueAtom, RawValueMode,
 };
 
-use crate::TidyOptions;
+use super::TidyOptions;
 
 const MISSING_REQUIRED_DATA: &str = "missing required citation key data";
 

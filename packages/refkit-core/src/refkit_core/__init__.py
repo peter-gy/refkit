@@ -36,8 +36,15 @@ RefkitError = _extension.RefkitError
 Rendered = _extension.Rendered
 RenderedDocument = _extension.RenderedDocument
 Style = _extension.Style
+TidyError = _extension.TidyError
+TidyOptions = _extension.TidyOptions
+TidyResult = _extension.TidyResult
+TidySyntaxError = _extension.TidySyntaxError
+TidyWarning = _extension.TidyWarning
 build_info = _extension.build_info
 build_mode = _extension.build_mode
+tidy_bibtex = _extension.tidy_bibtex
+_tidy_option_names = _extension._tidy_option_names
 
 __all__ = [
     "BibDocument",
@@ -57,7 +64,13 @@ __all__ = [
     "Rendered",
     "RenderedDocument",
     "Style",
+    "TidyError",
+    "TidyOptions",
+    "TidyResult",
+    "TidySyntaxError",
+    "TidyWarning",
     "build_info",
     "build_mode",
+    "tidy_bibtex",
     "__version__",
 ]

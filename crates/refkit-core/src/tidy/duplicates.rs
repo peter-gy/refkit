@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use refkit_core::{RawEntryId, RawSyntaxDocument, RawSyntaxEntry};
+use crate::{RawEntryId, RawSyntaxDocument, RawSyntaxEntry};
 
-use crate::{DuplicateRule, MergeStrategy, TidyOptions, TidyWarning};
+use super::{DuplicateRule, MergeStrategy, TidyOptions, TidyWarning};
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct DuplicatePlan {

@@ -11,9 +11,10 @@ use serde_json::{Value, json};
 
 use crate::conversion::json_to_py;
 use crate::errors::RefkitError;
+use crate::tidy::{TidyOptions, TidyResult, tidy_error_to_py};
 use refkit_core::{
     RawBlockInfo, RawDocument, RawEditError, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo,
-    quoted, read_bibliography_text,
+    quoted, read_bibliography_text, tidy_bibtex as core_tidy_bibtex,
 };
 
 type SharedDocument = Rc<RefCell<RawDocument>>;
@@ -95,6 +96,31 @@ impl BibDocument {
                 .map_err(|err| RefkitError::new_err(format!("failed to write BibTeX: {err}")))?;
             Ok(())
         })
+    }
+
+    fn to_bibtex(&self, py: Python<'_>) -> PyResult<String> {
+        let data = self.doc.borrow().clone();
+        py.detach(move || render_document(&data))
+    }
+
+    #[pyo3(signature = (*, options = None))]
+    fn tidy(
+        &self,
+        py: Python<'_>,
+        options: Option<PyRef<'_, TidyOptions>>,
+    ) -> PyResult<TidyResult> {
+        let data = self.doc.borrow().clone();
+        let options = options
+            .as_ref()
+            .map(|options| options.inner())
+            .unwrap_or_default();
+        let rendered = py
+            .detach(move || render_document_text(&data))
+            .map_err(RefkitError::new_err)?;
+        let result = py
+            .detach(move || core_tidy_bibtex(&rendered, options))
+            .map_err(|err| tidy_error_to_py(py, err))?;
+        Ok(TidyResult::from_core(result))
     }
 
     fn __repr__(&self) -> String {
@@ -427,7 +453,11 @@ fn unique_entry_id(doc: &RawDocument, key: &str) -> PyResult<Option<RawEntryId>>
 }
 
 fn render_document(data: &RawDocument) -> PyResult<String> {
-    data.render().map_err(RefkitError::new_err)
+    render_document_text(data).map_err(RefkitError::new_err)
+}
+
+fn render_document_text(data: &RawDocument) -> Result<String, String> {
+    data.render()
 }
 
 fn raw_edit_error_to_py(err: RawEditError, field_key: &str) -> PyErr {

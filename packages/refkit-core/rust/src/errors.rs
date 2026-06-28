@@ -6,6 +6,8 @@ use refkit_core::{DocumentError, StyleError, quoted};
 
 create_exception!(refkit_core, RefkitError, PyException);
 create_exception!(refkit_core, MissingReferenceError, RefkitError);
+create_exception!(refkit_core, TidyError, RefkitError);
+create_exception!(refkit_core, TidySyntaxError, TidyError);
 
 pub(crate) fn document_error_to_py(err: DocumentError) -> PyErr {
     match err {

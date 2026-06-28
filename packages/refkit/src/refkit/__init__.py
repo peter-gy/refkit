@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from importlib.metadata import version as _metadata_version
 from os import PathLike
+from pathlib import Path
 
 import refkit_core as _core
 
-_COMPATIBLE_REFKIT_CORE_VERSION = "0.0.2"
+_COMPATIBLE_REFKIT_CORE_VERSION = "0.0.3"
 __version__ = _metadata_version("refkit")
 
 
@@ -46,6 +47,11 @@ RefkitError = _core.RefkitError
 Rendered = _core.Rendered
 RenderedDocument = _core.RenderedDocument
 Style = _core.Style
+TidyError = _core.TidyError
+TidyOptions = _core.TidyOptions
+TidyResult = _core.TidyResult
+TidySyntaxError = _core.TidySyntaxError
+TidyWarning = _core.TidyWarning
 build_info = _core.build_info
 build_mode = _core.build_mode
 
@@ -67,13 +73,44 @@ __all__ = [
     "Rendered",
     "RenderedDocument",
     "Style",
+    "TidyError",
+    "TidyOptions",
+    "TidyResult",
+    "TidySyntaxError",
+    "TidyWarning",
     "build_info",
     "build_mode",
     "cite",
     "full_bibliography",
+    "tidy_bibtex",
+    "tidy_file",
     "check_refkit_core_version",
     "__version__",
 ]
+
+
+def tidy_bibtex(
+    source: str,
+    *,
+    options: TidyOptions | None = None,
+) -> TidyResult:
+    """Format BibTeX text and return the formatted source plus warnings."""
+
+    return _core.tidy_bibtex(source, options=options)
+
+
+def tidy_file(
+    path: str | PathLike[str],
+    *,
+    output: str | PathLike[str] | None = None,
+    options: TidyOptions | None = None,
+) -> TidyResult:
+    """Read a BibTeX file, format it, and write the result when `output` is set."""
+
+    result = BibDocument.read(path).tidy(options=options)
+    if output is not None:
+        Path(output).write_text(result.bibtex, encoding="utf-8")
+    return result
 
 
 def cite(

@@ -1,6 +1,6 @@
 # refkit
 
-`refkit` reads BibTeX, BibLaTeX, and Hayagriva YAML, renders CSL citations, and edits raw BibTeX documents from Python.
+`refkit` reads BibTeX, BibLaTeX, and Hayagriva YAML, renders CSL citations, formats BibTeX, and edits raw BibTeX documents from Python.
 
 ## Install
 
@@ -9,9 +9,9 @@ pip install refkit
 ```
 
 `refkit` is pure Python and depends on the exact matching `refkit-core` release.
-`refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`, including PyEmscripten wheels for the Python 3.14 Pyodide runtime.
+`refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`, including PyEmscripten wheels for Pyodide.
 
-`refkit` supports CPython 3.11 through 3.14. Native wheels from `refkit-core` use the Python 3.11 stable ABI.
+The supported Python versions and native wheel ABI are declared in package metadata and release workflows.
 
 ## Render A Citation
 
@@ -73,6 +73,53 @@ rk.full_bibliography("refs.bib", style="chicago-author-date").html
 
 Use `Library.parse_bibtex`, `Library.parse_yaml`, and `Document` when the bibliography source is already in memory or when several citations share the same library and style.
 
+## Format BibTeX
+
+`tidy_bibtex` formats BibTeX text and returns `TidyResult` with the formatted source, warnings, and entry count.
+
+```python
+import refkit as rk
+
+result = rk.tidy_bibtex(
+    """
+@ARTICLE {doe2024,
+  pages={6-13},
+  year={2024},}
+"""
+)
+
+print(result.bibtex)
+print(result.count)
+```
+
+Use `TidyOptions` for formatting choices:
+
+```python
+options = rk.TidyOptions(sort_fields=True, wrap=88)
+result = rk.tidy_bibtex(source, options=options)
+```
+
+Warnings are structured objects:
+
+```python
+for warning in result.warnings:
+    print(warning.code, warning.rule, warning.message)
+```
+
+Raw edit flows can render the current document state before formatting:
+
+```python
+raw = rk.BibDocument.read("refs.bib")
+raw.entries["doe2024"].fields["title"].value = "Corrected title"
+result = raw.tidy(options=rk.TidyOptions(sort_fields=True))
+```
+
+Use `tidy_file` when the input is on disk. It writes a file when `output` is supplied.
+
+```python
+rk.tidy_file("refs.bib", output="refs.tidy.bib")
+```
+
 ## Capabilities
 
 | Capability | Python surface |
@@ -82,6 +129,7 @@ Use `Library.parse_bibtex`, `Library.parse_yaml`, and `Document` when the biblio
 | Render bibliographies | `Document.cited_bibliography`, `Document.full_bibliography`, `full_bibliography` |
 | Load styles and locales | `Style.load`, `Style.from_path`, `Style.from_xml`, `Locale.load` |
 | Inspect entries | mapping access, `keys`, `get`, `get_many`, `select`, `project`, `to_dicts` |
+| Format BibTeX | `tidy_bibtex`, `tidy_file`, `TidyOptions`, `TidyResult` |
 | Edit raw BibTeX | `BibDocument.read`, `BibDocument.parse`, field assignment, `write` |
 | Inspect rendered output | `Rendered.text`, `Rendered.html`, `Rendered.tree` |
 
@@ -145,7 +193,7 @@ for entry in library.select("article > periodical[volume]"):
 
 ## Edit Raw BibTeX
 
-`BibDocument` preserves the raw `.bib` structure that normalized rendering does not need: comments, preambles, string definitions, failed blocks, order, and source spans.
+`BibDocument` preserves raw `.bib` comments, preambles, string definitions, failed blocks, order, and source spans.
 
 ```python
 raw = rk.BibDocument.read("refs.bib")

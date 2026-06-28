@@ -36,6 +36,8 @@ def main() -> None:
         citation=namespace.cite("key", style="apa"),
         rendered=namespace.cite_rendered("key", style="apa"),
         each=namespace.cite_each("keys", style="apa"),
+        tidy=namespace.tidy_bibtex(sort_fields=True),
+        tidy_report=namespace.tidy_bibtex_report(sort_fields=True),
     ).to_dicts()[0]
 
     assert row["count"] == 1
@@ -43,6 +45,8 @@ def main() -> None:
     assert row["rendered"]["text"] == "(Doe, 2024)"
     assert row["rendered"]["html"]
     assert row["each"] == ["(Doe, 2024)"]
+    assert row["tidy"].startswith("@article{doe2024,")
+    assert row["tidy_report"]["ok"] is True
 
     sys.stdout.write(f"polars {pl.__version__}\n")
     sys.stdout.write(f"polars-refkit {polars_refkit.__version__}\n")

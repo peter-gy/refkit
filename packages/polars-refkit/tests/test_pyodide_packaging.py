@@ -33,7 +33,7 @@ def test_rust_plugin_uses_package_local_pyodide_abi_boundary() -> None:
     polars_core = cast(dict[str, Any], dependencies["polars-core"])
     pyo3_polars = cast(dict[str, Any], dependencies["pyo3-polars"])
 
-    assert package["version"] == "0.0.2"
+    assert package["version"] == "0.0.3"
     assert workspace["resolver"] == "3"
     assert polars["version"] == "=0.50.0"
     assert polars_core["version"] == "=0.50.0"
@@ -117,3 +117,5 @@ def test_pyodide_smoke_runs_through_public_polars_expressions() -> None:
     assert 'namespace.cite("key", style="apa")' in script
     assert 'namespace.cite_rendered("key", style="apa")' in script
     assert 'namespace.cite_each("keys", style="apa")' in script
+    assert "namespace.tidy_bibtex(sort_fields=True)" in script
+    assert "namespace.tidy_bibtex_report(sort_fields=True)" in script

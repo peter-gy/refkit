@@ -18,7 +18,7 @@ dependencies = [
 
 [[package]]
 name = "bibtex-tidy-rs"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "refkit-core",
  "serde",
@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "refkit-core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "biblatex",
  "hayagriva",
@@ -480,7 +480,7 @@ dependencies = [
 
 [[package]]
 name = "refkit-core-native"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "pyo3",
  "refkit-core",

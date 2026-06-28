@@ -10,36 +10,36 @@ from typing import Any, Literal, TypeAlias
 import polars as pl
 from polars.plugins import register_plugin_function
 
+from ._tidy_options import (
+    TIDY_UNSET as _TIDY_UNSET,
+)
+from ._tidy_options import (
+    DuplicateRule as DuplicateRule,
+)
+from ._tidy_options import (
+    MergeStrategy as MergeStrategy,
+)
+from ._tidy_options import (
+    tidy_kwargs as _tidy_kwargs,
+)
+from ._tidy_options import (
+    tidy_signature as _tidy_signature,
+)
+
 PLUGIN_PATH = Path(__file__).parent
 RecoveryMode: TypeAlias = Literal["error", "report"]
 ColumnExpr: TypeAlias = str | pl.Expr
 
 __version__ = _metadata_version("polars-refkit")
 
-__all__ = [
-    "__version__",
-    "RefkitExprNamespace",
-    "full_bibliography_html",
-    "full_bibliography_rendered",
-    "full_bibliography_text",
-    "can_parse",
-    "cite",
-    "cite_each",
-    "cite_each_html",
-    "cite_each_rendered",
-    "cite_group",
-    "cite_group_html",
-    "cite_group_rendered",
-    "cite_html",
-    "cite_rendered",
-    "diagnostics",
-    "entries",
-    "entry_count",
-    "has_diagnostics",
-    "keys",
-    "parse_report",
-    "to_hayagriva_json",
-]
+__all__ = (
+    "__version__ DuplicateRule MergeStrategy RefkitExprNamespace "
+    "can_parse cite cite_html cite_rendered cite_each cite_each_html "
+    "cite_each_rendered cite_group cite_group_html cite_group_rendered "
+    "diagnostics entries entry_count has_diagnostics keys parse_report "
+    "to_hayagriva_json full_bibliography_html full_bibliography_rendered "
+    "full_bibliography_text tidy_bibtex tidy_bibtex_report"
+).split()
 
 
 def cite(
@@ -359,6 +359,144 @@ def to_hayagriva_json(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error
     )
 
 
+def tidy_bibtex(
+    bibtex_col: ColumnExpr,
+    *,
+    omit: Any = _TIDY_UNSET,
+    curly: Any = _TIDY_UNSET,
+    numeric: Any = _TIDY_UNSET,
+    months: Any = _TIDY_UNSET,
+    space: Any = _TIDY_UNSET,
+    tab: Any = _TIDY_UNSET,
+    align: Any = _TIDY_UNSET,
+    blank_lines: Any = _TIDY_UNSET,
+    sort: Any = _TIDY_UNSET,
+    duplicates: Any = _TIDY_UNSET,
+    merge: Any = _TIDY_UNSET,
+    strip_enclosing_braces: Any = _TIDY_UNSET,
+    drop_all_caps: Any = _TIDY_UNSET,
+    escape: Any = _TIDY_UNSET,
+    sort_fields: Any = _TIDY_UNSET,
+    strip_comments: Any = _TIDY_UNSET,
+    trailing_commas: Any = _TIDY_UNSET,
+    encode_urls: Any = _TIDY_UNSET,
+    tidy_comments: Any = _TIDY_UNSET,
+    remove_empty_fields: Any = _TIDY_UNSET,
+    remove_duplicate_fields: Any = _TIDY_UNSET,
+    generate_keys: Any = _TIDY_UNSET,
+    max_authors: Any = _TIDY_UNSET,
+    lowercase: Any = _TIDY_UNSET,
+    enclosing_braces: Any = _TIDY_UNSET,
+    remove_braces: Any = _TIDY_UNSET,
+    wrap: Any = _TIDY_UNSET,
+) -> pl.Expr:
+    """Format each BibTeX row and return the formatted source."""
+
+    return _tidy_expr(
+        "tidy_bibtex",
+        bibtex_col,
+        kwargs=_tidy_kwargs(
+            omit=omit,
+            curly=curly,
+            numeric=numeric,
+            months=months,
+            space=space,
+            tab=tab,
+            align=align,
+            blank_lines=blank_lines,
+            sort=sort,
+            duplicates=duplicates,
+            merge=merge,
+            strip_enclosing_braces=strip_enclosing_braces,
+            drop_all_caps=drop_all_caps,
+            escape=escape,
+            sort_fields=sort_fields,
+            strip_comments=strip_comments,
+            trailing_commas=trailing_commas,
+            encode_urls=encode_urls,
+            tidy_comments=tidy_comments,
+            remove_empty_fields=remove_empty_fields,
+            remove_duplicate_fields=remove_duplicate_fields,
+            generate_keys=generate_keys,
+            max_authors=max_authors,
+            lowercase=lowercase,
+            enclosing_braces=enclosing_braces,
+            remove_braces=remove_braces,
+            wrap=wrap,
+        ),
+        output_name="tidy_bibtex",
+    )
+
+
+def tidy_bibtex_report(
+    bibtex_col: ColumnExpr,
+    *,
+    omit: Any = _TIDY_UNSET,
+    curly: Any = _TIDY_UNSET,
+    numeric: Any = _TIDY_UNSET,
+    months: Any = _TIDY_UNSET,
+    space: Any = _TIDY_UNSET,
+    tab: Any = _TIDY_UNSET,
+    align: Any = _TIDY_UNSET,
+    blank_lines: Any = _TIDY_UNSET,
+    sort: Any = _TIDY_UNSET,
+    duplicates: Any = _TIDY_UNSET,
+    merge: Any = _TIDY_UNSET,
+    strip_enclosing_braces: Any = _TIDY_UNSET,
+    drop_all_caps: Any = _TIDY_UNSET,
+    escape: Any = _TIDY_UNSET,
+    sort_fields: Any = _TIDY_UNSET,
+    strip_comments: Any = _TIDY_UNSET,
+    trailing_commas: Any = _TIDY_UNSET,
+    encode_urls: Any = _TIDY_UNSET,
+    tidy_comments: Any = _TIDY_UNSET,
+    remove_empty_fields: Any = _TIDY_UNSET,
+    remove_duplicate_fields: Any = _TIDY_UNSET,
+    generate_keys: Any = _TIDY_UNSET,
+    max_authors: Any = _TIDY_UNSET,
+    lowercase: Any = _TIDY_UNSET,
+    enclosing_braces: Any = _TIDY_UNSET,
+    remove_braces: Any = _TIDY_UNSET,
+    wrap: Any = _TIDY_UNSET,
+) -> pl.Expr:
+    """Return `{ok, bibtex, count, warnings, error}` for each BibTeX row."""
+
+    return _tidy_expr(
+        "tidy_bibtex_report",
+        bibtex_col,
+        kwargs=_tidy_kwargs(
+            omit=omit,
+            curly=curly,
+            numeric=numeric,
+            months=months,
+            space=space,
+            tab=tab,
+            align=align,
+            blank_lines=blank_lines,
+            sort=sort,
+            duplicates=duplicates,
+            merge=merge,
+            strip_enclosing_braces=strip_enclosing_braces,
+            drop_all_caps=drop_all_caps,
+            escape=escape,
+            sort_fields=sort_fields,
+            strip_comments=strip_comments,
+            trailing_commas=trailing_commas,
+            encode_urls=encode_urls,
+            tidy_comments=tidy_comments,
+            remove_empty_fields=remove_empty_fields,
+            remove_duplicate_fields=remove_duplicate_fields,
+            generate_keys=generate_keys,
+            max_authors=max_authors,
+            lowercase=lowercase,
+            enclosing_braces=enclosing_braces,
+            remove_braces=remove_braces,
+            wrap=wrap,
+        ),
+        output_name="tidy_bibtex_report",
+    )
+
+
 @pl.api.register_expr_namespace("refkit")
 class RefkitExprNamespace:
     """BibTeX expressions available from `pl.Expr.refkit`."""
@@ -564,6 +702,134 @@ class RefkitExprNamespace:
 
         return to_hayagriva_json(self._expr, recovery=recovery)
 
+    def tidy_bibtex(
+        self,
+        *,
+        omit: Any = _TIDY_UNSET,
+        curly: Any = _TIDY_UNSET,
+        numeric: Any = _TIDY_UNSET,
+        months: Any = _TIDY_UNSET,
+        space: Any = _TIDY_UNSET,
+        tab: Any = _TIDY_UNSET,
+        align: Any = _TIDY_UNSET,
+        blank_lines: Any = _TIDY_UNSET,
+        sort: Any = _TIDY_UNSET,
+        duplicates: Any = _TIDY_UNSET,
+        merge: Any = _TIDY_UNSET,
+        strip_enclosing_braces: Any = _TIDY_UNSET,
+        drop_all_caps: Any = _TIDY_UNSET,
+        escape: Any = _TIDY_UNSET,
+        sort_fields: Any = _TIDY_UNSET,
+        strip_comments: Any = _TIDY_UNSET,
+        trailing_commas: Any = _TIDY_UNSET,
+        encode_urls: Any = _TIDY_UNSET,
+        tidy_comments: Any = _TIDY_UNSET,
+        remove_empty_fields: Any = _TIDY_UNSET,
+        remove_duplicate_fields: Any = _TIDY_UNSET,
+        generate_keys: Any = _TIDY_UNSET,
+        max_authors: Any = _TIDY_UNSET,
+        lowercase: Any = _TIDY_UNSET,
+        enclosing_braces: Any = _TIDY_UNSET,
+        remove_braces: Any = _TIDY_UNSET,
+        wrap: Any = _TIDY_UNSET,
+    ) -> pl.Expr:
+        """Format each BibTeX row and return the formatted source."""
+
+        return tidy_bibtex(
+            self._expr,
+            omit=omit,
+            curly=curly,
+            numeric=numeric,
+            months=months,
+            space=space,
+            tab=tab,
+            align=align,
+            blank_lines=blank_lines,
+            sort=sort,
+            duplicates=duplicates,
+            merge=merge,
+            strip_enclosing_braces=strip_enclosing_braces,
+            drop_all_caps=drop_all_caps,
+            escape=escape,
+            sort_fields=sort_fields,
+            strip_comments=strip_comments,
+            trailing_commas=trailing_commas,
+            encode_urls=encode_urls,
+            tidy_comments=tidy_comments,
+            remove_empty_fields=remove_empty_fields,
+            remove_duplicate_fields=remove_duplicate_fields,
+            generate_keys=generate_keys,
+            max_authors=max_authors,
+            lowercase=lowercase,
+            enclosing_braces=enclosing_braces,
+            remove_braces=remove_braces,
+            wrap=wrap,
+        )
+
+    def tidy_bibtex_report(
+        self,
+        *,
+        omit: Any = _TIDY_UNSET,
+        curly: Any = _TIDY_UNSET,
+        numeric: Any = _TIDY_UNSET,
+        months: Any = _TIDY_UNSET,
+        space: Any = _TIDY_UNSET,
+        tab: Any = _TIDY_UNSET,
+        align: Any = _TIDY_UNSET,
+        blank_lines: Any = _TIDY_UNSET,
+        sort: Any = _TIDY_UNSET,
+        duplicates: Any = _TIDY_UNSET,
+        merge: Any = _TIDY_UNSET,
+        strip_enclosing_braces: Any = _TIDY_UNSET,
+        drop_all_caps: Any = _TIDY_UNSET,
+        escape: Any = _TIDY_UNSET,
+        sort_fields: Any = _TIDY_UNSET,
+        strip_comments: Any = _TIDY_UNSET,
+        trailing_commas: Any = _TIDY_UNSET,
+        encode_urls: Any = _TIDY_UNSET,
+        tidy_comments: Any = _TIDY_UNSET,
+        remove_empty_fields: Any = _TIDY_UNSET,
+        remove_duplicate_fields: Any = _TIDY_UNSET,
+        generate_keys: Any = _TIDY_UNSET,
+        max_authors: Any = _TIDY_UNSET,
+        lowercase: Any = _TIDY_UNSET,
+        enclosing_braces: Any = _TIDY_UNSET,
+        remove_braces: Any = _TIDY_UNSET,
+        wrap: Any = _TIDY_UNSET,
+    ) -> pl.Expr:
+        """Return `{ok, bibtex, count, warnings, error}` for each BibTeX row."""
+
+        return tidy_bibtex_report(
+            self._expr,
+            omit=omit,
+            curly=curly,
+            numeric=numeric,
+            months=months,
+            space=space,
+            tab=tab,
+            align=align,
+            blank_lines=blank_lines,
+            sort=sort,
+            duplicates=duplicates,
+            merge=merge,
+            strip_enclosing_braces=strip_enclosing_braces,
+            drop_all_caps=drop_all_caps,
+            escape=escape,
+            sort_fields=sort_fields,
+            strip_comments=strip_comments,
+            trailing_commas=trailing_commas,
+            encode_urls=encode_urls,
+            tidy_comments=tidy_comments,
+            remove_empty_fields=remove_empty_fields,
+            remove_duplicate_fields=remove_duplicate_fields,
+            generate_keys=generate_keys,
+            max_authors=max_authors,
+            lowercase=lowercase,
+            enclosing_braces=enclosing_braces,
+            remove_braces=remove_braces,
+            wrap=wrap,
+        )
+
 
 def _cite_expr(
     function_name: str,
@@ -659,6 +925,21 @@ def _diagnostics_expr(
     )
 
 
+def _tidy_expr(
+    function_name: str,
+    bibtex_col: ColumnExpr,
+    *,
+    kwargs: dict[str, Any],
+    output_name: str,
+) -> pl.Expr:
+    return _register(
+        function_name,
+        [bibtex_col],
+        kwargs=kwargs or {"_defaults": True},
+        output_name=output_name,
+    )
+
+
 def _render_kwargs(style: str, locale: str, recovery: RecoveryMode) -> dict[str, Any]:
     return {
         "style": style,
@@ -698,3 +979,16 @@ def _parse_into_expr(expr: ColumnExpr) -> pl.Expr:
     if isinstance(expr, str):
         return pl.col(expr)
     return pl.lit(expr)
+
+
+def _set_signature(target: Any, signature: object) -> None:
+    target.__signature__ = signature
+
+
+for _target, _first_parameter in (
+    (tidy_bibtex, "bibtex_col"),
+    (tidy_bibtex_report, "bibtex_col"),
+    (RefkitExprNamespace.tidy_bibtex, "self"),
+    (RefkitExprNamespace.tidy_bibtex_report, "self"),
+):
+    _set_signature(_target, _tidy_signature(_first_parameter))

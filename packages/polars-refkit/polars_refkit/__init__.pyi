@@ -6,7 +6,14 @@ import polars as pl
 __version__: str
 
 RecoveryMode: TypeAlias = Literal["error", "report"]
+DuplicateRule: TypeAlias = Literal["doi", "key", "abstract", "citation"]
+MergeStrategy: TypeAlias = Literal["first", "last", "combine", "overwrite"]
 ColumnExpr: TypeAlias = str | pl.Expr
+TidyStringList: TypeAlias = Iterable[str] | None
+TidyDuplicateRules: TypeAlias = Iterable[DuplicateRule] | None
+TidyDefaultableUsize: TypeAlias = bool | int | None
+TidyDefaultableString: TypeAlias = bool | str | None
+TidyDefaultableStringList: TypeAlias = bool | Iterable[str] | None
 
 class RefkitExprNamespace:
     def cite(
@@ -115,6 +122,68 @@ class RefkitExprNamespace:
     def diagnostics(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
     def parse_report(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
     def to_hayagriva_json(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+    def tidy_bibtex(
+        self,
+        *,
+        omit: TidyStringList = ...,
+        curly: bool = ...,
+        numeric: bool = ...,
+        months: bool = ...,
+        space: int = ...,
+        tab: bool = ...,
+        align: TidyDefaultableUsize = ...,
+        blank_lines: bool = ...,
+        sort: TidyDefaultableStringList = ...,
+        duplicates: TidyDuplicateRules = ...,
+        merge: MergeStrategy | None = ...,
+        strip_enclosing_braces: bool = ...,
+        drop_all_caps: bool = ...,
+        escape: bool = ...,
+        sort_fields: TidyDefaultableStringList = ...,
+        strip_comments: bool = ...,
+        trailing_commas: bool = ...,
+        encode_urls: bool = ...,
+        tidy_comments: bool = ...,
+        remove_empty_fields: bool = ...,
+        remove_duplicate_fields: bool = ...,
+        generate_keys: TidyDefaultableString = ...,
+        max_authors: int | None = ...,
+        lowercase: bool = ...,
+        enclosing_braces: TidyDefaultableStringList = ...,
+        remove_braces: TidyDefaultableStringList = ...,
+        wrap: TidyDefaultableUsize = ...,
+    ) -> pl.Expr: ...
+    def tidy_bibtex_report(
+        self,
+        *,
+        omit: TidyStringList = ...,
+        curly: bool = ...,
+        numeric: bool = ...,
+        months: bool = ...,
+        space: int = ...,
+        tab: bool = ...,
+        align: TidyDefaultableUsize = ...,
+        blank_lines: bool = ...,
+        sort: TidyDefaultableStringList = ...,
+        duplicates: TidyDuplicateRules = ...,
+        merge: MergeStrategy | None = ...,
+        strip_enclosing_braces: bool = ...,
+        drop_all_caps: bool = ...,
+        escape: bool = ...,
+        sort_fields: TidyDefaultableStringList = ...,
+        strip_comments: bool = ...,
+        trailing_commas: bool = ...,
+        encode_urls: bool = ...,
+        tidy_comments: bool = ...,
+        remove_empty_fields: bool = ...,
+        remove_duplicate_fields: bool = ...,
+        generate_keys: TidyDefaultableString = ...,
+        max_authors: int | None = ...,
+        lowercase: bool = ...,
+        enclosing_braces: TidyDefaultableStringList = ...,
+        remove_braces: TidyDefaultableStringList = ...,
+        wrap: TidyDefaultableUsize = ...,
+    ) -> pl.Expr: ...
 
 def cite(
     bibtex_col: ColumnExpr,
@@ -222,3 +291,65 @@ def entries(
 def diagnostics(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
 def parse_report(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
 def to_hayagriva_json(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
+def tidy_bibtex(
+    bibtex_col: ColumnExpr,
+    *,
+    omit: TidyStringList = ...,
+    curly: bool = ...,
+    numeric: bool = ...,
+    months: bool = ...,
+    space: int = ...,
+    tab: bool = ...,
+    align: TidyDefaultableUsize = ...,
+    blank_lines: bool = ...,
+    sort: TidyDefaultableStringList = ...,
+    duplicates: TidyDuplicateRules = ...,
+    merge: MergeStrategy | None = ...,
+    strip_enclosing_braces: bool = ...,
+    drop_all_caps: bool = ...,
+    escape: bool = ...,
+    sort_fields: TidyDefaultableStringList = ...,
+    strip_comments: bool = ...,
+    trailing_commas: bool = ...,
+    encode_urls: bool = ...,
+    tidy_comments: bool = ...,
+    remove_empty_fields: bool = ...,
+    remove_duplicate_fields: bool = ...,
+    generate_keys: TidyDefaultableString = ...,
+    max_authors: int | None = ...,
+    lowercase: bool = ...,
+    enclosing_braces: TidyDefaultableStringList = ...,
+    remove_braces: TidyDefaultableStringList = ...,
+    wrap: TidyDefaultableUsize = ...,
+) -> pl.Expr: ...
+def tidy_bibtex_report(
+    bibtex_col: ColumnExpr,
+    *,
+    omit: TidyStringList = ...,
+    curly: bool = ...,
+    numeric: bool = ...,
+    months: bool = ...,
+    space: int = ...,
+    tab: bool = ...,
+    align: TidyDefaultableUsize = ...,
+    blank_lines: bool = ...,
+    sort: TidyDefaultableStringList = ...,
+    duplicates: TidyDuplicateRules = ...,
+    merge: MergeStrategy | None = ...,
+    strip_enclosing_braces: bool = ...,
+    drop_all_caps: bool = ...,
+    escape: bool = ...,
+    sort_fields: TidyDefaultableStringList = ...,
+    strip_comments: bool = ...,
+    trailing_commas: bool = ...,
+    encode_urls: bool = ...,
+    tidy_comments: bool = ...,
+    remove_empty_fields: bool = ...,
+    remove_duplicate_fields: bool = ...,
+    generate_keys: TidyDefaultableString = ...,
+    max_authors: int | None = ...,
+    lowercase: bool = ...,
+    enclosing_braces: TidyDefaultableStringList = ...,
+    remove_braces: TidyDefaultableStringList = ...,
+    wrap: TidyDefaultableUsize = ...,
+) -> pl.Expr: ...

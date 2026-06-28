@@ -31,6 +31,11 @@ CORE_EXPORTS = (
     "Rendered",
     "RenderedDocument",
     "Style",
+    "TidyError",
+    "TidyOptions",
+    "TidyResult",
+    "TidySyntaxError",
+    "TidyWarning",
 )
 
 
@@ -42,6 +47,8 @@ def _fake_core_module(name: str, *, version: str) -> ModuleType:
     dynamic_module.build_mode = "release"
     for export in CORE_EXPORTS:
         setattr(module, export, type(export, (), {}))
+    dynamic_module.tidy_bibtex = lambda source, *, options=None: source
+    dynamic_module._tidy_option_names = []
     return module
 
 

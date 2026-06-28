@@ -4,11 +4,12 @@ use pyo3::types::PyModule;
 use crate::citation::{Citation, CitationGroup, Cite};
 use crate::document::{Document, RenderedDocument};
 use crate::entry::Entry;
-use crate::errors::{MissingReferenceError, RefkitError};
+use crate::errors::{MissingReferenceError, RefkitError, TidyError, TidySyntaxError};
 use crate::library::Library;
 use crate::raw;
 use crate::rendered::Rendered;
 use crate::style::{Locale, Style};
+use crate::tidy;
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
@@ -20,6 +21,8 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "MissingReferenceError",
         py.get_type::<MissingReferenceError>(),
     )?;
+    m.add("TidyError", py.get_type::<TidyError>())?;
+    m.add("TidySyntaxError", py.get_type::<TidySyntaxError>())?;
     m.add_class::<Library>()?;
     m.add_class::<Entry>()?;
     m.add_class::<Style>()?;
@@ -30,6 +33,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Document>()?;
     m.add_class::<RenderedDocument>()?;
     m.add_class::<Rendered>()?;
+    tidy::register(m)?;
     raw::register(m)?;
     Ok(())
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.metadata as metadata_module
+import inspect
 import json
 from typing import Any, cast
 
@@ -27,6 +28,33 @@ def test_polars_refkit_import_reports_installed_version() -> None:
     import polars_refkit as prk
 
     assert prk.__version__ == metadata_module.version("polars-refkit")
+
+
+def test_polars_refkit_tidy_runtime_signatures_list_public_keywords() -> None:
+    import polars_refkit as prk
+
+    namespace = cast(Any, pl.col("bibtex")).refkit
+    namespace_signature = inspect.signature(namespace.tidy_bibtex)
+    namespace_type_signature = inspect.signature(prk.RefkitExprNamespace.tidy_bibtex)
+    top_level_signature = inspect.signature(prk.tidy_bibtex)
+
+    assert list(top_level_signature.parameters)[:4] == [
+        "bibtex_col",
+        "omit",
+        "curly",
+        "numeric",
+    ]
+    assert list(namespace_type_signature.parameters)[:4] == [
+        "self",
+        "omit",
+        "curly",
+        "numeric",
+    ]
+    assert "bibtex_col" not in namespace_signature.parameters
+    assert list(namespace_signature.parameters)[:3] == ["omit", "curly", "numeric"]
+    assert top_level_signature.parameters["space"].default == 2
+    assert top_level_signature.parameters["escape"].default is True
+    assert top_level_signature.parameters["sort_fields"].default is None
 
 
 def test_polars_refkit_expressions_parse_and_render_bibtex_rows() -> None:
@@ -183,6 +211,212 @@ def test_polars_refkit_namespace_methods_have_stable_default_names() -> None:
     assert result["entry_count"].item() == 1
     assert "Doe" in result["cite"].item()
     assert json.loads(result["to_hayagriva_json"].item())[0]["id"] == "doe2024"
+
+
+def test_polars_refkit_tidy_formats_rows_and_reports_warnings() -> None:
+    import polars_refkit as prk
+
+    source = """@ARTICLE {,
+    title={Fast Citations},
+    pages={6-13},
+    year={2024},}
+"""
+    frame = pl.DataFrame({"bibtex": [source]})
+
+    row = frame.select(
+        formatted=prk.tidy_bibtex("bibtex", sort_fields=True),
+        report=prk.tidy_bibtex_report("bibtex", sort_fields=True),
+    ).to_dicts()[0]
+
+    assert row["formatted"] == row["report"]["bibtex"]
+    assert row["formatted"].startswith("@article{\n")
+    assert "  title" in row["formatted"]
+    assert "  pages" in row["formatted"]
+    assert "{6--13}" in row["formatted"]
+    assert row["report"]["ok"] is True
+    assert row["report"]["count"] == 1
+    assert row["report"]["error"] is None
+    assert row["report"]["warnings"] == [
+        {
+            "code": "missing_key",
+            "rule": None,
+            "message": "ARTICLE entry does not have a citation key.",
+        }
+    ]
+
+
+def test_polars_refkit_tidy_namespace_matches_function_api() -> None:
+    import polars_refkit as prk
+
+    source = """@article{doe2024,
+  year={2024},
+  title={Fast Citations},
+  author={Doe, Jane}
+}
+"""
+    frame = pl.DataFrame({"bibtex": [source]})
+    namespace = cast(Any, pl.col("bibtex")).refkit
+
+    row = frame.select(
+        top_tidy=prk.tidy_bibtex("bibtex", sort_fields=True, wrap=88),
+        ns_tidy=namespace.tidy_bibtex(sort_fields=True, wrap=88),
+        top_report=prk.tidy_bibtex_report("bibtex", sort_fields=True, wrap=88),
+        ns_report=namespace.tidy_bibtex_report(sort_fields=True, wrap=88),
+    ).to_dicts()[0]
+
+    assert row["top_tidy"] == row["ns_tidy"]
+    assert row["top_report"] == row["ns_report"]
+    assert row["top_report"]["bibtex"] == row["top_tidy"]
+    assert row["top_report"]["ok"] is True
+
+
+def test_polars_refkit_tidy_default_names_lazy_and_literal_inputs() -> None:
+    import polars_refkit as prk
+
+    source = "@ARTICLE{doe2024, title={Fast Citations}, pages={6-13}, year={2024}}\n"
+    frame = pl.DataFrame({"row": [1]})
+
+    result = (
+        frame.lazy()
+        .select(
+            prk.tidy_bibtex(pl.lit(source)),
+            prk.tidy_bibtex_report(pl.lit(source)),
+        )
+        .collect()
+    )
+
+    assert set(result.columns) == {"tidy_bibtex", "tidy_bibtex_report"}
+    assert result["tidy_bibtex"].item().startswith("@article{doe2024,")
+    assert result["tidy_bibtex_report"].item()["count"] == 1
+
+
+def test_polars_refkit_tidy_invalid_rows_become_nulls_with_report_error() -> None:
+    import polars_refkit as prk
+
+    frame = pl.DataFrame({"bibtex": [BIBTEX, "@article{broken,\n  title={No close}\n"]})
+
+    rows = frame.select(
+        formatted=prk.tidy_bibtex("bibtex"),
+        report=prk.tidy_bibtex_report("bibtex"),
+    ).to_dicts()
+
+    assert rows[0]["formatted"].startswith("@article{doe2024,")
+    assert rows[0]["report"]["ok"] is True
+    assert rows[1]["formatted"] is None
+    assert rows[1]["report"]["ok"] is False
+    assert rows[1]["report"]["bibtex"] is None
+    assert rows[1]["report"]["count"] is None
+    assert rows[1]["report"]["warnings"] is None
+    assert "entry ended before closing delimiter" in rows[1]["report"]["error"]
+
+
+def test_polars_refkit_tidy_rejects_invalid_static_options() -> None:
+    import polars_refkit as prk
+
+    with pytest.raises(TypeError, match="space must be an integer"):
+        prk.tidy_bibtex("bibtex", space=cast(Any, True))
+
+    with pytest.raises(ValueError, match="space must be non-negative"):
+        prk.tidy_bibtex("bibtex", space=-1)
+
+    with pytest.raises(TypeError, match="sort_fields must be an iterable"):
+        prk.tidy_bibtex("bibtex", sort_fields=cast(Any, "title"))
+
+    with pytest.raises(TypeError, match="omit must be an iterable"):
+        prk.tidy_bibtex("bibtex", omit=cast(Any, 1))
+
+    with pytest.raises(TypeError, match="omit must be an iterable"):
+        prk.tidy_bibtex("bibtex", omit=cast(Any, ["title", 1]))
+
+    with pytest.raises(TypeError, match="escape must be a bool"):
+        prk.tidy_bibtex("bibtex", escape=cast(Any, None))
+
+    with pytest.raises(TypeError, match="merge must be a string"):
+        prk.tidy_bibtex("bibtex", merge=cast(Any, 1))
+
+    with pytest.raises(ValueError, match="unknown tidy option"):
+        cast(Any, prk)._tidy_kwargs(unknown=True)
+
+    with pytest.raises(ValueError, match="unknown duplicate rule"):
+        prk.tidy_bibtex("bibtex", duplicates=cast(Any, ["bogus"]))
+
+    with pytest.raises(ValueError, match="unknown merge strategy"):
+        prk.tidy_bibtex("bibtex", merge=cast(Any, "bogus"))
+
+
+def test_polars_refkit_tidy_accepts_representative_static_options() -> None:
+    import polars_refkit as prk
+
+    source = """
+@article{old,
+  author={Doe, Jane and Roe, Richard},
+  title={Fast Citations},
+  journal={Journal of Citation Tests},
+  year={2024},
+  note={},
+  abstract={Drop me}
+}
+"""
+    row = (
+        pl.DataFrame({"bibtex": [source]})
+        .select(
+            spaced=prk.tidy_bibtex("bibtex", space=4, align=None),
+            wrapped=prk.tidy_bibtex("bibtex", wrap=True),
+            custom_key=prk.tidy_bibtex("bibtex", generate_keys="[auth:lower][year]", max_authors=1),
+            default_key=prk.tidy_bibtex("bibtex", generate_keys=True),
+            omitted=prk.tidy_bibtex("bibtex", omit=None, remove_empty_fields=True),
+            unwrapped_title=prk.tidy_bibtex("bibtex", remove_braces=None, sort=False),
+            enclosed_title=prk.tidy_bibtex("bibtex", enclosing_braces=["title"]),
+            no_merge=prk.tidy_bibtex_report(
+                "bibtex",
+                duplicates=None,
+                merge=None,
+                generate_keys=None,
+                max_authors=None,
+            ),
+        )
+        .to_dicts()[0]
+    )
+
+    assert "    author =" in row["spaced"]
+    assert row["wrapped"].startswith("@article{old,")
+    assert "@article{doe2024," in row["custom_key"]
+    assert "@article{doe2024fast," in row["default_key"]
+    assert "abstract" in row["omitted"]
+    assert "note" not in row["omitted"]
+    assert "title         = {Fast Citations}" in row["unwrapped_title"]
+    assert "title         = {{Fast Citations}}" in row["enclosed_title"]
+    assert row["no_merge"]["ok"] is True
+
+
+def test_polars_refkit_tidy_duplicates_none_keeps_core_merge_defaults() -> None:
+    import polars_refkit as prk
+    import refkit as rk
+
+    source = """
+@article{first, title={Same}, doi={10.1/example}, year={2024}}
+@article{second, title={Same}, doi={10.1/example}, year={2025}}
+"""
+    options = rk.TidyOptions(duplicates=None, merge="first")
+    expected = rk.tidy_bibtex(source, options=options)
+
+    row = (
+        pl.DataFrame({"bibtex": [source]})
+        .select(
+            formatted=prk.tidy_bibtex("bibtex", duplicates=None, merge="first"),
+            report=prk.tidy_bibtex_report("bibtex", duplicates=None, merge="first"),
+            explicit=prk.tidy_bibtex_report("bibtex", duplicates=["doi"], merge="first"),
+        )
+        .to_dicts()[0]
+    )
+
+    assert row["formatted"] == expected.bibtex
+    assert row["report"]["bibtex"] == expected.bibtex
+    assert [warning["rule"] for warning in row["report"]["warnings"]] == [
+        warning.rule for warning in expected.warnings
+    ]
+    assert [warning["rule"] for warning in row["explicit"]["warnings"]] == ["doi"]
+    assert "second" not in row["formatted"]
 
 
 def test_polars_refkit_diagnostics_return_list_column() -> None:

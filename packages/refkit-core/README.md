@@ -37,6 +37,17 @@ Expected output:
 (Doe, 2024)
 ```
 
+`tidy_bibtex` formats BibTeX text through the same native package:
+
+```python
+result = refkit_core.tidy_bibtex(
+    "@ARTICLE{doe2024, pages={6-13}, year={2024}}\n",
+    options=refkit_core.TidyOptions(sort_fields=True),
+)
+
+print(result.bibtex)
+```
+
 ## Package Contract
 
 `refkit-core` owns the native implementation for:
@@ -47,17 +58,18 @@ Expected output:
 | Render citations | `Document.render`, `Citation`, `Cite`, `CitationGroup` |
 | Render bibliographies | `Document.cited_bibliography`, `Document.full_bibliography` |
 | Load CSL styles and locales | `Style.load`, `Style.from_path`, `Style.from_xml`, `Locale.load` |
+| Format BibTeX | `tidy_bibtex`, `TidyOptions`, `TidyResult`, `TidyWarning` |
 | Edit raw BibTeX | `BibDocument`, `BibEntry`, `BibField` |
 | Inspect rendered output | `Rendered.text`, `Rendered.html`, `Rendered.tree` |
 
-`refkit-core` does not provide the one-call path helpers from `refkit`, such as `refkit.cite` and `refkit.full_bibliography`.
+Use `refkit` for one-call path helpers such as `refkit.cite` and `refkit.full_bibliography`.
 
 ## Pyodide
 
 Pyodide uses the same native extension package as CPython.
 The release workflow builds `refkit-core` for `wasm32-unknown-emscripten` with toolchain values from `pyodide config get`, then publishes the PyEmscripten wheel alongside the CPython wheels.
 The pure Python `refkit` package keeps the same exact dependency on `refkit-core`, so Pyodide resolves the matching wheel from PyPI.
-The current Pyodide lane targets Python 3.14 and the `pyemscripten_2026_0_wasm32` ABI.
+The Pyodide lane takes the Python target and PyEmscripten ABI from the release workflow.
 
 ## Development
 

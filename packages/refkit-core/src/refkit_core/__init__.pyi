@@ -16,8 +16,14 @@ from ._refkit_core import (
     Rendered,
     RenderedDocument,
     Style,
+    TidyError,
+    TidyOptions,
+    TidyResult,
+    TidySyntaxError,
+    TidyWarning,
     build_info,
     build_mode,
+    tidy_bibtex,
 )
 
 __all__ = [
@@ -38,9 +44,16 @@ __all__ = [
     "Rendered",
     "RenderedDocument",
     "Style",
+    "TidyError",
+    "TidyOptions",
+    "TidyResult",
+    "TidySyntaxError",
+    "TidyWarning",
     "build_info",
     "build_mode",
+    "tidy_bibtex",
     "__version__",
 ]
 
 __version__: str
+_tidy_option_names: list[str]

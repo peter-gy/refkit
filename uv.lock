@@ -959,7 +959,7 @@ wheels = [
 
 [[package]]
 name = "polars-refkit"
-version = "0.0.2"
+version = "0.0.3"
 source = { editable = "packages/polars-refkit" }
 dependencies = [
     { name = "polars" },
@@ -1431,7 +1431,7 @@ wheels = [
 
 [[package]]
 name = "refkit"
-version = "0.0.2"
+version = "0.0.3"
 source = { editable = "packages/refkit" }
 dependencies = [
     { name = "refkit-core" },
@@ -1467,12 +1467,12 @@ requires-dist = [
 
 [[package]]
 name = "refkit-core"
-version = "0.0.2"
+version = "0.0.3"
 source = { editable = "packages/refkit-core" }
 
 [[package]]
 name = "refkit-workspace"
-version = "0.0.2"
+version = "0.0.3"
 source = { virtual = "." }
 dependencies = [
     { name = "polars-refkit" },

@@ -6,6 +6,7 @@ mod render_tree;
 mod strings;
 mod style;
 mod style_analysis;
+pub mod tidy;
 
 pub use document::{
     Cite as CoreCite, Document as CoreDocument, DocumentError,
@@ -32,3 +33,6 @@ pub use strings::{
     vertical_align_name,
 };
 pub use style::{PreparedStyle, StyleError, load_prepared_style, prepare_style_from_xml};
+pub use tidy::{
+    DuplicateRule, MergeStrategy, TidyError, TidyOptions, TidyResult, TidyWarning, tidy_bibtex,
+};

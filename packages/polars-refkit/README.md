@@ -8,7 +8,7 @@
 pip install polars-refkit
 ```
 
-`polars-refkit` requires Polars `>=1.29` and supports CPython 3.11 through 3.14. It also publishes a Python 3.14 PyEmscripten wheel for Pyodide.
+The supported Python versions, Polars dependency, native wheel ABI, and Pyodide target are declared in package metadata and release workflows.
 
 ## Render And Inspect Rows
 
@@ -35,13 +35,14 @@ out = df.select(
     each_citation=pl.col("bibtex").refkit.cite_each(pl.col("keys")),
     grouped_citation=pl.col("bibtex").refkit.cite_group(pl.col("keys")),
     bibliography=pl.col("bibtex").refkit.full_bibliography_html(),
+    formatted=pl.col("bibtex").refkit.tidy_bibtex(sort_fields=True),
     count=pl.col("bibtex").refkit.entry_count(),
     keys=pl.col("bibtex").refkit.keys(),
     entries=pl.col("bibtex").refkit.entries(),
 )
 ```
 
-Each row is one BibTeX or BibLaTeX source. The expressions run inside eager `DataFrame.select` and lazy `LazyFrame.select(...).collect()` plans. Row-level parse failures return null for value expressions and a diagnostic list from `diagnostics` or `parse_report`.
+Each row is one BibTeX or BibLaTeX source. The expressions run inside eager `DataFrame.select` and lazy `LazyFrame.select(...).collect()` plans. Row-level parse and formatting failures return null for value expressions. Use `diagnostics`, `parse_report`, or `tidy_bibtex_report` when a query needs row messages.
 
 `recovery="error"` uses strict parsing. In a Polars expression, a strict row parse failure returns null for value expressions, `False` from `can_parse`, and a failed `parse_report` instead of aborting the query. `recovery="report"` keeps recoverable entries in that row and preserves parser diagnostics.
 
@@ -66,6 +67,17 @@ batch = pl.DataFrame({"keys": [["doe2024", "roe2022"]]})
 out = batch.select(citation=pl.lit(df["bibtex"][0]).refkit.cite_group(pl.col("keys")))
 ```
 
+Use `tidy_bibtex` to format BibTeX rows in the same query plan:
+
+```python
+out = df.select(
+    formatted=pl.col("bibtex").refkit.tidy_bibtex(sort_fields=True, wrap=88),
+    report=pl.col("bibtex").refkit.tidy_bibtex_report(sort_fields=True),
+)
+```
+
+`tidy_bibtex_report` returns `{ok, bibtex, count, warnings, error}`. `warnings` is a list of `{code, rule, message}` structs. Invalid static option values raise during query construction or execution.
+
 Top-level functions and namespace methods use stable default output names, so multiple expressions over the same `bibtex` column can be selected without manual aliases. Use `alias` or named `select` expressions when a result column needs a different name.
 
 ## Capabilities
@@ -75,6 +87,7 @@ Top-level functions and namespace methods use stable default output names, so mu
 | Read normalized bibliography data | `entry_count`, `can_parse`, `has_diagnostics`, `keys`, `entries`, `parse_report`, `diagnostics` |
 | Render citations | `cite`, `cite_html`, `cite_rendered`, `cite_each`, `cite_group`, and their HTML or struct variants |
 | Render bibliographies | `full_bibliography_text`, `full_bibliography_html`, `full_bibliography_rendered` |
+| Format BibTeX | `tidy_bibtex`, `tidy_bibtex_report` |
 | Inspect entries | `keys`, `entries`, `to_hayagriva_json` |
 | Process dataframe columns | eager `DataFrame.select` and lazy `LazyFrame.select(...).collect()` |
 | Use expression namespace | `pl.Expr.refkit` methods with the same capability set |
@@ -103,6 +116,8 @@ Top-level functions and namespace methods use stable default output names, so mu
 | `parse_report(bibtex_col, recovery="error")` | `Struct[ok, entry_count, keys, diagnostics]` | Parses each row once and returns a summary struct. |
 | `diagnostics(bibtex_col, recovery="error")` | `List[String]` | Returns an empty list for valid rows and parse messages for invalid rows. |
 | `to_hayagriva_json(bibtex_col, recovery="error")` | `String` | Returns normalized Hayagriva entry JSON with `id` and `key` fields. |
+| `tidy_bibtex(bibtex_col, sort_fields=False, wrap=False, ...)` | `String` | Formats each BibTeX row. Row formatting failures return null. |
+| `tidy_bibtex_report(bibtex_col, sort_fields=False, wrap=False, ...)` | `Struct[ok, bibtex, count, warnings, error]` | Formats each row and reports formatter warnings or row errors. |
 
 ## Expression Namespace
 
@@ -117,10 +132,11 @@ out = df.select(
     grouped_citation=pl.col("bibtex").refkit.cite_group(pl.col("keys")),
     entries=pl.col("bibtex").refkit.entries(),
     hayagriva_json=pl.col("bibtex").refkit.to_hayagriva_json(),
+    formatted=pl.col("bibtex").refkit.tidy_bibtex(sort_fields=True),
 )
 ```
 
-Top-level functions and namespace methods expose one name per capability. They return expressions with names that match the method, such as `keys`, `entry_count`, `cite`, and `to_hayagriva_json`. Name outputs in `select`, `with_columns`, or `alias` when a call site needs a different column name.
+Top-level functions and namespace methods expose one name per capability. They return expressions with names that match the method, such as `keys`, `entry_count`, `cite`, `to_hayagriva_json`, and `tidy_bibtex`. Name outputs in `select`, `with_columns`, or `alias` when a call site needs a different column name.
 
 Typed code can cast the namespace when the type checker does not know Polars plugin namespaces:
 
@@ -143,7 +159,7 @@ entries = (
 
 ## Scope
 
-Use `polars-refkit` when BibTeX source lives in a dataframe and the result should stay in a Polars query plan. Use `refkit` for raw BibTeX repair with comments, preambles, string definitions, failed blocks, ordering, and source spans.
+Use `polars-refkit` when BibTeX source lives in a dataframe and the result should stay in a Polars query plan. Use `refkit.BibDocument` when a workflow edits raw documents with comments, preambles, string definitions, failed blocks, ordering, and source spans.
 
 ## Development
 

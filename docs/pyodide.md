@@ -16,9 +16,7 @@ python -m pip install polars-refkit
 
 Pyodide resolves `refkit` the same way CPython does. The pure Python wheel declares `refkit-core==<same release>`, and Pyodide selects the matching `pyemscripten` wheel for its runtime.
 
-`polars-refkit` uses the Polars package supplied by Pyodide. Install `polars` before installing a local `polars-refkit` wheel in smoke tests or release validation. The published package keeps the same public dependency as CPython: `polars>=1.29`.
-
-The current lane targets Python 3.14 and the `pyemscripten_2026_0_wasm32` ABI.
+`polars-refkit` uses the Polars package supplied by Pyodide. Install `polars` before installing a local `polars-refkit` wheel in smoke tests or release validation. The published package keeps the same public dependency declared in its package metadata.
 
 ## Build Contract
 
@@ -36,13 +34,14 @@ CI passes those values to `emscripten-core/setup-emsdk` and `maturin`:
 ```bash
 CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS="$(pyodide config get rustflags)"
 MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION="$(pyodide config get pyodide_abi_version)"
+PYODIDE_PYTHON_VERSION="${PYODIDE_PYTHON_VERSION:?set the Pyodide Python version}"
 cd packages/polars-refkit
 maturin build --release \
   --target wasm32-unknown-emscripten \
-  --interpreter 3.14
+  --interpreter "$PYODIDE_PYTHON_VERSION"
 ```
 
-The workflow does not hardcode Emscripten, Rust nightly, ABI version, or cargo rustflags. Those values are part of the Pyodide runtime contract.
+The release workflows set `PYODIDE_PYTHON_VERSION` from the matrix and read Emscripten, Rust nightly, ABI, and cargo rustflags from `pyodide config get`.
 
 `packages/polars-refkit/rust` is a package-local Rust workspace. It uses the Polars plugin ABI that matches Pyodide's current Polars wheel while depending on the shared `crates/refkit-core` library for citation parsing and rendering.
 

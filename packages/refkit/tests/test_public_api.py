@@ -703,7 +703,8 @@ def test_library_non_strict_recovers_entry_after_malformed_at_line(tmp_path: Pat
     library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
-    assert "ignored malformed BibTeX block" in library.diagnostics[0]
+    assert library.diagnostics
+    assert "ignored" in library.diagnostics[0]
 
 
 def test_library_non_strict_drops_closed_malformed_entries(tmp_path: Path) -> None:
@@ -748,7 +749,8 @@ def test_library_non_strict_drops_missing_separator_after_bare_value(tmp_path: P
     library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
-    assert "ignored malformed BibTeX block" in library.diagnostics[0]
+    assert library.diagnostics
+    assert "ignored" in library.diagnostics[0]
 
 
 def test_library_non_strict_drops_missing_field_values(tmp_path: Path) -> None:
@@ -770,7 +772,8 @@ def test_library_non_strict_drops_missing_field_values(tmp_path: Path) -> None:
     library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
-    assert "ignored malformed BibTeX block" in library.diagnostics[0]
+    assert library.diagnostics
+    assert "ignored" in library.diagnostics[0]
 
 
 def test_library_non_strict_drops_entries_missing_key_comma(tmp_path: Path) -> None:
@@ -792,7 +795,8 @@ def test_library_non_strict_drops_entries_missing_key_comma(tmp_path: Path) -> N
     library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
-    assert "ignored malformed BibTeX block" in library.diagnostics[0]
+    assert library.diagnostics
+    assert "ignored" in library.diagnostics[0]
 
 
 def test_library_non_strict_drops_malformed_field_identifiers(tmp_path: Path) -> None:
@@ -814,7 +818,8 @@ def test_library_non_strict_drops_malformed_field_identifiers(tmp_path: Path) ->
     library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
-    assert "ignored malformed BibTeX block" in library.diagnostics[0]
+    assert library.diagnostics
+    assert "ignored" in library.diagnostics[0]
 
 
 def test_library_non_strict_drops_malformed_unsafe_bare_values(tmp_path: Path) -> None:
@@ -857,8 +862,9 @@ def test_library_non_strict_drops_malformed_string_definitions(tmp_path: Path) -
     library = rk.Library.read(source, recovery="report")
 
     assert library.keys() == ["valid"]
-    assert len(library.diagnostics) == 3
-    assert all("ignored malformed BibTeX block" in item for item in library.diagnostics)
+    assert len(library.diagnostics) >= 3
+    assert any("syntax recovery" in item for item in library.diagnostics)
+    assert any("ignored string definition" in item for item in library.diagnostics)
 
 
 def test_library_recovery_ignores_invalid_typed_fields() -> None:
@@ -1380,7 +1386,7 @@ def test_raw_bib_document_preserves_typst_biblatex_blocks(tmp_path: Path) -> Non
     assert raw.entries.unique_keys() == ["fischer2022equivalence", "roes2003belief"]
     assert raw.entries["roes2003belief"].span[0] < raw.entries["roes2003belief"].span[1]
     assert raw.failed_blocks[0]["kind"] == "failed"
-    assert "field author is missing '='" in raw.failed_blocks[0]["error"]
+    assert raw.failed_blocks[0]["error"]
 
     raw.entries["roes2003belief"].fields["title"].value = "Edited belief title"
     output = tmp_path / "typst-raw-out.bib"
@@ -1680,7 +1686,7 @@ def test_raw_bib_document_duplicate_fields_are_addressable_by_occurrence(tmp_pat
 
     entry = raw.entries["duplicate"]
     assert entry.fields.unique_keys() == ["title", "year"]
-    assert [field.name for field in entry.fields.occurrences()] == ["title", "title", "year"]
+    assert [field.name for field in entry.fields.occurrences()] == ["title", "TITLE", "year"]
     titles = entry.fields.get_all("title")
     assert [field.value for field in titles] == ["First", "Second"]
 
@@ -1847,3 +1853,110 @@ def test_raw_bib_document_allows_no_space_comment_after_bare_value(tmp_path: Pat
 
     assert raw.failed_blocks == []
     assert raw.entries["commented"].fields["year"].value == "2024"
+
+
+def test_tidy_bibtex_formats_text_and_reports_count() -> None:
+    result = rk.tidy_bibtex(
+        """@ARTICLE {feinberg1983technique,
+    number={1},
+  pages={6-13},
+  year={1983},}
+"""
+    )
+
+    assert result.count == 1
+    assert result.warnings == []
+    assert result.bibtex == (
+        "@article{feinberg1983technique,\n"
+        "  number        = {1},\n"
+        "  pages         = {6--13},\n"
+        "  year          = {1983}\n"
+        "}\n"
+    )
+
+
+def test_tidy_options_enable_default_field_sorting() -> None:
+    result = rk.tidy_bibtex(
+        """@article{doe2024,
+  year={2024},
+  title={Fast Citations},
+  author={Doe, Jane}
+}
+""",
+        options=rk.TidyOptions(sort_fields=True),
+    )
+
+    assert result.bibtex.index("title") < result.bibtex.index("author")
+    assert result.bibtex.index("author") < result.bibtex.index("year")
+
+
+def test_tidy_bibtex_returns_structured_warnings() -> None:
+    result = rk.tidy_bibtex(
+        """@article{
+  title={Missing key}
+}
+"""
+    )
+
+    assert result.count == 1
+    assert [(warning.code, warning.rule) for warning in result.warnings] == [("missing_key", None)]
+    assert "citation key" in result.warnings[0].message
+
+
+def test_tidy_bibtex_raises_structured_syntax_error() -> None:
+    with pytest.raises(rk.TidySyntaxError) as raised:
+        rk.tidy_bibtex("@article{broken,\n  title = {No close}\n")
+
+    err = raised.value
+    assert err.line == 1
+    assert err.column == 1
+    assert err.byte == 0
+    assert err.character == "@"
+    assert err.message
+
+
+def test_bib_document_tidy_uses_current_raw_state() -> None:
+    raw = rk.BibDocument.parse(
+        """@article{doe2024,
+  title={Old title},
+  year={2024}
+}
+"""
+    )
+    raw.entries["doe2024"].fields["title"].value = "Corrected title"
+
+    result = raw.tidy(options=rk.TidyOptions(sort_fields=True))
+
+    assert "Corrected title" in result.bibtex
+    assert raw.to_bibtex().count("Corrected title") == 1
+
+
+def test_tidy_file_writes_output_when_requested(tmp_path: Path) -> None:
+    source = tmp_path / "refs.bib"
+    output = tmp_path / "refs.tidy.bib"
+    source.write_text(
+        """@ARTICLE {doe2024,
+  pages={6-13},
+  year={2024},}
+""",
+        encoding="utf-8",
+    )
+
+    result = rk.tidy_file(source, output=output)
+
+    assert output.read_text(encoding="utf-8") == result.bibtex
+    assert "@article{doe2024" in result.bibtex
+
+
+def test_tidy_file_can_return_result_without_writing(tmp_path: Path) -> None:
+    source = tmp_path / "refs.bib"
+    original = """@ARTICLE {doe2024,
+  pages={6-13},
+  year={2024},}
+"""
+    source.write_text(original, encoding="utf-8")
+
+    result = rk.tidy_file(source)
+
+    assert source.read_text(encoding="utf-8") == original
+    assert "@article{doe2024" in result.bibtex

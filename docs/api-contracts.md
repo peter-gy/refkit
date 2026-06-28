@@ -5,7 +5,7 @@ Refkit exposes two bibliography models:
 | Model | Use it for | Source APIs |
 | --- | --- | --- |
 | `Library` | Rendering, selection, normalized entry access, and bulk export. | `Library.read(path)`, `Library.parse_bibtex(source)`, `Library.parse_yaml(source)` |
-| `BibDocument` | Raw `.bib` inspection and field edits that keep comments, strings, preambles, malformed blocks, order, and byte spans. | `BibDocument.read(path)`, `BibDocument.parse(source)` |
+| `BibDocument` | Raw `.bib` inspection, formatting, and field edits that keep comments, strings, preambles, malformed blocks, order, and byte spans. | `BibDocument.read(path)`, `BibDocument.parse(source)`, `BibDocument.tidy(options=...)` |
 
 ## One-Off Helpers
 
@@ -40,6 +40,31 @@ doc.render(
 ```
 
 `Document.render([...])` returns `RenderedDocument`. Use `rendered["detail"]` or `rendered.citations["detail"]` for named citations and `rendered.bibliography` for the cited bibliography. Use `Document.cited_bibliography([...])` when only the cited bibliography is needed. Use `Document.full_bibliography()` when every library entry should appear.
+
+## BibTeX Formatting
+
+`tidy_bibtex(source, options=None)` formats a BibTeX string and returns `TidyResult`.
+
+```python
+import refkit as rk
+
+options = rk.TidyOptions(sort_fields=True, wrap=88)
+result = rk.tidy_bibtex("@ARTICLE{doe2024, pages={6-13}, year={2024}}\n", options=options)
+
+print(result.bibtex)
+```
+
+`TidyResult.bibtex` is the formatted BibTeX string. `TidyResult.count` is the number of parsed entries. `TidyResult.warnings` contains `TidyWarning` objects with `code`, `rule`, and `message`.
+
+`BibDocument.to_bibtex()` renders the current raw document state. `BibDocument.tidy(options=None)` formats that rendered state and returns `TidyResult`.
+
+```python
+raw = rk.BibDocument.read("refs.bib")
+raw.entries["doe2024"].fields["title"].value = "Corrected title"
+result = raw.tidy(options=rk.TidyOptions(sort_fields=True))
+```
+
+`tidy_file(path, output=None, options=None)` reads a BibTeX file through `BibDocument.read`. It writes `result.bibtex` when `output` is supplied.
 
 ## Rendered Output
 
@@ -124,6 +149,8 @@ Use `raw.entries.unique_keys()` when one key per distinct entry name is needed. 
 | `Style.from_xml(xml)` | `ValueError` | Invalid CSL XML or dependent style input. |
 | `Style.from_path(path)` | `RefkitError`, `ValueError` | File read failure or invalid CSL XML. |
 | `Locale.load(code)` | `ValueError` | Unknown bundled locale code. |
+| `tidy_bibtex(source)` | `TidySyntaxError` | The raw BibTeX parser records a malformed block. |
+| `tidy_bibtex(source, options=...)` | `TidyError` | Key template generation fails. |
 | `Document.render(citations)` | `TypeError` | `citations` is not an iterable of `Citation` objects. |
 | `CitationGroup([])` | `ValueError` | The group has no citation items. |
 | `Document.render(citations)` | `MissingReferenceError` | A citation key is absent from the `Library`. |
