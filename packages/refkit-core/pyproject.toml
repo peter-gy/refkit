@@ -1,6 +1,6 @@
 [project]
 name = "refkit-core"
-version = "0.0.4-rc.3"
+version = "0.0.4-rc.4"
 description = "Native core for refkit citation parsing, rendering, and BibTeX editing"
 readme = "README.md"
 license = "Apache-2.0"

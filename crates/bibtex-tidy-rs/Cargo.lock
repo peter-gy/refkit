@@ -18,7 +18,7 @@ dependencies = [
 
 [[package]]
 name = "bibtex-tidy-rs"
-version = "0.0.4-rc.3"
+version = "0.0.4-rc.4"
 dependencies = [
  "refkit-core",
  "serde",
@@ -392,7 +392,7 @@ dependencies = [
 
 [[package]]
 name = "refkit-core"
-version = "0.0.4-rc.3"
+version = "0.0.4-rc.4"
 dependencies = [
  "biblatex",
  "hayagriva",
