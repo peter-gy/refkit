@@ -157,9 +157,6 @@ jobs:
     name: ${{ matrix.package }} / Build sdist
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: sccache
     strategy:
       fail-fast: false
       matrix:
@@ -177,11 +174,6 @@ jobs:
         with:
           python-version: "3.14"
           enable-cache: false
-
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
-        with:
-          version: "v0.16.0"
 
       - run: uv build --package ${{ matrix.package }} --sdist --out-dir dist --no-create-gitignore
 
