@@ -46,7 +46,7 @@ def test_public_package_keeps_polars_dependency_floor() -> None:
 def test_workflows_build_and_test_polars_refkit_pyemscripten_wheels() -> None:
     ci_jobs = read_workflow_jobs(".github/workflows/ci.yml")
     publish_jobs = read_workflow_jobs(".github/workflows/publish.yml")
-    release_jobs = read_workflow_jobs(".github/workflows/release-tests.yml")
+    release_jobs = read_workflow_jobs(".github/workflows/release-tests-polars-refkit.yml")
 
     assert_polars_wasm_build_job(
         ci_jobs["build-polars-refkit-wasm"],
@@ -65,7 +65,7 @@ def test_workflows_build_and_test_polars_refkit_pyemscripten_wheels() -> None:
         ],
     )
     assert_polars_pyemscripten_smoke_job(
-        release_jobs["test-polars-refkit-pyemscripten"],
+        release_jobs["test-pyemscripten"],
         artifact_names=[
             "release_refkit_dist",
             "release_refkit_core_pyemscripten_3.14",
@@ -78,8 +78,10 @@ def test_workflows_build_and_test_polars_refkit_pyemscripten_wheels() -> None:
         "publish-refkit",
         "publish-polars-refkit",
     }
-    assert publish_jobs["test-polars-refkit"]["uses"] == "./.github/workflows/release-tests.yml"
-    assert publish_jobs["test-polars-refkit"]["with"] == {"package": "polars-refkit"}
+    assert publish_jobs["test-polars-refkit"]["uses"] == (
+        "./.github/workflows/release-tests-polars-refkit.yml"
+    )
+    assert "with" not in publish_jobs["test-polars-refkit"]
 
 
 def assert_polars_wasm_build_job(job: dict[str, Any], *, artifact_name: str) -> None:

@@ -68,8 +68,8 @@ jobs:
         with:
           workspaces: |
             . -> target
-            crates/bibtex-tidy-rs -> crates/bibtex-tidy-rs/target
-            packages/polars-refkit/rust -> packages/polars-refkit/rust/target
+            crates/bibtex-tidy-rs -> target
+            packages/polars-refkit/rust -> target
 
       - name: Lint
         run: make rust-lint
@@ -98,8 +98,8 @@ jobs:
           shared-key: msrv
           workspaces: |
             . -> target
-            crates/bibtex-tidy-rs -> crates/bibtex-tidy-rs/target
-            packages/polars-refkit/rust -> packages/polars-refkit/rust/target
+            crates/bibtex-tidy-rs -> target
+            packages/polars-refkit/rust -> target
 
       - name: Check minimum Rust version
         run: make rust-floor

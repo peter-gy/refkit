@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   source-checks:
@@ -170,48 +170,12 @@ jobs:
           uv run --locked --only-group build twine check --strict dist/*
           python scripts/distribution_contract.py dist/*
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: ${{ matrix.artifact }}
-          path: dist/*.tar.gz
-          retention-days: 7
-          if-no-files-found: error
-
-  test-native-sdists:
-    name: ${{ matrix.package }} / Test sdist rebuild
-    needs: build-native-sdists
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - package: refkit-core
-            artifact: refkit_core_sdist
-            pattern: refkit_core-*.tar.gz
-          - package: polars-refkit
-            artifact: polars_refkit_sdist
-            pattern: polars_refkit-*.tar.gz
-    steps:
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          python-version: "3.11"
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-          ignore-empty-workdir: true
-
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: ${{ matrix.artifact }}
-          path: dist
-
-      - name: Build and import package
+      - name: Build and import package from sdist
         shell: bash
         env:
           PACKAGE: ${{ matrix.package }}
-          SDIST_PATTERN: ${{ matrix.pattern }}
         run: |
-          mapfile -t sdists < <(compgen -G "dist/$SDIST_PATTERN")
+          sdists=(dist/*.tar.gz)
           if [ "${#sdists[@]}" -ne 1 ]; then
             printf 'Expected one sdist for %s, found %s\n' "$PACKAGE" "${#sdists[@]}" >&2
             exit 1
@@ -235,6 +199,13 @@ jobs:
           assert frame.select(pl.col("bibtex").refkit.entry_count()).item() == 1
           PY
           fi
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*.tar.gz
+          retention-days: 7
+          if-no-files-found: error
 
   build-polars-refkit-cpython:
     name: polars-refkit / Build CPython wheel
@@ -522,7 +493,6 @@ jobs:
       - build-refkit-core-cpython
       - build-refkit-core-wasm
       - build-native-sdists
-      - test-native-sdists
       - build-polars-refkit-cpython
       - build-polars-refkit-wasm
       - test-pyemscripten

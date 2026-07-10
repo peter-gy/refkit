@@ -63,6 +63,20 @@ jobs:
       - name: Build sdist
         run: uv build --package refkit-core --sdist --out-dir dist/refkit-core --no-create-gitignore
 
+      - name: Build and import from sdist
+        shell: bash
+        run: |
+          sdists=(dist/refkit-core/refkit_core-*.tar.gz)
+          if [ "${#sdists[@]}" -ne 1 ]; then
+            printf 'Expected one refkit-core sdist, found %s\n' "${#sdists[@]}" >&2
+            exit 1
+          fi
+          uv run --no-project --python "3.11" --with "${sdists[0]}" python - <<'PY'
+          import refkit_core as core
+
+          assert core.__version__
+          PY
+
       - name: Upload sdist
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -178,12 +192,9 @@ jobs:
   test-refkit-core:
     name: refkit-core / Test release artifacts
     needs:
-      - build-refkit-core-sdist
       - build-refkit-core-cpython
       - build-refkit-core-wasm
-    uses: ./.github/workflows/release-tests.yml
-    with:
-      package: refkit-core
+    uses: ./.github/workflows/release-tests-refkit-core.yml
 
   publish-refkit-core:
     name: refkit-core / Publish to PyPI
@@ -272,9 +283,7 @@ jobs:
       - build-refkit
       - build-refkit-core-cpython
       - build-refkit-core-wasm
-    uses: ./.github/workflows/release-tests.yml
-    with:
-      package: refkit
+    uses: ./.github/workflows/release-tests-refkit.yml
 
   publish-refkit:
     name: refkit / Publish to PyPI
@@ -337,6 +346,20 @@ jobs:
 
       - name: Build sdist
         run: uv build --package polars-refkit --sdist --out-dir dist/polars-refkit --no-create-gitignore
+
+      - name: Build and import from sdist
+        shell: bash
+        run: |
+          sdists=(dist/polars-refkit/polars_refkit-*.tar.gz)
+          if [ "${#sdists[@]}" -ne 1 ]; then
+            printf 'Expected one polars-refkit sdist, found %s\n' "${#sdists[@]}" >&2
+            exit 1
+          fi
+          uv run --no-project --python "3.11" --with "${sdists[0]}" python - <<'PY'
+          import polars_refkit
+
+          assert polars_refkit
+          PY
 
       - name: Upload sdist
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -456,12 +479,9 @@ jobs:
     needs:
       - build-refkit
       - build-refkit-core-wasm
-      - build-polars-refkit-sdist
       - build-polars-refkit-cpython
       - build-polars-refkit-wasm
-    uses: ./.github/workflows/release-tests.yml
-    with:
-      package: polars-refkit
+    uses: ./.github/workflows/release-tests-polars-refkit.yml
 
   publish-polars-refkit:
     name: polars-refkit / Publish to PyPI
