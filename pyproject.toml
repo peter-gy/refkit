@@ -28,15 +28,15 @@ members = [
 
 [dependency-groups]
 dev = [
-    "hatchling>=1.27",
-    "hypothesis>=6",
-    "maturin>=1.9,<2",
-    "pyrefly>=1.0.0",
-    "pytest>=9.0.3",
-    "pytest-cov>=7.0.0",
+    "hatchling>=1.31.0",
+    "hypothesis>=6.156.5",
+    "maturin>=1.14.1,<2",
+    "pyrefly>=1.1.1",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "pyyaml>=6.0.3",
-    "ruff>=0.15.16",
-    "ty>=0.0.46",
+    "ruff>=0.15.21",
+    "ty>=0.0.58",
 ]
 build = [
     "twine==6.2.0",
