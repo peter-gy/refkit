@@ -29,6 +29,7 @@ members = [
 [dependency-groups]
 dev = [
     "hatchling>=1.27",
+    "hypothesis>=6",
     "maturin>=1.9,<2",
     "pyrefly>=1.0.0",
     "pytest>=9.0.3",
@@ -38,10 +39,10 @@ dev = [
     "ty>=0.0.46",
 ]
 build = [
-    "twine>=6.2",
+    "twine==6.2.0",
 ]
 pyodide-build = [
-    "pyodide-build",
+    "pyodide-build==0.35.1; python_version >= '3.12'",
 ]
 
 [tool.pytest.ini_options]
@@ -49,8 +50,12 @@ testpaths = [
     "packages/refkit/tests",
     "packages/polars-refkit/tests",
     "packages/refkit-bench/tests",
+    "scripts/tests",
 ]
 addopts = [
+    "--strict",
+    "-W",
+    "error",
     "--cov=refkit",
     "--cov=polars_refkit",
     "--cov=refkit_bench",
@@ -75,6 +80,7 @@ project-includes = [
     "packages/polars-refkit/tests",
     "packages/refkit-bench/src/refkit_bench",
     "packages/refkit-bench/tests",
+    "scripts",
 ]
 project-excludes = [
     "**/__pycache__",

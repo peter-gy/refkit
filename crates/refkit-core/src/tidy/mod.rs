@@ -32,8 +32,8 @@ pub enum TidyWarning {
 impl TidyWarning {
     pub fn code(&self) -> &'static str {
         match self {
-            Self::MissingKey { .. } => "MISSING_KEY",
-            Self::DuplicateEntry { .. } => "DUPLICATE_ENTRY",
+            Self::MissingKey { .. } => "missing_key",
+            Self::DuplicateEntry { .. } => "duplicate_entry",
         }
     }
 
@@ -201,7 +201,7 @@ mod tests {
 
         assert_eq!(result.count, 1);
         assert_eq!(result.warnings.len(), 1);
-        assert_eq!(result.warnings[0].code(), "MISSING_KEY");
+        assert_eq!(result.warnings[0].code(), "missing_key");
     }
 
     #[test]

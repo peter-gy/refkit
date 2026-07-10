@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "crates/bibtex-tidy-rs",
     "crates/refkit-core",
     "packages/refkit-core/rust",
 ]
@@ -12,6 +11,12 @@ edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
 repository = "https://github.com/petergy/refkit"
+
+[workspace.dependencies]
+pyo3 = "0.28.3"
+refkit-core = { version = "0.0.3", path = "crates/refkit-core" }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
 
 [profile.release]
 lto = "thin"

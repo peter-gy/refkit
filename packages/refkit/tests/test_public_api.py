@@ -365,14 +365,17 @@ def test_refkit_import_reports_runtime_core_metadata() -> None:
 def test_refkit_import_rejects_mismatched_core_version(monkeypatch: pytest.MonkeyPatch) -> None:
     required_core_version = metadata.version("refkit-core")
     mismatched_core = ModuleType("refkit_core")
-    cast(Any, mismatched_core).__version__ = f"{required_core_version}.mismatch"
+    mismatched_version = f"{required_core_version}.mismatch"
+    cast(Any, mismatched_core).__version__ = mismatched_version
 
     monkeypatch.setitem(sys.modules, "refkit_core", mismatched_core)
     monkeypatch.delitem(sys.modules, "refkit")
     monkeypatch.syspath_prepend(str(ROOT / "src"))
     try:
-        with pytest.raises(SystemError, match=f"requires {required_core_version}"):
+        with pytest.raises(SystemError) as raised:
             importlib.import_module("refkit")
+        assert required_core_version in str(raised.value)
+        assert mismatched_version in str(raised.value)
     finally:
         sys.modules["refkit"] = rk
 

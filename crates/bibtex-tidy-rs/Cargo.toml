@@ -1,11 +1,11 @@
 [package]
 name = "bibtex-tidy-rs"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
+version = "0.0.3"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
 description = "Rust BibTeX formatter compatible with bibtex-tidy behavior"
-repository.workspace = true
+repository = "https://github.com/petergy/refkit"
 publish = false
 include = [
     "/Cargo.toml",
@@ -21,3 +21,11 @@ refkit-core = { version = "0.0.3", path = "../refkit-core" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml = "0.9.34"
 walkdir = "2.5.0"
+
+[workspace]
+resolver = "3"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

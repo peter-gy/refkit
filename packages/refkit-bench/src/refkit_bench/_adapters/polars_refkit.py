@@ -314,6 +314,6 @@ def _polars_entries_frame(frame: Any, column: str, *, fields: Iterable[str]) -> 
 
     return (
         frame.select(entries=prk.entries(column, fields=fields))
-        .explode("entries")
+        .explode("entries", empty_as_null=True)
         .unnest("entries")
     )

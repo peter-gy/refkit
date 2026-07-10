@@ -8,14 +8,13 @@ from pathlib import Path
 
 import refkit_core as _core
 
-_COMPATIBLE_REFKIT_CORE_VERSION = "0.0.3"
 __version__ = _metadata_version("refkit")
 
 
 def check_refkit_core_version() -> bool:
     """Return whether the installed `refkit-core` version matches `refkit`."""
 
-    return _core.__version__ == _COMPATIBLE_REFKIT_CORE_VERSION
+    return _core.__version__ == __version__
 
 
 def _ensure_refkit_core_version() -> None:
@@ -23,7 +22,7 @@ def _ensure_refkit_core_version() -> None:
         return
     raise SystemError(
         f"The installed refkit-core version ({_core.__version__}) is incompatible "
-        f"with refkit {__version__}, which requires {_COMPATIBLE_REFKIT_CORE_VERSION}. "
+        f"with refkit {__version__}. "
         "Install refkit and refkit-core from the same release."
     )
 

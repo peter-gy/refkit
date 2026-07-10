@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.metadata as metadata_module
 import inspect
 import json
+import subprocess
+import sys
 from typing import Any, cast
 
 import polars as pl
@@ -28,6 +30,27 @@ def test_polars_refkit_import_reports_installed_version() -> None:
     import polars_refkit as prk
 
     assert prk.__version__ == metadata_module.version("polars-refkit")
+
+
+def test_import_registers_expression_namespace_in_fresh_process() -> None:
+    program = "\n".join(
+        (
+            "import polars as pl",
+            "import polars_refkit as prk",
+            'namespace = pl.col("bibtex").refkit',
+            "assert type(namespace) is prk.RefkitExprNamespace",
+        )
+    )
+
+    subprocess.run([sys.executable, "-c", program], check=True)
+
+
+def test_polars_refkit_namespace_supports_direct_construction() -> None:
+    import polars_refkit as prk
+
+    namespace = prk.RefkitExprNamespace(pl.col("bibtex"))
+
+    assert isinstance(namespace.entry_count(), pl.Expr)
 
 
 def test_polars_refkit_tidy_runtime_signatures_list_public_keywords() -> None:

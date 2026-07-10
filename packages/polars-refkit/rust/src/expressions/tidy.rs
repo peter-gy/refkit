@@ -295,14 +295,9 @@ fn warning_lists_to_series(reports: &[Option<TidyReportRow>]) -> PolarsResult<Se
 }
 
 fn warnings_to_struct_series(warnings: &[TidyWarning]) -> PolarsResult<Series> {
-    let code = StringChunked::from_iter_values(
-        "code".into(),
-        warnings.iter().map(|warning| match warning {
-            TidyWarning::MissingKey { .. } => "missing_key",
-            TidyWarning::DuplicateEntry { .. } => "duplicate_entry",
-        }),
-    )
-    .into_series();
+    let code =
+        StringChunked::from_iter_values("code".into(), warnings.iter().map(TidyWarning::code))
+            .into_series();
     let rule = StringChunked::from_iter_options(
         "rule".into(),
         warnings

@@ -20,10 +20,10 @@ default = []
 extension-module = ["pyo3/extension-module", "pyo3/abi3-py311"]
 
 [dependencies]
-pyo3 = "0.28.2"
-refkit-core = { path = "../../../crates/refkit-core" }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
+pyo3.workspace = true
+refkit-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
-pyo3 = { version = "0.28.2", features = ["auto-initialize"] }
+pyo3 = { workspace = true, features = ["auto-initialize"] }

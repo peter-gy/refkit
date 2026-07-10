@@ -222,14 +222,15 @@ impl TidyResult {
 
 impl TidyWarning {
     fn from_core(warning: CoreTidyWarning) -> Self {
+        let code = warning.code().to_string();
         match warning {
             CoreTidyWarning::MissingKey { message } => Self {
-                code: "missing_key".to_string(),
+                code,
                 rule: None,
                 message,
             },
             CoreTidyWarning::DuplicateEntry { rule, message } => Self {
-                code: "duplicate_entry".to_string(),
+                code,
                 rule: Some(rule.as_str().to_string()),
                 message,
             },

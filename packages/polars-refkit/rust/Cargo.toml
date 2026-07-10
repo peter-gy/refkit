@@ -25,8 +25,8 @@ extension-module = ["pyo3/extension-module", "pyo3/abi3-py311"]
 [dependencies]
 polars = { version = "=0.50.0", default-features = false }
 polars-core = { version = "=0.50.0", default-features = false, features = ["dtype-struct"] }
-pyo3 = "0.25"
+pyo3 = "0.25.1"
 pyo3-polars = { version = "=0.23.1", features = ["derive"] }
 refkit-core = { path = "../../../crates/refkit-core" }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
+serde_json = "1.0.150"
