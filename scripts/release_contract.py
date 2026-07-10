@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY = "https://github.com/peter-gy/refkit"
 NUMERIC_VERSION_COMPONENT = r"(?:0|[1-9][0-9]*)"
 RELEASE_TAG = re.compile(
     rf"^v(?P<version>{NUMERIC_VERSION_COMPONENT}\."
@@ -17,7 +18,7 @@ RELEASE_TAG = re.compile(
 
 
 class ReleaseContractError(ValueError):
-    """Raised when publishable package versions are inconsistent."""
+    """Raised when publishable package metadata is inconsistent."""
 
 
 def _read_toml(root: Path, relative_path: str) -> dict[str, Any]:
@@ -82,6 +83,27 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
         or tidy_core.get("path") != "../refkit-core"
     ):
         mismatches.append(f"bibtex-tidy-rs must depend on refkit-core {expected}")
+
+    rust_repositories = {
+        "Rust workspace": cargo_workspace["workspace"]["package"].get("repository"),
+        "bibtex-tidy-rs": tidy_manifest["package"].get("repository"),
+        "polars-refkit Rust crate": _read_toml(root, "packages/polars-refkit/rust/Cargo.toml")[
+            "package"
+        ].get("repository"),
+    }
+    for name, repository in rust_repositories.items():
+        if repository != REPOSITORY:
+            mismatches.append(f"{name} repository must be {REPOSITORY}")
+
+    python_projects = {
+        "refkit": "packages/refkit/pyproject.toml",
+        "refkit-core": "packages/refkit-core/pyproject.toml",
+        "polars-refkit": "packages/polars-refkit/pyproject.toml",
+    }
+    for name, relative_path in python_projects.items():
+        project = _read_toml(root, relative_path)["project"]
+        if project.get("urls", {}).get("Repository") != REPOSITORY:
+            mismatches.append(f"{name} project.urls.Repository must be {REPOSITORY}")
 
     if mismatches:
         raise ReleaseContractError("\n".join(mismatches))

@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
 description = "Rust BibTeX formatter compatible with bibtex-tidy behavior"
-repository = "https://github.com/petergy/refkit"
+repository = "https://github.com/peter-gy/refkit"
 publish = false
 include = [
     "/Cargo.toml",
