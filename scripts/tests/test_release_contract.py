@@ -14,10 +14,12 @@ CONTRACT_FILES = (
     "Cargo.toml",
     "pyproject.toml",
     "crates/bibtex-tidy-rs/Cargo.toml",
+    "crates/refkit-core/Cargo.toml",
     "packages/polars-refkit/pyproject.toml",
     "packages/polars-refkit/rust/Cargo.toml",
     "packages/refkit/pyproject.toml",
     "packages/refkit-core/pyproject.toml",
+    "packages/refkit-core/rust/Cargo.toml",
 )
 
 
@@ -121,6 +123,29 @@ def test_release_contract_reports_repository_drift(
     )
 
     with pytest.raises(ReleaseContractError, match=message):
+        validate_release_contract(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "crates/refkit-core/Cargo.toml",
+        "packages/refkit-core/rust/Cargo.toml",
+    ],
+)
+def test_release_contract_reports_repository_inheritance_drift(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    copy_contract_files(tmp_path)
+    manifest = tmp_path / relative_path
+    source = manifest.read_text(encoding="utf-8")
+    manifest.write_text(
+        source.replace("repository.workspace = true\n", "", 1),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ReleaseContractError, match="must inherit"):
         validate_release_contract(tmp_path)
 
 

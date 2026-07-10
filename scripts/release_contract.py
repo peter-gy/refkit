@@ -95,6 +95,15 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
         if repository != REPOSITORY:
             mismatches.append(f"{name} repository must be {REPOSITORY}")
 
+    rust_workspace_members = {
+        "refkit-core Rust crate": "crates/refkit-core/Cargo.toml",
+        "refkit-core native Rust crate": "packages/refkit-core/rust/Cargo.toml",
+    }
+    for name, relative_path in rust_workspace_members.items():
+        package = _read_toml(root, relative_path)["package"]
+        if package.get("repository") != {"workspace": True}:
+            mismatches.append(f"{name} must inherit the Rust workspace repository")
+
     python_projects = {
         "refkit": "packages/refkit/pyproject.toml",
         "refkit-core": "packages/refkit-core/pyproject.toml",
@@ -111,9 +120,7 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Validate version alignment for RefKit release artifacts."
-    )
+    parser = argparse.ArgumentParser(description="Validate RefKit release package metadata.")
     parser.add_argument("--tag", help="Release tag in vX.Y.Z or vX.Y.Z-rc.N form")
     parser.add_argument("--root", type=Path, default=ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
