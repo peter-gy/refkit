@@ -1,0 +1,77 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      python:
+        patterns:
+          - "*"
+
+  - package-ecosystem: npm
+    directory: /.github/release-notes/
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      release-notes:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      rust:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: /crates/bibtex-tidy-rs/
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      rust:
+        patterns:
+          - "*"
+
+  - package-ecosystem: cargo
+    directory: /packages/polars-refkit/rust/
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      polars-abi:
+        patterns:
+          - polars
+          - polars-core
+          - pyo3
+          - pyo3-polars
+      rust:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - polars
+          - polars-core
+          - pyo3
+          - pyo3-polars

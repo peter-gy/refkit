@@ -255,19 +255,15 @@ out = df.select(
 ## Development
 
 ```bash
-uv sync --all-packages --group dev
+uv sync --locked --all-packages --group dev
 (cd packages/refkit-core && uv run maturin develop)
-uv run pytest packages/refkit/tests --no-cov
+uv run --locked --all-packages --group dev python -m pytest packages/refkit/tests --no-cov
 ```
 
-The workspace also provides:
+Run every workspace gate from the repository root:
 
 ```bash
-make lint
-make typecheck
-make test
-make rust
-make build
+make check
 ```
 
 ## License

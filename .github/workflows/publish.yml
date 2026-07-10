@@ -13,85 +13,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  source-checks:
+    name: Source checks
+    uses: ./.github/workflows/source-checks.yml
+
   check-release-version:
     name: Check release version
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.14"
-          enable-cache: false
-          cache-dependency-glob: uv.lock
 
       - name: Check package versions
         id: version
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          python - <<'PY'
-          from __future__ import annotations
-
-          import os
-          import tomllib
-          from pathlib import Path
-
-          tag = os.environ["RELEASE_TAG"]
-          release_version = tag[1:] if tag.startswith("v") else tag
-          version_files = {
-              "refkit": Path("packages/refkit/pyproject.toml"),
-              "refkit-core": Path("packages/refkit-core/pyproject.toml"),
-              "polars-refkit": Path("packages/polars-refkit/pyproject.toml"),
-              "polars-refkit-rust": Path("packages/polars-refkit/rust/Cargo.toml"),
-              "rust-workspace": Path("Cargo.toml"),
-          }
-          dependency_pins = {
-              "refkit": {
-                  "refkit-core": release_version,
-              },
-          }
-
-          mismatches: list[str] = []
-          for name, path in version_files.items():
-              data = tomllib.loads(path.read_text(encoding="utf-8"))
-              if "project" in data:
-                  version = data["project"]["version"]
-              elif "package" in data:
-                  version = data["package"]["version"]
-              else:
-                  version = data["workspace"]["package"]["version"]
-              if version != release_version:
-                  mismatches.append(f"{name} has {version}, expected {release_version}")
-
-          for package, expected_pins in dependency_pins.items():
-              data = tomllib.loads(version_files[package].read_text(encoding="utf-8"))
-              dependencies = data["project"].get("dependencies", [])
-              for dependency_name, expected_version in expected_pins.items():
-                  expected = f"{dependency_name}=={expected_version}"
-                  if expected not in dependencies:
-                      mismatches.append(f"{package} must depend on {expected}")
-
-          if mismatches:
-              raise SystemExit("\n".join(mismatches))
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              print(f"version={release_version}", file=output)
-          PY
+          version=$(python scripts/release_contract.py --tag "$RELEASE_TAG")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build-refkit-core-sdist:
     name: refkit-core / Build sdist
     needs: check-release-version
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -117,6 +75,7 @@ jobs:
     name: refkit-core / Build CPython wheel (${{ matrix.os }})
     needs: check-release-version
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -126,7 +85,7 @@ jobs:
           - windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -137,15 +96,21 @@ jobs:
           enable-cache: false
           cache-dependency-glob: uv.lock
 
+      - name: Configure reproducible Rust paths
+        uses: ./.github/actions/configure-rust-build
+
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           working-directory: packages/refkit-core
-          args: --release --out dist --interpreter 3.11
+          args: --locked --release --out dist --interpreter 3.11
           sccache: false
 
       - name: Check metadata
-        run: uvx twine check --strict packages/refkit-core/dist/*
+        run: |
+          python -m scripts.normalize_wheel packages/refkit-core/dist/*.whl
+          uv run --locked --only-group build twine check --strict packages/refkit-core/dist/*
+          python scripts/distribution_contract.py packages/refkit-core/dist/*
 
       - name: Upload wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -159,6 +124,7 @@ jobs:
     name: refkit-core / Build PyEmscripten wheel (${{ matrix.python-version }})
     needs: check-release-version
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -166,7 +132,7 @@ jobs:
           - python-version: "3.14"
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -177,39 +143,29 @@ jobs:
           enable-cache: false
           cache-dependency-glob: uv.lock
 
-      - name: Install Pyodide build tools
-        run: uv sync --locked --only-group pyodide-build
-
-      - name: Get Pyodide config
-        id: pyodide-config
-        run: |
-          {
-            echo "rust-toolchain=$(uv run --locked --only-group pyodide-build pyodide config get rust_toolchain)"
-            echo "emscripten-version=$(uv run --locked --only-group pyodide-build pyodide config get emscripten_version)"
-            echo "pyodide-abi-version=$(uv run --locked --only-group pyodide-build pyodide config get pyodide_abi_version)"
-            echo "rustflags=$(uv run --locked --only-group pyodide-build pyodide config get rustflags)"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Set up Emscripten
-        uses: emscripten-core/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984 # v16
+      - name: Set up Pyodide
+        id: pyodide
+        uses: ./.github/actions/setup-pyodide
         with:
-          version: ${{ steps.pyodide-config.outputs.emscripten-version }}
           no-cache: true
 
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         env:
-          CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide-config.outputs.rustflags }}
-          MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide-config.outputs.pyodide-abi-version }}
+          CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide.outputs.rustflags }}
+          MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide.outputs.pyodide-abi-version }}
         with:
           working-directory: packages/refkit-core
           target: wasm32-unknown-emscripten
-          args: --release --out dist --interpreter ${{ matrix.python-version }}
-          rust-toolchain: ${{ steps.pyodide-config.outputs.rust-toolchain }}
+          args: --locked --release --out dist --interpreter ${{ matrix.python-version }}
+          rust-toolchain: ${{ steps.pyodide.outputs.rust-toolchain }}
           sccache: false
 
       - name: Check metadata
-        run: uvx twine check --strict packages/refkit-core/dist/*
+        run: |
+          python -m scripts.normalize_wheel packages/refkit-core/dist/*.whl
+          uv run --locked --only-group build twine check --strict packages/refkit-core/dist/*
+          python scripts/distribution_contract.py packages/refkit-core/dist/*
 
       - name: Upload wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -233,18 +189,20 @@ jobs:
     name: refkit-core / Publish to PyPI
     needs:
       - check-release-version
+      - source-checks
       - build-refkit-core-sdist
       - build-refkit-core-cpython
       - build-refkit-core-wasm
       - test-refkit-core
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: release
     permissions:
       contents: read
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -255,22 +213,7 @@ jobs:
           enable-cache: false
           cache-dependency-glob: uv.lock
 
-      - name: Check PyPI state
-        id: pypi
-        env:
-          PACKAGE: refkit-core
-          VERSION: ${{ needs.check-release-version.outputs.version }}
-        run: |
-          status=$(curl -s -o /dev/null -I -w "%{http_code}" "https://pypi.org/pypi/${PACKAGE}/${VERSION}/json")
-          if [ "$status" = "200" ]; then
-            echo "already_published=true" >> "$GITHUB_OUTPUT"
-            echo "${PACKAGE} ${VERSION} is already on PyPI"
-          else
-            echo "already_published=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Download artifacts
-        if: steps.pypi.outputs.already_published != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: release_refkit_core_*
@@ -278,22 +221,25 @@ jobs:
           path: dist/refkit-core
 
       - name: Publish package
-        if: steps.pypi.outputs.already_published != 'true'
         run: |
           for whl in dist/refkit-core/*.whl
           do
             unzip -qt "$whl"
           done
-          uvx twine check --strict dist/refkit-core/*
-          uv publish --trusted-publishing always dist/refkit-core/*
+          uv run --locked --only-group build twine check --strict dist/refkit-core/*
+          python scripts/distribution_contract.py dist/refkit-core/*
+          uv publish --trusted-publishing always \
+            --check-url https://pypi.org/simple \
+            dist/refkit-core/*
 
   build-refkit:
     name: refkit / Build distribution
     needs: check-release-version
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -308,7 +254,9 @@ jobs:
         run: uv build --package refkit --out-dir dist/refkit --no-create-gitignore
 
       - name: Check metadata
-        run: uvx twine check --strict dist/refkit/*
+        run: |
+          uv run --locked --only-group build twine check --strict dist/refkit/*
+          python scripts/distribution_contract.py dist/refkit/*
 
       - name: Upload distribution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -332,17 +280,19 @@ jobs:
     name: refkit / Publish to PyPI
     needs:
       - check-release-version
+      - source-checks
       - publish-refkit-core
       - build-refkit
       - test-refkit
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: release
     permissions:
       contents: read
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -353,40 +303,28 @@ jobs:
           enable-cache: false
           cache-dependency-glob: uv.lock
 
-      - name: Check PyPI state
-        id: pypi
-        env:
-          PACKAGE: refkit
-          VERSION: ${{ needs.check-release-version.outputs.version }}
-        run: |
-          status=$(curl -s -o /dev/null -I -w "%{http_code}" "https://pypi.org/pypi/${PACKAGE}/${VERSION}/json")
-          if [ "$status" = "200" ]; then
-            echo "already_published=true" >> "$GITHUB_OUTPUT"
-            echo "${PACKAGE} ${VERSION} is already on PyPI"
-          else
-            echo "already_published=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Download distribution
-        if: steps.pypi.outputs.already_published != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release_refkit_dist
           path: dist/refkit
 
       - name: Publish package
-        if: steps.pypi.outputs.already_published != 'true'
         run: |
-          uvx twine check --strict dist/refkit/*
-          uv publish --trusted-publishing always dist/refkit/*
+          uv run --locked --only-group build twine check --strict dist/refkit/*
+          python scripts/distribution_contract.py dist/refkit/*
+          uv publish --trusted-publishing always \
+            --check-url https://pypi.org/simple \
+            dist/refkit/*
 
   build-polars-refkit-sdist:
     name: polars-refkit / Build sdist
     needs: check-release-version
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -412,6 +350,7 @@ jobs:
     name: polars-refkit / Build CPython wheel (${{ matrix.os }})
     needs: check-release-version
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -421,7 +360,7 @@ jobs:
           - windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -432,15 +371,21 @@ jobs:
           enable-cache: false
           cache-dependency-glob: uv.lock
 
+      - name: Configure reproducible Rust paths
+        uses: ./.github/actions/configure-rust-build
+
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           working-directory: packages/polars-refkit
-          args: --release --out dist --interpreter 3.11
+          args: --locked --release --out dist --interpreter 3.11
           sccache: false
 
       - name: Check metadata
-        run: uvx twine check --strict packages/polars-refkit/dist/*
+        run: |
+          python -m scripts.normalize_wheel packages/polars-refkit/dist/*.whl
+          uv run --locked --only-group build twine check --strict packages/polars-refkit/dist/*
+          python scripts/distribution_contract.py packages/polars-refkit/dist/*
 
       - name: Upload wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -454,6 +399,7 @@ jobs:
     name: polars-refkit / Build PyEmscripten wheel (${{ matrix.python-version }})
     needs: check-release-version
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -461,7 +407,7 @@ jobs:
           - python-version: "3.14"
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -472,40 +418,30 @@ jobs:
           enable-cache: false
           cache-dependency-glob: uv.lock
 
-      - name: Install Pyodide build tools
-        run: uv sync --locked --only-group pyodide-build
-
-      - name: Get Pyodide config
-        id: pyodide-config
-        run: |
-          {
-            echo "rust-toolchain=$(uv run --locked --only-group pyodide-build pyodide config get rust_toolchain)"
-            echo "emscripten-version=$(uv run --locked --only-group pyodide-build pyodide config get emscripten_version)"
-            echo "pyodide-abi-version=$(uv run --locked --only-group pyodide-build pyodide config get pyodide_abi_version)"
-            echo "rustflags=$(uv run --locked --only-group pyodide-build pyodide config get rustflags)"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Set up Emscripten
-        uses: emscripten-core/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984 # v16
+      - name: Set up Pyodide
+        id: pyodide
+        uses: ./.github/actions/setup-pyodide
         with:
-          version: ${{ steps.pyodide-config.outputs.emscripten-version }}
           no-cache: true
 
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         env:
-          CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide-config.outputs.rustflags }}
+          CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide.outputs.rustflags }}
           HOST_CC: cc
-          MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide-config.outputs.pyodide-abi-version }}
+          MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide.outputs.pyodide-abi-version }}
         with:
           working-directory: packages/polars-refkit
           target: wasm32-unknown-emscripten
-          args: --release --out dist --interpreter ${{ matrix.python-version }}
-          rust-toolchain: ${{ steps.pyodide-config.outputs.rust-toolchain }}
+          args: --locked --release --out dist --interpreter ${{ matrix.python-version }}
+          rust-toolchain: ${{ steps.pyodide.outputs.rust-toolchain }}
           sccache: false
 
       - name: Check metadata
-        run: uvx twine check --strict packages/polars-refkit/dist/*
+        run: |
+          python -m scripts.normalize_wheel packages/polars-refkit/dist/*.whl
+          uv run --locked --only-group build twine check --strict packages/polars-refkit/dist/*
+          python scripts/distribution_contract.py packages/polars-refkit/dist/*
 
       - name: Upload wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -531,18 +467,20 @@ jobs:
     name: polars-refkit / Publish to PyPI
     needs:
       - check-release-version
+      - source-checks
       - build-polars-refkit-sdist
       - build-polars-refkit-cpython
       - build-polars-refkit-wasm
       - test-polars-refkit
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: release
     permissions:
       contents: read
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -553,22 +491,7 @@ jobs:
           enable-cache: false
           cache-dependency-glob: uv.lock
 
-      - name: Check PyPI state
-        id: pypi
-        env:
-          PACKAGE: polars-refkit
-          VERSION: ${{ needs.check-release-version.outputs.version }}
-        run: |
-          status=$(curl -s -o /dev/null -I -w "%{http_code}" "https://pypi.org/pypi/${PACKAGE}/${VERSION}/json")
-          if [ "$status" = "200" ]; then
-            echo "already_published=true" >> "$GITHUB_OUTPUT"
-            echo "${PACKAGE} ${VERSION} is already on PyPI"
-          else
-            echo "already_published=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Download artifacts
-        if: steps.pypi.outputs.already_published != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: release_polars_refkit_*
@@ -576,14 +499,16 @@ jobs:
           path: dist/polars-refkit
 
       - name: Publish package
-        if: steps.pypi.outputs.already_published != 'true'
         run: |
           for whl in dist/polars-refkit/*.whl
           do
             unzip -qt "$whl"
           done
-          uvx twine check --strict dist/polars-refkit/*
-          uv publish --trusted-publishing always dist/polars-refkit/*
+          uv run --locked --only-group build twine check --strict dist/polars-refkit/*
+          python scripts/distribution_contract.py dist/polars-refkit/*
+          uv publish --trusted-publishing always \
+            --check-url https://pypi.org/simple \
+            dist/polars-refkit/*
 
   release-complete:
     name: Release complete
@@ -593,6 +518,7 @@ jobs:
       - publish-polars-refkit
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Check package publish results
         env:
@@ -616,12 +542,13 @@ jobs:
     name: Update release notes
     needs: release-complete
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: release
     permissions:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -630,8 +557,15 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: "26"
+          package-manager-cache: false
+
+      - name: Install release note generator
+        working-directory: .github/release-notes
+        run: |
+          npm ci --ignore-scripts --omit=dev --no-audit --no-fund
+          npm audit --omit=dev --audit-level=high
 
       - name: Update release notes
-        run: npx --yes changelogithub@14.0.0
+        run: .github/release-notes/node_modules/.bin/changelogithub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

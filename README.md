@@ -174,20 +174,16 @@ The Python packages are adapters over that core:
 ## Development
 
 ```bash
-uv sync --all-packages --group dev
+uv sync --locked --all-packages --group dev
 (cd packages/refkit-core && uv run maturin develop)
 (cd packages/polars-refkit && uv run maturin develop)
-uv run pytest
+make test
 ```
 
-Local quality gates:
+Run the complete local gate:
 
 ```bash
-make lint
-make typecheck
-make test
-make rust
-make build
+make check
 ```
 
 ## License

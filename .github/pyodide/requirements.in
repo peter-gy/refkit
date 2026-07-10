@@ -1,0 +1,4 @@
+# Runtime dependencies for the Pyodide contract tests.
+# Run `make pyodide-lock` from the repository root after changing this file.
+polars==1.33.1
+pytest==9.1.1

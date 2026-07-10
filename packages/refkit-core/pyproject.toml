@@ -35,3 +35,9 @@ bindings = "pyo3"
 features = ["extension-module"]
 editable-profile = "dev"
 strip = true
+locked = true
+exclude = [
+    "src/**/__pycache__/**",
+    "src/**/*.pyc",
+    "src/**/*.pyo",
+]

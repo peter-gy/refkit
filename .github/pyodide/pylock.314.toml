@@ -1,0 +1,68 @@
+lock-version = "1.0"
+created-by = "pip"
+
+[[packages]]
+name = "iniconfig"
+version = "2.3.0"
+
+[[packages.wheels]]
+name = "iniconfig-2.3.0-py3-none-any.whl"
+url = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/iniconfig-2.3.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "1cd8448eea1c863c970703ed01fa1baf655043150cee772772253e3461b701ed"
+
+[[packages]]
+name = "packaging"
+version = "26.2"
+
+[[packages.wheels]]
+name = "packaging-26.2-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/df/b2/87e62e8c3e2f4b32e5fe99e0b86d576da1312593b39f47d8ceef365e95ed/packaging-26.2-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e"
+
+[[packages]]
+name = "pluggy"
+version = "1.6.0"
+
+[[packages.wheels]]
+name = "pluggy-1.6.0-py3-none-any.whl"
+url = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/pluggy-1.6.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "8358dcb4259589a6dbb54b42d0c437801bac4c69e843e617e3b529e9b7926fda"
+
+[[packages]]
+name = "polars"
+version = "1.33.1"
+
+[[packages.wheels]]
+name = "polars-1.33.1-cp314-cp314-pyemscripten_2026_0_wasm32.whl"
+url = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/polars-1.33.1-cp314-cp314-pyemscripten_2026_0_wasm32.whl"
+
+[packages.wheels.hashes]
+sha256 = "3eefe347ffa293521fe54b25b4bd89baea72017eb0738c23dec9028643f66b1b"
+
+[[packages]]
+name = "pygments"
+version = "2.20.0"
+
+[[packages.wheels]]
+name = "pygments-2.20.0-py3-none-any.whl"
+url = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/pygments-2.20.0-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "72b3a2c9c1f6eae60e2023e19d2d706cc0a6e0b2c40cc7fd94b9264a380e7569"
+
+[[packages]]
+name = "pytest"
+version = "9.1.1"
+
+[[packages.wheels]]
+name = "pytest-9.1.1-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl"
+
+[packages.wheels.hashes]
+sha256 = "37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c"

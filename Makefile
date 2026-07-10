@@ -1,40 +1,55 @@
 POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
+TIDY_RUST := crates/bibtex-tidy-rs/Cargo.toml
+UV_RUN := uv run --locked --all-packages --group dev
+RUST_SYSROOT := $(shell rustc --print sysroot)
+RUST_REMAP_FLAGS := --remap-path-prefix=$(HOME)=home --remap-path-prefix=$(HOME)/.cargo/registry/src=cargo-registry --remap-path-prefix=$(HOME)/.cargo/git/checkouts=cargo-git --remap-path-prefix=$(HOME)/.rustup=rustup --remap-path-prefix=$(RUST_SYSROOT)=rust-toolchain --remap-path-prefix=$(CURDIR)=refkit
 
 .PHONY: format
 format:
-	uv run ruff check --fix .
-	uv run ruff format .
+	$(UV_RUN) ruff check --fix .
+	$(UV_RUN) ruff format .
 	cargo fmt --all
+	cargo fmt --manifest-path $(TIDY_RUST) --all
 	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all
 
-.PHONY: lint
-lint:
-	uv run ruff check .
-	uv run ruff format --check .
+.PHONY: python-lint
+python-lint:
+	$(UV_RUN) ruff check .
+	$(UV_RUN) ruff format --check .
+
+.PHONY: rust-lint
+rust-lint:
 	cargo fmt --all --check
+	cargo fmt --manifest-path $(TIDY_RUST) --all --check
 	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all --check
-	cargo clippy --workspace --all-targets --all-features -- -D warnings
-	cargo clippy --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features -- -D warnings
+	cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+	cargo clippy --locked --manifest-path $(TIDY_RUST) --all-targets --all-features -- -D warnings
+	cargo clippy --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features -- -D warnings
+
+.PHONY: lint
+lint: python-lint rust-lint
 
 .PHONY: typecheck
 typecheck:
-	uv run ty check
-	uv run pyrefly check
+	$(UV_RUN) ty check
+	$(UV_RUN) pyrefly check
 
 .PHONY: test
 test:
-	uv run pytest
+	$(UV_RUN) python -m pytest
 
 .PHONY: benchmark-test
 benchmark-test:
-	uv run --package refkit-bench pytest packages/refkit-bench/tests
+	$(UV_RUN) python -m pytest packages/refkit-bench/tests
 
 .PHONY: rust
 rust:
-	cargo check --workspace
-	cargo check --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
-	cargo test --workspace
-	cargo test --manifest-path $(POLARS_REFKIT_RUST)
+	cargo check --locked --workspace
+	cargo check --locked --manifest-path $(TIDY_RUST) --all-targets --all-features
+	cargo check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
+	cargo test --locked --workspace
+	cargo test --locked --manifest-path $(TIDY_RUST)
+	cargo test --locked --manifest-path $(POLARS_REFKIT_RUST)
 
 .PHONY: rust-floor
 rust-floor:
@@ -43,11 +58,19 @@ rust-floor:
 		rustup toolchain install 1.85 --profile minimal; \
 	fi
 	rustup run 1.85 cargo check --locked --workspace
+	rustup run 1.85 cargo check --locked --manifest-path $(TIDY_RUST) --all-targets --all-features
 	rustup run 1.85 cargo check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 
-.PHONY: clean-build
-clean-build:
-	rm -rf dist target/wheels target packages/refkit-core/dist packages/polars-refkit/dist
+.PHONY: pyodide-lock pyodide-lock-check
+pyodide-lock:
+	$(UV_RUN) python scripts/pyodide_lock.py
+
+pyodide-lock-check:
+	$(UV_RUN) python scripts/pyodide_lock.py --check
+
+.PHONY: clean-dist
+clean-dist:
+	rm -rf dist packages/refkit-core/dist packages/polars-refkit/dist
 
 .PHONY: clean
 clean:
@@ -57,7 +80,8 @@ clean:
 		wheels \
 		build \
 		target \
-		target \
+		crates/bibtex-tidy-rs/target \
+		packages/polars-refkit/rust/target \
 		packages/refkit-core/dist \
 		packages/polars-refkit/dist \
 		htmlcov \
@@ -93,10 +117,27 @@ clean:
 	fi
 
 .PHONY: build
-build: clean-build
-	uv build --package refkit-core --no-create-gitignore
-	uv build --package refkit --no-create-gitignore
-	uv build --package polars-refkit --no-create-gitignore
+build: clean-dist
+	uv build --package refkit-core --sdist --no-create-gitignore
+	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package refkit-core --wheel --no-create-gitignore
+	uv build --package refkit --sdist --no-create-gitignore
+	uv build --package refkit --wheel --no-create-gitignore
+	uv build --package polars-refkit --sdist --no-create-gitignore
+	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package polars-refkit --wheel --no-create-gitignore
+	$(UV_RUN) python -m scripts.normalize_wheel 'dist/*.whl'
+	$(UV_RUN) python scripts/distribution_contract.py dist/*
 
-.PHONY: all
-all: lint typecheck test benchmark-test rust rust-floor build
+.PHONY: lock
+lock:
+	uv lock --check
+
+.PHONY: release-check
+release-check:
+	$(UV_RUN) python scripts/release_contract.py
+
+.PHONY: architecture-check
+architecture-check:
+	$(UV_RUN) python scripts/architecture_contract.py
+
+.PHONY: check
+check: lock release-check architecture-check pyodide-lock-check lint typecheck test rust rust-floor build

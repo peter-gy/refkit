@@ -1,0 +1,28 @@
+name: Create Pyodide virtual environment
+description: Create the pinned Pyodide runtime used for installed-wheel tests.
+
+inputs:
+  path:
+    description: Destination for the Pyodide virtual environment.
+    default: .venv-pyodide
+
+runs:
+  using: composite
+  steps:
+    - name: Create pinned Pyodide runtime
+      shell: bash
+      env:
+        PYODIDE_VENV_PATH: ${{ inputs.path }}
+      run: |
+        python_version="$(
+          python -c 'import json; print(json.load(open(".github/pyodide/runtime.json"))["python-version"])'
+        )"
+        xbuildenv_version="$(
+          python -c 'import json; print(json.load(open(".github/pyodide/runtime.json"))["xbuildenv-version"])'
+        )"
+        export PYODIDE_XBUILDENV_PATH="${RUNNER_TEMP}/refkit-pyodide-${xbuildenv_version}"
+        uv sync --python "${python_version}" --locked --only-group pyodide-build
+        uv run --python "${python_version}" --locked --only-group pyodide-build \
+          pyodide xbuildenv install "${xbuildenv_version}"
+        uv run --python "${python_version}" --locked --only-group pyodide-build \
+          pyodide venv "${PYODIDE_VENV_PATH}"

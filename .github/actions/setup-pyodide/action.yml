@@ -1,0 +1,63 @@
+name: Set up Pyodide
+description: Resolve the locked Pyodide toolchain and install its Emscripten SDK.
+
+inputs:
+  no-cache:
+    description: Disable the Emscripten SDK cache for release builds.
+    default: "false"
+
+outputs:
+  rust-toolchain:
+    description: Rust toolchain required by the selected Pyodide ABI.
+    value: ${{ steps.config.outputs.rust-toolchain }}
+  emscripten-version:
+    description: Emscripten version required by the selected Pyodide ABI.
+    value: ${{ steps.config.outputs.emscripten-version }}
+  pyodide-abi-version:
+    description: PyEmscripten platform version for wheel tags.
+    value: ${{ steps.config.outputs.pyodide-abi-version }}
+  rustflags:
+    description: Rust flags required for wasm32-unknown-emscripten.
+    value: ${{ steps.config.outputs.rustflags }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Pyodide build tools
+      shell: bash
+      run: |
+        python_version="$(
+          python -c 'import json; print(json.load(open(".github/pyodide/runtime.json"))["python-version"])'
+        )"
+        uv sync --python "${python_version}" --locked --only-group pyodide-build
+
+    - name: Resolve Pyodide toolchain
+      id: config
+      shell: bash
+      run: |
+        python_version="$(
+          python -c 'import json; print(json.load(open(".github/pyodide/runtime.json"))["python-version"])'
+        )"
+        xbuildenv_version="$(
+          python -c 'import json; print(json.load(open(".github/pyodide/runtime.json"))["xbuildenv-version"])'
+        )"
+        export PYODIDE_XBUILDENV_PATH="${RUNNER_TEMP}/refkit-pyodide-${xbuildenv_version}"
+        uv run --python "${python_version}" --locked --only-group pyodide-build \
+          pyodide xbuildenv install "${xbuildenv_version}"
+        rust_toolchain="$(uv run --python "${python_version}" --locked --only-group pyodide-build pyodide config get rust_toolchain)"
+        emscripten_version="$(uv run --python "${python_version}" --locked --only-group pyodide-build pyodide config get emscripten_version)"
+        pyodide_abi_version="$(uv run --python "${python_version}" --locked --only-group pyodide-build pyodide config get pyodide_abi_version)"
+        rustflags="$(uv run --python "${python_version}" --locked --only-group pyodide-build pyodide config get rustflags)"
+        rustflags="${rustflags} --remap-path-prefix=${HOME}=home --remap-path-prefix=${HOME}/.cargo/registry/src=cargo-registry --remap-path-prefix=${HOME}/.cargo/git/checkouts=cargo-git --remap-path-prefix=${HOME}/.rustup=rustup --remap-path-prefix=/root/.cargo/registry/src=cargo-registry --remap-path-prefix=/root/.cargo/git/checkouts=cargo-git --remap-path-prefix=/root/.rustup=rustup --remap-path-prefix=/usr/local/rustup=rustup --remap-path-prefix=${RUNNER_TEMP}=temp --remap-path-prefix=${GITHUB_WORKSPACE}=refkit"
+        {
+          echo "rust-toolchain=${rust_toolchain}"
+          echo "emscripten-version=${emscripten_version}"
+          echo "pyodide-abi-version=${pyodide_abi_version}"
+          echo "rustflags=${rustflags}"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Set up Emscripten
+      uses: emscripten-core/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984 # v16
+      with:
+        version: ${{ steps.config.outputs.emscripten-version }}
+        no-cache: ${{ inputs.no-cache }}

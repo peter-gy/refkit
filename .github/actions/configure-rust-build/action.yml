@@ -1,0 +1,47 @@
+name: Configure reproducible Rust paths
+description: Remap runner-specific source roots before compiling release artifacts.
+
+runs:
+  using: composite
+  steps:
+    - name: Export Rust path remapping
+      shell: bash
+      run: |
+        python - <<'PY'
+        import os
+        import subprocess
+        from pathlib import Path
+
+        sysroot = subprocess.run(
+            ["rustc", "--print", "sysroot"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        mappings = [
+            (str(Path.home()), "home"),
+            (str(Path.home() / ".cargo" / "registry" / "src"), "cargo-registry"),
+            (str(Path.home() / ".cargo" / "git" / "checkouts"), "cargo-git"),
+            (str(Path.home() / ".rustup"), "rustup"),
+            (sysroot, "rust-toolchain"),
+            (os.environ.get("RUNNER_TEMP"), "temp"),
+            (os.environ.get("RUNNER_TOOL_CACHE"), "tool-cache"),
+            ("/root/.cargo/registry/src", "cargo-registry"),
+            ("/root/.cargo/git/checkouts", "cargo-git"),
+            ("/root/.rustup", "rustup"),
+            ("/usr/local/rustup", "rustup"),
+            ("/github/home", "home"),
+            ("/io", "refkit"),
+            ("/github/workspace", "refkit"),
+            (os.environ["GITHUB_WORKSPACE"], "refkit"),
+        ]
+        flags = " ".join(
+            f"--remap-path-prefix={source}={target}"
+            for source, target in dict.fromkeys(mappings)
+            if source
+        )
+        if existing := os.environ.get("RUSTFLAGS"):
+            flags = f"{existing} {flags}"
+        with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+            output.write(f"RUSTFLAGS={flags}\n")
+        PY

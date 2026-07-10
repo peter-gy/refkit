@@ -15,6 +15,7 @@ jobs:
   validate-package:
     name: Validate package selection
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Check package input
         env:
@@ -30,6 +31,7 @@ jobs:
     if: inputs.package == 'refkit-core'
     needs: validate-package
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -87,9 +89,10 @@ jobs:
     if: inputs.package == 'refkit-core'
     needs: validate-package
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -106,12 +109,12 @@ jobs:
           name: release_refkit_core_pyemscripten_3.14
           path: dist
 
+      - name: Create Pyodide virtual environment
+        uses: ./.github/actions/create-pyodide-venv
+
       - name: Test installed package
         run: |
-          uv sync --locked --only-group pyodide-build
-          uv run --locked --only-group pyodide-build pyodide venv .venv-pyodide
           source .venv-pyodide/bin/activate
-          python -m pip install --upgrade pip
           python -m pip install refkit-core --no-index --no-deps --find-links dist --force-reinstall
           python - <<'PY'
           import refkit_core as core
@@ -125,6 +128,7 @@ jobs:
     if: inputs.package == 'refkit-core'
     needs: validate-package
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Set up uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
@@ -155,6 +159,7 @@ jobs:
     if: inputs.package == 'refkit'
     needs: validate-package
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -179,7 +184,7 @@ jobs:
             python-version: "3.14"
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -212,9 +217,10 @@ jobs:
     if: inputs.package == 'refkit'
     needs: validate-package
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -237,20 +243,23 @@ jobs:
           name: release_refkit_core_pyemscripten_3.14
           path: dist
 
+      - name: Create Pyodide virtual environment
+        uses: ./.github/actions/create-pyodide-venv
+
       - name: Test installed package
         run: |
-          uv sync --locked --only-group pyodide-build
-          uv run --locked --only-group pyodide-build pyodide venv .venv-pyodide
           source .venv-pyodide/bin/activate
-          python -m pip install --upgrade pip
+          python -m pip install -r .github/pyodide/pylock.314.toml
           python -m pip install refkit --no-index --find-links dist --force-reinstall
           python .github/pyodide/smoke_refkit.py
+          python -m pytest -q -c /dev/null .github/pyodide/test_refkit_runtime.py
 
   test-polars-refkit-cpython:
-    name: polars-refkit / Test CPython wheel (${{ matrix.os }}, py${{ matrix.python-version }})
+    name: polars-refkit / Test CPython wheel (${{ matrix.os }}, py${{ matrix.python-version }}, ${{ matrix.polars }})
     if: inputs.package == 'polars-refkit'
     needs: validate-package
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -258,21 +267,27 @@ jobs:
           - os: ubuntu-latest
             artifact-os: Linux
             python-version: "3.11"
+            polars: polars==1.29.0
           - os: ubuntu-latest
             artifact-os: Linux
             python-version: "3.14"
+            polars: polars
           - os: macos-15
             artifact-os: macOS
             python-version: "3.11"
+            polars: polars==1.29.0
           - os: macos-15
             artifact-os: macOS
             python-version: "3.14"
+            polars: polars
           - os: windows-latest
             artifact-os: Windows
             python-version: "3.11"
+            polars: polars==1.29.0
           - os: windows-latest
             artifact-os: Windows
             python-version: "3.14"
+            polars: polars
     steps:
       - name: Set up uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
@@ -292,7 +307,7 @@ jobs:
         shell: bash
         run: |
           wheels=(dist/polars_refkit-*.whl)
-          uv run --no-project --python "${{ matrix.python-version }}" --with "${wheels[0]}" python - <<'PY'
+          uv run --no-project --python "${{ matrix.python-version }}" --with "${{ matrix.polars }}" --with "${wheels[0]}" python - <<'PY'
           import polars as pl
           import polars_refkit
 
@@ -313,9 +328,10 @@ jobs:
     if: inputs.package == 'polars-refkit'
     needs: validate-package
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
@@ -344,22 +360,26 @@ jobs:
           name: release_polars_refkit_pyemscripten_3.14
           path: dist
 
+      - name: Create Pyodide virtual environment
+        uses: ./.github/actions/create-pyodide-venv
+
       - name: Test installed package
         run: |
-          uv sync --locked --only-group pyodide-build
-          uv run --locked --only-group pyodide-build pyodide venv .venv-pyodide
           source .venv-pyodide/bin/activate
-          python -m pip install --upgrade pip
-          python -m pip install polars
+          python -m pip install -r .github/pyodide/pylock.314.toml
           python -m pip install refkit --no-index --find-links dist --force-reinstall
           python -m pip install dist/polars_refkit-*.whl
           python .github/pyodide/smoke_polars_refkit.py
+          python -m pytest -q -c /dev/null \
+            .github/pyodide/test_refkit_runtime.py \
+            .github/pyodide/test_polars_refkit_runtime.py
 
   test-polars-refkit-sdist:
     name: polars-refkit / Test sdist rebuild
     if: inputs.package == 'polars-refkit'
     needs: validate-package
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Set up uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0

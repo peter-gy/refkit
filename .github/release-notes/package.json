@@ -1,0 +1,11 @@
+{
+  "name": "refkit-release-notes",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "changelogithub": "14.0.0"
+  },
+  "overrides": {
+    "tar": "7.5.19"
+  }
+}

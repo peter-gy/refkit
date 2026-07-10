@@ -39,3 +39,9 @@ bindings = "pyo3"
 features = ["extension-module"]
 editable-profile = "dev"
 strip = true
+locked = true
+exclude = [
+    "polars_refkit/**/__pycache__/**",
+    "polars_refkit/**/*.pyc",
+    "polars_refkit/**/*.pyo",
+]

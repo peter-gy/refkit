@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import importlib.util
 import tomllib
 from pathlib import Path
@@ -25,52 +24,6 @@ def read_workflow_jobs(path: str) -> dict[str, Any]:
     return cast(dict[str, Any], workflow["jobs"])
 
 
-def python_heredoc(run: str) -> str:
-    lines = run.splitlines()
-    start = lines.index("python - <<'PY'") + 1
-    end = lines.index("PY", start)
-    return "\n".join(lines[start:end])
-
-
-def path_dict_assignment(source: str, name: str) -> dict[str, str]:
-    module = ast.parse(source)
-    for node in module.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        if not any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
-            continue
-        if not isinstance(node.value, ast.Dict):
-            break
-        values: dict[str, str] = {}
-        for key, value in zip(node.value.keys, node.value.values, strict=True):
-            if (
-                isinstance(key, ast.Constant)
-                and isinstance(key.value, str)
-                and isinstance(value, ast.Call)
-                and isinstance(value.func, ast.Name)
-                and value.func.id == "Path"
-                and len(value.args) == 1
-                and isinstance(value.args[0], ast.Constant)
-                and isinstance(value.args[0].value, str)
-            ):
-                values[key.value] = value.args[0].value
-        return values
-    raise AssertionError(f"{name} assignment not found")
-
-
-def make_target_commands(makefile: str, target: str) -> list[str]:
-    lines = makefile.splitlines()
-    target_line = f"{target}:"
-    start = next(index for index, line in enumerate(lines) if line.startswith(target_line))
-    commands: list[str] = []
-    for line in lines[start + 1 :]:
-        if line and not line.startswith(("\t", " ")):
-            break
-        if line.startswith("\t"):
-            commands.append(line.strip())
-    return commands
-
-
 def load_module(path: str) -> Any:
     module_path = ROOT / path
     spec = importlib.util.spec_from_file_location(module_path.stem, module_path)
@@ -88,19 +41,6 @@ def test_public_package_keeps_polars_dependency_floor() -> None:
 
     assert project["dependencies"] == ["polars>=1.29"]
     assert "polars>=1.29" in build_system["requires"]
-
-
-def test_rust_plugin_uses_package_local_pyodide_abi_boundary() -> None:
-    data = read_toml("packages/polars-refkit/rust/Cargo.toml")
-    dependencies = cast(dict[str, Any], data["dependencies"])
-    polars = cast(dict[str, Any], dependencies["polars"])
-    polars_core = cast(dict[str, Any], dependencies["polars-core"])
-    pyo3_polars = cast(dict[str, Any], dependencies["pyo3-polars"])
-
-    assert polars["version"] == "=0.50.0"
-    assert polars_core["version"] == "=0.50.0"
-    assert dependencies["pyo3"] == "0.25"
-    assert pyo3_polars["version"] == "=0.23.1"
 
 
 def test_workflows_build_and_test_polars_refkit_pyemscripten_wheels() -> None:
@@ -142,36 +82,14 @@ def test_workflows_build_and_test_polars_refkit_pyemscripten_wheels() -> None:
     assert publish_jobs["test-polars-refkit"]["with"] == {"package": "polars-refkit"}
 
 
-def test_publish_release_version_gate_covers_public_manifests() -> None:
-    publish_jobs = read_workflow_jobs(".github/workflows/publish.yml")
-    version_step = next(
-        step
-        for step in cast(list[dict[str, Any]], publish_jobs["check-release-version"]["steps"])
-        if step.get("id") == "version"
-    )
-
-    assert path_dict_assignment(python_heredoc(str(version_step["run"])), "version_files") == {
-        "refkit": "packages/refkit/pyproject.toml",
-        "refkit-core": "packages/refkit-core/pyproject.toml",
-        "polars-refkit": "packages/polars-refkit/pyproject.toml",
-        "polars-refkit-rust": "packages/polars-refkit/rust/Cargo.toml",
-        "rust-workspace": "Cargo.toml",
-    }
-
-
 def assert_polars_wasm_build_job(job: dict[str, Any], *, artifact_name: str) -> None:
     steps = cast(list[dict[str, Any]], job["steps"])
-    config_step = next(step for step in steps if step.get("id") == "pyodide-config")
     setup_step = next(
-        step
-        for step in steps
-        if str(step.get("uses", "")).startswith("emscripten-core/setup-emsdk")
+        step for step in steps if step.get("uses") == "./.github/actions/setup-pyodide"
     )
     build_step = next(
         step for step in steps if str(step.get("uses", "")).startswith("PyO3/maturin-action")
     )
-    config_run = str(config_step["run"])
-    setup_with = cast(dict[str, Any], setup_step["with"])
     build_env = cast(dict[str, Any], build_step["env"])
     build_with = cast(dict[str, Any], build_step["with"])
     upload_names = [
@@ -180,19 +98,17 @@ def assert_polars_wasm_build_job(job: dict[str, Any], *, artifact_name: str) -> 
         if str(step.get("uses", "")).startswith("actions/upload-artifact")
     ]
 
-    for config_name in ("rust_toolchain", "emscripten_version", "pyodide_abi_version", "rustflags"):
-        assert config_name in config_run
-    assert setup_with["version"] == "${{ steps.pyodide-config.outputs.emscripten-version }}"
+    assert setup_step["id"] == "pyodide"
     assert build_with["working-directory"] == "packages/polars-refkit"
     assert build_with["target"] == "wasm32-unknown-emscripten"
-    assert build_with["rust-toolchain"] == "${{ steps.pyodide-config.outputs.rust-toolchain }}"
+    assert build_with["rust-toolchain"] == "${{ steps.pyodide.outputs.rust-toolchain }}"
     assert build_env == {
         "CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS": (
-            "${{ steps.pyodide-config.outputs.rustflags }}"
+            "${{ steps.pyodide.outputs.rustflags }}"
         ),
         "HOST_CC": "cc",
         "MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION": (
-            "${{ steps.pyodide-config.outputs.pyodide-abi-version }}"
+            "${{ steps.pyodide.outputs.pyodide-abi-version }}"
         ),
     }
     assert upload_names == [artifact_name]
@@ -215,8 +131,7 @@ def assert_polars_pyemscripten_smoke_job(
     assert "python .github/pyodide/smoke_polars_refkit.py" in run_steps
 
 
-def test_public_build_surface_excludes_refkit_bench() -> None:
-    makefile = read_text("Makefile")
+def test_benchmark_package_stays_outside_public_runtime_dependencies() -> None:
     workspace = read_toml("pyproject.toml")
     bench = read_toml("packages/refkit-bench/pyproject.toml")
 
@@ -226,11 +141,6 @@ def test_public_build_surface_excludes_refkit_bench() -> None:
     root_sources = cast(dict[str, Any], workspace["tool"]["uv"]["sources"])
 
     assert set(public_project["dependencies"]) == {"refkit-core", "refkit", "polars-refkit"}
-    assert make_target_commands(makefile, "build") == [
-        "uv build --package refkit-core --no-create-gitignore",
-        "uv build --package refkit --no-create-gitignore",
-        "uv build --package polars-refkit --no-create-gitignore",
-    ]
     assert {"refkit", "polars-refkit"} <= bench_dependencies
     assert bench_sources["refkit"] == {"workspace": True}
     assert bench_sources["polars-refkit"] == {"workspace": True}

@@ -1,0 +1,6 @@
+{
+  "python-version": "3.14",
+  "pyodide-build-version": "0.35.1",
+  "xbuildenv-version": "314.0.2",
+  "polars-wheel-tag": "cp314-cp314-pyemscripten_2026_0_wasm32"
+}
