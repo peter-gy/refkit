@@ -1401,7 +1401,7 @@ dependencies = [
 
 [[package]]
 name = "polars_refkit"
-version = "0.0.3"
+version = "0.0.4-rc.1"
 dependencies = [
  "polars",
  "polars-core",
@@ -1691,7 +1691,7 @@ dependencies = [
 
 [[package]]
 name = "refkit-core"
-version = "0.0.3"
+version = "0.0.4-rc.1"
 dependencies = [
  "biblatex",
  "hayagriva",

@@ -13,7 +13,7 @@ use crate::tidy;
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
-    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add("__version__", python_version(env!("CARGO_PKG_VERSION")))?;
     m.add("build_info", build_info())?;
     m.add("build_mode", build_mode())?;
     m.add("RefkitError", py.get_type::<RefkitError>())?;
@@ -41,10 +41,15 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
 fn build_info() -> String {
     format!(
         "refkit-core {} ({}, {})",
-        env!("CARGO_PKG_VERSION"),
+        python_version(env!("CARGO_PKG_VERSION")),
         std::env::consts::OS,
         std::env::consts::ARCH
     )
+}
+
+fn python_version(cargo_version: &str) -> String {
+    // Cargo and Python spell release candidates differently. Export the PEP 440 form.
+    cargo_version.replace("-rc.", "rc")
 }
 
 fn build_mode() -> &'static str {
@@ -52,5 +57,28 @@ fn build_mode() -> &'static str {
         "debug"
     } else {
         "release"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_info, python_version};
+
+    #[test]
+    fn build_info_uses_python_version() {
+        let version = python_version(env!("CARGO_PKG_VERSION"));
+
+        assert!(build_info().starts_with(&format!("refkit-core {version} (")));
+        assert!(!build_info().contains("-rc."));
+    }
+
+    #[test]
+    fn python_version_uses_pep_440_rc_form() {
+        assert_eq!(python_version("1.2.3-rc.4"), "1.2.3rc4");
+    }
+
+    #[test]
+    fn python_version_preserves_stable_form() {
+        assert_eq!(python_version("1.2.3"), "1.2.3");
     }
 }

@@ -8,7 +8,12 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_TAG = re.compile(r"^v(?P<version>[0-9]+\.[0-9]+\.[0-9]+)$")
+NUMERIC_VERSION_COMPONENT = r"(?:0|[1-9][0-9]*)"
+RELEASE_TAG = re.compile(
+    rf"^v(?P<version>{NUMERIC_VERSION_COMPONENT}\."
+    rf"{NUMERIC_VERSION_COMPONENT}\."
+    rf"{NUMERIC_VERSION_COMPONENT}(?:-rc\.{NUMERIC_VERSION_COMPONENT})?)$"
+)
 
 
 class ReleaseContractError(ValueError):
@@ -34,7 +39,7 @@ def _workspace_version(root: Path) -> str:
 def _tag_version(tag: str) -> str:
     match = RELEASE_TAG.fullmatch(tag)
     if match is None:
-        raise ReleaseContractError(f"release tag {tag!r} must match v<major>.<minor>.<patch>")
+        raise ReleaseContractError(f"release tag {tag!r} must match vX.Y.Z or vX.Y.Z-rc.N")
     return match.group("version")
 
 
@@ -87,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Validate version alignment for RefKit release artifacts."
     )
-    parser.add_argument("--tag", help="Release tag in v<major>.<minor>.<patch> form")
+    parser.add_argument("--tag", help="Release tag in vX.Y.Z or vX.Y.Z-rc.N form")
     parser.add_argument("--root", type=Path, default=ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
