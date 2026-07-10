@@ -2,7 +2,7 @@
 name = "polars_refkit"
 version = "0.0.3"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.86"
 license = "Apache-2.0"
 description = "Polars expression plugin for refkit citation and BibTeX workflows"
 repository = "https://github.com/petergy/refkit"
