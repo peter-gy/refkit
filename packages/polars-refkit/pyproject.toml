@@ -1,6 +1,6 @@
 [project]
 name = "polars-refkit"
-version = "0.0.4-rc.4"
+version = "0.0.4-rc.5"
 description = "Polars expression plugin for refkit citation and BibTeX workflows"
 readme = "README.md"
 license = "Apache-2.0"

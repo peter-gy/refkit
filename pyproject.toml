@@ -1,6 +1,6 @@
 [project]
 name = "refkit-workspace"
-version = "0.0.4-rc.4"
+version = "0.0.4-rc.5"
 requires-python = ">=3.11,<3.15"
 license = "Apache-2.0"
 dependencies = [
