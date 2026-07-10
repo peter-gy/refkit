@@ -8,6 +8,9 @@ on:
 permissions:
   contents: read
 
+env:
+  SCCACHE_GHA_RW_MODE: READ_ONLY
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: false
@@ -90,6 +93,9 @@ jobs:
     needs: check-release-version
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
     strategy:
       fail-fast: false
       matrix:
@@ -113,12 +119,16 @@ jobs:
       - name: Configure reproducible Rust paths
         uses: ./.github/actions/configure-rust-build
 
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
+        with:
+          version: "v0.16.0"
+
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           working-directory: packages/refkit-core
           args: --locked --release --out dist --interpreter 3.11
-          sccache: false
 
       - name: Check metadata
         run: |
@@ -139,6 +149,9 @@ jobs:
     needs: check-release-version
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
     strategy:
       fail-fast: false
       matrix:
@@ -160,8 +173,11 @@ jobs:
       - name: Set up Pyodide
         id: pyodide
         uses: ./.github/actions/setup-pyodide
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
         with:
-          no-cache: true
+          version: "v0.16.0"
 
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -173,7 +189,6 @@ jobs:
           target: wasm32-unknown-emscripten
           args: --locked --release --out dist --interpreter ${{ matrix.python-version }}
           rust-toolchain: ${{ steps.pyodide.outputs.rust-toolchain }}
-          sccache: false
 
       - name: Check metadata
         run: |
@@ -374,6 +389,9 @@ jobs:
     needs: check-release-version
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
     strategy:
       fail-fast: false
       matrix:
@@ -397,12 +415,16 @@ jobs:
       - name: Configure reproducible Rust paths
         uses: ./.github/actions/configure-rust-build
 
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
+        with:
+          version: "v0.16.0"
+
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           working-directory: packages/polars-refkit
           args: --locked --release --out dist --interpreter 3.11
-          sccache: false
 
       - name: Check metadata
         run: |
@@ -423,6 +445,9 @@ jobs:
     needs: check-release-version
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
     strategy:
       fail-fast: false
       matrix:
@@ -444,8 +469,11 @@ jobs:
       - name: Set up Pyodide
         id: pyodide
         uses: ./.github/actions/setup-pyodide
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
         with:
-          no-cache: true
+          version: "v0.16.0"
 
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
@@ -458,7 +486,6 @@ jobs:
           target: wasm32-unknown-emscripten
           args: --locked --release --out dist --interpreter ${{ matrix.python-version }}
           rust-toolchain: ${{ steps.pyodide.outputs.rust-toolchain }}
-          sccache: false
 
       - name: Check metadata
         run: |

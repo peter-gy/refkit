@@ -1,11 +1,6 @@
 name: Set up Pyodide
 description: Resolve the locked Pyodide toolchain and install its Emscripten SDK.
 
-inputs:
-  no-cache:
-    description: Disable the Emscripten SDK cache for release builds.
-    default: "false"
-
 outputs:
   rust-toolchain:
     description: Rust toolchain required by the selected Pyodide ABI.
@@ -60,4 +55,5 @@ runs:
       uses: emscripten-core/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984 # v16
       with:
         version: ${{ steps.config.outputs.emscripten-version }}
-        no-cache: ${{ inputs.no-cache }}
+        actions-cache-folder: refkit-emsdk-cache
+        cache-key: refkit-emsdk-${{ steps.config.outputs.emscripten-version }}-${{ runner.os }}-${{ runner.arch }}
