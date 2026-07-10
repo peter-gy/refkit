@@ -457,7 +457,7 @@ dependencies = [
 
 [[package]]
 name = "refkit-core"
-version = "0.0.4-rc.2"
+version = "0.0.4-rc.3"
 dependencies = [
  "biblatex",
  "hayagriva",
@@ -468,7 +468,7 @@ dependencies = [
 
 [[package]]
 name = "refkit-core-native"
-version = "0.0.4-rc.2"
+version = "0.0.4-rc.3"
 dependencies = [
  "pyo3",
  "refkit-core",

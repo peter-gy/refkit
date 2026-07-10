@@ -1,6 +1,6 @@
 [package]
 name = "polars_refkit"
-version = "0.0.4-rc.2"
+version = "0.0.4-rc.3"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"

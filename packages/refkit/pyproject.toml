@@ -1,6 +1,6 @@
 [project]
 name = "refkit"
-version = "0.0.4-rc.2"
+version = "0.0.4-rc.3"
 description = "Fast Python citation parsing, rendering, and BibTeX editing backed by Rust"
 readme = "README.md"
 license = "Apache-2.0"
@@ -22,7 +22,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "refkit-core==0.0.4-rc.2",
+    "refkit-core==0.0.4-rc.3",
 ]
 
 [build-system]

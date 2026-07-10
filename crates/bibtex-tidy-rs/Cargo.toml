@@ -1,6 +1,6 @@
 [package]
 name = "bibtex-tidy-rs"
-version = "0.0.4-rc.2"
+version = "0.0.4-rc.3"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
@@ -15,7 +15,7 @@ include = [
 ]
 
 [dependencies]
-refkit-core = { version = "0.0.4-rc.2", path = "../refkit-core" }
+refkit-core = { version = "0.0.4-rc.3", path = "../refkit-core" }
 
 [dev-dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
