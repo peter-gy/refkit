@@ -1,7 +1,7 @@
 POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
 TIDY_RUST := crates/bibtex-tidy-rs/Cargo.toml
 UV_RUN := uv run --locked --all-packages --group dev
-RUST_FLOOR := 1.86
+RUST_FLOOR := 1.88
 RUST_SYSROOT := $(shell rustc --print sysroot)
 RUST_REMAP_FLAGS := --remap-path-prefix=$(HOME)=home --remap-path-prefix=$(HOME)/.cargo/registry/src=cargo-registry --remap-path-prefix=$(HOME)/.cargo/git/checkouts=cargo-git --remap-path-prefix=$(HOME)/.rustup=rustup --remap-path-prefix=$(RUST_SYSROOT)=rust-toolchain --remap-path-prefix=$(CURDIR)=refkit
 
@@ -45,7 +45,7 @@ benchmark-test:
 
 .PHONY: rust
 rust:
-	cargo check --locked --workspace
+	cargo check --locked --workspace --all-targets --all-features
 	cargo check --locked --manifest-path $(TIDY_RUST) --all-targets --all-features
 	cargo check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 	cargo test --locked --workspace
@@ -58,9 +58,9 @@ rust-floor:
 		echo "Network access: installing Rust $(RUST_FLOOR) with rustup."; \
 		rustup toolchain install $(RUST_FLOOR) --profile minimal; \
 	fi
-	rustup run $(RUST_FLOOR) cargo check --locked --workspace
-	rustup run $(RUST_FLOOR) cargo check --locked --manifest-path $(TIDY_RUST) --all-targets --all-features
-	rustup run $(RUST_FLOOR) cargo check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
+	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --workspace --all-targets --all-features
+	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --manifest-path $(TIDY_RUST) --all-targets --all-features
+	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 
 .PHONY: pyodide-lock pyodide-lock-check
 pyodide-lock:

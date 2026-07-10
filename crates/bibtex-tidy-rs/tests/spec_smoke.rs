@@ -230,15 +230,15 @@ fn all_upstream_specs_match_upstream() {
         for (index, spec) in read_specs(&name).into_iter().enumerate() {
             match tidy(&spec.input, spec.options.clone().into_tidy_options()) {
                 Ok(result) => {
-                    if let Some(expected) = spec.expected.as_ref() {
-                        if result.bibtex != *expected {
-                            failures.push(format!(
-                                "{name}#{index}: output mismatch\n{}\nexpected:\n{}\nactual:\n{}",
-                                first_diff(expected, &result.bibtex),
-                                snippet(expected),
-                                snippet(&result.bibtex)
-                            ));
-                        }
+                    if let Some(expected) = spec.expected.as_ref()
+                        && result.bibtex != *expected
+                    {
+                        failures.push(format!(
+                            "{name}#{index}: output mismatch\n{}\nexpected:\n{}\nactual:\n{}",
+                            first_diff(expected, &result.bibtex),
+                            snippet(expected),
+                            snippet(&result.bibtex)
+                        ));
                     }
                     if !spec.warnings.is_empty() {
                         let expected_rules = spec

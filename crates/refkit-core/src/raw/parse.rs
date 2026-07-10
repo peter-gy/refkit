@@ -395,10 +395,10 @@ fn find_at_block_end_with_escape_mode(
         ));
     };
     let open = start + open_rel;
-    if let Some(next) = next_block {
-        if next < open {
-            return Err((next, "entry opener is missing".to_string()));
-        }
+    if let Some(next) = next_block
+        && next < open
+    {
+        return Err((next, "entry opener is missing".to_string()));
     }
     let opener = source[open..].chars().next().unwrap();
     let root_closer = if opener == '{' { '}' } else { ')' };

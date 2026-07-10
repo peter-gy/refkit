@@ -10,7 +10,7 @@ uv sync --locked --all-packages --group dev
 (cd packages/polars-refkit && uv run maturin develop)
 ```
 
-Run the complete local gate with `make check`. It validates the release contract, Python and Rust formatting, lint, types, tests, the Rust 1.86 floor, and all three distributions.
+Run the complete local gate with `make check`. It validates the release contract, Python and Rust formatting, lint, types, tests, the Rust 1.88 floor, and all three distributions.
 
 ## Ownership
 

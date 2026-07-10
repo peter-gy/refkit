@@ -73,12 +73,12 @@ pub(crate) fn duplicate_plan(doc: &RawSyntaxDocument, options: &TidyOptions) -> 
                         existing_for_message,
                     ),
                 });
-                if check.do_merge {
-                    if let Some(strategy) = options.merge {
-                        plan.skip_entries.insert(entry.id);
-                        plan.merge_targets.insert(entry.id, merge_target.id);
-                        merge_entry(strategy, &mut plan.merged_entries, &merge_target, entry);
-                    }
+                if check.do_merge
+                    && let Some(strategy) = options.merge
+                {
+                    plan.skip_entries.insert(entry.id);
+                    plan.merge_targets.insert(entry.id, merge_target.id);
+                    merge_entry(strategy, &mut plan.merged_entries, &merge_target, entry);
                 }
             }
         }

@@ -78,7 +78,7 @@ jobs:
         run: make rust
 
   msrv:
-    name: Rust 1.86
+    name: Rust 1.88
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -87,10 +87,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Rust 1.86
+      - name: Set up Rust 1.88
         uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88
         with:
-          toolchain: "1.86"
+          toolchain: "1.88"
 
       - name: Cache Rust builds
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1

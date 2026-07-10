@@ -56,10 +56,11 @@ fn render_expression_atom(atom: &RawValueAtom) -> String {
 }
 
 fn transformed_value(field: &RawSyntaxField, options: &TidyOptions) -> (String, RawValueMode) {
-    if options.months && field.name.eq_ignore_ascii_case("month") {
-        if let Some(month) = abbreviate_month(&field.value) {
-            return (month.to_string(), RawValueMode::Bare);
-        }
+    if options.months
+        && field.name.eq_ignore_ascii_case("month")
+        && let Some(month) = abbreviate_month(&field.value)
+    {
+        return (month.to_string(), RawValueMode::Bare);
     }
 
     let mut value = field.value.clone();
@@ -80,10 +81,10 @@ fn transformed_value(field: &RawSyntaxField, options: &TidyOptions) -> (String, 
         value = format_page_range(&value);
     }
 
-    if field.name.eq_ignore_ascii_case("author") {
-        if let Some(max_authors) = options.max_authors {
-            value = limit_authors(&value, max_authors);
-        }
+    if field.name.eq_ignore_ascii_case("author")
+        && let Some(max_authors) = options.max_authors
+    {
+        value = limit_authors(&value, max_authors);
     }
 
     if options.strip_enclosing_braces {
@@ -232,15 +233,14 @@ fn escape_characters(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut index = 0usize;
     while index < chars.len() {
-        if chars[index] == '$' {
-            if let Some(end) = chars[index + 1..].iter().position(|ch| *ch == '$') {
-                if end > 0 {
-                    let end = index + end + 1;
-                    output.extend(chars[index..=end].iter());
-                    index = end + 1;
-                    continue;
-                }
-            }
+        if chars[index] == '$'
+            && let Some(end) = chars[index + 1..].iter().position(|ch| *ch == '$')
+            && end > 0
+        {
+            let end = index + end + 1;
+            output.extend(chars[index..=end].iter());
+            index = end + 1;
+            continue;
         }
 
         if chars[index] == '\\' {

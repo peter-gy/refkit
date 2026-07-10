@@ -79,12 +79,11 @@ pub(crate) fn render_citation_each(
 ) -> Result<Vec<RenderedOutput>, String> {
     let locales = bundled_locales();
     let locale = locale.map(|code| LocaleCode(code.to_string()));
-    if can_fast_render_single_citations(style) {
-        if let Some(rendered) =
+    if can_fast_render_single_citations(style)
+        && let Some(rendered) =
             render_independent_citation_each(library, keys, style, locale.clone(), locales)?
-        {
-            return Ok(rendered);
-        }
+    {
+        return Ok(rendered);
     }
 
     let mut driver = BibliographyDriver::new();
@@ -132,10 +131,10 @@ fn render_independent_citation_each(
     for key in keys {
         let output =
             render_independent_citation_inner(library, key, style, locale.clone(), locales)?;
-        if let Some(existing_key) = key_by_text.get(&output.text) {
-            if existing_key != key {
-                return Ok(None);
-            }
+        if let Some(existing_key) = key_by_text.get(&output.text)
+            && existing_key != key
+        {
+            return Ok(None);
         }
         key_by_text.insert(output.text.clone(), key);
         rendered.push(output);
