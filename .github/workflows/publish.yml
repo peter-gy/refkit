@@ -50,6 +50,9 @@ jobs:
     needs: check-release-version
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -62,6 +65,11 @@ jobs:
           python-version: "3.14"
           enable-cache: false
           cache-dependency-glob: uv.lock
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
+        with:
+          version: "v0.16.0"
 
       - name: Build sdist
         run: uv build --package refkit-core --sdist --out-dir dist/refkit-core --no-create-gitignore
@@ -346,6 +354,9 @@ jobs:
     needs: check-release-version
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -358,6 +369,11 @@ jobs:
           python-version: "3.14"
           enable-cache: false
           cache-dependency-glob: uv.lock
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
+        with:
+          version: "v0.16.0"
 
       - name: Build sdist
         run: uv build --package polars-refkit --sdist --out-dir dist/polars-refkit --no-create-gitignore
@@ -390,8 +406,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     env:
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: sccache
+      SCCACHE_GHA_ENABLED: ${{ matrix.os == 'ubuntu-latest' && 'true' || '' }}
+      RUSTC_WRAPPER: ${{ matrix.os == 'ubuntu-latest' && 'sccache' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -416,6 +432,7 @@ jobs:
         uses: ./.github/actions/configure-rust-build
 
       - name: Set up sccache
+        if: matrix.os == 'ubuntu-latest'
         uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696 # v0.0.10
         with:
           version: "v0.16.0"
