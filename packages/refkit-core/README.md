@@ -10,7 +10,7 @@ pip install refkit
 ```
 
 `refkit` pins one exact `refkit-core` version and checks that version at import time.
-Direct `refkit_core` imports are supported for native integration tests, packaging smoke tests, and low-level embedding.
+Direct `refkit_core` imports are supported for low-level integrations that use native objects without the `refkit` helper functions.
 
 ```python
 import refkit_core
@@ -66,24 +66,15 @@ Use `refkit` for one-call path helpers such as `refkit.cite` and `refkit.full_bi
 
 ## Pyodide
 
-Pyodide uses the same native extension package as CPython.
-The release workflow builds `refkit-core` for `wasm32-unknown-emscripten` with toolchain values from `pyodide config get`, then publishes the PyEmscripten wheel alongside the CPython wheels.
-The pure Python `refkit` package keeps the same exact dependency on `refkit-core`, so Pyodide resolves the matching wheel from PyPI.
-The Pyodide lane takes the Python target and PyEmscripten ABI from the release workflow.
+Pyodide uses the same `refkit_core` import package as CPython. Install `refkit` to select the matching PyEmscripten wheel for Pyodide 314.0.2:
 
-## Development
+```python
+import micropip
 
-```bash
-uv sync --all-packages --group dev
-(cd packages/refkit-core && uv run maturin develop)
-uv run pytest packages/refkit/tests --no-cov
+await micropip.install("refkit")
 ```
 
-Build only the native package:
-
-```bash
-uv build --package refkit-core --no-create-gitignore
-```
+The Pyodide CLI also accepts `python -m pip install refkit` inside its virtual environment.
 
 ## License
 

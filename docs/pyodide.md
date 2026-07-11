@@ -1,75 +1,93 @@
-# Pyodide Packaging
+# Use RefKit In Pyodide
 
-`refkit`, `refkit-core`, and `polars-refkit` install in Pyodide with the same public package names used on CPython.
+`refkit`, `refkit-core`, and `polars-refkit` use the same package and import names on CPython and Pyodide. The current PyEmscripten wheels target Pyodide 314.0.2 with Python 3.14.
 
-```bash
-python -m pip install refkit
-python -m pip install polars
-python -m pip install polars-refkit
+## Load RefKit In A Browser Or Node
+
+After creating a `pyodide` instance with `loadPyodide`, load `micropip` and install `refkit`:
+
+```javascript
+await pyodide.loadPackage("micropip");
+await pyodide.runPythonAsync(`
+import micropip
+await micropip.install("refkit")
+`);
 ```
 
-| Package | Role |
-| --- | --- |
-| `refkit` | Pure Python package. It depends on one exact `refkit-core` version and checks that version at import time. |
-| `refkit-core` | Native Rust/PyO3 extension package. It builds `refkit_core._refkit_core` for CPython and PyEmscripten. |
-| `polars-refkit` | Native Polars expression plugin. It builds `polars_refkit._internal` for CPython and PyEmscripten. |
+`micropip` installs the exact matching `refkit-core` release and selects its PyEmscripten wheel. Then run the regular Python API inside Pyodide:
 
-Pyodide resolves `refkit` the same way CPython does. The pure Python wheel declares `refkit-core==<same release>`, and Pyodide selects the matching `pyemscripten` wheel for its runtime.
+```python
+import refkit as rk
 
-`polars-refkit` uses the Polars package supplied by Pyodide. Install `polars` before installing a local `polars-refkit` wheel in smoke tests or release validation. The published package keeps the same public dependency declared in its package metadata.
+library = rk.Library.parse_bibtex(
+    """
+@article{doe2024,
+  author = {Doe, Jane},
+  title = {Browser Citations},
+  year = {2024}
+}
+"""
+)
+document = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+rendered = document.render([rk.Citation("intro", "doe2024")])
 
-## Build Contract
-
-The PyEmscripten build asks Pyodide for the current toolchain values:
-
-```bash
-pyodide config get rust_toolchain
-pyodide config get emscripten_version
-pyodide config get pyodide_abi_version
-pyodide config get rustflags
+print(rendered["intro"].text)
 ```
 
-CI passes those values to `emscripten-core/setup-emsdk` and `maturin`:
+Expected output:
 
-```bash
-CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS="$(pyodide config get rustflags)"
-MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION="$(pyodide config get pyodide_abi_version)"
-PYODIDE_PYTHON_VERSION="${PYODIDE_PYTHON_VERSION:?set the Pyodide Python version}"
-cd packages/polars-refkit
-maturin build --release \
-  --target wasm32-unknown-emscripten \
-  --interpreter "$PYODIDE_PYTHON_VERSION"
+```text
+(Doe, 2024)
 ```
 
-The release workflows set `PYODIDE_PYTHON_VERSION` from the matrix and read Emscripten, Rust nightly, ABI, and cargo rustflags from `pyodide config get`.
+Parsing, raw BibTeX editing, formatting, citation rendering, bibliography rendering, and structured rendered output use the same APIs as CPython.
 
-`packages/polars-refkit/rust` is a package-local Rust workspace. It uses the Polars plugin ABI that matches Pyodide's current Polars wheel while depending on the shared `crates/refkit-core` library for citation parsing and rendering.
+## Add The Polars Expressions
 
-## Smoke Test
+The Polars plugin ABI must match the Polars wheel loaded by Pyodide. Install the tested Python package pair for the current runtime:
 
-The Pyodide test lane installs the built `refkit-core` wheel, the local pure Python `refkit` package, Pyodide's `polars` package, and the built `polars-refkit` wheel. It verifies the public import paths and runs Polars expression callbacks:
+```javascript
+await pyodide.loadPackage("micropip");
+await pyodide.runPythonAsync(`
+import micropip
+await micropip.install(["polars==1.33.1", "polars-refkit"])
+`);
+```
+
+Then use the normal expression namespace:
 
 ```python
 import polars as pl
 import polars_refkit
-import refkit as rk
 
-assert rk.check_refkit_core_version()
-assert polars_refkit.__version__
-
-df = pl.DataFrame(
+frame = pl.DataFrame(
     {
-        "bibtex": ["@article{doe2024, author={Doe, Jane}, title={Fast Citations}, year={2024}}"],
+        "bibtex": [
+            "@article{doe2024, author={Doe, Jane}, title={Browser Citations}, year={2024}}"
+        ],
         "key": ["doe2024"],
     }
 )
-row = df.select(
+
+row = frame.select(
     count=pl.col("bibtex").refkit.entry_count(),
     citation=pl.col("bibtex").refkit.cite("key", style="apa"),
 ).to_dicts()[0]
 
-assert row["count"] == 1
-assert row["citation"] == "(Doe, 2024)"
+assert row == {"count": 1, "citation": "(Doe, 2024)"}
 ```
 
-This is a packaging smoke test. Full API behavior is covered by the normal CPython test suite, which exercises the same Rust core, Python wrapper, and Polars expression contracts.
+Use Pyodide 314.0.2, Polars 1.33.1, and a `polars-refkit` wheel for the `pyemscripten_2026_0` platform together. A different Polars wheel can fail plugin loading even when its Python package version satisfies the broad dependency range.
+
+## Use The Pyodide CLI
+
+The Pyodide CLI provides a Python command for testing, experimentation, and bundle preparation. Inside its virtual environment, install the same packages with pip:
+
+```bash
+python -m pip install refkit
+python -m pip install 'polars==1.33.1' polars-refkit
+```
+
+If installation reports that no compatible wheel exists, use the supported Pyodide runtime or select a RefKit release built for that runtime.
+
+See the official [Pyodide package loading guide](https://pyodide.org/en/stable/usage/loading-packages.html) for `micropip` and JavaScript loading patterns. See the [API contracts](api-contracts.md) for RefKit return shapes and errors.

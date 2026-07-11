@@ -8,4 +8,4 @@
 - Keep raw BibTeX parsing and tidy formatting on one syntax model.
 - Exercise changes with `make rust-lint rust rust-floor` from the repository root.
 
-Rendering changes should cover document history, bibliography sorting, text, HTML, and rendered-tree output when those boundaries are affected.
+Rendering changes should cover ordered citations within one render call, bibliography sorting, text, HTML, and rendered-tree output when those boundaries are affected.

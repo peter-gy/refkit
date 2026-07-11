@@ -19,6 +19,8 @@ RUNTIME = json.loads(RUNTIME_PATH.read_text())
 PYTHON_VERSION = RUNTIME["python-version"]
 XBUILDENV_VERSION = RUNTIME["xbuildenv-version"]
 POLARS_WHEEL_TAG = RUNTIME["polars-wheel-tag"]
+POLARS_PLUGIN_ABI = RUNTIME["polars-plugin-abi"]
+POLARS_CARGO_LOCK_PATH = ROOT / "packages" / "polars-refkit" / "rust" / "Cargo.lock"
 HOST_WHEEL_TAGS = ("macosx_", "manylinux_", "musllinux_", "win_")
 
 
@@ -43,6 +45,15 @@ def _packages(path: Path) -> dict[str, dict[str, Any]]:
     return {package["name"]: package for package in data["packages"]}
 
 
+def _cargo_versions(path: Path) -> dict[str, set[str]]:
+    packages = tomllib.loads(path.read_text())["package"]
+    names = ("polars", "polars-core", "pyo3", "pyo3-polars")
+    return {
+        name: {package["version"] for package in packages if package["name"] == name}
+        for name in names
+    }
+
+
 def validate_lock(path: Path) -> list[str]:
     packages = _packages(path)
     errors = []
@@ -53,6 +64,23 @@ def validate_lock(path: Path) -> list[str]:
     for name, version in requirements.items():
         if name in packages and packages[name]["version"] != version:
             errors.append(f"{name} must resolve to {version}")
+
+    expected_python_polars = POLARS_PLUGIN_ABI["python-polars"]
+    if requirements.get("polars") != expected_python_polars:
+        errors.append(
+            f"Pyodide Polars requirement must be {expected_python_polars} for the plugin ABI"
+        )
+
+    cargo_versions = _cargo_versions(POLARS_CARGO_LOCK_PATH)
+    cargo_contract = {
+        "polars": POLARS_PLUGIN_ABI["rust-polars"],
+        "polars-core": POLARS_PLUGIN_ABI["rust-polars"],
+        "pyo3": POLARS_PLUGIN_ABI["pyo3"],
+        "pyo3-polars": POLARS_PLUGIN_ABI["pyo3-polars"],
+    }
+    for name, version in cargo_contract.items():
+        if cargo_versions[name] != {version}:
+            errors.append(f"{name} must resolve to {version} for the Polars plugin ABI")
 
     workspace = tomllib.loads((ROOT / "pyproject.toml").read_text())
     build_requirement = (

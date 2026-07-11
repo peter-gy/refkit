@@ -8,10 +8,18 @@
 pip install refkit
 ```
 
+In Pyodide 314.0.2, install from Python code that supports top-level `await`:
+
+```python
+import micropip
+
+await micropip.install("refkit")
+```
+
 `refkit` is pure Python and depends on the exact matching `refkit-core` release.
 `refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`, including PyEmscripten wheels for Pyodide.
 
-The supported Python versions and native wheel ABI are declared in package metadata and release workflows.
+RefKit supports Python 3.11 through 3.14. The matching native wheel is installed through the exact `refkit-core` dependency.
 
 ## Render A Citation
 
@@ -250,20 +258,6 @@ out = df.select(
     keys=pl.col("bibtex").refkit.keys(),
     entries=pl.col("bibtex").refkit.entries(),
 )
-```
-
-## Development
-
-```bash
-uv sync --locked --all-packages --group dev
-(cd packages/refkit-core && uv run maturin develop)
-uv run --locked --all-packages --group dev python -m pytest packages/refkit/tests --no-cov
-```
-
-Run every workspace gate from the repository root:
-
-```bash
-make check
 ```
 
 ## License

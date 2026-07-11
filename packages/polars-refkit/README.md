@@ -8,7 +8,15 @@
 pip install polars-refkit
 ```
 
-The supported Python versions, Polars dependency, native wheel ABI, and Pyodide target are declared in package metadata and release workflows.
+`polars-refkit` supports Python 3.11 through 3.14 and Polars 1.29 or newer. The current PyEmscripten wheel is tested with Pyodide 314.0.2 and its Polars 1.33.1 wheel.
+
+Install that tested Pyodide pair with `micropip`:
+
+```python
+import micropip
+
+await micropip.install(["polars==1.33.1", "polars-refkit"])
+```
 
 ## Render And Inspect Rows
 
@@ -160,14 +168,6 @@ entries = (
 ## Scope
 
 Use `polars-refkit` when BibTeX source lives in a dataframe and the result should stay in a Polars query plan. Use `refkit.BibDocument` when a workflow edits raw documents with comments, preambles, string definitions, failed blocks, ordering, and source spans.
-
-## Development
-
-```bash
-uv sync --all-packages --group dev
-(cd packages/polars-refkit && uv run maturin develop)
-uv run pytest packages/polars-refkit/tests --no-cov
-```
 
 ## License
 

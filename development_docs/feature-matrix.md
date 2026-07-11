@@ -9,6 +9,14 @@ Evidence paths are relative to the corresponding project root.
 
 The python-bibtexparser feature rows describe the inspected local beta source tree. The benchmark suite installs its configured PyPI prerelease for comparison rows.
 
+| Project | Repository | Inspected revision |
+| --- | --- | --- |
+| citeproc-js | `https://github.com/juris-m/citeproc-js` | `6f5f579771261375cddd3c3f15a5152091d786db` |
+| citeproc-py | `https://github.com/citeproc-py/citeproc-py` | `5085ce96b7cceeaed5e4ac9f44f2a2e1a57fa1df` |
+| python-bibtexparser | `https://github.com/sciunto-org/python-bibtexparser` | `b0f77f9828737af760442293e13ebf5f87827042` |
+
+To refresh the matrix, select and record new upstream revisions, inspect the evidence paths at those revisions, then update the date, status rows, gaps, and evidence map together. The RefKit column describes the repository commit containing this file.
+
 ## Status Legend
 
 | Status | Meaning |
@@ -167,7 +175,7 @@ The python-bibtexparser feature rows describe the inspected local beta source tr
 | Type information for Python consumers | No. JavaScript package. | No type stubs found in inspected source. | Yes. `py.typed` is packaged. | Yes. `__init__.pyi` and typed package metadata are present. |
 | Rust-backed parsing and rendering | No. | No. | No. | Yes. Native module uses PyO3, maturin, Hayagriva, and BibLaTeX crates. |
 | GIL release for heavy work | Not applicable. | No. Pure Python and lxml. | No. Pure Python. | Yes for current heavy paths. `Library.read`, `Document.render`, `Document.cited_bibliography`, `Document.full_bibliography`, rendered tree serialization, `BibDocument.write`, `BibDocument.tidy`, and `tidy_bibtex` detach after Python inputs are converted to Rust-owned state. |
-| Python runtime dependencies | No. JavaScript runtime. | No. Requires lxml. | No. Requires pylatexenc. | Partial. `refkit` has no Python runtime dependencies. `polars-refkit` depends on Polars because it is a Polars expression plugin. |
+| Python runtime dependencies | Not applicable. JavaScript runtime. | Yes. Requires lxml. | Yes. Requires pylatexenc. | Yes. `refkit` requires the exact matching `refkit-core`. `refkit-core` has no Python package dependencies. `polars-refkit` requires Polars. |
 
 ## Errors, Diagnostics, And Validation
 
@@ -184,8 +192,8 @@ The python-bibtexparser feature rows describe the inspected local beta source tr
 | Feature | citeproc-js | citeproc-py | python-bibtexparser | refkit workspace |
 | --- | --- | --- | --- | --- |
 | Package language | JavaScript. | Python. | Python. | Python plus Rust. |
-| Package name from metadata | `citeproc`. | `citeproc-py`. | `bibtexparser`. | `refkit` and `polars-refkit`. |
-| Import name | `CSL` from bundled JS or CommonJS module. | `citeproc`. | `bibtexparser`. | `refkit` and `polars_refkit`. |
+| Package name from metadata | `citeproc`. | `citeproc-py`. | `bibtexparser`. | `refkit`, `refkit-core`, and `polars-refkit`. |
+| Import name | `CSL` from bundled JS or CommonJS module. | `citeproc`. | `bibtexparser`. | `refkit`, `refkit_core`, and `polars_refkit`. |
 | Python version support | Not applicable. | Declared in package metadata. | Declared in package metadata. | Declared in package metadata. |
 | Refkit workspace license | Not applicable. | Not applicable. | Not applicable. | Apache-2.0. |
 | Build system | JavaScript package and repo build scripts. | setuptools with versioneer and schema conversion. | setuptools. | uv workspace with maturin, PyO3, and pyo3-polars. |
@@ -205,7 +213,7 @@ refkit already covers the main overlap that requires two Python packages today:
 
 ## Migration Paths
 
-The [migration guide](migration.md) gives concrete replacements for common citeproc-py rendering flows and python-bibtexparser raw repair flows. The [API contracts guide](api-contracts.md) defines one-off helper inputs, structured return shapes, raw block records, and public errors.
+The [migration guide](../docs/migration.md) gives concrete replacements for common citeproc-py rendering flows and python-bibtexparser raw repair flows. The [API contracts guide](../docs/api-contracts.md) defines one-off helper inputs, structured return shapes, raw block records, and public errors.
 
 ## Current refkit Gaps
 

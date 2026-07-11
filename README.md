@@ -13,7 +13,7 @@ pip install polars-refkit
 `refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`.
 Installing `refkit` also installs the matching native wheel for the current Python platform.
 
-The supported Python versions, wheel ABI, and Pyodide targets are declared in package metadata and release workflows.
+RefKit supports Python 3.11 through 3.14. The [PyEmscripten wheels](docs/pyodide.md) target Pyodide 314.0.2.
 
 ## Render Citations From Python
 
@@ -135,7 +135,6 @@ out = df.select(
 | `refkit` | `import refkit as rk` | Citation rendering, normalized library access, selectors, and raw BibTeX editing. |
 | `refkit-core` | Installed by `refkit` | Native Rust/PyO3 implementation used by `refkit`, including Pyodide-compatible wheels. |
 | `polars-refkit` | `import polars_refkit as prk` | BibTeX parsing, formatting, inspection, and rendering inside eager or lazy Polars plans. |
-| `refkit-bench` | `python -m refkit_bench.runner` | Repository benchmark lanes for parser, renderer, raw BibTeX, and Polars workflows. |
 
 ## Capabilities
 
@@ -149,42 +148,18 @@ out = df.select(
 | Format and edit raw BibTeX | `tidy_bibtex`, `tidy_file`, `BibDocument` | `tidy_bibtex`, `tidy_bibtex_report` |
 | Export rendered output | `Rendered.text`, `Rendered.html`, `Rendered.tree` | string and struct expressions |
 
-## Architecture
-
-The root Cargo workspace owns the shared Rust core and the `refkit-core` native adapter.
-`crates/refkit-core` contains the platform-independent work: parsing, recovery, normalized records, raw BibTeX blocks, BibTeX formatting, style preparation, document rendering, rendered trees, and shared error records.
-
-The Python packages are adapters over that core:
-
-- `refkit-core` owns PyO3 classes, Python exceptions, GIL release, Python value conversion, and PyEmscripten wheel builds.
-- `refkit` is pure Python. It pins one exact `refkit-core` version and rejects a mismatched core at import time.
-- `polars-refkit` owns expression registration, dtypes, broadcasting, null mapping, eager and lazy execution, dataframe diagnostics, and its package-local Rust workspace for the Polars plugin ABI.
-
-## Package Docs
+## Documentation
 
 - [refkit Python API](packages/refkit/README.md)
 - [refkit-core native package](packages/refkit-core/README.md)
 - [polars-refkit expressions](packages/polars-refkit/README.md)
-- [refkit benchmark runner](packages/refkit-bench/README.md)
 - [API contracts](docs/api-contracts.md)
-- [Pyodide packaging](docs/pyodide.md)
+- [Use RefKit in Pyodide](docs/pyodide.md)
 - [Migration guide](docs/migration.md)
-- [Feature matrix](docs/feature-matrix.md)
 
-## Development
+## Contributing
 
-```bash
-uv sync --locked --all-packages --group dev
-(cd packages/refkit-core && uv run maturin develop)
-(cd packages/polars-refkit && uv run maturin develop)
-make test
-```
-
-Run the complete local gate:
-
-```bash
-make check
-```
+The [developer documentation](development_docs/README.md) covers architecture, setup, testing, packaging, releases, and benchmarks.
 
 ## License
 

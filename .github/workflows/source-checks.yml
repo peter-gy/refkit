@@ -44,6 +44,9 @@ jobs:
       - name: Check architecture contract
         run: make architecture-check
 
+      - name: Check documentation contract
+        run: make docs-check
+
       - name: Check Pyodide runtime lock
         run: make pyodide-lock-check
 

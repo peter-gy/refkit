@@ -8,9 +8,10 @@ import sys
 import tarfile
 import zipfile
 from collections.abc import Iterator
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 GENERATED_SUFFIXES = (".pyc", ".pyo")
+INTERNAL_DOCUMENTATION_DIRECTORY = "development_docs"
 ROOT = Path(__file__).resolve().parents[1]
 SBOM_LOCAL_REFERENCE_MARKERS = (b"path+file://", b"download_url=file://")
 KNOWN_CI_BUILD_PATHS = (
@@ -43,6 +44,14 @@ def generated_members(path: Path) -> list[str]:
         member
         for member in _members(path)
         if "__pycache__" in Path(member).parts or member.endswith(GENERATED_SUFFIXES)
+    ]
+
+
+def internal_document_members(path: Path) -> list[str]:
+    return [
+        member
+        for member in _members(path)
+        if INTERNAL_DOCUMENTATION_DIRECTORY in PurePosixPath(member).parts
     ]
 
 
@@ -130,9 +139,7 @@ def distribution_paths(arguments: list[str]) -> tuple[list[Path], list[str]]:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Reject generated Python bytecode in distribution archives."
-    )
+    parser = argparse.ArgumentParser(description="Validate RefKit distribution archive contents.")
     parser.add_argument("distributions", nargs="+")
     return parser.parse_args()
 
@@ -144,6 +151,10 @@ def main() -> int:
         errors.extend(
             f"{distribution}: generated member {member}"
             for member in generated_members(distribution)
+        )
+        errors.extend(
+            f"{distribution}: internal documentation member {member}"
+            for member in internal_document_members(distribution)
         )
         errors.extend(
             f"{distribution}: {violation}" for violation in content_violations(distribution)

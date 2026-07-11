@@ -140,5 +140,9 @@ release-check:
 architecture-check:
 	$(UV_RUN) python scripts/architecture_contract.py
 
+.PHONY: docs-check
+docs-check:
+	$(UV_RUN) python scripts/docs_contract.py
+
 .PHONY: check
-check: lock release-check architecture-check pyodide-lock-check lint typecheck test rust rust-floor build
+check: lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test rust rust-floor build

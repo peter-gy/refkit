@@ -2,5 +2,11 @@
   "python-version": "3.14",
   "pyodide-build-version": "0.35.1",
   "xbuildenv-version": "314.0.2",
-  "polars-wheel-tag": "cp314-cp314-pyemscripten_2026_0_wasm32"
+  "polars-wheel-tag": "cp314-cp314-pyemscripten_2026_0_wasm32",
+  "polars-plugin-abi": {
+    "python-polars": "1.33.1",
+    "rust-polars": "0.51.0",
+    "pyo3": "0.25.1",
+    "pyo3-polars": "0.24.0"
+  }
 }
