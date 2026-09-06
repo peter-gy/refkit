@@ -1,0 +1,53 @@
+development_docs/README.md
+  s_3f5f1d834d51b6::t_31529b21e2af61 18
+packages/refkit/README.md
+  s_3f5f1d834d51b6::t_e8b29c3e0c53f5 50-61
+  s_3f5f1d834d51b6::t_dc2bd6bb276e83 62-63
+development_docs/troubleshooting.md
+  s_3f5f1d834d51b6::t_31529b21e2af61 10
+scripts/docs_contract.py
+  s_3f5f1d834d51b6::t_911427e968bd06 164-167
+.github/AGENTS.md
+  s_3f5f1d834d51b6::t_e8b29c3e0c53f5 13
+development_docs/repository-contracts.md
+  s_3f5f1d834d51b6::t_e8b29c3e0c53f5 14,28-36,79
+scripts/AGENTS.md
+  s_3f5f1d834d51b6::t_b24bed848422fc 12
+  s_3f5f1d834d51b6::t_e8b29c3e0c53f5 14
+development_docs/adapters.md
+  s_3f5f1d834d51b6::t_e8b29c3e0c53f5 26-33
+development_docs/development.md
+  s_3f5f1d834d51b6::t_31529b21e2af61 11,23
+development_docs/packaging-and-release.md
+  s_3f5f1d834d51b6::t_e8b29c3e0c53f5 11,47-50,79
+development_docs/benchmarks.md
+  s_3f5f1d834d51b6::t_31529b21e2af61 11,128
+AGENTS.md
+  s_3f5f1d834d51b6::t_31529b21e2af61 10,74
+  s_3f5f1d834d51b6::t_e8b29c3e0c53f5 54,82
+development_docs/testing.md
+  s_3f5f1d834d51b6::t_e8b29c3e0c53f5 10,16
+docs/reference/agent-docs.md
+  s_3f5f1d834d51b6::t_e8b29c3e0c53f5 2,7-39
+development_docs/feature-matrix.md
+  s_3f5f1d834d51b6::t_b24bed848422fc 180
+packages/refkit/AGENTS.md
+  s_3f5f1d834d51b6::t_e8b29c3e0c53f5 12
+  s_3f5f1d834d51b6::t_31529b21e2af61 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b6c39bffc35b2f84759e7d2f383fbf2416280c1f",
+  "prompts": {},
+  "sessions": {
+    "s_3f5f1d834d51b6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0759c-2397-7560-954a-ecacd63f6a14",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
