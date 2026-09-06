@@ -1,0 +1,22 @@
+.github/AGENTS.md
+  s_3f5f1d834d51b6::t_b653df3fcfb09b 12
+.github/workflows/pages.yml
+  s_3f5f1d834d51b6::t_4c0b2cb058c0b5 41-47
+  s_3f5f1d834d51b6::t_e8d6f29634645c 1-40,48-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6f3cf94844c75dc125b827746e30cb8902fe391b",
+  "prompts": {},
+  "sessions": {
+    "s_3f5f1d834d51b6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0759c-2397-7560-954a-ecacd63f6a14",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
