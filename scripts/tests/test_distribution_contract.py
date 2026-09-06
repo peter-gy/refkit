@@ -48,7 +48,7 @@ def _sdist(path: Path, members: list[str]) -> None:
 def _refkit_wheel(path: Path, plugin_files: tuple[str, ...] = _AGENT_PLUGIN_FILES) -> None:
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(f"{_DIST_INFO}/WHEEL", "Wheel-Version: 1.0\n")
-        archive.writestr(f"{_DIST_INFO}/METADATA", "Requires-Dist: agent-plugins==0.1.1\n")
+        archive.writestr(f"{_DIST_INFO}/METADATA", "Requires-Dist: agent-plugins==0.2.0\n")
         archive.writestr(
             f"{_DIST_INFO}/entry_points.txt",
             "[marimo.agent.capability]\nrefkit = refkit.agent\n",
@@ -299,7 +299,7 @@ def test_refkit_wheel_requires_agent_plugins_dependency(tmp_path: Path) -> None:
         add={f"{_DIST_INFO}/METADATA": "Requires-Dist: another-package\n"},
     )
 
-    assert agent_plugin_violations(wheel) == ["wheel must require agent-plugins==0.1.1"]
+    assert agent_plugin_violations(wheel) == ["wheel must require agent-plugins==0.2.0"]
 
 
 def test_refkit_sdist_contains_agent_plugin_and_backend(tmp_path: Path) -> None:

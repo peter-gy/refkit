@@ -10,6 +10,7 @@ dependencies = [
 
 [tool.uv]
 exclude-newer = "3 days"
+exclude-newer-package = { agent-plugins = "2026-09-07T00:00:00Z" }
 package = false
 
 [tool.uv.sources]

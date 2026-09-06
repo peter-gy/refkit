@@ -148,21 +148,15 @@ def agent_plugin_violations(path: Path) -> list[str]:
 def _wheel_agent_plugin_violations(contents: dict[str, bytes]) -> list[str]:
     violations = []
     dist_info_candidates = [
-        name.removesuffix("/WHEEL")
-        for name in contents
-        if name.endswith(".dist-info/WHEEL")
+        name.removesuffix("/WHEEL") for name in contents if name.endswith(".dist-info/WHEEL")
     ]
     if len(dist_info_candidates) != 1:
         return ["wheel must contain exactly one .dist-info/WHEEL file"]
 
     dist_info = dist_info_candidates[0]
     plugin_root = f"{dist_info.removesuffix('.dist-info')}.agent-plugin"
-    expected_payload = {
-        f"{plugin_root}/{relative}" for relative in REFKIT_AGENT_PLUGIN_FILES
-    }
-    actual_payload = {
-        name for name in contents if name.startswith(f"{plugin_root}/")
-    }
+    expected_payload = {f"{plugin_root}/{relative}" for relative in REFKIT_AGENT_PLUGIN_FILES}
+    actual_payload = {name for name in contents if name.startswith(f"{plugin_root}/")}
     if actual_payload != expected_payload:
         violations.append(
             "wheel Agent Plugin payload mismatch: "
@@ -206,8 +200,8 @@ def _wheel_agent_plugin_violations(contents: dict[str, bytes]) -> list[str]:
 
     metadata_path = f"{dist_info}/METADATA"
     metadata = contents.get(metadata_path, b"").decode(errors="replace")
-    if "Requires-Dist: agent-plugins==0.1.1" not in metadata:
-        violations.append("wheel must require agent-plugins==0.1.1")
+    if "Requires-Dist: agent-plugins==0.2.0" not in metadata:
+        violations.append("wheel must require agent-plugins==0.2.0")
     return violations
 
 
@@ -217,12 +211,8 @@ def _sdist_agent_plugin_violations(contents: dict[str, bytes]) -> list[str]:
         return ["sdist must contain exactly one archive root"]
     root = roots.pop()
     plugin_root = f"{root}/.agent-plugin"
-    expected_payload = {
-        f"{plugin_root}/{relative}" for relative in REFKIT_AGENT_PLUGIN_FILES
-    }
-    actual_payload = {
-        name for name in contents if name.startswith(f"{plugin_root}/")
-    }
+    expected_payload = {f"{plugin_root}/{relative}" for relative in REFKIT_AGENT_PLUGIN_FILES}
+    actual_payload = {name for name in contents if name.startswith(f"{plugin_root}/")}
     violations = []
     if actual_payload != expected_payload:
         violations.append(
@@ -272,8 +262,7 @@ def main() -> int:
             f"{distribution}: {violation}" for violation in content_violations(distribution)
         )
         errors.extend(
-            f"{distribution}: {violation}"
-            for violation in agent_plugin_violations(distribution)
+            f"{distribution}: {violation}" for violation in agent_plugin_violations(distribution)
         )
     if errors:
         sys.stderr.write("Distribution contract failed:\n" + "\n".join(errors) + "\n")
