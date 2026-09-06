@@ -75,7 +75,7 @@ def _parse_expr(
     return _register(
         function_name,
         [bibtex_col],
-        kwargs={"strict": _recovery_to_strict(recovery)},
+        kwargs={"recovery": _validate_recovery(recovery)},
         output_name=output_name,
     )
 
@@ -90,7 +90,7 @@ def _entries_expr(
     return _register(
         "entries",
         [bibtex_col],
-        kwargs={"strict": _recovery_to_strict(recovery), "fields": list(fields)},
+        kwargs={"recovery": _validate_recovery(recovery), "fields": list(fields)},
         output_name=output_name,
     )
 
@@ -101,7 +101,7 @@ def _diagnostics_expr(
     return _register(
         "diagnostics",
         [bibtex_col],
-        kwargs={"strict": _recovery_to_strict(recovery)},
+        kwargs={"recovery": _validate_recovery(recovery)},
         output_name=output_name,
     )
 
@@ -125,16 +125,14 @@ def _render_kwargs(style: str, locale: str, recovery: RecoveryMode) -> dict[str,
     return {
         "style": style,
         "locale": locale,
-        "strict": _recovery_to_strict(recovery),
+        "recovery": _validate_recovery(recovery),
         "all": True,
     }
 
 
-def _recovery_to_strict(recovery: RecoveryMode) -> bool:
-    if recovery == "error":
-        return True
-    if recovery == "report":
-        return False
+def _validate_recovery(recovery: RecoveryMode) -> RecoveryMode:
+    if recovery in ("error", "report"):
+        return recovery
     raise ValueError("recovery must be 'error' or 'report'")
 
 

@@ -5,9 +5,11 @@ use pyo3::types::PyAny;
 use serde_json::{Value, json};
 
 use crate::conversion::json_to_py;
-use refkit_core::{RenderedFormatting, RenderedNode, RenderedRecord, quoted};
+use refkit_core::{RenderedFormatting, RenderedNode, RenderedRecord};
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+use crate::repr::quoted;
+
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Rendered {
     record: Arc<RenderedRecord>,

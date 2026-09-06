@@ -11,7 +11,6 @@ members = [
     "polars-refkit",
     "refkit",
     "refkit-bench",
-    "refkit-core",
     "refkit-workspace",
 ]
 
@@ -1217,12 +1216,6 @@ wheels = [
 name = "refkit"
 version = "0.0.4rc5"
 source = { editable = "packages/refkit" }
-dependencies = [
-    { name = "refkit-core" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "refkit-core", editable = "packages/refkit-core" }]
 
 [[package]]
 name = "refkit-bench"
@@ -1250,18 +1243,12 @@ requires-dist = [
 ]
 
 [[package]]
-name = "refkit-core"
-version = "0.0.4rc5"
-source = { editable = "packages/refkit-core" }
-
-[[package]]
 name = "refkit-workspace"
 version = "0.0.4rc5"
 source = { virtual = "." }
 dependencies = [
     { name = "polars-refkit" },
     { name = "refkit" },
-    { name = "refkit-core" },
 ]
 
 [package.dev-dependencies]
@@ -1287,7 +1274,6 @@ pyodide-build = [
 requires-dist = [
     { name = "polars-refkit", editable = "packages/polars-refkit" },
     { name = "refkit", editable = "packages/refkit" },
-    { name = "refkit-core", editable = "packages/refkit-core" },
 ]
 
 [package.metadata.requires-dev]

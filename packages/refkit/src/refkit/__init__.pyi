@@ -1,6 +1,6 @@
 from os import PathLike
 
-from refkit_core import (
+from ._native import (
     BibDocument,
     BibEntry,
     BibEntryMap,
@@ -56,13 +56,11 @@ __all__ = [
     "full_bibliography",
     "tidy_bibtex",
     "tidy_file",
-    "check_refkit_core_version",
     "__version__",
 ]
 
 __version__: str
 
-def check_refkit_core_version() -> bool: ...
 def tidy_bibtex(
     source: str,
     *,

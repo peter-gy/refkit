@@ -1,26 +1,25 @@
-use std::fs;
-use std::path::Path;
-
-pub struct SourceText {
-    pub source: String,
-    pub diagnostic: Option<String>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextEncoding {
+    Utf8,
+    Windows1252,
 }
 
-pub fn read_bibliography_text(path: &Path) -> Result<SourceText, String> {
-    let bytes =
-        fs::read(path).map_err(|err| format!("failed to read {}: {err}", path.display()))?;
-    match String::from_utf8(bytes) {
-        Ok(source) => Ok(SourceText {
-            source,
-            diagnostic: None,
-        }),
-        Err(err) => Ok(SourceText {
-            source: decode_windows_1252(&err.into_bytes()),
-            diagnostic: Some(format!(
-                "decoded {} as Windows-1252-compatible text because it is not valid UTF-8",
-                path.display()
-            )),
-        }),
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecodedText {
+    pub text: String,
+    pub encoding: TextEncoding,
+}
+
+pub fn decode_bibliography(bytes: &[u8]) -> DecodedText {
+    match String::from_utf8(bytes.to_vec()) {
+        Ok(text) => DecodedText {
+            text,
+            encoding: TextEncoding::Utf8,
+        },
+        Err(err) => DecodedText {
+            text: decode_windows_1252(&err.into_bytes()),
+            encoding: TextEncoding::Windows1252,
+        },
     }
 }
 
@@ -66,7 +65,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn decodes_utf8_without_fallback() {
+        assert_eq!(
+            decode_bibliography("Grüße".as_bytes()),
+            DecodedText {
+                text: "Grüße".to_string(),
+                encoding: TextEncoding::Utf8,
+            }
+        );
+    }
+
+    #[test]
     fn decodes_windows_1252_when_utf8_fails() {
-        assert_eq!(decode_windows_1252(&[0x48, 0x80]), "H€");
+        assert_eq!(
+            decode_bibliography(&[0x48, 0x80]),
+            DecodedText {
+                text: "H€".to_string(),
+                encoding: TextEncoding::Windows1252,
+            }
+        );
     }
 }

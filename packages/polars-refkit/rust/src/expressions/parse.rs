@@ -1,13 +1,10 @@
 use polars::prelude::*;
 use pyo3_polars::derive::polars_expr;
-use refkit_core::{NormalizedEntry, NormalizedValue, parse_bibtex_report_source};
-use serde_json::Value;
+use refkit_core::parse_bibtex_report;
 
 use super::ParseKwargs;
 use super::broadcast::parse_value_library_source;
-use super::dtypes::{
-    boolean_output, keys_output, parse_report_output, string_output, uint32_output,
-};
+use super::dtypes::{boolean_output, keys_output, parse_report_output, uint32_output};
 
 #[polars_expr(output_type_func=uint32_output)]
 fn entry_count(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
@@ -16,7 +13,7 @@ fn entry_count(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
         .iter()
         .map(|value| {
             value.and_then(|source| {
-                parse_value_library_source(source, kwargs.strict)
+                parse_value_library_source(source, kwargs.recovery.policy())
                     .ok()
                     .and_then(|library| u32::try_from(library.len()).ok())
             })
@@ -35,7 +32,7 @@ fn keys(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
             builder.append_null();
             continue;
         };
-        match parse_value_library_source(source, kwargs.strict) {
+        match parse_value_library_source(source, kwargs.recovery.policy()) {
             Ok(library) => {
                 builder.append_values_iter(library.keys().iter().map(String::as_str));
             }
@@ -57,7 +54,7 @@ fn diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
             builder.append_null();
             continue;
         };
-        let report = parse_bibtex_report_source(source, kwargs.strict);
+        let report = parse_bibtex_report(source, kwargs.recovery.policy());
         builder.append_values_iter(report.diagnostics.iter().map(String::as_str));
     }
 
@@ -81,7 +78,7 @@ fn parse_report(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> 
             diagnostics.append_null();
             continue;
         };
-        let report = parse_bibtex_report_source(source, kwargs.strict);
+        let report = parse_bibtex_report(source, kwargs.recovery.policy());
         ok.push(Some(report.ok));
         entry_count.push(
             report
@@ -113,7 +110,9 @@ fn can_parse(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
     let bibtex = inputs[0].str()?;
     let output = bibtex
         .iter()
-        .map(|value| value.map(|source| parse_value_library_source(source, kwargs.strict).is_ok()))
+        .map(|value| {
+            value.map(|source| parse_value_library_source(source, kwargs.recovery.policy()).is_ok())
+        })
         .collect::<BooleanChunked>();
     Ok(output.into_series())
 }
@@ -125,52 +124,11 @@ fn has_diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Serie
         .iter()
         .map(|value| {
             value.map(|source| {
-                !parse_bibtex_report_source(source, kwargs.strict)
+                !parse_bibtex_report(source, kwargs.recovery.policy())
                     .diagnostics
                     .is_empty()
             })
         })
         .collect::<BooleanChunked>();
     Ok(output.into_series())
-}
-
-#[polars_expr(output_type_func=string_output)]
-fn to_hayagriva_json(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let output = bibtex
-        .iter()
-        .map(|value| {
-            let source = value?;
-            let library = parse_value_library_source(source, kwargs.strict).ok()?;
-            library.normalized_entries().ok().and_then(|entries| {
-                serde_json::to_string(&normalized_entries_to_json(&entries)).ok()
-            })
-        })
-        .collect::<StringChunked>();
-    Ok(output.into_series())
-}
-
-fn normalized_entries_to_json(entries: &[NormalizedEntry]) -> Vec<Value> {
-    entries
-        .iter()
-        .map(|entry| normalized_value_to_json(&entry.value))
-        .collect()
-}
-
-fn normalized_value_to_json(value: &NormalizedValue) -> Value {
-    match value {
-        NormalizedValue::Null => Value::Null,
-        NormalizedValue::Bool(value) => Value::Bool(*value),
-        NormalizedValue::Number(value) => Value::Number(value.clone()),
-        NormalizedValue::String(value) => Value::String(value.clone()),
-        NormalizedValue::Array(values) => {
-            Value::Array(values.iter().map(normalized_value_to_json).collect())
-        }
-        NormalizedValue::Object(values) => Value::Object(
-            values
-                .iter()
-                .map(|(key, value)| (key.clone(), normalized_value_to_json(value)))
-                .collect(),
-        ),
-    }
 }

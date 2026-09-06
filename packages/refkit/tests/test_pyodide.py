@@ -11,7 +11,6 @@ import pytest
 
 ROOT = Path(__file__).resolve()
 REFKIT_SRC = str(ROOT.parents[1] / "src")
-CORE_SRC = str(ROOT.parents[2] / "refkit-core" / "src")
 
 CORE_EXPORTS = (
     "BibDocument",
@@ -43,7 +42,7 @@ def _fake_core_module(name: str, *, version: str) -> ModuleType:
     module = ModuleType(name)
     dynamic_module = cast(Any, module)
     dynamic_module.__version__ = version
-    dynamic_module.build_info = f"refkit-core {version} pyemscripten test"
+    dynamic_module.build_info = f"refkit {version} pyemscripten test"
     dynamic_module.build_mode = "release"
     for export in CORE_EXPORTS:
         setattr(module, export, type(export, (), {}))
@@ -76,40 +75,21 @@ def test_mock_pyodide_can_wrap_sync_tests(mock_pyodide: Any) -> None:
     assert wrapped() == "emscripten"
 
 
-def test_refkit_core_import_uses_pyodide_extension_module(
+def test_refkit_import_uses_pyodide_extension_module(
     monkeypatch: pytest.MonkeyPatch,
     mock_pyodide: Any,
 ) -> None:
-    version = metadata.version("refkit-core")
-    fake_extension = _fake_core_module("refkit_core._refkit_core", version=version)
-
-    with mock_pyodide():
-        monkeypatch.delitem(sys.modules, "refkit_core", raising=False)
-        monkeypatch.delitem(sys.modules, "refkit_core._refkit_core", raising=False)
-        monkeypatch.setitem(sys.modules, "refkit_core._refkit_core", fake_extension)
-        monkeypatch.syspath_prepend(CORE_SRC)
-
-        imported = cast(Any, importlib.import_module("refkit_core"))
-
-    assert imported.__version__ == version
-    assert imported.build_info == cast(Any, fake_extension).build_info
-    assert imported.Library is cast(Any, fake_extension).Library
-
-
-def test_refkit_import_uses_public_core_package_under_pyodide(
-    monkeypatch: pytest.MonkeyPatch,
-    mock_pyodide: Any,
-) -> None:
-    version = metadata.version("refkit-core")
-    fake_core = _fake_core_module("refkit_core", version=version)
+    version = metadata.version("refkit")
+    fake_extension = _fake_core_module("refkit._native", version=version)
 
     with mock_pyodide():
         monkeypatch.delitem(sys.modules, "refkit", raising=False)
-        monkeypatch.setitem(sys.modules, "refkit_core", fake_core)
+        monkeypatch.delitem(sys.modules, "refkit._native", raising=False)
+        monkeypatch.setitem(sys.modules, "refkit._native", fake_extension)
         monkeypatch.syspath_prepend(REFKIT_SRC)
 
         imported = cast(Any, importlib.import_module("refkit"))
 
-    assert imported.check_refkit_core_version()
-    assert imported.build_info == cast(Any, fake_core).build_info
-    assert imported.Library is cast(Any, fake_core).Library
+    assert imported.__version__ == version
+    assert imported.build_info == cast(Any, fake_extension).build_info
+    assert imported.Library is cast(Any, fake_extension).Library

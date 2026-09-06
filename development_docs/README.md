@@ -6,7 +6,7 @@ These documents describe how to change, test, package, and release RefKit. The r
 
 ```bash
 uv sync --locked --all-packages --group dev
-(cd packages/refkit-core && uv run maturin develop)
+(cd packages/refkit && uv run maturin develop)
 (cd packages/polars-refkit && uv run maturin develop)
 ```
 

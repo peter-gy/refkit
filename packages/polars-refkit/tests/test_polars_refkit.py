@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import importlib.metadata as metadata_module
 import inspect
-import json
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any, cast
 
 import polars as pl
 import pytest
+
+WORKSPACE = Path(__file__).parents[3]
 
 BIBTEX = """@article{doe2024,
   author = {Doe, Jane},
@@ -118,7 +120,6 @@ def test_polars_refkit_top_level_expressions_have_stable_default_names() -> None
         prk.keys("bibtex"),
         prk.cite("bibtex", "key"),
         prk.cite_html("bibtex", "key"),
-        prk.to_hayagriva_json("bibtex"),
     )
 
     assert set(result.columns) == {
@@ -126,12 +127,10 @@ def test_polars_refkit_top_level_expressions_have_stable_default_names() -> None
         "keys",
         "cite",
         "cite_html",
-        "to_hayagriva_json",
     }
     assert result["entry_count"].item() == 1
     assert result["keys"].to_list()[0] == ["doe2024"]
     assert "Doe" in result["cite"].item()
-    assert json.loads(result["to_hayagriva_json"].item())[0]["id"] == "doe2024"
 
 
 def test_bibliography_expressions_render_all_entries_in_row() -> None:
@@ -189,8 +188,6 @@ def test_polars_refkit_namespace_matches_function_api() -> None:
         ns_title_entries=namespace.entries(fields=("key", "title")),
         top_parse_report=prk.parse_report("bibtex"),
         ns_parse_report=namespace.parse_report(),
-        top_hayagriva_json=prk.to_hayagriva_json("bibtex"),
-        ns_hayagriva_json=namespace.to_hayagriva_json(),
     ).to_dicts()
 
     row = result[0]
@@ -207,7 +204,6 @@ def test_polars_refkit_namespace_matches_function_api() -> None:
     assert row["top_entries"] == row["ns_entries"]
     assert row["top_title_entries"] == row["ns_title_entries"]
     assert row["top_parse_report"] == row["ns_parse_report"]
-    assert row["top_hayagriva_json"] == row["ns_hayagriva_json"]
     assert "Doe" in row["top_citation"]
     assert "Reference Work" in row["top_bibliography_html"]
     assert row["top_entries"][0]["key"] == "doe2024"
@@ -225,14 +221,14 @@ def test_polars_refkit_namespace_methods_have_stable_default_names() -> None:
         namespace.keys(),
         namespace.entry_count(),
         namespace.cite("key", style="apa"),
-        namespace.to_hayagriva_json(),
+        namespace.diagnostics(),
     )
 
-    assert set(result.columns) == {"keys", "entry_count", "cite", "to_hayagriva_json"}
+    assert set(result.columns) == {"keys", "entry_count", "cite", "diagnostics"}
     assert result["keys"].to_list()[0] == ["doe2024"]
     assert result["entry_count"].item() == 1
     assert "Doe" in result["cite"].item()
-    assert json.loads(result["to_hayagriva_json"].item())[0]["id"] == "doe2024"
+    assert result["diagnostics"].to_list()[0] == []
 
 
 def test_polars_refkit_tidy_formats_rows_and_reports_warnings() -> None:
@@ -487,37 +483,6 @@ def test_polars_refkit_diagnostics_return_list_column() -> None:
     assert "parse error" in result[1]["diagnostics"][0]
 
 
-def test_polars_refkit_namespace_diagnostics_and_json() -> None:
-    import polars_refkit  # noqa: F401
-
-    frame = pl.DataFrame({"bibtex": [BIBTEX]})
-    namespace = cast(Any, pl.col("bibtex")).refkit
-
-    result = frame.select(
-        diagnostics=namespace.diagnostics(),
-        hayagriva_json=namespace.to_hayagriva_json(),
-    ).to_dicts()[0]
-    entries = cast(list[dict[str, Any]], json.loads(result["hayagriva_json"]))
-
-    assert result["diagnostics"] == []
-    assert entries[0]["id"] == "doe2024"
-
-
-def test_polars_refkit_exports_normalized_json() -> None:
-    import polars_refkit as prk
-
-    row = (
-        pl.DataFrame({"bibtex": [BIBTEX]})
-        .select(hayagriva_json=prk.to_hayagriva_json("bibtex"))
-        .to_dicts()[0]
-    )
-
-    hayagriva_entries = cast(list[dict[str, Any]], json.loads(row["hayagriva_json"]))
-    assert hayagriva_entries[0]["id"] == "doe2024"
-    assert hayagriva_entries[0]["key"] == "doe2024"
-    assert hayagriva_entries[0]["title"] == "Reference Work"
-
-
 def test_polars_refkit_accepts_literal_expressions() -> None:
     import polars_refkit as prk
 
@@ -672,6 +637,23 @@ def test_polars_refkit_entries_and_parse_report_are_polars_native() -> None:
     assert "parse error" in rows[1]["report"]["diagnostics"][0]
 
 
+def test_biblatex_input_normalizes_through_the_polars_adapter() -> None:
+    import polars_refkit as prk
+
+    source = (WORKSPACE / "testdata/contracts/biblatex-input.bib").read_text(encoding="utf-8")
+    namespace = cast(prk.RefkitExprNamespace, cast(Any, pl.col("bibtex")).refkit)
+    row = (
+        pl.DataFrame({"bibtex": [source]})
+        .select(entries=namespace.entries(fields=("key", "title", "date")))
+        .to_dicts()[0]
+    )
+    entry = row["entries"][0]
+
+    assert entry["key"] == "extended-name"
+    assert entry["date"] == "2026-02"
+    assert entry["title"] == "Typed Bibliography Ports"
+
+
 def test_polars_refkit_recovery_modes_choose_strict_null_or_report_recovery() -> None:
     import polars_refkit as prk
 
@@ -741,7 +723,6 @@ def test_polars_refkit_invalid_bibtex_rows_become_nulls() -> None:
         bibliography=prk.full_bibliography_html("bibtex"),
         bibliography_struct=prk.full_bibliography_rendered("bibtex"),
         bibliography_struct_is_null=prk.full_bibliography_rendered("bibtex").is_null(),
-        hayagriva_json=prk.to_hayagriva_json("bibtex"),
     ).to_dicts()
 
     valid, invalid = result
@@ -749,7 +730,6 @@ def test_polars_refkit_invalid_bibtex_rows_become_nulls() -> None:
     assert valid["keys"] == ["doe2024"]
     assert "Doe" in result[0]["citation"]
     assert "Reference Work" in result[0]["bibliography"]
-    assert json.loads(valid["hayagriva_json"])[0]["key"] == "doe2024"
     assert invalid["count"] is None
     assert invalid["keys"] is None
     assert invalid["citation"] is None
@@ -758,7 +738,6 @@ def test_polars_refkit_invalid_bibtex_rows_become_nulls() -> None:
     assert invalid["bibliography"] is None
     assert invalid["bibliography_struct"] is None
     assert invalid["bibliography_struct_is_null"] is True
-    assert invalid["hayagriva_json"] is None
 
 
 def test_polars_refkit_missing_key_becomes_null_citation() -> None:

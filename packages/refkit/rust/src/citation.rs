@@ -4,9 +4,11 @@ use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use refkit_core::{CoreCite, option_quoted, quoted};
+use refkit_core::Cite as CoreCite;
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+use crate::repr::{option_quoted, quoted};
+
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Cite {
     #[pyo3(get)]
@@ -39,7 +41,7 @@ impl Cite {
     }
 }
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct CitationGroup {
     cites: Vec<Cite>,
@@ -73,7 +75,7 @@ impl CitationGroup {
     }
 }
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Citation {
     #[pyo3(get)]

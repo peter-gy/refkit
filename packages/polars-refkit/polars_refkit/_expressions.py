@@ -326,17 +326,6 @@ def parse_report(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") ->
     return _parse_expr("parse_report", bibtex_col, recovery=recovery, output_name="parse_report")
 
 
-def to_hayagriva_json(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr:
-    """Return normalized Hayagriva entry JSON for each BibTeX row."""
-
-    return _parse_expr(
-        "to_hayagriva_json",
-        bibtex_col,
-        recovery=recovery,
-        output_name="to_hayagriva_json",
-    )
-
-
 def tidy_bibtex(
     bibtex_col: ColumnExpr,
     *,

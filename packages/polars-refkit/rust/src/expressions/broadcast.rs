@@ -1,19 +1,22 @@
 use polars::prelude::*;
 
-use refkit_core::{CoreLibrary, PreparedStyle, load_prepared_style};
+use refkit_core::{Library, LibraryError, PreparedStyle, RecoveryPolicy, load_prepared_style};
 
 pub(super) fn parse_value_library_source(
     source: &str,
-    strict: bool,
-) -> Result<CoreLibrary, String> {
-    CoreLibrary::parse_bibtex(source, strict)
+    recovery: RecoveryPolicy,
+) -> Result<Library, LibraryError> {
+    Library::parse_biblatex(source, recovery)
 }
 
-pub(super) fn parse_broadcast_library(bibtex: &StringChunked, strict: bool) -> Option<CoreLibrary> {
+pub(super) fn parse_broadcast_library(
+    bibtex: &StringChunked,
+    recovery: RecoveryPolicy,
+) -> Option<Library> {
     if bibtex.len() != 1 {
         return None;
     }
-    parse_value_library_source(bibtex.get(0)?, strict).ok()
+    parse_value_library_source(bibtex.get(0)?, recovery).ok()
 }
 
 pub(super) fn load_style(name: &str) -> PolarsResult<std::sync::Arc<PreparedStyle>> {

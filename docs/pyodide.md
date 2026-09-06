@@ -1,6 +1,6 @@
 # Use RefKit In Pyodide
 
-`refkit`, `refkit-core`, and `polars-refkit` use the same package and import names on CPython and Pyodide. The current PyEmscripten wheels target Pyodide 314.0.2 with Python 3.14.
+`refkit` and `polars-refkit` use the same package and import names on CPython and Pyodide. The current PyEmscripten wheels target Pyodide 314.0.2 with Python 3.14.
 
 ## Load RefKit In A Browser Or Node
 
@@ -14,7 +14,7 @@ await micropip.install("refkit")
 `);
 ```
 
-`micropip` installs the exact matching `refkit-core` release and selects its PyEmscripten wheel. Then run the regular Python API inside Pyodide:
+`micropip` selects the `refkit` PyEmscripten wheel. Then run the regular Python API inside Pyodide:
 
 ```python
 import refkit as rk

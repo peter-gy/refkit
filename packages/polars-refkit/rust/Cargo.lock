@@ -1409,7 +1409,6 @@ dependencies = [
  "pyo3-polars",
  "refkit-core",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -1696,8 +1695,6 @@ dependencies = [
  "biblatex",
  "hayagriva",
  "indexmap",
- "serde",
- "serde_json",
 ]
 
 [[package]]

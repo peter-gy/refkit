@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -7,12 +6,14 @@ use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
 use refkit_core::{
-    PreparedStyle, StyleError, bundled_locales, load_prepared_style, prepare_style_from_xml, quoted,
+    PreparedStyle, StyleError, is_bundled_locale, load_prepared_style, prepare_style_from_xml,
 };
 
 use crate::errors::{RefkitError, style_error_to_py};
+use crate::filesystem::read_style;
+use crate::repr::quoted;
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Style {
     id: String,
@@ -22,13 +23,16 @@ pub struct Style {
 #[pymethods]
 impl Style {
     #[staticmethod]
-    fn load(name: &str) -> PyResult<Self> {
-        cached_bundled_style(name)
+    fn load(py: Python<'_>, name: String) -> PyResult<Self> {
+        let id = name.clone();
+        py.detach(move || load_prepared_style(&name))
+            .map(|data| Self { id, data })
+            .map_err(style_error_to_py)
     }
 
     #[staticmethod]
-    fn from_xml(xml: &str) -> PyResult<Self> {
-        prepare_style_from_xml(xml)
+    fn from_xml(py: Python<'_>, xml: String) -> PyResult<Self> {
+        py.detach(move || prepare_style_from_xml(&xml))
             .map(|style| Self {
                 id: "xml".to_string(),
                 data: Arc::new(style),
@@ -37,12 +41,14 @@ impl Style {
     }
 
     #[staticmethod]
-    fn from_path(path: PathBuf) -> PyResult<Self> {
-        let xml = fs::read_to_string(&path)
-            .map_err(|err| RefkitError::new_err(format!("failed to read style: {err}")))?;
-        prepare_style_from_xml(&xml)
+    fn from_path(py: Python<'_>, path: PathBuf) -> PyResult<Self> {
+        let id = path.display().to_string();
+        let xml = py
+            .detach(move || read_style(&path))
+            .map_err(RefkitError::new_err)?;
+        py.detach(move || prepare_style_from_xml(&xml))
             .map(|style| Self {
-                id: path.display().to_string(),
+                id,
                 data: Arc::new(style),
             })
             .map_err(style_error_to_py)
@@ -67,7 +73,7 @@ impl Style {
     }
 }
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Locale {
     code: String,
@@ -76,20 +82,14 @@ pub struct Locale {
 #[pymethods]
 impl Locale {
     #[staticmethod]
-    fn load(code: &str) -> PyResult<Self> {
-        bundled_locales()
-            .iter()
-            .find(|locale| locale.lang.as_ref().is_some_and(|lang| lang.0 == code))
-            .map(|inner| Self {
-                code: inner
-                    .lang
-                    .as_ref()
-                    .map(|lang| lang.0.clone())
-                    .unwrap_or_else(|| code.to_string()),
-            })
-            .ok_or_else(|| {
-                PyValueError::new_err(format!("unknown bundled locale {}", quoted(code)))
-            })
+    fn load(py: Python<'_>, code: String) -> PyResult<Self> {
+        let exists = py.detach({
+            let code = code.clone();
+            move || is_bundled_locale(&code)
+        });
+        exists.then(|| Self { code: code.clone() }).ok_or_else(|| {
+            PyValueError::new_err(format!("unknown bundled locale {}", quoted(&code)))
+        })
     }
 
     #[getter]
@@ -100,15 +100,6 @@ impl Locale {
     fn __repr__(&self) -> String {
         format!("Locale(code={})", quoted(&self.code))
     }
-}
-
-pub(crate) fn cached_bundled_style(name: &str) -> PyResult<Style> {
-    load_prepared_style(name)
-        .map(|style| Style {
-            id: name.to_string(),
-            data: style,
-        })
-        .map_err(style_error_to_py)
 }
 
 pub(crate) fn extract_locale(locale: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> {

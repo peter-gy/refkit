@@ -1,5 +1,4 @@
 POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
-TIDY_RUST := crates/bibtex-tidy-rs/Cargo.toml
 UV_RUN := uv run --locked --all-packages --group dev
 RUST_FLOOR := 1.88
 RUST_SYSROOT := $(shell rustc --print sysroot)
@@ -10,7 +9,6 @@ format:
 	$(UV_RUN) ruff check --fix .
 	$(UV_RUN) ruff format .
 	cargo fmt --all
-	cargo fmt --manifest-path $(TIDY_RUST) --all
 	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all
 
 .PHONY: python-lint
@@ -21,10 +19,8 @@ python-lint:
 .PHONY: rust-lint
 rust-lint:
 	cargo fmt --all --check
-	cargo fmt --manifest-path $(TIDY_RUST) --all --check
 	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all --check
 	cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-	cargo clippy --locked --manifest-path $(TIDY_RUST) --all-targets --all-features -- -D warnings
 	cargo clippy --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features -- -D warnings
 
 .PHONY: lint
@@ -46,10 +42,8 @@ benchmark-test:
 .PHONY: rust
 rust:
 	cargo check --locked --workspace --all-targets --all-features
-	cargo check --locked --manifest-path $(TIDY_RUST) --all-targets --all-features
 	cargo check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 	cargo test --locked --workspace
-	cargo test --locked --manifest-path $(TIDY_RUST)
 	cargo test --locked --manifest-path $(POLARS_REFKIT_RUST)
 
 .PHONY: rust-floor
@@ -59,7 +53,6 @@ rust-floor:
 		rustup toolchain install $(RUST_FLOOR) --profile minimal; \
 	fi
 	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --workspace --all-targets --all-features
-	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --manifest-path $(TIDY_RUST) --all-targets --all-features
 	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 
 .PHONY: pyodide-lock pyodide-lock-check
@@ -71,7 +64,7 @@ pyodide-lock-check:
 
 .PHONY: clean-dist
 clean-dist:
-	rm -rf dist packages/refkit-core/dist packages/polars-refkit/dist
+	rm -rf dist packages/refkit/dist packages/polars-refkit/dist
 
 .PHONY: clean
 clean:
@@ -81,9 +74,8 @@ clean:
 		wheels \
 		build \
 		target \
-		crates/bibtex-tidy-rs/target \
 		packages/polars-refkit/rust/target \
-		packages/refkit-core/dist \
+		packages/refkit/dist \
 		packages/polars-refkit/dist \
 		htmlcov \
 		.coverage \
@@ -119,10 +111,8 @@ clean:
 
 .PHONY: build
 build: clean-dist
-	uv build --package refkit-core --sdist --no-create-gitignore
-	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package refkit-core --wheel --no-create-gitignore
 	uv build --package refkit --sdist --no-create-gitignore
-	uv build --package refkit --wheel --no-create-gitignore
+	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package refkit --wheel --no-create-gitignore
 	uv build --package polars-refkit --sdist --no-create-gitignore
 	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package polars-refkit --wheel --no-create-gitignore
 	$(UV_RUN) python -m scripts.normalize_wheel 'dist/*.whl'

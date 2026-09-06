@@ -4,7 +4,7 @@ use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict};
 
-use refkit_core::{CoreDocument, CoreRenderedDocument};
+use refkit_core::{Document as CoreDocument, RenderedDocument as CoreRenderedDocument};
 
 use crate::citation::parse_document_citations;
 use crate::errors::document_error_to_py;
@@ -12,7 +12,7 @@ use crate::library::Library;
 use crate::rendered::Rendered;
 use crate::style::{Style, extract_locale};
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Document {
     inner: CoreDocument,
@@ -74,7 +74,7 @@ impl Document {
     }
 }
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 pub struct RenderedDocument {
     citation_ids: Vec<String>,
     citations: Vec<Rendered>,

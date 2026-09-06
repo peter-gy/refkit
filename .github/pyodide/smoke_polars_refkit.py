@@ -6,7 +6,6 @@ from typing import Any, cast
 import polars as pl
 
 import polars_refkit
-import refkit as rk
 
 BIBTEX = """
 @article{doe2024,
@@ -19,8 +18,6 @@ BIBTEX = """
 
 
 def main() -> None:
-    assert rk.check_refkit_core_version()
-    assert rk.Library.parse_bibtex(BIBTEX)
     assert polars_refkit.__version__
 
     frame = pl.DataFrame(

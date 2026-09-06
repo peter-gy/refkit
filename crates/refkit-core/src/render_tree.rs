@@ -1,11 +1,12 @@
 use hayagriva::{BibliographyItem, BufWriteFormat, ElemChild, ElemChildren, RenderedCitation};
 
+use crate::RenderedOutput;
 use crate::render::{
     bibliography_to_text_html, elem_children_to_html, elem_children_to_string, safe_href,
 };
-use crate::{
-    RenderedOutput, display_name, elem_meta_name, font_style_name, font_variant_name,
-    font_weight_name, formatting_summary, text_decoration_name, vertical_align_name,
+use crate::strings::{
+    display_name, elem_meta_name, font_style_name, font_variant_name, font_weight_name,
+    formatting_summary, text_decoration_name, vertical_align_name,
 };
 
 #[derive(Debug, Clone)]

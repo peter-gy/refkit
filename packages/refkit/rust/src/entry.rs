@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use pyo3::prelude::*;
 
-use refkit_core::{EntryRecord, quoted};
+use refkit_core::EntryRecord;
+
+use crate::repr::quoted;
 
 struct EntryData {
     record: EntryRecord,
@@ -14,7 +16,7 @@ impl EntryData {
     }
 }
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Entry {
     data: Arc<EntryData>,
@@ -43,6 +45,11 @@ impl Entry {
     #[getter]
     fn title(&self) -> Option<String> {
         self.data.record.title.clone()
+    }
+
+    #[getter]
+    fn date(&self) -> Option<String> {
+        self.data.record.date.clone()
     }
 
     #[getter]

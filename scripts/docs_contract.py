@@ -23,7 +23,6 @@ MARKDOWN_ROOTS = (
 PUBLIC_DOCS = (
     Path("README.md"),
     Path("packages/refkit/README.md"),
-    Path("packages/refkit-core/README.md"),
     Path("packages/polars-refkit/README.md"),
 )
 SKIPPED_DIRECTORIES = {

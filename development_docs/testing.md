@@ -7,7 +7,7 @@ Test through the boundary that a consumer or maintainer depends on. Shared Rust 
 | Boundary | Main location | Contract |
 | --- | --- | --- |
 | Portable Rust | `crates/refkit-core/src` and module tests | Parsing, recovery, raw edits, tidy formatting, rendering, and typed records. |
-| Native and facade Python | `packages/refkit/tests` | Public objects, errors, helpers, stubs, runtime version checks, and Pyodide metadata. |
+| Python adapter | `packages/refkit/tests` | Public objects, errors, helpers, stubs, native metadata, and Pyodide behavior. |
 | Polars | `packages/polars-refkit/tests` | Eager and lazy plans, namespace parity, broadcasting, dtypes, null mapping, diagnostics, and plugin packaging. |
 | Benchmark tooling | `packages/refkit-bench/tests` | Lane selection, workload provenance, result shape, adapter correctness checks, and output files. |
 | Repository contracts | `scripts/tests` | Architecture, documentation, versions, Pyodide locks, archive contents, and wheel normalization. |
@@ -25,12 +25,12 @@ make docs-check
 make build
 ```
 
-`make test` runs the Python, Polars, benchmark, and script contract suites with strict warnings and full branch coverage for the Python packages. `make rust` checks and tests the root, compatibility, and Polars Cargo workspaces. `make build` validates the contents of all local Python distributions.
+`make test` runs the Python, Polars, benchmark, and script contract suites with strict warnings and full branch coverage for the Python packages. `make rust` checks and tests the root and Polars Cargo workspaces. `make build` validates the contents of both Python distributions.
 
 ## Choose The Assertion Boundary
 
 - Parser and raw edit regressions should use the smallest input that preserves the failing syntax.
-- Python behavior should be asserted through `refkit` or `refkit_core` objects that users import.
+- Python behavior should be asserted through `refkit` objects that users import.
 - Polars behavior should be asserted through expressions in eager and lazy plans where execution mode is relevant.
 - Package regressions should install the built wheel or sdist when editable imports could hide the failure.
 - Pyodide claims require a PyEmscripten wheel and execution inside the configured Pyodide runtime.

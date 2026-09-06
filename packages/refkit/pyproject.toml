@@ -22,23 +22,23 @@ classifiers = [
     "Programming Language :: Rust",
     "Typing :: Typed",
 ]
-dependencies = [
-    "refkit-core==0.0.4-rc.5",
-]
+dependencies = []
 
 [build-system]
-requires = ["hatchling>=1.27"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
 
-[tool.hatch.build.targets.sdist]
-only-include = [
-    "LICENSE",
-    "NOTICE",
-    "README.md",
-    "pyproject.toml",
-    "src/refkit",
-    "tests",
+[tool.maturin]
+manifest-path = "rust/Cargo.toml"
+python-source = "src"
+module-name = "refkit._native"
+bindings = "pyo3"
+features = ["extension-module"]
+editable-profile = "dev"
+strip = true
+locked = true
+exclude = [
+    "src/**/__pycache__/**",
+    "src/**/*.pyc",
+    "src/**/*.pyo",
 ]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/refkit"]

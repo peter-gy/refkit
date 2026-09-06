@@ -2,7 +2,7 @@
 
 Refkit replaces the common split between a CSL renderer and a BibTeX repair library with one Python API backed by Rust.
 
-## Package Split
+## Python Package
 
 Install `refkit` for Python citation workflows:
 
@@ -10,17 +10,27 @@ Install `refkit` for Python citation workflows:
 pip install refkit
 ```
 
-`refkit` is pure Python and depends on the exact matching `refkit-core` release.
-`refkit-core` contains the native Rust/PyO3 extension as `refkit_core._refkit_core`.
-Importing `refkit` checks that the installed `refkit-core` version matches the version required by `refkit`.
+`refkit` contains the Python API and its native extension. Import public objects from `refkit`:
 
 ```python
 import refkit as rk
 
-assert rk.check_refkit_core_version()
+library = rk.Library.parse_bibtex("@article{doe2024, title={Fast Citations}}")
 ```
 
-Runtime metadata such as `rk.build_info` and `rk.build_mode` is available from the `refkit` package.
+Starting with 0.0.4-rc.5, replace direct `refkit_core` imports with `refkit`. The distribution-to-distribution version handshake ended when the native extension moved to `refkit._native`. Importing `refkit` still verifies that the packaged extension matches the package metadata.
+
+Runtime metadata such as `rk.build_info` and `rk.build_mode` remains available from `refkit`.
+
+## Normalized Entry Projection
+
+Use `Library.project` for Python dictionaries and `pl.Expr.refkit.entries` for Polars structs. Both APIs expose the RefKit-owned field contract.
+
+```python
+rows = library.project(["key", "type", "title", "date", "doi", "volume"])
+```
+
+Replace `Library.to_dicts()` with `Library.project(...)`. Replace `to_hayagriva_json()` expressions with `entries(fields=...)`.
 
 ## From citeproc-py
 

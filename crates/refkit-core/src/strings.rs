@@ -4,7 +4,7 @@ use hayagriva::citationberg::{
 use hayagriva::types::EntryType;
 use hayagriva::{ElemMeta, Formatting};
 
-pub fn quoted(value: &str) -> String {
+pub(crate) fn quoted(value: &str) -> String {
     let mut output = String::with_capacity(value.len() + 2);
     output.push('"');
     for ch in value.chars() {
@@ -22,11 +22,7 @@ pub fn quoted(value: &str) -> String {
     output
 }
 
-pub fn option_quoted(value: Option<&str>) -> String {
-    value.map_or_else(|| "None".to_string(), quoted)
-}
-
-pub fn entry_type_name(entry_type: &EntryType) -> &'static str {
+pub(crate) fn entry_type_name(entry_type: &EntryType) -> &'static str {
     match entry_type {
         EntryType::Article => "Article",
         EntryType::Chapter => "Chapter",
@@ -62,7 +58,7 @@ pub fn entry_type_name(entry_type: &EntryType) -> &'static str {
     }
 }
 
-pub fn display_name(display: Display) -> &'static str {
+pub(crate) fn display_name(display: Display) -> &'static str {
     match display {
         Display::Block => "Block",
         Display::LeftMargin => "LeftMargin",
@@ -71,7 +67,7 @@ pub fn display_name(display: Display) -> &'static str {
     }
 }
 
-pub fn elem_meta_name(meta: &ElemMeta) -> &'static str {
+pub(crate) fn elem_meta_name(meta: &ElemMeta) -> &'static str {
     match meta {
         ElemMeta::Names(_) => "Names",
         ElemMeta::Date => "Date",
@@ -85,21 +81,21 @@ pub fn elem_meta_name(meta: &ElemMeta) -> &'static str {
     }
 }
 
-pub fn font_style_name(font_style: FontStyle) -> &'static str {
+pub(crate) fn font_style_name(font_style: FontStyle) -> &'static str {
     match font_style {
         FontStyle::Normal => "Normal",
         FontStyle::Italic => "Italic",
     }
 }
 
-pub fn font_variant_name(font_variant: FontVariant) -> &'static str {
+pub(crate) fn font_variant_name(font_variant: FontVariant) -> &'static str {
     match font_variant {
         FontVariant::Normal => "Normal",
         FontVariant::SmallCaps => "SmallCaps",
     }
 }
 
-pub fn font_weight_name(font_weight: FontWeight) -> &'static str {
+pub(crate) fn font_weight_name(font_weight: FontWeight) -> &'static str {
     match font_weight {
         FontWeight::Normal => "Normal",
         FontWeight::Bold => "Bold",
@@ -107,14 +103,14 @@ pub fn font_weight_name(font_weight: FontWeight) -> &'static str {
     }
 }
 
-pub fn text_decoration_name(text_decoration: TextDecoration) -> &'static str {
+pub(crate) fn text_decoration_name(text_decoration: TextDecoration) -> &'static str {
     match text_decoration {
         TextDecoration::None => "None",
         TextDecoration::Underline => "Underline",
     }
 }
 
-pub fn vertical_align_name(vertical_align: VerticalAlign) -> &'static str {
+pub(crate) fn vertical_align_name(vertical_align: VerticalAlign) -> &'static str {
     match vertical_align {
         VerticalAlign::None => "None",
         VerticalAlign::Baseline => "Baseline",
@@ -123,7 +119,7 @@ pub fn vertical_align_name(vertical_align: VerticalAlign) -> &'static str {
     }
 }
 
-pub fn formatting_summary(formatting: Formatting) -> String {
+pub(crate) fn formatting_summary(formatting: Formatting) -> String {
     if formatting == Formatting::default() {
         return "Normal".to_string();
     }
@@ -161,13 +157,11 @@ mod tests {
     }
 
     #[test]
-    fn quoted_strings_are_stable_python_boundary_strings() {
+    fn quoted_strings_escape_diagnostic_values() {
         assert_eq!(quoted("doe2024"), "\"doe2024\"");
         assert_eq!(quoted("O'Reilly\\n"), "\"O'Reilly\\\\n\"");
         assert_eq!(quoted("line\nbreak"), "\"line\\nbreak\"");
         assert_eq!(quoted("quote\""), "\"quote\\\"\"");
-        assert_eq!(option_quoted(Some("page")), "\"page\"");
-        assert_eq!(option_quoted(None), "None");
     }
 
     #[test]

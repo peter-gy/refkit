@@ -96,7 +96,7 @@ Top-level functions and namespace methods use stable default output names, so mu
 | Render citations | `cite`, `cite_html`, `cite_rendered`, `cite_each`, `cite_group`, and their HTML or struct variants |
 | Render bibliographies | `full_bibliography_text`, `full_bibliography_html`, `full_bibliography_rendered` |
 | Format BibTeX | `tidy_bibtex`, `tidy_bibtex_report` |
-| Inspect entries | `keys`, `entries`, `to_hayagriva_json` |
+| Inspect entries | `keys`, `entries` |
 | Process dataframe columns | eager `DataFrame.select` and lazy `LazyFrame.select(...).collect()` |
 | Use expression namespace | `pl.Expr.refkit` methods with the same capability set |
 
@@ -123,7 +123,6 @@ Top-level functions and namespace methods use stable default output names, so mu
 | `entries(bibtex_col, fields=("key", "title", "doi", "volume"), recovery="error")` | `List[Struct]` | Projects normalized entries into Polars-native rows. |
 | `parse_report(bibtex_col, recovery="error")` | `Struct[ok, entry_count, keys, diagnostics]` | Parses each row once and returns a summary struct. |
 | `diagnostics(bibtex_col, recovery="error")` | `List[String]` | Returns an empty list for valid rows and parse messages for invalid rows. |
-| `to_hayagriva_json(bibtex_col, recovery="error")` | `String` | Returns normalized Hayagriva entry JSON with `id` and `key` fields. |
 | `tidy_bibtex(bibtex_col, sort_fields=False, wrap=False, ...)` | `String` | Formats each BibTeX row. Row formatting failures return null. |
 | `tidy_bibtex_report(bibtex_col, sort_fields=False, wrap=False, ...)` | `Struct[ok, bibtex, count, warnings, error]` | Formats each row and reports formatter warnings or row errors. |
 
@@ -139,12 +138,11 @@ out = df.select(
     each_citation=pl.col("bibtex").refkit.cite_each(pl.col("keys")),
     grouped_citation=pl.col("bibtex").refkit.cite_group(pl.col("keys")),
     entries=pl.col("bibtex").refkit.entries(),
-    hayagriva_json=pl.col("bibtex").refkit.to_hayagriva_json(),
     formatted=pl.col("bibtex").refkit.tidy_bibtex(sort_fields=True),
 )
 ```
 
-Top-level functions and namespace methods expose one name per capability. They return expressions with names that match the method, such as `keys`, `entry_count`, `cite`, `to_hayagriva_json`, and `tidy_bibtex`. Name outputs in `select`, `with_columns`, or `alias` when a call site needs a different column name.
+Top-level functions and namespace methods expose one name per capability. They return expressions with names that match the method, such as `keys`, `entry_count`, `cite`, and `tidy_bibtex`. Name outputs in `select`, `with_columns`, or `alias` when a call site needs a different column name.
 
 Typed code can cast the namespace when the type checker does not know Polars plugin namespaces:
 

@@ -13,13 +13,11 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_FILES = (
     "Cargo.toml",
     "pyproject.toml",
-    "crates/bibtex-tidy-rs/Cargo.toml",
     "crates/refkit-core/Cargo.toml",
     "packages/polars-refkit/pyproject.toml",
     "packages/polars-refkit/rust/Cargo.toml",
     "packages/refkit/pyproject.toml",
-    "packages/refkit-core/pyproject.toml",
-    "packages/refkit-core/rust/Cargo.toml",
+    "packages/refkit/rust/Cargo.toml",
 )
 
 
@@ -78,31 +76,11 @@ def test_release_contract_rejects_unsupported_release_tags(tag: str) -> None:
         validate_release_contract(ROOT, tag)
 
 
-def test_release_contract_reports_core_dependency_drift(tmp_path: Path) -> None:
-    copy_contract_files(tmp_path)
-    version = validate_release_contract(tmp_path)
-    manifest = tmp_path / "packages/refkit/pyproject.toml"
-    source = manifest.read_text(encoding="utf-8")
-    manifest.write_text(
-        source.replace(
-            f'"refkit-core=={version}"',
-            '"refkit-core==9.9.9"',
-        ),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ReleaseContractError, match=f"must depend on refkit-core=={version}"):
-        validate_release_contract(tmp_path)
-
-
 @pytest.mark.parametrize(
     ("relative_path", "message"),
     [
         ("Cargo.toml", "Rust workspace repository must be"),
-        (
-            "packages/refkit-core/pyproject.toml",
-            r"refkit-core project\.urls\.Repository must be",
-        ),
+        ("packages/refkit/pyproject.toml", r"refkit project\.urls\.Repository must be"),
     ],
 )
 def test_release_contract_reports_repository_drift(
@@ -130,7 +108,7 @@ def test_release_contract_reports_repository_drift(
     "relative_path",
     [
         "crates/refkit-core/Cargo.toml",
-        "packages/refkit-core/rust/Cargo.toml",
+        "packages/refkit/rust/Cargo.toml",
     ],
 )
 def test_release_contract_reports_repository_inheritance_drift(
@@ -146,6 +124,19 @@ def test_release_contract_reports_repository_inheritance_drift(
     )
 
     with pytest.raises(ReleaseContractError, match="must inherit"):
+        validate_release_contract(tmp_path)
+
+
+def test_release_contract_reports_native_adapter_version_drift(tmp_path: Path) -> None:
+    copy_contract_files(tmp_path)
+    manifest = tmp_path / "packages/refkit/rust/Cargo.toml"
+    source = manifest.read_text(encoding="utf-8")
+    manifest.write_text(
+        source.replace("version.workspace = true", 'version = "9.9.9"', 1),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ReleaseContractError, match="refkit native Rust crate has 9.9.9"):
         validate_release_contract(tmp_path)
 
 

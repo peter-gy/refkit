@@ -95,7 +95,7 @@ Bibliography trees contain entries:
 
 ## Projection Rows
 
-`Library.project(fields=None, *, keys=None)` returns a list of dictionaries. Supported fields are `key`, `entry_type`, `type`, `title`, `doi`, and `volume`. `title`, `doi`, and `volume` may be `None`.
+`Library.project(fields=None, *, keys=None)` returns a list of dictionaries. Supported fields are `key`, `entry_type`, `type`, `title`, `date`, `doi`, and `volume`. `title`, `date`, `doi`, and `volume` may be `None`.
 
 ```python
 import refkit as rk
@@ -142,7 +142,7 @@ Use `raw.entries.unique_keys()` when one key per distinct entry name is needed. 
 | `Library.parse_bibtex(source, *, recovery="error")` | `RefkitError` | BibTeX parse failure. |
 | `Library.parse_yaml(source)` | `RefkitError` | Invalid Hayagriva YAML. |
 | `Library.project(fields=..., keys=...)` | `TypeError` | `fields` or `keys` is a string or is not iterable. |
-| `Library.project(fields=...)` | `ValueError` | A projection field is not one of `key`, `entry_type`, `type`, `title`, `doi`, or `volume`. |
+| `Library.project(fields=...)` | `ValueError` | A projection field is not one of `key`, `entry_type`, `type`, `title`, `date`, `doi`, or `volume`. |
 | `Library.project(keys=...)` | `KeyError` | A requested entry key is absent from the `Library`. |
 | `Library.select(selector)` | `ValueError` | Invalid Hayagriva selector. |
 | `Style.load(name)` | `ValueError` | Unknown bundled style name. |

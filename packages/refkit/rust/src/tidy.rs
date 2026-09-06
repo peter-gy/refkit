@@ -3,13 +3,13 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBool, PyDict, PyModule};
 
 use crate::errors::{TidyError as PyTidyError, TidySyntaxError};
+use crate::repr::{option_quoted, quoted};
 use refkit_core::{
     DuplicateRule, MergeStrategy, TidyError as CoreTidyError, TidyOptions as CoreTidyOptions,
-    TidyResult as CoreTidyResult, TidyWarning as CoreTidyWarning, option_quoted, quoted,
-    tidy_bibtex as core_tidy_bibtex,
+    TidyResult as CoreTidyResult, TidyWarning as CoreTidyWarning, tidy_bibtex as core_tidy_bibtex,
 };
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct TidyOptions {
     inner: CoreTidyOptions,
@@ -138,7 +138,7 @@ impl TidyOptions {
     }
 }
 
-#[pyclass(module = "refkit_core", frozen, skip_from_py_object)]
+#[pyclass(module = "refkit", frozen, skip_from_py_object)]
 #[derive(Clone)]
 pub struct TidyWarning {
     #[pyo3(get)]
@@ -161,7 +161,7 @@ impl TidyWarning {
     }
 }
 
-#[pyclass(module = "refkit_core", frozen, skip_from_py_object)]
+#[pyclass(module = "refkit", frozen, skip_from_py_object)]
 #[derive(Clone)]
 pub struct TidyResult {
     #[pyo3(get)]

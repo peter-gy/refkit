@@ -6,7 +6,7 @@ RefKit keeps cross-file invariants executable. Each contract has one source-leve
 
 | Contract | Command | Protects |
 | --- | --- | --- |
-| Architecture | `make architecture-check` | Portable-core independence, Cargo workspace ownership, shared-core adapter dependencies, and locked native builds. |
+| Architecture | `make architecture-check` | Core dependency classification, host-boundary ownership, workspace composition, released engines, adapter direction, and locked native builds. |
 | Documentation | `make docs-check` | Markdown-only developer docs, local link targets, and the public-to-developer audience boundary. |
 | Release metadata | `make release-check` | Lockstep versions, exact native dependency pins, repository metadata, and release tag grammar. |
 | Pyodide runtime | `make pyodide-lock-check` | Runtime requirements, resolved wheels, hashes, and the tested Python-to-Rust Polars plugin ABI mapping. |
@@ -19,10 +19,9 @@ Contract diagnostics should name the offending source or archive member and retu
 
 ### Python API
 
-- native PyO3 definitions under `packages/refkit-core/rust/src`
-- native exports in `packages/refkit-core/src/refkit_core/__init__.py`
-- native stubs in `packages/refkit-core/src/refkit_core/*.pyi`
-- facade exports and helpers in `packages/refkit/src/refkit`
+- native PyO3 definitions under `packages/refkit/rust/src`
+- native stubs in `packages/refkit/src/refkit/_native.pyi`
+- public exports, stubs, and helpers in `packages/refkit/src/refkit`
 - public tests and end-user API docs
 
 ### Polars API
@@ -37,16 +36,14 @@ Contract diagnostics should name the offending source or archive member and retu
 
 - root Cargo workspace version and shared Rust dependency
 - root Python workspace version
-- `refkit`, `refkit-core`, and `polars-refkit` project versions
-- compatibility and Polars Rust crate versions
-- exact `refkit-core` dependency in `refkit`
+- `refkit` and `polars-refkit` project versions
+- native adapter and Polars Rust crate versions
 
 `scripts/release_contract.py` lists the authoritative repeated sources.
 
 ### Rust dependencies
 
 - root `Cargo.lock`
-- `crates/bibtex-tidy-rs/Cargo.lock`
 - `packages/polars-refkit/rust/Cargo.lock`
 
 Update each lockfile whose workspace resolves the dependency. The Polars workspace keeps its plugin ABI family local.

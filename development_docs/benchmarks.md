@@ -8,7 +8,7 @@ Timing runs require release-mode native extensions:
 
 ```bash
 uv sync --locked --all-packages --group dev
-(cd packages/refkit-core && uv run maturin develop --release)
+(cd packages/refkit && uv run maturin develop --release)
 (cd packages/polars-refkit && uv run maturin develop --release)
 ```
 

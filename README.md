@@ -9,9 +9,8 @@ pip install refkit
 pip install polars-refkit
 ```
 
-`refkit` is a pure Python package with an exact dependency on `refkit-core`.
-`refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`.
-Installing `refkit` also installs the matching native wheel for the current Python platform.
+`refkit` contains the Python API and its Rust/PyO3 extension at `refkit._native`.
+Installing `refkit` uses a compatible native wheel when available and builds from the source distribution on other platforms.
 
 RefKit supports Python 3.11 through 3.14. The [PyEmscripten wheels](docs/pyodide.md) target Pyodide 314.0.2.
 
@@ -133,7 +132,6 @@ out = df.select(
 | Package | Entry point | Use it for |
 | --- | --- | --- |
 | `refkit` | `import refkit as rk` | Citation rendering, normalized library access, selectors, and raw BibTeX editing. |
-| `refkit-core` | Installed by `refkit` | Native Rust/PyO3 implementation used by `refkit`, including Pyodide-compatible wheels. |
 | `polars-refkit` | `import polars_refkit as prk` | BibTeX parsing, formatting, inspection, and rendering inside eager or lazy Polars plans. |
 
 ## Capabilities
@@ -144,14 +142,13 @@ out = df.select(
 | Render citations | `Document.render`, `Citation`, `Cite`, `CitationGroup`, `cite` | `cite`, `cite_html`, `cite_rendered`, `cite_each`, `cite_group` |
 | Render bibliographies | `Document.cited_bibliography`, `Document.full_bibliography`, `full_bibliography` | `full_bibliography_text`, `full_bibliography_html`, `full_bibliography_rendered` |
 | Load CSL styles and locales | `Style.load`, `Style.from_path`, `Style.from_xml`, `Locale.load` | `style=` and `locale=` arguments |
-| Inspect entries | Mapping access, selectors, `project`, `to_dicts` | `keys`, `entries`, `to_hayagriva_json` |
+| Inspect entries | Mapping access, selectors, and `project` | `keys` and `entries` |
 | Format and edit raw BibTeX | `tidy_bibtex`, `tidy_file`, `BibDocument` | `tidy_bibtex`, `tidy_bibtex_report` |
 | Export rendered output | `Rendered.text`, `Rendered.html`, `Rendered.tree` | string and struct expressions |
 
 ## Documentation
 
 - [refkit Python API](packages/refkit/README.md)
-- [refkit-core native package](packages/refkit-core/README.md)
 - [polars-refkit expressions](packages/polars-refkit/README.md)
 - [API contracts](docs/api-contracts.md)
 - [Use RefKit in Pyodide](docs/pyodide.md)

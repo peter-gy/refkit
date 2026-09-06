@@ -1,67 +1,28 @@
-use std::path::PathBuf;
-
-use crate::quoted;
-
-use super::read::read_bibliography_text;
 use super::recovery::recover_biblatex_library;
-use super::{ParseReport, ParsedLibrary};
+use super::{ParseReport, ParsedLibrary, RecoveryPolicy};
 
-pub(super) fn parse_library_path(
-    path: PathBuf,
-    strict: bool,
-    diagnostics: bool,
+pub(super) fn parse_biblatex_library(
+    source: &str,
+    recovery: RecoveryPolicy,
 ) -> Result<ParsedLibrary, String> {
-    let text = read_bibliography_text(&path)?;
-    let mut parsed = match path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-    {
-        Some("bib") => parse_library_source(&text.source, "bibtex", strict, diagnostics),
-        Some("yaml" | "yml") => parse_library_source(&text.source, "yaml", strict, diagnostics),
-        Some(ext) => Err(format!(
-            "unsupported bibliography extension {}",
-            quoted(ext)
-        )),
-        None => Err("bibliography path has no extension".to_string()),
+    let parsed = match recovery {
+        RecoveryPolicy::Error => parse_biblatex_strict(source),
+        RecoveryPolicy::Report => recover_biblatex_library(source, true),
     }?;
-    if diagnostics && let Some(diagnostic) = text.diagnostic {
-        parsed.diagnostics.insert(0, diagnostic);
-    }
-    Ok(parsed)
+    reject_recovered_empty_bibtex(source, parsed)
 }
 
-pub(super) fn parse_library_source(
-    source: &str,
-    format: &str,
-    strict: bool,
-    diagnostics: bool,
-) -> Result<ParsedLibrary, String> {
-    match format.to_ascii_lowercase().as_str() {
-        "bib" | "bibtex" | "biblatex" => {
-            let parsed = parse_biblatex_library(source, strict, diagnostics)?;
-            reject_recovered_empty_bibtex(source, strict, parsed)
-        }
-        "yaml" | "yml" => hayagriva::io::from_yaml_str(source)
-            .map(|inner| ParsedLibrary {
-                inner,
-                diagnostics: Vec::new(),
-            })
-            .map_err(|err| format!("yaml parse error: {err}")),
-        other => Err(format!("unsupported bibliography format {}", quoted(other))),
-    }
+pub(super) fn parse_hayagriva_yaml(source: &str) -> Result<ParsedLibrary, String> {
+    hayagriva::io::from_yaml_str(source)
+        .map(|inner| ParsedLibrary {
+            inner,
+            diagnostics: Vec::new(),
+        })
+        .map_err(|err| format!("yaml parse error: {err}"))
 }
 
-pub(super) fn parse_bibtex_value_source(
-    source: &str,
-    strict: bool,
-) -> Result<ParsedLibrary, String> {
-    parse_library_source(source, "bibtex", strict, false)
-}
-
-pub fn parse_bibtex_report_source(source: &str, strict: bool) -> ParseReport {
-    match parse_library_source(source, "bibtex", strict, true) {
+pub fn parse_bibtex_report(source: &str, recovery: RecoveryPolicy) -> ParseReport {
+    match parse_biblatex_library(source, recovery) {
         Ok(parsed) if recovered_empty_source_is_failure(source, &parsed) => ParseReport {
             ok: false,
             entry_count: None,
@@ -89,14 +50,13 @@ fn recovered_empty_source_is_failure(source: &str, parsed: &ParsedLibrary) -> bo
 
 fn reject_recovered_empty_bibtex(
     source: &str,
-    strict: bool,
     parsed: ParsedLibrary,
 ) -> Result<ParsedLibrary, String> {
     if recovered_empty_source_is_failure(source, &parsed) {
         return Err(parsed.diagnostics.join("\n"));
     }
     if parsed.inner.is_empty() && !source.trim().is_empty() && parsed.diagnostics.is_empty() {
-        let diagnosed = parse_biblatex_library(source, strict, true)?;
+        let diagnosed = recover_biblatex_library(source, true)?;
         if recovered_empty_source_is_failure(source, &diagnosed) {
             return Err(diagnosed.diagnostics.join("\n"));
         }
@@ -104,15 +64,7 @@ fn reject_recovered_empty_bibtex(
     Ok(parsed)
 }
 
-fn parse_biblatex_library(
-    source: &str,
-    strict: bool,
-    diagnostics: bool,
-) -> Result<ParsedLibrary, String> {
-    if !strict {
-        return recover_biblatex_library(source, diagnostics);
-    }
-
+fn parse_biblatex_strict(source: &str) -> Result<ParsedLibrary, String> {
     match hayagriva::io::from_biblatex_str(source) {
         Ok(inner) => Ok(ParsedLibrary {
             inner,

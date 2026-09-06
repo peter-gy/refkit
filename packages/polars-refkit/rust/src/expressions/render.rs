@@ -4,7 +4,7 @@ use pyo3_polars::derive::polars_expr;
 use pyo3_polars::export::polars_arrow::array::IntoBoxedArray;
 use pyo3_polars::export::polars_arrow::bitmap::Bitmap;
 use refkit_core::{
-    CoreLibrary, PreparedStyle, RenderedOutput, render_library_bibliography,
+    Library as CoreLibrary, PreparedStyle, RenderedOutput, render_library_bibliography,
     render_library_citation, render_library_citation_each, render_library_citation_group,
 };
 
@@ -93,7 +93,7 @@ fn render_citation_field(
     let style = load_style(&kwargs.style)?;
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
 
-    let output = match parse_broadcast_library(bibtex, kwargs.strict) {
+    let output = match parse_broadcast_library(bibtex, kwargs.recovery.policy()) {
         Some(library) => (0..len)
             .map(|index| {
                 let key = broadcast_get(keys, index)?;
@@ -106,7 +106,7 @@ fn render_citation_field(
             .map(|index| {
                 let source = broadcast_get(bibtex, index)?;
                 let key = broadcast_get(keys, index)?;
-                let library = parse_value_library_source(source, kwargs.strict).ok()?;
+                let library = parse_value_library_source(source, kwargs.recovery.policy()).ok()?;
                 render_library_citation(&library, key, style.as_ref(), locale)
                     .ok()
                     .map(|rendered| rendered_field(rendered, field))
@@ -128,7 +128,7 @@ fn render_citation_each_field(
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
     let mut builder = ListStringChunkedBuilder::new("cite_each".into(), len, len * 2);
 
-    match parse_broadcast_library(bibtex, kwargs.strict) {
+    match parse_broadcast_library(bibtex, kwargs.recovery.policy()) {
         Some(library) => {
             for index in 0..len {
                 append_citation_each_field(
@@ -148,7 +148,7 @@ fn render_citation_each_field(
                     builder.append_null();
                     continue;
                 };
-                match parse_value_library_source(source, kwargs.strict) {
+                match parse_value_library_source(source, kwargs.recovery.policy()) {
                     Ok(library) => append_citation_each_field(
                         &mut builder,
                         &library,
@@ -178,7 +178,7 @@ fn render_citation_group_field(
     let style = load_style(&kwargs.style)?;
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
 
-    let output = match parse_broadcast_library(bibtex, kwargs.strict) {
+    let output = match parse_broadcast_library(bibtex, kwargs.recovery.policy()) {
         Some(library) => (0..len)
             .map(|index| {
                 render_citation_group_at(&library, key_lists, index, &style, locale)
@@ -190,7 +190,7 @@ fn render_citation_group_field(
         None => (0..len)
             .map(|index| {
                 let source = broadcast_get(bibtex, index)?;
-                let library = parse_value_library_source(source, kwargs.strict).ok()?;
+                let library = parse_value_library_source(source, kwargs.recovery.policy()).ok()?;
                 render_citation_group_at(&library, key_lists, index, &style, locale)
                     .ok()
                     .flatten()
@@ -214,7 +214,7 @@ fn render_bibliography_field(
         .iter()
         .map(|value| {
             let source = value?;
-            let library = parse_value_library_source(source, kwargs.strict).ok()?;
+            let library = parse_value_library_source(source, kwargs.recovery.policy()).ok()?;
             render_library_bibliography(&library, style.as_ref(), locale, kwargs.all)
                 .ok()
                 .map(|rendered| rendered_field(rendered, field))
@@ -234,7 +234,7 @@ fn render_citation_struct(
     let style = load_style(&kwargs.style)?;
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
 
-    let rendered = match parse_broadcast_library(bibtex, kwargs.strict) {
+    let rendered = match parse_broadcast_library(bibtex, kwargs.recovery.policy()) {
         Some(library) => (0..len)
             .map(|index| {
                 let key = broadcast_get(keys, index)?;
@@ -245,7 +245,7 @@ fn render_citation_struct(
             .map(|index| {
                 let source = broadcast_get(bibtex, index)?;
                 let key = broadcast_get(keys, index)?;
-                let library = parse_value_library_source(source, kwargs.strict).ok()?;
+                let library = parse_value_library_source(source, kwargs.recovery.policy()).ok()?;
                 render_library_citation(&library, key, style.as_ref(), locale).ok()
             })
             .collect::<Vec<_>>(),
@@ -266,7 +266,7 @@ fn render_citation_each_struct(
     let mut builder =
         AnonymousOwnedListBuilder::new(name.into(), len, Some(rendered_struct_dtype()));
 
-    match parse_broadcast_library(bibtex, kwargs.strict) {
+    match parse_broadcast_library(bibtex, kwargs.recovery.policy()) {
         Some(library) => {
             for index in 0..len {
                 append_citation_each_struct(
@@ -285,7 +285,7 @@ fn render_citation_each_struct(
                     builder.append_null();
                     continue;
                 };
-                match parse_value_library_source(source, kwargs.strict) {
+                match parse_value_library_source(source, kwargs.recovery.policy()) {
                     Ok(library) => append_citation_each_struct(
                         &mut builder,
                         &library,
@@ -314,7 +314,7 @@ fn render_citation_group_struct(
     let style = load_style(&kwargs.style)?;
     let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
 
-    let rendered = match parse_broadcast_library(bibtex, kwargs.strict) {
+    let rendered = match parse_broadcast_library(bibtex, kwargs.recovery.policy()) {
         Some(library) => (0..len)
             .map(|index| {
                 render_citation_group_at(&library, key_lists, index, &style, locale).ok()?
@@ -323,7 +323,7 @@ fn render_citation_group_struct(
         None => (0..len)
             .map(|index| {
                 let source = broadcast_get(bibtex, index)?;
-                let library = parse_value_library_source(source, kwargs.strict).ok()?;
+                let library = parse_value_library_source(source, kwargs.recovery.policy()).ok()?;
                 render_citation_group_at(&library, key_lists, index, &style, locale).ok()?
             })
             .collect::<Vec<_>>(),
@@ -344,7 +344,7 @@ fn render_bibliography_struct(
         .iter()
         .map(|value| {
             let source = value?;
-            let library = parse_value_library_source(source, kwargs.strict).ok()?;
+            let library = parse_value_library_source(source, kwargs.recovery.policy()).ok()?;
             render_library_bibliography(&library, style.as_ref(), locale, kwargs.all).ok()
         })
         .collect::<Vec<_>>();

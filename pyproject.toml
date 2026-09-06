@@ -6,7 +6,6 @@ license = "Apache-2.0"
 dependencies = [
     "polars-refkit",
     "refkit",
-    "refkit-core",
 ]
 
 [tool.uv]
@@ -16,12 +15,10 @@ package = false
 refkit-bench = { workspace = true }
 polars-refkit = { workspace = true }
 refkit = { workspace = true }
-refkit-core = { workspace = true }
 
 [tool.uv.workspace]
 members = [
     "packages/refkit-bench",
-    "packages/refkit-core",
     "packages/refkit",
     "packages/polars-refkit",
 ]
@@ -74,7 +71,6 @@ omit = [
 [tool.pyrefly]
 project-includes = [
     "packages/refkit/src/refkit",
-    "packages/refkit-core/src/refkit_core",
     "packages/refkit/tests",
     "packages/polars-refkit/polars_refkit",
     "packages/polars-refkit/tests",
@@ -95,7 +91,6 @@ python-version = "3.11"
 search-path = [
     "packages/refkit-bench/src",
     "packages/refkit/src",
-    "packages/refkit-core/src",
     "packages/polars-refkit",
 ]
 
@@ -121,7 +116,6 @@ select = [
 [tool.ruff.lint.isort]
 known-first-party = [
     "refkit_bench",
-    "refkit_core",
     "polars_refkit",
     "refkit",
     "tests",

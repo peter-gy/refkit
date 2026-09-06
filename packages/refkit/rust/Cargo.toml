@@ -1,10 +1,10 @@
 [package]
-name = "refkit-core-native"
+name = "refkit-native"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Native Python bindings for refkit"
+description = "Native Python adapter for refkit"
 repository.workspace = true
 include = [
     "/Cargo.toml",
@@ -12,7 +12,7 @@ include = [
 ]
 
 [lib]
-name = "_refkit_core"
+name = "_native"
 crate-type = ["cdylib", "rlib"]
 
 [features]
@@ -22,7 +22,6 @@ extension-module = ["pyo3/extension-module", "pyo3/abi3-py311"]
 [dependencies]
 pyo3.workspace = true
 refkit-core.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]

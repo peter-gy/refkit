@@ -3,19 +3,16 @@ mod library;
 mod raw;
 mod render;
 mod render_tree;
+mod source;
 mod strings;
 mod style;
 mod style_analysis;
 pub mod tidy;
 
-pub use document::{
-    Cite as CoreCite, Document as CoreDocument, DocumentError,
-    RenderedDocument as CoreRenderedDocument,
-};
+pub use document::{Cite, Document, DocumentError, RenderedDocument};
 pub use library::{
-    EntryRecord, Library as CoreLibrary, NormalizedEntry, NormalizedValue, ParseReport,
-    ProjectField, SourceText, parse_bibtex_report_source, parse_project_field,
-    read_bibliography_text,
+    EntryField, EntryFieldError, EntryRecord, Library, LibraryError, ParseReport, RecoveryPolicy,
+    parse_bibtex_report,
 };
 pub use raw::{
     RawBlockInfo, RawDocument, RawEditError, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo,
@@ -23,15 +20,12 @@ pub use raw::{
     normalize_raw_at_command,
 };
 pub use render::{
-    RenderedOutput, bundled_locales, render_library_bibliography, render_library_citation,
-    render_library_citation_each, render_library_citation_group,
+    RenderError, RenderedOutput, is_bundled_locale, render_library_bibliography,
+    render_library_citation, render_library_citation_each, render_library_citation_group,
 };
 pub use render_tree::{RenderedFormatting, RenderedNode, RenderedRecord};
-pub use strings::{
-    display_name, elem_meta_name, entry_type_name, font_style_name, font_variant_name,
-    font_weight_name, formatting_summary, option_quoted, quoted, text_decoration_name,
-    vertical_align_name,
-};
+pub use source::{DecodedText, TextEncoding, decode_bibliography};
+pub(crate) use strings::quoted;
 pub use style::{PreparedStyle, StyleError, load_prepared_style, prepare_style_from_xml};
 pub use tidy::{
     DuplicateRule, MergeStrategy, TidyError, TidyOptions, TidyResult, TidyWarning, tidy_bibtex,

@@ -1,7 +1,7 @@
 use polars::prelude::*;
 use polars_core::chunked_array::builder::{AnonymousOwnedListBuilder, ListBuilderTrait};
 use pyo3_polars::derive::polars_expr;
-use refkit_core::{ProjectField, parse_project_field};
+use refkit_core::{EntryField, EntryRecord};
 
 use super::EntriesKwargs;
 use super::broadcast::{compute_error, parse_value_library_source};
@@ -23,12 +23,10 @@ fn entries(inputs: &[Series], kwargs: EntriesKwargs) -> PolarsResult<Series> {
             builder.append_null();
             continue;
         };
-        match parse_value_library_source(source, kwargs.strict) {
+        match parse_value_library_source(source, kwargs.recovery.policy()) {
             Ok(library) => {
-                let records = library
-                    .project_records(&fields, None)
-                    .map_err(compute_error)?;
-                let entries = entry_records_to_struct_series(records, &field_names)?;
+                let entries =
+                    entry_records_to_struct_series(library.records(), &fields, &field_names)?;
                 builder.append_series(&entries)?;
             }
             Err(_) => builder.append_null(),
@@ -38,15 +36,20 @@ fn entries(inputs: &[Series], kwargs: EntriesKwargs) -> PolarsResult<Series> {
     Ok(builder.finish().into_series())
 }
 
-fn parse_project_fields(fields: &[String]) -> Result<Vec<ProjectField>, String> {
+fn parse_project_fields(fields: &[String]) -> Result<Vec<EntryField>, String> {
     fields
         .iter()
-        .map(|field| parse_project_field(field))
+        .map(|field| {
+            field
+                .parse::<EntryField>()
+                .map_err(|error| error.to_string())
+        })
         .collect()
 }
 
 fn entry_records_to_struct_series(
-    records: Vec<Vec<Option<String>>>,
+    records: &[EntryRecord],
+    fields: &[EntryField],
     field_names: &[&str],
 ) -> PolarsResult<Series> {
     let fields = field_names
@@ -57,7 +60,7 @@ fn entry_records_to_struct_series(
                 (*field_name).into(),
                 records
                     .iter()
-                    .map(move |record| record[field_index].as_deref()),
+                    .map(move |record| record.field(fields[field_index])),
             )
             .into_series()
         })

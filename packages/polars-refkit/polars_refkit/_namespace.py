@@ -27,7 +27,6 @@ from ._expressions import (
     parse_report,
     tidy_bibtex,
     tidy_bibtex_report,
-    to_hayagriva_json,
 )
 from ._plugin import ColumnExpr, RecoveryMode
 from ._tidy_options import TIDY_UNSET as _TIDY_UNSET
@@ -232,11 +231,6 @@ class RefkitExprNamespace:
         """Return parser diagnostics as a list column for each BibTeX row."""
 
         return diagnostics(self._expr, recovery=recovery)
-
-    def to_hayagriva_json(self, *, recovery: RecoveryMode = "error") -> pl.Expr:
-        """Return normalized Hayagriva entry JSON for each BibTeX row."""
-
-        return to_hayagriva_json(self._expr, recovery=recovery)
 
     def tidy_bibtex(
         self,

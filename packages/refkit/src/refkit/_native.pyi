@@ -1,12 +1,13 @@
 from collections.abc import Iterable
 from os import PathLike
-from typing import Any, Literal, TypeAlias, TypedDict
+from typing import Literal, TypeAlias, TypedDict
 
 class _ProjectionRow(TypedDict, total=False):
     key: str
     entry_type: str
     type: str
     title: str | None
+    date: str | None
     doi: str | None
     volume: str | None
 
@@ -105,7 +106,7 @@ __version__: str
 build_info: str
 build_mode: Literal["debug", "release"]
 _tidy_option_names: list[str]
-_RecoveryMode: TypeAlias = Literal["error", "report"]
+_RecoveryPolicy: TypeAlias = Literal["error", "report"]
 _DuplicateRule: TypeAlias = Literal["doi", "key", "abstract", "citation"]
 _MergeStrategy: TypeAlias = Literal["first", "last", "combine", "overwrite"]
 
@@ -170,6 +171,7 @@ class TidyResult:
     def count(self) -> int: ...
 
 def tidy_bibtex(source: str, *, options: TidyOptions | None = None) -> TidyResult: ...
+def _write_bibtex(path: str | PathLike[str], source: str) -> None: ...
 
 class Entry:
     @property
@@ -179,6 +181,8 @@ class Entry:
     @property
     def title(self) -> str | None: ...
     @property
+    def date(self) -> str | None: ...
+    @property
     def parents(self) -> list[Entry]: ...
     @property
     def volume(self) -> str | None: ...
@@ -187,12 +191,12 @@ class Entry:
 
 class Library:
     @staticmethod
-    def read(path: str | PathLike[str], *, recovery: _RecoveryMode = "error") -> Library: ...
+    def read(path: str | PathLike[str], *, recovery: _RecoveryPolicy = "error") -> Library: ...
     @staticmethod
     def parse_bibtex(
         source: str,
         *,
-        recovery: _RecoveryMode = "error",
+        recovery: _RecoveryPolicy = "error",
     ) -> Library: ...
     @staticmethod
     def parse_yaml(source: str) -> Library: ...
@@ -204,7 +208,6 @@ class Library:
     def get(self, key: str) -> Entry | None: ...
     def is_empty(self) -> bool: ...
     def select(self, selector: str) -> list[Entry]: ...
-    def to_dicts(self) -> list[dict[str, Any]]: ...
     def project(
         self, fields: Iterable[str] | None = None, *, keys: Iterable[str] | None = None
     ) -> list[_ProjectionRow]: ...

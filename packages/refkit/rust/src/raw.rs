@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -11,15 +10,17 @@ use serde_json::{Value, json};
 
 use crate::conversion::json_to_py;
 use crate::errors::RefkitError;
+use crate::filesystem::{read_bibtex, write_bibtex};
+use crate::repr::quoted;
 use crate::tidy::{TidyOptions, TidyResult, tidy_error_to_py};
 use refkit_core::{
     RawBlockInfo, RawDocument, RawEditError, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo,
-    quoted, read_bibliography_text, tidy_bibtex as core_tidy_bibtex,
+    tidy_bibtex as core_tidy_bibtex,
 };
 
 type SharedDocument = Rc<RefCell<RawDocument>>;
 
-#[pyclass(module = "refkit_core", unsendable)]
+#[pyclass(module = "refkit", unsendable)]
 pub struct BibDocument {
     doc: SharedDocument,
 }
@@ -28,11 +29,8 @@ pub struct BibDocument {
 impl BibDocument {
     #[staticmethod]
     fn read(py: Python<'_>, path: PathBuf) -> PyResult<Self> {
-        let read_path = path.clone();
-        let parsed: Result<RawDocument, String> = py.detach(move || {
-            let text = read_bibliography_text(&read_path)?;
-            Ok(RawDocument::parse(&text.source))
-        });
+        let parsed: Result<RawDocument, String> =
+            py.detach(move || read_bibtex(&path).map(|source| RawDocument::parse(&source)));
         let data = parsed.map_err(RefkitError::new_err)?;
         Ok(Self {
             doc: Rc::new(RefCell::new(data)),
@@ -92,9 +90,7 @@ impl BibDocument {
 
         py.detach(move || {
             let rendered = render_document(&data)?;
-            fs::write(&path, rendered)
-                .map_err(|err| RefkitError::new_err(format!("failed to write BibTeX: {err}")))?;
-            Ok(())
+            write_bibtex(&path, &rendered).map_err(RefkitError::new_err)
         })
     }
 
@@ -133,7 +129,7 @@ impl BibDocument {
     }
 }
 
-#[pyclass(module = "refkit_core", unsendable)]
+#[pyclass(module = "refkit", unsendable)]
 pub struct BibEntryMap {
     doc: SharedDocument,
 }
@@ -223,7 +219,7 @@ impl BibEntryMap {
     }
 }
 
-#[pyclass(module = "refkit_core", unsendable)]
+#[pyclass(module = "refkit", unsendable)]
 pub struct BibEntry {
     doc: SharedDocument,
     entry_id: RawEntryId,
@@ -276,7 +272,7 @@ impl BibEntry {
     }
 }
 
-#[pyclass(module = "refkit_core", unsendable)]
+#[pyclass(module = "refkit", unsendable)]
 pub struct BibFieldMap {
     doc: SharedDocument,
     entry_id: RawEntryId,
@@ -387,7 +383,7 @@ impl BibFieldMap {
     }
 }
 
-#[pyclass(module = "refkit_core", unsendable)]
+#[pyclass(module = "refkit", unsendable)]
 pub struct BibField {
     doc: SharedDocument,
     entry_id: RawEntryId,

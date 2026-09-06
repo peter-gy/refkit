@@ -27,7 +27,6 @@ from ._expressions import keys as keys
 from ._expressions import parse_report as parse_report
 from ._expressions import tidy_bibtex as tidy_bibtex
 from ._expressions import tidy_bibtex_report as tidy_bibtex_report
-from ._expressions import to_hayagriva_json as to_hayagriva_json
 from ._namespace import RefkitExprNamespace as RefkitExprNamespace
 from ._plugin import PLUGIN_PATH as PLUGIN_PATH
 from ._plugin import ColumnExpr as ColumnExpr
@@ -46,7 +45,7 @@ __all__ = (
     "can_parse cite cite_html cite_rendered cite_each cite_each_html "
     "cite_each_rendered cite_group cite_group_html cite_group_rendered "
     "diagnostics entries entry_count has_diagnostics keys parse_report "
-    "to_hayagriva_json full_bibliography_html full_bibliography_rendered "
+    "full_bibliography_html full_bibliography_rendered "
     "full_bibliography_text tidy_bibtex tidy_bibtex_report"
 ).split()
 

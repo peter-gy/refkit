@@ -142,7 +142,7 @@ def test_benchmark_package_stays_outside_public_runtime_dependencies() -> None:
     bench_sources = cast(dict[str, Any], bench["tool"]["uv"]["sources"])
     root_sources = cast(dict[str, Any], workspace["tool"]["uv"]["sources"])
 
-    assert set(public_project["dependencies"]) == {"refkit-core", "refkit", "polars-refkit"}
+    assert set(public_project["dependencies"]) == {"refkit", "polars-refkit"}
     assert {"refkit", "polars-refkit"} <= bench_dependencies
     assert bench_sources["refkit"] == {"workspace": True}
     assert bench_sources["polars-refkit"] == {"workspace": True}
@@ -152,7 +152,6 @@ def test_benchmark_package_stays_outside_public_runtime_dependencies() -> None:
 
 def test_pyodide_smoke_runs_through_public_polars_expressions(
     capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = load_module(".github/pyodide/smoke_polars_refkit.py")
 
@@ -162,7 +161,3 @@ def test_pyodide_smoke_runs_through_public_polars_expressions(
     assert lines[-1] == "(Doe, 2024)"
     assert any(line.startswith("polars ") for line in lines)
     assert any(line.startswith("polars-refkit ") for line in lines)
-
-    monkeypatch.setattr(module.rk, "check_refkit_core_version", lambda: False)
-    with pytest.raises(AssertionError):
-        module.main()

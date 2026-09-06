@@ -5,16 +5,33 @@ mod parse;
 mod render;
 mod tidy;
 
+use refkit_core::RecoveryPolicy;
 use serde::Deserialize;
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum RecoveryArg {
+    Error,
+    Report,
+}
+
+impl RecoveryArg {
+    pub(super) fn policy(self) -> RecoveryPolicy {
+        match self {
+            Self::Error => RecoveryPolicy::Error,
+            Self::Report => RecoveryPolicy::Report,
+        }
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub(super) struct ParseKwargs {
-    pub(super) strict: bool,
+    pub(super) recovery: RecoveryArg,
 }
 
 #[derive(Debug, Deserialize)]
 pub(super) struct EntriesKwargs {
-    pub(super) strict: bool,
+    pub(super) recovery: RecoveryArg,
     pub(super) fields: Vec<String>,
 }
 
@@ -22,7 +39,7 @@ pub(super) struct EntriesKwargs {
 pub(super) struct RenderKwargs {
     pub(super) style: String,
     pub(super) locale: String,
-    pub(super) strict: bool,
+    pub(super) recovery: RecoveryArg,
     pub(super) all: bool,
 }
 

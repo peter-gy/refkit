@@ -16,10 +16,9 @@ import micropip
 await micropip.install("refkit")
 ```
 
-`refkit` is pure Python and depends on the exact matching `refkit-core` release.
-`refkit-core` contains the Rust/PyO3 extension as `refkit_core._refkit_core`, including PyEmscripten wheels for Pyodide.
+`refkit` contains the Python API and its Rust/PyO3 extension at `refkit._native`, including PyEmscripten wheels for Pyodide.
 
-RefKit supports Python 3.11 through 3.14. The matching native wheel is installed through the exact `refkit-core` dependency.
+RefKit supports Python 3.11 through 3.14. Installation uses a compatible native wheel when available and builds from the source distribution on other platforms.
 
 ## Render A Citation
 
@@ -136,7 +135,7 @@ rk.tidy_file("refs.bib", output="refs.tidy.bib")
 | Render citations | `Document.render`, `Citation`, `Cite`, `CitationGroup`, `cite` |
 | Render bibliographies | `Document.cited_bibliography`, `Document.full_bibliography`, `full_bibliography` |
 | Load styles and locales | `Style.load`, `Style.from_path`, `Style.from_xml`, `Locale.load` |
-| Inspect entries | mapping access, `keys`, `get`, `get_many`, `select`, `project`, `to_dicts` |
+| Inspect entries | mapping access, `keys`, `get`, `get_many`, `select`, and `project` |
 | Format BibTeX | `tidy_bibtex`, `tidy_file`, `TidyOptions`, `TidyResult` |
 | Edit raw BibTeX | `BibDocument.read`, `BibDocument.parse`, field assignment, `write` |
 | Inspect rendered output | `Rendered.text`, `Rendered.html`, `Rendered.tree` |
@@ -182,14 +181,13 @@ doe2024:
 
 ## Inspect A Library
 
-`Library` is the normalized citation database. Use it for rendering, selectors, mapping access, and bulk export.
+`Library` is the normalized citation database. Use it for rendering, selectors, mapping access, and typed field projection.
 
 ```python
 library = rk.Library.read("refs.bib")
 
 print(library.keys())
-print(library.project(["key", "title", "doi", "volume"]))
-print(library.to_dicts())
+print(library.project(["key", "type", "title", "date", "doi", "volume"]))
 ```
 
 `Library.select` accepts Hayagriva selector strings:

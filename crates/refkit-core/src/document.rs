@@ -11,7 +11,7 @@ use hayagriva::{
 
 use crate::render::bundled_locales;
 use crate::render_tree::{rendered_record_from_bibliography, rendered_record_from_citation};
-use crate::{CoreLibrary, PreparedStyle, RenderedRecord};
+use crate::{Library, PreparedStyle, RenderedRecord};
 
 #[derive(Debug, Clone)]
 pub struct Cite {
@@ -51,7 +51,7 @@ impl std::error::Error for DocumentError {}
 
 #[derive(Clone)]
 pub struct Document {
-    library: Arc<CoreLibrary>,
+    library: Arc<Library>,
     style: Arc<PreparedStyle>,
     locale: Option<String>,
 }
@@ -63,11 +63,7 @@ pub struct RenderedDocument {
 }
 
 impl Document {
-    pub fn new(
-        library: Arc<CoreLibrary>,
-        style: Arc<PreparedStyle>,
-        locale: Option<String>,
-    ) -> Self {
+    pub fn new(library: Arc<Library>, style: Arc<PreparedStyle>, locale: Option<String>) -> Self {
         Self {
             library,
             style,
@@ -172,7 +168,7 @@ fn citation_item<'a>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{CoreLibrary, load_prepared_style};
+    use crate::{Library, RecoveryPolicy, load_prepared_style};
 
     use super::*;
 
@@ -235,7 +231,7 @@ mod tests {
     }
 
     fn test_document(style: &str, source: &str) -> Document {
-        let library = Arc::new(CoreLibrary::parse_source(source, "bibtex", false, false).unwrap());
+        let library = Arc::new(Library::parse_biblatex(source, RecoveryPolicy::Report).unwrap());
         let style = load_prepared_style(style).unwrap();
         Document::new(library, style, Some("en-US".to_string()))
     }

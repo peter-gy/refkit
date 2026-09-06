@@ -4,6 +4,7 @@ mod html;
 mod text;
 
 use std::sync::OnceLock;
+use std::{error::Error, fmt};
 
 use hayagriva::archive;
 use hayagriva::citationberg::Locale as CslLocale;
@@ -22,9 +23,32 @@ pub struct RenderedOutput {
     pub html: String,
 }
 
-pub fn bundled_locales() -> &'static [CslLocale] {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderError(String);
+
+impl RenderError {
+    fn new(message: String) -> Self {
+        Self(message)
+    }
+}
+
+impl fmt::Display for RenderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl Error for RenderError {}
+
+pub(crate) fn bundled_locales() -> &'static [CslLocale] {
     static LOCALES: OnceLock<Vec<CslLocale>> = OnceLock::new();
     LOCALES.get_or_init(archive::locales).as_slice()
+}
+
+pub fn is_bundled_locale(code: &str) -> bool {
+    bundled_locales()
+        .iter()
+        .any(|locale| locale.lang.as_ref().is_some_and(|lang| lang.0 == code))
 }
 
 pub fn render_library_citation(
@@ -32,8 +56,8 @@ pub fn render_library_citation(
     key: &str,
     style: &PreparedStyle,
     locale: Option<&str>,
-) -> Result<RenderedOutput, String> {
-    render_citation(library.inner(), key, style.inner.as_ref(), locale)
+) -> Result<RenderedOutput, RenderError> {
+    render_citation(library.inner(), key, style.inner.as_ref(), locale).map_err(RenderError::new)
 }
 
 pub fn render_library_citation_each(
@@ -41,8 +65,9 @@ pub fn render_library_citation_each(
     keys: &[&str],
     style: &PreparedStyle,
     locale: Option<&str>,
-) -> Result<Vec<RenderedOutput>, String> {
+) -> Result<Vec<RenderedOutput>, RenderError> {
     render_citation_each(library.inner(), keys, style.inner.as_ref(), locale)
+        .map_err(RenderError::new)
 }
 
 pub fn render_library_citation_group(
@@ -50,8 +75,9 @@ pub fn render_library_citation_group(
     keys: &[&str],
     style: &PreparedStyle,
     locale: Option<&str>,
-) -> Result<RenderedOutput, String> {
+) -> Result<RenderedOutput, RenderError> {
     render_citation_group(library.inner(), keys, style.inner.as_ref(), locale)
+        .map_err(RenderError::new)
 }
 
 pub fn render_library_bibliography(
@@ -59,8 +85,9 @@ pub fn render_library_bibliography(
     style: &PreparedStyle,
     locale: Option<&str>,
     all: bool,
-) -> Result<RenderedOutput, String> {
+) -> Result<RenderedOutput, RenderError> {
     render_bibliography(library.inner(), style.inner.as_ref(), locale, all)
+        .map_err(RenderError::new)
 }
 
 #[cfg(test)]
@@ -112,11 +139,9 @@ mod tests {
 
     #[test]
     fn renders_citation_text_and_html() {
-        let library = Library::parse_source(
+        let library = Library::parse_biblatex(
             "@article{doe2024, author = {Doe, Jane}, title = {Core}, year = {2024}}",
-            "bibtex",
-            false,
-            false,
+            crate::RecoveryPolicy::Report,
         )
         .unwrap();
         let style = load_prepared_style("apa").unwrap();
@@ -130,12 +155,10 @@ mod tests {
 
     #[test]
     fn renders_citation_each_in_key_order() {
-        let library = Library::parse_source(
+        let library = Library::parse_biblatex(
             "@article{doe2024, author = {Doe, Jane}, title = {Core}, year = {2024}}
              @article{roe2023, author = {Roe, Richard}, title = {Edges}, year = {2023}}",
-            "bibtex",
-            false,
-            false,
+            crate::RecoveryPolicy::Report,
         )
         .unwrap();
         let style = load_prepared_style("apa").unwrap();
@@ -157,12 +180,10 @@ mod tests {
 
     #[test]
     fn citation_each_falls_back_for_ambiguous_fast_texts() {
-        let library = Library::parse_source(
+        let library = Library::parse_biblatex(
             "@article{doe2024a, author = {Doe, Jane}, title = {Alpha}, year = {2024}}
              @article{doe2024b, author = {Doe, Jane}, title = {Beta}, year = {2024}}",
-            "bibtex",
-            false,
-            false,
+            crate::RecoveryPolicy::Report,
         )
         .unwrap();
         let style = load_prepared_style("apa").unwrap();

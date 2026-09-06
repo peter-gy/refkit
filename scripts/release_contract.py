@@ -30,7 +30,10 @@ def _project_version(root: Path, relative_path: str) -> str:
 
 
 def _package_version(root: Path, relative_path: str) -> str:
-    return str(_read_toml(root, relative_path)["package"]["version"])
+    version = _read_toml(root, relative_path)["package"]["version"]
+    if version == {"workspace": True}:
+        return _workspace_version(root)
+    return str(version)
 
 
 def _workspace_version(root: Path) -> str:
@@ -49,10 +52,9 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
     expected = _tag_version(tag) if tag is not None else canonical
     versions = {
         "rust workspace": canonical,
-        "bibtex-tidy-rs": _package_version(root, "crates/bibtex-tidy-rs/Cargo.toml"),
         "python workspace": _project_version(root, "pyproject.toml"),
         "refkit": _project_version(root, "packages/refkit/pyproject.toml"),
-        "refkit-core": _project_version(root, "packages/refkit-core/pyproject.toml"),
+        "refkit native Rust crate": _package_version(root, "packages/refkit/rust/Cargo.toml"),
         "polars-refkit": _project_version(root, "packages/polars-refkit/pyproject.toml"),
         "polars-refkit Rust crate": _package_version(
             root, "packages/polars-refkit/rust/Cargo.toml"
@@ -65,28 +67,13 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
         if version != expected
     ]
 
-    refkit = _read_toml(root, "packages/refkit/pyproject.toml")
-    expected_core_dependency = f"refkit-core=={expected}"
-    if expected_core_dependency not in refkit["project"].get("dependencies", []):
-        mismatches.append(f"refkit must depend on {expected_core_dependency}")
-
     cargo_workspace = _read_toml(root, "Cargo.toml")
     rust_core = cargo_workspace["workspace"]["dependencies"]["refkit-core"]
     if not isinstance(rust_core, dict) or rust_core.get("version") != expected:
         mismatches.append(f"Rust workspace must depend on refkit-core {expected}")
 
-    tidy_manifest = _read_toml(root, "crates/bibtex-tidy-rs/Cargo.toml")
-    tidy_core = tidy_manifest["dependencies"]["refkit-core"]
-    if (
-        not isinstance(tidy_core, dict)
-        or tidy_core.get("version") != expected
-        or tidy_core.get("path") != "../refkit-core"
-    ):
-        mismatches.append(f"bibtex-tidy-rs must depend on refkit-core {expected}")
-
     rust_repositories = {
         "Rust workspace": cargo_workspace["workspace"]["package"].get("repository"),
-        "bibtex-tidy-rs": tidy_manifest["package"].get("repository"),
         "polars-refkit Rust crate": _read_toml(root, "packages/polars-refkit/rust/Cargo.toml")[
             "package"
         ].get("repository"),
@@ -97,7 +84,7 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
 
     rust_workspace_members = {
         "refkit-core Rust crate": "crates/refkit-core/Cargo.toml",
-        "refkit-core native Rust crate": "packages/refkit-core/rust/Cargo.toml",
+        "refkit native Rust crate": "packages/refkit/rust/Cargo.toml",
     }
     for name, relative_path in rust_workspace_members.items():
         package = _read_toml(root, relative_path)["package"]
@@ -106,7 +93,6 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
 
     python_projects = {
         "refkit": "packages/refkit/pyproject.toml",
-        "refkit-core": "packages/refkit-core/pyproject.toml",
         "polars-refkit": "packages/polars-refkit/pyproject.toml",
     }
     for name, relative_path in python_projects.items():

@@ -6,27 +6,33 @@ use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyAny, PyDict, PyDictMethods, PyList, PyListMethods};
 
-use refkit_core::CoreLibrary;
+use refkit_core::Library as CoreLibrary;
 
 use crate::conversion::{
-    normalized_entries_to_py, parse_project_fields_arg, parse_projection_keys,
-    parse_recovery_policy, project_rows_to_py,
+    parse_project_fields_arg, parse_projection_keys, parse_recovery_policy, project_rows_to_py,
 };
 use crate::entry::Entry;
 use crate::errors::RefkitError;
+use crate::filesystem::{LibraryFormat, read_library};
 
-#[pyclass(module = "refkit_core", skip_from_py_object)]
+#[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Library {
     pub(crate) inner: Arc<CoreLibrary>,
+    diagnostics: Arc<Vec<String>>,
     py_keys: Arc<PyOnceLock<Py<PyList>>>,
     py_entries: Arc<PyOnceLock<Py<PyDict>>>,
 }
 
 impl Library {
-    fn from_core(inner: CoreLibrary) -> Self {
+    fn from_core(inner: CoreLibrary, diagnostic: Option<String>) -> Self {
+        let diagnostics = diagnostic
+            .into_iter()
+            .chain(inner.diagnostics().iter().cloned())
+            .collect();
         Self {
             inner: Arc::new(inner),
+            diagnostics: Arc::new(diagnostics),
             py_keys: Arc::new(PyOnceLock::new()),
             py_entries: Arc::new(PyOnceLock::new()),
         }
@@ -56,29 +62,42 @@ impl Library {
     #[staticmethod]
     #[pyo3(signature = (path, *, recovery = "error"))]
     fn read(py: Python<'_>, path: PathBuf, recovery: &str) -> PyResult<Self> {
-        let (strict, diagnostics) = parse_recovery_policy(recovery)?;
-        let library = py.detach(move || CoreLibrary::read_path(path, strict, diagnostics));
-        library.map(Self::from_core).map_err(RefkitError::new_err)
+        let recovery = parse_recovery_policy(recovery)?;
+        let parsed: Result<(CoreLibrary, Option<String>), String> = py.detach(move || {
+            let source = read_library(&path)?;
+            let library = match source.format {
+                LibraryFormat::Biblatex => CoreLibrary::parse_biblatex(&source.text, recovery),
+                LibraryFormat::HayagrivaYaml => CoreLibrary::parse_hayagriva_yaml(&source.text),
+            }
+            .map_err(|error| error.to_string())?;
+            Ok((library, source.diagnostic))
+        });
+        parsed
+            .map(|(library, diagnostic)| Self::from_core(library, diagnostic))
+            .map_err(RefkitError::new_err)
     }
 
     #[staticmethod]
     #[pyo3(signature = (source, *, recovery = "error"))]
     fn parse_bibtex(py: Python<'_>, source: String, recovery: &str) -> PyResult<Self> {
-        let (strict, diagnostics) = parse_recovery_policy(recovery)?;
-        let library =
-            py.detach(move || CoreLibrary::parse_source(&source, "bibtex", strict, diagnostics));
-        library.map(Self::from_core).map_err(RefkitError::new_err)
+        let recovery = parse_recovery_policy(recovery)?;
+        let library = py.detach(move || CoreLibrary::parse_biblatex(&source, recovery));
+        library
+            .map(|library| Self::from_core(library, None))
+            .map_err(|error| RefkitError::new_err(error.to_string()))
     }
 
     #[staticmethod]
     fn parse_yaml(py: Python<'_>, source: String) -> PyResult<Self> {
-        let library = py.detach(move || CoreLibrary::parse_source(&source, "yaml", false, false));
-        library.map(Self::from_core).map_err(RefkitError::new_err)
+        let library = py.detach(move || CoreLibrary::parse_hayagriva_yaml(&source));
+        library
+            .map(|library| Self::from_core(library, None))
+            .map_err(|error| RefkitError::new_err(error.to_string()))
     }
 
     #[getter]
     fn diagnostics(&self) -> Vec<String> {
-        self.inner.diagnostics().to_vec()
+        self.diagnostics.as_ref().clone()
     }
 
     fn keys(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
@@ -130,17 +149,10 @@ impl Library {
         Ok(self
             .inner
             .select_records(selector)
-            .map_err(PyValueError::new_err)?
+            .map_err(|error| PyValueError::new_err(error.to_string()))?
             .into_iter()
             .map(Entry::from_record)
             .collect())
-    }
-
-    fn to_dicts(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let entries = py
-            .detach(|| self.inner.normalized_entries())
-            .map_err(RefkitError::new_err)?;
-        normalized_entries_to_py(py, &entries)
     }
 
     #[pyo3(signature = (fields = None, *, keys = None))]
@@ -152,11 +164,14 @@ impl Library {
     ) -> PyResult<Py<PyAny>> {
         let fields = parse_project_fields_arg(fields)?;
         let keys = parse_projection_keys(self.inner.as_ref(), keys)?;
-        let records = self
-            .inner
-            .project_records(&fields, keys.as_deref())
-            .map_err(RefkitError::new_err)?;
-        project_rows_to_py(py, &fields, records)
+        let records = match keys {
+            Some(keys) => keys
+                .iter()
+                .filter_map(|key| self.inner.get_record(key).cloned())
+                .collect(),
+            None => self.inner.records().to_vec(),
+        };
+        project_rows_to_py(py, &fields, &records)
     }
 
     fn __len__(&self) -> usize {

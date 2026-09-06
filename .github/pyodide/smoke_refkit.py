@@ -6,7 +6,6 @@ import refkit as rk
 
 
 def main() -> None:
-    assert rk.check_refkit_core_version()
     assert rk.build_info
 
     library = rk.Library.parse_bibtex(

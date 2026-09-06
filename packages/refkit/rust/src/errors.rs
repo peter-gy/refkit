@@ -2,12 +2,14 @@ use pyo3::create_exception;
 use pyo3::exceptions::{PyException, PyValueError};
 use pyo3::prelude::*;
 
-use refkit_core::{DocumentError, StyleError, quoted};
+use refkit_core::{DocumentError, StyleError};
 
-create_exception!(refkit_core, RefkitError, PyException);
-create_exception!(refkit_core, MissingReferenceError, RefkitError);
-create_exception!(refkit_core, TidyError, RefkitError);
-create_exception!(refkit_core, TidySyntaxError, TidyError);
+use crate::repr::quoted;
+
+create_exception!(refkit, RefkitError, PyException);
+create_exception!(refkit, MissingReferenceError, RefkitError);
+create_exception!(refkit, TidyError, RefkitError);
+create_exception!(refkit, TidySyntaxError, TidyError);
 
 pub(crate) fn document_error_to_py(err: DocumentError) -> PyErr {
     match err {

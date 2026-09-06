@@ -5,6 +5,7 @@ use crate::citation::{Citation, CitationGroup, Cite};
 use crate::document::{Document, RenderedDocument};
 use crate::entry::Entry;
 use crate::errors::{MissingReferenceError, RefkitError, TidyError, TidySyntaxError};
+use crate::filesystem::write_bibtex_py;
 use crate::library::Library;
 use crate::raw;
 use crate::rendered::Rendered;
@@ -33,6 +34,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Document>()?;
     m.add_class::<RenderedDocument>()?;
     m.add_class::<Rendered>()?;
+    m.add_function(wrap_pyfunction!(write_bibtex_py, m)?)?;
     tidy::register(m)?;
     raw::register(m)?;
     Ok(())
@@ -40,7 +42,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 fn build_info() -> String {
     format!(
-        "refkit-core {} ({}, {})",
+        "refkit {} ({}, {})",
         python_version(env!("CARGO_PKG_VERSION")),
         std::env::consts::OS,
         std::env::consts::ARCH
@@ -68,7 +70,7 @@ mod tests {
     fn build_info_uses_python_version() {
         let version = python_version(env!("CARGO_PKG_VERSION"));
 
-        assert!(build_info().starts_with(&format!("refkit-core {version} (")));
+        assert!(build_info().starts_with(&format!("refkit {version} (")));
         assert!(!build_info().contains("-rc."));
     }
 

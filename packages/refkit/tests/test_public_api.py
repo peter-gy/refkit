@@ -357,24 +357,25 @@ def test_entry_parent_chains_preserve_nested_hayagriva_parents() -> None:
 
 def test_refkit_import_reports_runtime_core_metadata() -> None:
     assert rk.__version__ == metadata.version("refkit")
-    assert rk.check_refkit_core_version()
-    assert rk.build_info.startswith(f"refkit-core {metadata.version('refkit-core')}")
+    assert rk.build_info.startswith(f"refkit {metadata.version('refkit')}")
     assert rk.build_mode in {"debug", "release"}
 
 
-def test_refkit_import_rejects_mismatched_core_version(monkeypatch: pytest.MonkeyPatch) -> None:
-    required_core_version = metadata.version("refkit-core")
-    mismatched_core = ModuleType("refkit_core")
-    mismatched_version = f"{required_core_version}.mismatch"
-    cast(Any, mismatched_core).__version__ = mismatched_version
+def test_refkit_import_rejects_mismatched_native_extension(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_version = metadata.version("refkit")
+    mismatched_native = ModuleType("refkit._native")
+    mismatched_version = f"{package_version}.mismatch"
+    cast(Any, mismatched_native).__version__ = mismatched_version
 
-    monkeypatch.setitem(sys.modules, "refkit_core", mismatched_core)
+    monkeypatch.setitem(sys.modules, "refkit._native", mismatched_native)
     monkeypatch.delitem(sys.modules, "refkit")
     monkeypatch.syspath_prepend(str(ROOT / "src"))
     try:
         with pytest.raises(SystemError) as raised:
             importlib.import_module("refkit")
-        assert required_core_version in str(raised.value)
+        assert package_version in str(raised.value)
         assert mismatched_version in str(raised.value)
     finally:
         sys.modules["refkit"] = rk
@@ -528,10 +529,8 @@ def test_library_reads_hayagriva_yaml_schema_and_selectors(tmp_path: Path) -> No
         }
     ]
 
-    exported = {entry["key"]: entry for entry in library.to_dicts()}
-    assert exported["zygos"]["parent"]["type"] == "proceedings"
-    assert exported["wwdc-network"]["parent"][1]["type"] == "video"
-    assert exported["wwdc-network"]["parent"][1]["url"]["date"] == "2020-09-17"
+    assert library["zygos"].parents[0].entry_type == "Proceedings"
+    assert library["wwdc-network"].parents[1].entry_type == "Video"
 
     yml_path = tmp_path / "hayagriva-rich.yml"
     yml_path.write_text(source, encoding="utf-8")
@@ -558,6 +557,26 @@ def test_library_reads_bibtex_and_biblatex_sources() -> None:
             "volume": "1",
         }
     ]
+
+
+def test_biblatex_numeric_month_and_extended_name_render_end_to_end() -> None:
+    library = rk.Library.parse_bibtex(
+        (WORKSPACE / "testdata/contracts/biblatex-input.bib").read_text(encoding="utf-8")
+    )
+
+    entries = library.project(["key", "title", "date"])
+    rendered = rk.Document(library, rk.Style.load("apa"), locale="en-US").full_bibliography()
+
+    assert library["extended-name"].date == "2026-02"
+    assert entries == [
+        {
+            "date": "2026-02",
+            "key": "extended-name",
+            "title": "Typed Bibliography Ports",
+        }
+    ]
+    assert "Rousse" in rendered.text
+    assert "2026" in rendered.text
 
 
 def test_library_reports_unsupported_read_extension(tmp_path: Path) -> None:
