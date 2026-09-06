@@ -1,0 +1,25 @@
+NOTICE
+  s_d6c1969625d69a::t_f195535fc3174a 8
+crates/refkit-core/tests/tidy_corpus.rs
+  s_d6c1969625d69a::t_324e9333f805d2 1-104
+crates/refkit-core/tests/tidy_spec.rs
+  s_d6c1969625d69a::t_324e9333f805d2 1-587
+packages/polars-refkit/NOTICE
+  s_d6c1969625d69a::t_eee801f7e45f0f 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0504be80a16b965f5ebfd6d1e6c29aeef0ff56ce",
+  "prompts": {},
+  "sessions": {
+    "s_d6c1969625d69a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07552-1c83-7ca1-94c1-af71c3cc9acc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
