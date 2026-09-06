@@ -55,7 +55,7 @@ export default defineConfig({
         rel: "icon",
         type: "image/svg+xml",
         media: "(prefers-color-scheme: light)",
-        href: publicPath("/brand/refkit-mark-light.svg"),
+        href: publicPath("/brand/refkit-favicon-light.svg"),
       },
     ],
     [
@@ -64,7 +64,7 @@ export default defineConfig({
         rel: "icon",
         type: "image/svg+xml",
         media: "(prefers-color-scheme: dark)",
-        href: publicPath("/brand/refkit-mark-dark.svg"),
+        href: publicPath("/brand/refkit-favicon-dark.svg"),
       },
     ],
     ["meta", { property: "og:type", content: "website" }],

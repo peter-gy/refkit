@@ -30,6 +30,8 @@ const brandAssets = {
   "refkit-wordmark-dark": [339, 221],
   "refkit-mark-light": [288, 288],
   "refkit-mark-dark": [288, 288],
+  "refkit-favicon-light": [192, 192],
+  "refkit-favicon-dark": [192, 192],
   "refkit-lockup-horizontal-light": [491, 253],
   "refkit-lockup-horizontal-dark": [491, 253],
   "refkit-lockup-vertical-light": [403, 457],
@@ -203,8 +205,8 @@ for (const value of [
   withBasePath("/brand/refkit-lockup-horizontal-dark-transparent.svg"),
   withBasePath("/brand/refkit-lockup-vertical-light.svg"),
   withBasePath("/brand/refkit-lockup-vertical-dark.svg"),
-  withBasePath("/brand/refkit-mark-light.svg"),
-  withBasePath("/brand/refkit-mark-dark.svg"),
+  withBasePath("/brand/refkit-favicon-light.svg"),
+  withBasePath("/brand/refkit-favicon-dark.svg"),
   withBasePath("/icons/scan-text-light.svg"),
   withBasePath("/icons/scan-text-dark.svg"),
   withBasePath("/icons/quote-light.svg"),
@@ -236,6 +238,9 @@ for (const [name, logicalSize] of Object.entries(brandAssets)) {
   const svg = readFileSync(join(outputRoot, "brand", `${name}.svg`), "utf8")
   const viewBox = `viewBox="0 0 ${logicalSize[0]} ${logicalSize[1]}"`
   if (!svg.includes(viewBox)) errors.push(`unexpected SVG viewBox for ${name}`)
+  if (name.startsWith("refkit-favicon-") && /<rect\b/.test(svg)) {
+    errors.push(`favicon SVG contains a background rectangle: ${name}`)
+  }
 }
 
 for (const name of [
