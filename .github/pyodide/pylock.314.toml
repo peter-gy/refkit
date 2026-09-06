@@ -3,14 +3,14 @@ created-by = "pip"
 
 [[packages]]
 name = "agent-plugins"
-version = "0.1.1"
+version = "0.2.0"
 
 [[packages.wheels]]
-name = "agent_plugins-0.1.1-py3-none-any.whl"
-url = "https://files.pythonhosted.org/packages/d1/21/3ebab3b138cf09e262321b4faa17a6e94fb23148d5be755f393c8e3869ea/agent_plugins-0.1.1-py3-none-any.whl"
+name = "agent_plugins-0.2.0-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/24/43/03d7b1d3e22e0665e54feb63a50765f53611be050b3720cabafab74a1d6e/agent_plugins-0.2.0-py3-none-any.whl"
 
 [packages.wheels.hashes]
-sha256 = "30a4129ba7c8bdebb24fbf15a3ddbea346dc13c1ec5dcc69df0c9a48c091f67a"
+sha256 = "94dd4f5d15f8688691c3628f2848fbe92d110baf96e7314c147fcc775ce45a50"
 
 [[packages]]
 name = "iniconfig"

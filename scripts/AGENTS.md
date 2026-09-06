@@ -11,6 +11,6 @@ Scripts under this directory validate source, generated state, wheels, sdists, a
 
 The architecture contract rejects unclassified Rust dependencies, host I/O in the portable core, direct engine dependencies in adapters, unclassified `refkit` runtime dependencies, and workspace changes that alter composition ownership.
 
-`augment_agent_plugin.py` composes direct Maturin wheel output with the public Agent Plugins build adapter. The distribution contract owns the exact RefKit plugin, skill, entry-point, backend, and dependency artifact shape.
+Direct Maturin builds call `agent-plugins attach-wheel` before archive normalization. The distribution contract owns the exact RefKit plugin, skill, entry-point, backend, and dependency artifact shape.
 
 Run `make python-lint typecheck test`. See [repository contracts](../development_docs/repository-contracts.md) for ownership across scripts.

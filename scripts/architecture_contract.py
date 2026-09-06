@@ -14,7 +14,7 @@ POLARS_ADAPTER = Path("packages/polars-refkit/rust/Cargo.toml")
 REFKIT_PROJECT = Path("packages/refkit/pyproject.toml")
 NATIVE_PACKAGES = (REFKIT_PROJECT, Path("packages/polars-refkit/pyproject.toml"))
 RELEASED_CORE_DEPENDENCIES = ("biblatex", "hayagriva")
-REFKIT_RUNTIME_DEPENDENCIES = ["agent-plugins==0.1.1"]
+REFKIT_RUNTIME_DEPENDENCIES = ["agent-plugins==0.2.0"]
 CARGO_LOCKS = (
     Path("Cargo.lock"),
     Path("packages/polars-refkit/rust/Cargo.lock"),

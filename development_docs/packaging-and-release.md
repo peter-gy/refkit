@@ -46,7 +46,7 @@ Maturin is the Rust-backed Python package builder used by both distributions. It
 
 The `refkit` PEP 517 backend composes Maturin with `agent-plugins`. A regular wheel carries `plugin.json` and the exact `skills/refkit` tree beside the Python package. A source distribution stages the same files under `.agent-plugin` so a wheel rebuilt from that archive uses the captured release resources. An editable install stores a marker for the authored plugin root.
 
-GitHub's native and PyEmscripten jobs call Maturin directly for cross-platform wheel production. `scripts.augment_agent_plugin` applies the same public Agent Plugins build adapter to those prebuilt wheels before SBOM normalization and archive validation.
+GitHub's native and PyEmscripten jobs call Maturin directly for cross-platform wheel production. `agent-plugins attach-wheel` adds the configured plugin to each prebuilt wheel before SBOM normalization and archive validation.
 
 Local `make build` normalizes and validates both wheel and sdist contents. The publish workflow uploads build artifacts, downloads the complete merged set, then runs `twine check --strict` and the distribution contract immediately before trusted publication.
 

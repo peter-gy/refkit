@@ -119,10 +119,10 @@ def test_agent_module_returns_instructions_and_known_resources() -> None:
     assert all(path.is_relative_to(skill.path) for path in resources.values())
 
 
-def test_agent_plugin_build_plan_contains_authored_resources() -> None:
-    plan = agent_plugins.build_plan(ROOT / "packages/refkit")
+def test_agent_plugin_project_inspection_contains_authored_resources() -> None:
+    plugin = agent_plugins.Plugin.from_project(ROOT / "packages/refkit")
 
-    assert {mapping.target.as_posix() for mapping in plan.files} == PLUGIN_FILES
+    assert {path.relative_to(plugin.path).as_posix() for path in plugin.files} == PLUGIN_FILES
 
 
 def test_agent_module_help_points_to_sdk_and_installed_resources() -> None:
@@ -131,7 +131,7 @@ def test_agent_module_help_points_to_sdk_and_installed_resources() -> None:
     rendered = pydoc.render_doc(refkit_agent)
 
     assert str(plugin.path) in rendered
-    assert str(skill / "SKILL.md") in rendered
+    assert str(skill.file("SKILL.md")) in rendered
     assert "Library.parse_bibtex" in rendered
     assert "diagnostics = list(library.diagnostics)" in rendered
     assert '"status": "partial_recovery"' in rendered
@@ -170,5 +170,5 @@ def test_agent_skill_reports_missing_packaged_skill(
     )
     monkeypatch.setattr(refkit_agent, "agent_plugin", lambda: agent_plugins.Plugin(tmp_path))
 
-    with pytest.raises(agent_plugins.AgentPluginError, match="has no refkit skill"):
+    with pytest.raises(agent_plugins.AgentPluginError, match="'refkit' is unavailable"):
         refkit_agent.agent_skill()

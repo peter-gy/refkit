@@ -57,9 +57,11 @@ jobs:
           args: --locked --release --out dist --interpreter 3.11
 
       - name: Package Agent Plugin
+        shell: bash
         run: >-
-          uv run --no-project --with agent-plugins==0.1.1
-          python -m scripts.augment_agent_plugin "packages/refkit/dist/*.whl"
+          uv run --no-project --with agent-plugins==0.2.0
+          agent-plugins attach-wheel packages/refkit/dist/*.whl
+          --project packages/refkit
 
       - run: python -c "from pathlib import Path; print('\\n'.join(p.name for p in Path('packages/refkit/dist').iterdir()))"
 
@@ -118,9 +120,11 @@ jobs:
           rust-toolchain: ${{ steps.pyodide.outputs.rust-toolchain }}
 
       - name: Package Agent Plugin
+        shell: bash
         run: >-
-          uv run --no-project --with agent-plugins==0.1.1
-          python -m scripts.augment_agent_plugin "packages/refkit/dist/*.whl"
+          uv run --no-project --with agent-plugins==0.2.0
+          agent-plugins attach-wheel packages/refkit/dist/*.whl
+          --project packages/refkit
 
       - run: ls -lh packages/refkit/dist
 
