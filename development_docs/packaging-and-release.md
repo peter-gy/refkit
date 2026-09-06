@@ -8,7 +8,7 @@ A wheel is an installable Python archive. A source distribution, or sdist, conta
 
 | Distribution | Artifacts | Runtime relationship |
 | --- | --- | --- |
-| `refkit` | sdist, CPython ABI3 wheels, PyEmscripten wheel | Provides `refkit._native` and the public Python API. |
+| `refkit` | sdist, CPython ABI3 wheels, PyEmscripten wheel | Provides `refkit._native`, the public Python API, and its version-matched Agent Plugin. |
 | `polars-refkit` | sdist, CPython wheels, PyEmscripten wheel | Requires a compatible Polars runtime and provides `polars_refkit._internal`. |
 
 Build local CPython artifacts with:
@@ -44,6 +44,10 @@ Native release builds use locked Cargo resolution and path remapping. Remapping 
 
 Maturin is the Rust-backed Python package builder used by both distributions. It emits a software bill of materials (SBOM), an inventory of components inside the wheel. `scripts.normalize_wheel` replaces local references with stable package references, removes generated timestamps and serial numbers, and refreshes the affected wheel `RECORD` hashes. The distribution contract then rejects generated Python bytecode, developer documentation, local SBOM references, and embedded builder paths.
 
+The `refkit` PEP 517 backend composes Maturin with `agent-plugins`. A regular wheel carries `plugin.json` and the exact `skills/refkit` tree beside the Python package. A source distribution stages the same files under `.agent-plugin` so a wheel rebuilt from that archive uses the captured release resources. An editable install stores a marker for the authored plugin root.
+
+GitHub's native and PyEmscripten jobs call Maturin directly for cross-platform wheel production. `scripts.augment_agent_plugin` applies the same public Agent Plugins build adapter to those prebuilt wheels before SBOM normalization and archive validation.
+
 Local `make build` normalizes and validates both wheel and sdist contents. The publish workflow uploads build artifacts, downloads the complete merged set, then runs `twine check --strict` and the distribution contract immediately before trusted publication.
 
 ## PyEmscripten Builds
@@ -72,7 +76,7 @@ Release-test workflows consume built artifacts through clean environments:
 - `release-tests-refkit.yml` installs and exercises `refkit` wheels on CPython and Pyodide.
 - `release-tests-polars-refkit.yml` installs compatible Polars versions and exercises the plugin on CPython and Pyodide.
 
-The Pyodide lane creates a virtual environment from the pinned xbuild environment, installs locked runtime packages and local wheels, runs smoke programs, and executes the focused runtime tests under `.github/pyodide`.
+The Pyodide lane creates a virtual environment from the pinned xbuild environment, installs locked runtime packages and local wheels, runs smoke programs, and executes the focused runtime tests under `.github/pyodide`. The runtime lock includes `agent-plugins` so the local RefKit wheel can resolve its Agent Skill without package-index access.
 
 ## Publish Dependencies
 

@@ -23,6 +23,14 @@ The extension declares that it uses the Python Global Interpreter Lock. Core-hea
 
 Update native registration, `__init__.py`, `_native.pyi`, `__init__.pyi`, typed dictionaries, `__all__`, runtime signature tests, public reference, and installed-wheel tests together.
 
+### Code-mode capability
+
+`refkit.agent` is a lazy instruction and resource adapter over the public Python API. The `marimo.agent.capability` entry point maps `refkit` to that module. Marimo reads the entry-point name and module during discovery, then a code-mode agent imports the module and calls `help` when the capability is relevant.
+
+The agent module adds no bibliography operations. Its dynamic documentation routes agents to `Library`, `Document`, `BibDocument`, tidy functions, the public documentation map, and the version-matched Agent Skill installed with the distribution. `agent_plugin()` and `agent_skill()` expose those resources through `agent-plugins`.
+
+Keep `refkit.agent` out of the package root so importing `refkit` does not import agent tooling. Test discovery metadata, module loading, dynamic help, resource lookup, and root-import laziness together.
+
 ## Polars Adapter
 
 The Polars call path is:

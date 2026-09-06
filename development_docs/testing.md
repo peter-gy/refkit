@@ -7,12 +7,13 @@ Test through the boundary that a consumer or maintainer depends on. Shared Rust 
 | Boundary | Main location | Contract |
 | --- | --- | --- |
 | Portable Rust | `crates/refkit-core/src` and module tests | Parsing, recovery, raw edits, tidy formatting, rendering, and typed records. |
-| Python adapter | `packages/refkit/tests` | Public objects, errors, helpers, stubs, native metadata, and composition under a mocked Pyodide import. |
+| Python adapter | `packages/refkit/tests` | Public objects, errors, helpers, stubs, native metadata, agent capability discovery, packaged resources, and composition under a mocked Pyodide import. |
 | Polars | `packages/polars-refkit/tests` | Eager and lazy plans, namespace parity, broadcasting, dtypes, null mapping, diagnostics, and plugin packaging. |
 | Benchmark tooling | `packages/refkit-bench/tests` | Lane selection, workload provenance, result shape, adapter correctness checks, and output files. |
 | Repository contracts | `scripts/tests` | Architecture, documentation, versions, Pyodide locks, archive contents, and wheel normalization. |
 | Built artifacts | `.github/workflows/ci.yml` and release-test workflows | Wheel and sdist installation on supported runtimes and platforms. |
 | Pyodide runtime | `.github/pyodide` | Public imports, parsing, raw edits, rendering, Polars callbacks, and row failure behavior. |
+| Agent Plugin artifacts | Package tests, distribution contract, and installed smoke | Entry-point metadata, lazy imports, dynamic help, exact skill files, wheel and sdist markers, and Pyodide lookup. |
 | Documentation site | `docs/`, `pages.yml`, and browser validation | TypeScript, root and Pages-base routes, links, assets, metadata, raw Markdown, llms indexes, search, themes, and responsive delivery. |
 
 ## Focused Commands

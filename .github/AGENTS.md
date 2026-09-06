@@ -10,6 +10,7 @@ GitHub Actions builds and tests source, CPython distributions, and PyEmscripten 
 - Keep workflows outside product semantics. Compose Make targets, build distributions, install them in clean environments, and report failures at the affected package boundary.
 - Publish `refkit` and `polars-refkit` after their own artifact tests, then join both packages at release completion.
 - Build documentation for pull requests and deploy the configured `/refkit/` artifact from `workflows/pages.yml` after its route, base-path, llms, and asset checks pass.
+- Add the RefKit Agent Plugin to direct Maturin wheel output before normalization, archive validation, artifact upload, or installed-runtime tests.
 - Treat tags and publish jobs as external state changes that require explicit authorization.
 
 Run `actionlint .github/workflows/*.yml` and the affected package checks. See [packaging and release](../development_docs/packaging-and-release.md) for the artifact contract.

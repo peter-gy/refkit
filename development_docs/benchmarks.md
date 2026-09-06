@@ -8,7 +8,7 @@ Timing runs require release-mode native extensions:
 
 ```bash
 uv sync --locked --all-packages --group dev
-(cd packages/refkit && uv run maturin develop --release)
+make refkit-develop-release
 (cd packages/polars-refkit && uv run maturin develop --release)
 ```
 
@@ -125,7 +125,7 @@ The runner executes in one process with deterministic participant and input orde
 
 A setup failure emits one zero-second failure row. A measured failure stops later rounds for that participant. Cleanup failure prints a diagnostic to standard error and leaves completed rows unchanged. The process exits nonzero when any row has `failed` status. Runs containing `ok` and `unsupported` rows exit zero.
 
-`--build-mode release` records a caller-supplied label. Use `--build-mode auto` to read `refkit.build_mode`, and build both adapters with `maturin develop --release` before a timing claim.
+`--build-mode release` records a caller-supplied label. Use `--build-mode auto` to read `refkit.build_mode`, run `make refkit-develop-release`, and build the Polars adapter with `maturin develop --release` before a timing claim.
 
 ## Measurement Limits
 

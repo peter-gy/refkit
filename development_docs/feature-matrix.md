@@ -177,7 +177,7 @@ To refresh the matrix, select and record new upstream revisions, inspect the evi
 | Type information for Python consumers | No. JavaScript package. | No type stubs found in inspected source. | Yes. `py.typed` is packaged. | Yes. `__init__.pyi` and typed package metadata are present. |
 | Rust-backed parsing and rendering | No. | No. | No. | Yes. Native module uses PyO3, maturin, Hayagriva, and BibLaTeX crates. |
 | GIL release for heavy work | Not applicable. | No. Pure Python and lxml. | No. Pure Python. | Yes for current heavy paths. `Library.read`, `Document.render`, `Document.cited_bibliography`, `Document.full_bibliography`, rendered tree serialization, `BibDocument.write`, `BibDocument.tidy`, and `tidy_bibtex` detach after Python inputs are converted to Rust-owned state. |
-| Python runtime dependencies | Not applicable. JavaScript runtime. | Yes. Requires lxml. | Yes. Requires pylatexenc. | `refkit` has no Python package dependencies. `polars-refkit` requires Polars. |
+| Python runtime dependencies | Not applicable. JavaScript runtime. | Yes. Requires lxml. | Yes. Requires pylatexenc. | `refkit` requires `agent-plugins` for its version-matched code-mode resources. `polars-refkit` requires Polars. |
 
 ## Errors, Diagnostics, And Validation
 

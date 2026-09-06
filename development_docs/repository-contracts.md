@@ -11,7 +11,7 @@ RefKit keeps cross-file invariants executable. Each contract has one source-leve
 | Documentation site | `make docs-site-check` | Locked pnpm install, TypeScript, root and Pages-base VitePress output, routes, public assets, social metadata, raw Markdown, llms indexes, local links, and heading fragments. |
 | Release metadata | `make release-check` | Lockstep versions, exact native dependency pins, repository metadata, and release tag grammar. |
 | Pyodide runtime | `make pyodide-lock-check` | Runtime requirements, resolved wheels, hashes, and the tested Python-to-Rust Polars plugin ABI mapping. |
-| Distribution archive | `scripts/distribution_contract.py <archives>` | Bytecode exclusion, developer-doc exclusion, normalized SBOM references, and builder-path removal. |
+| Distribution archive | `scripts/distribution_contract.py <archives>` | Bytecode exclusion, developer-doc exclusion, normalized SBOM references, builder-path removal, and exact RefKit Agent Plugin resources. |
 | Wheel normalization | `python -m scripts.normalize_wheel <wheels>` | Stable SBOM references and matching `RECORD` hashes before archive validation. |
 
 Contract diagnostics should name the offending source or archive member and return a nonzero exit status. Keep validation deterministic and free from network access. Test a new failure mode beside the script before adding it to `make check` or CI.
@@ -24,6 +24,15 @@ Contract diagnostics should name the offending source or archive member and retu
 - native stubs in `packages/refkit/src/refkit/_native.pyi`
 - public exports, stubs, and helpers in `packages/refkit/src/refkit`
 - public tests and end-user API docs
+
+### Agent capability
+
+- root `plugin.json` and the curated `skills/refkit` tree
+- `packages/refkit/src/refkit/agent.py`
+- the `marimo.agent.capability` entry point and package runtime dependency
+- package-local Agent Plugins build backend
+- direct-Maturin wheel augmentation
+- exact source-plan, wheel, sdist, installed-resource, and dynamic-help tests
 
 ### Polars API
 
@@ -67,6 +76,7 @@ Run `make pyodide-lock` to regenerate the lock, then `make pyodide-lock-check`.
 | Cargo and uv locks | Tracked resolution contracts. Validate them before tests. |
 | Pyodide lock | Tracked generated runtime input. Regenerate through `scripts/pyodide_lock.py`. |
 | Wheels and sdists | Derived build output. Validate archives and leave them untracked. |
+| Agent Plugin wheel payload | Derived from root `plugin.json` and `skills/refkit`. Validate its exact inventory in wheels and sdists. |
 | Wheel SBOMs | Derived by native builds, normalized before archive validation. |
 | Benchmark JSON and CSV | Local evidence under `packages/refkit-bench/results`. Keep audited code and fixtures tracked. |
 | `development_docs/` | Tracked maintainer guidance. Excluded from published distributions. |

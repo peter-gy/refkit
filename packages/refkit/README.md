@@ -47,6 +47,20 @@ Expected output:
 
 Every `Rendered` value exposes text, rendered HTML, and a structured tree. `TidyOptions` configures canonical BibTeX formatting and duplicate handling.
 
+## Use From Marimo Code Mode
+
+RefKit registers `refkit.agent` as a marimo code-mode capability. Import the module named by `marimo._code_mode.capabilities()`, then call `help` for a version-matched workflow and packaged Agent Skill:
+
+```python
+import refkit.agent as refkit_agent
+
+help(refkit_agent)
+```
+
+The capability guides agents to the same `Library`, `Document`, `BibDocument`, and tidy APIs used by regular Python callers.
+
+Marimo exposes capability discovery through its internal preview code-mode module. The [agent-readable documentation](https://peter-gy.github.io/refkit/reference/agent-docs) records the current discovery and resource contract.
+
 ## Documentation
 
 - [Get started](https://github.com/peter-gy/refkit/blob/main/docs/get-started.md)

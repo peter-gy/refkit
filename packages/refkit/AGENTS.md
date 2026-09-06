@@ -9,7 +9,8 @@
 - Release the GIL around parsing, rendering, formatting, and filesystem work that stays independent of Python objects.
 - Keep unsendable raw document state on the GIL-bound path.
 - Update `_native.pyi`, package exports, public docs, and boundary tests with every public change.
+- Keep `refkit.agent` lazy and limited to dynamic help plus packaged-resource access over the public Python API.
 
-Rebuild with `(cd packages/refkit && uv run maturin develop)`. Run `make python-lint typecheck test rust` from the repository root.
+Rebuild with `make refkit-develop` from the repository root so the editable native module and Agent Plugin marker come from the same backend. Run `make python-lint typecheck test rust` after the rebuild.
 
 Wheel changes need CPython and PyEmscripten installation evidence. Package metadata keeps the extension at `refkit._native`.

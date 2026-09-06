@@ -8,7 +8,7 @@ Install the uv, Rust, Node.js, and pnpm prerequisites from the [developer index]
 
 ```bash
 uv sync --locked --all-packages --group dev
-(cd packages/refkit && uv run maturin develop)
+make refkit-develop
 (cd packages/polars-refkit && uv run maturin develop)
 ```
 
@@ -20,7 +20,7 @@ uv sync --locked --all-packages --group dev
 | --- | --- | --- |
 | Pure Python facade or stubs | None | `make python-lint typecheck test` |
 | Portable Rust core | Rebuild each affected Python adapter | `make rust-lint rust rust-floor` |
-| Native PyO3 adapter | `(cd packages/refkit && uv run maturin develop)` | `make typecheck test rust` |
+| Native PyO3 adapter or Agent Plugin | `make refkit-develop` | `make typecheck test rust` |
 | Polars expressions or plugin Rust | `(cd packages/polars-refkit && uv run maturin develop)` | `make typecheck test rust` |
 | Benchmark runner | Build both adapters in release mode | `make benchmark-test` |
 | User documentation or site | Install locked pnpm dependencies | `make docs-check test` |

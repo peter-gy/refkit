@@ -7,7 +7,7 @@ Gather evidence at the failing boundary before rebuilding the full workspace.
 Rebuild the Python adapter after changing `crates/refkit-core` or `packages/refkit/rust`:
 
 ```bash
-(cd packages/refkit && uv run maturin develop)
+make refkit-develop
 ```
 
 Inspect `refkit.build_info` and `refkit.build_mode` when the loaded artifact remains unclear.

@@ -161,7 +161,10 @@ def _local_target(root: Path, source: Path, target: str) -> Path | None:
             docs / relative / "index.md",
             docs / "public" / relative,
         )
-        return next((path.resolve() for path in candidates if path.exists()), candidates[0].resolve())
+        return next(
+            (path.resolve() for path in candidates if path.exists()),
+            candidates[0].resolve(),
+        )
 
     resolved = (source.parent / decoded).resolve()
     if resolved.exists() or Path(decoded).suffix:
