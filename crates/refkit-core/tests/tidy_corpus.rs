@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use bibtex_tidy_rs::{TidyOptions, tidy};
+use refkit_core::{TidyOptions, tidy_bibtex as tidy};
 use walkdir::WalkDir;
 
 #[test]

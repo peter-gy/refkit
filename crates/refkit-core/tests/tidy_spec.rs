@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use bibtex_tidy_rs::{DuplicateRule, TidyOptions, tidy};
+use refkit_core::{DuplicateRule, TidyOptions, tidy_bibtex as tidy};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -323,15 +323,15 @@ impl SpecOptions {
         if let Some(merge) = self.merge {
             match merge {
                 serde_yaml::Value::Bool(true) => {
-                    options.merge = Some(bibtex_tidy_rs::MergeStrategy::Combine);
+                    options.merge = Some(refkit_core::MergeStrategy::Combine);
                 }
                 serde_yaml::Value::Bool(false) => options.merge = None,
                 serde_yaml::Value::String(value) => {
                     options.merge = match value.as_str() {
-                        "first" => Some(bibtex_tidy_rs::MergeStrategy::First),
-                        "last" => Some(bibtex_tidy_rs::MergeStrategy::Last),
-                        "combine" => Some(bibtex_tidy_rs::MergeStrategy::Combine),
-                        "overwrite" => Some(bibtex_tidy_rs::MergeStrategy::Overwrite),
+                        "first" => Some(refkit_core::MergeStrategy::First),
+                        "last" => Some(refkit_core::MergeStrategy::Last),
+                        "combine" => Some(refkit_core::MergeStrategy::Combine),
+                        "overwrite" => Some(refkit_core::MergeStrategy::Overwrite),
                         _ => None,
                     };
                 }
@@ -427,7 +427,7 @@ impl SpecOptions {
     }
 }
 
-fn assert_expected(name: &str, spec: &SpecDocument, result: &bibtex_tidy_rs::TidyResult) {
+fn assert_expected(name: &str, spec: &SpecDocument, result: &refkit_core::TidyResult) {
     let expected = spec
         .expected
         .as_ref()
@@ -442,13 +442,13 @@ fn string_sequence(values: Vec<serde_yaml::Value>) -> Vec<String> {
         .collect()
 }
 
-fn duplicate_rules(value: serde_yaml::Value) -> Option<Vec<bibtex_tidy_rs::DuplicateRule>> {
+fn duplicate_rules(value: serde_yaml::Value) -> Option<Vec<refkit_core::DuplicateRule>> {
     match value {
         serde_yaml::Value::Bool(true) => Some(vec![
-            bibtex_tidy_rs::DuplicateRule::Doi,
-            bibtex_tidy_rs::DuplicateRule::Citation,
-            bibtex_tidy_rs::DuplicateRule::Abstract,
-            bibtex_tidy_rs::DuplicateRule::Key,
+            refkit_core::DuplicateRule::Doi,
+            refkit_core::DuplicateRule::Citation,
+            refkit_core::DuplicateRule::Abstract,
+            refkit_core::DuplicateRule::Key,
         ]),
         serde_yaml::Value::Bool(false) => None,
         serde_yaml::Value::Sequence(values) => Some(
@@ -457,10 +457,10 @@ fn duplicate_rules(value: serde_yaml::Value) -> Option<Vec<bibtex_tidy_rs::Dupli
                 .filter_map(|value| {
                     let value = value.as_str()?;
                     match value {
-                        "doi" => Some(bibtex_tidy_rs::DuplicateRule::Doi),
-                        "key" => Some(bibtex_tidy_rs::DuplicateRule::Key),
-                        "abstract" => Some(bibtex_tidy_rs::DuplicateRule::Abstract),
-                        "citation" => Some(bibtex_tidy_rs::DuplicateRule::Citation),
+                        "doi" => Some(refkit_core::DuplicateRule::Doi),
+                        "key" => Some(refkit_core::DuplicateRule::Key),
+                        "abstract" => Some(refkit_core::DuplicateRule::Abstract),
+                        "citation" => Some(refkit_core::DuplicateRule::Citation),
                         _ => None,
                     }
                 })
