@@ -46,6 +46,20 @@ def test_documentation_contract_reports_missing_and_escaping_targets(tmp_path: P
     ]
 
 
+def test_documentation_contract_resolves_vitepress_routes_and_public_assets(
+    tmp_path: Path,
+) -> None:
+    _documentation_tree(tmp_path)
+    _write(tmp_path / "docs/get-started.md", "# Get started\n")
+    _write(tmp_path / "docs/public/brand.svg", "<svg/>\n")
+    _write(
+        tmp_path / "docs/guide.md",
+        "[Start](/get-started)\n[Brand](/brand.svg)\n",
+    )
+
+    assert check_contract(tmp_path) == []
+
+
 def test_documentation_contract_checks_scripts_guidance(tmp_path: Path) -> None:
     _documentation_tree(tmp_path)
     _write(tmp_path / "scripts/AGENTS.md", "[Missing](missing.md)\n")
@@ -136,7 +150,7 @@ def test_documentation_contract_requires_the_developer_index(tmp_path: Path) -> 
 def test_documentation_contract_ignores_private_git_ignored_markdown(tmp_path: Path) -> None:
     _documentation_tree(tmp_path)
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    _write(tmp_path / ".gitignore", "CONTEXT.md\n")
-    _write(tmp_path / "CONTEXT.md", "[Local](missing.md)\n")
+    _write(tmp_path / ".gitignore", "LOCAL_NOTES.md\n")
+    _write(tmp_path / "LOCAL_NOTES.md", "[Local](missing.md)\n")
 
     assert check_contract(tmp_path) == []

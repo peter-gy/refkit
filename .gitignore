@@ -16,3 +16,5 @@ packages/refkit-bench/results/*
 
 # Virtual environments
 .venv
+node_modules/
+docs/.vitepress/cache/

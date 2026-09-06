@@ -1,0 +1,59 @@
+{
+  "nav": [
+    { "text": "Start", "link": "/get-started" },
+    { "text": "Concepts", "link": "/concepts/how-refkit-works" },
+    { "text": "Guides", "link": "/guides/parse-bibliographies" },
+    { "text": "Reference", "link": "/reference/python" }
+  ],
+  "sidebar": [
+    {
+      "text": "Start",
+      "items": [
+        { "text": "Get started", "link": "/get-started" },
+        { "text": "Why RefKit", "link": "/why-refkit" },
+        { "text": "Performance", "link": "/performance" }
+      ]
+    },
+    {
+      "text": "Concepts",
+      "items": [
+        { "text": "How RefKit works", "link": "/concepts/how-refkit-works" },
+        { "text": "Choose a bibliography model", "link": "/concepts/bibliography-models" },
+        { "text": "Citation rendering", "link": "/concepts/citation-rendering" },
+        { "text": "Parsing and recovery", "link": "/concepts/parsing-and-recovery" }
+      ]
+    },
+    {
+      "text": "Guides",
+      "items": [
+        { "text": "Parse bibliographies", "link": "/guides/parse-bibliographies" },
+        { "text": "Render citations", "link": "/guides/render-citations" },
+        { "text": "Edit raw BibTeX", "link": "/guides/edit-bibtex" },
+        { "text": "Format BibTeX", "link": "/guides/format-bibtex" },
+        { "text": "Process Polars columns", "link": "/guides/polars" },
+        { "text": "Run in Pyodide", "link": "/pyodide" }
+      ]
+    },
+    {
+      "text": "Reference",
+      "items": [
+        { "text": "Python API", "link": "/reference/python" },
+        { "text": "Data shapes", "link": "/reference/data-shapes" },
+        { "text": "Tidy options", "link": "/reference/tidy-options" },
+        { "text": "Polars expressions", "link": "/reference/polars" },
+        { "text": "Selectors", "link": "/reference/selectors" },
+        { "text": "Rust core", "link": "/reference/rust" },
+        { "text": "Agent-readable docs", "link": "/reference/agent-docs" },
+        { "text": "Errors and diagnostics", "link": "/reference/errors" }
+      ]
+    },
+    {
+      "text": "Change and recover",
+      "items": [
+        { "text": "Migration guide", "link": "/migration" },
+        { "text": "Troubleshooting", "link": "/troubleshooting" }
+      ]
+    }
+  ],
+  "unlisted": []
+}

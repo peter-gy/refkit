@@ -1,5 +1,7 @@
 POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
 UV_RUN := uv run --locked --all-packages --group dev
+PNPM_DOCS := pnpm --dir docs
+DOCS_PAGES_BASE_PATH := /refkit
 RUST_FLOOR := 1.88
 RUST_SYSROOT := $(shell rustc --print sysroot)
 RUST_REMAP_FLAGS := --remap-path-prefix=$(HOME)=home --remap-path-prefix=$(HOME)/.cargo/registry/src=cargo-registry --remap-path-prefix=$(HOME)/.cargo/git/checkouts=cargo-git --remap-path-prefix=$(HOME)/.rustup=rustup --remap-path-prefix=$(RUST_SYSROOT)=rust-toolchain --remap-path-prefix=$(CURDIR)=refkit
@@ -130,9 +132,27 @@ release-check:
 architecture-check:
 	$(UV_RUN) python scripts/architecture_contract.py
 
-.PHONY: docs-check
-docs-check:
+.PHONY: docs-source-check
+docs-source-check:
 	$(UV_RUN) python scripts/docs_contract.py
+
+.PHONY: docs-dev
+docs-dev:
+	$(PNPM_DOCS) dev
+
+.PHONY: docs-site-check
+docs-site-check:
+	$(PNPM_DOCS) install --frozen-lockfile
+	BASE_PATH=$(DOCS_PAGES_BASE_PATH) $(PNPM_DOCS) build
+	$(PNPM_DOCS) build
+
+.PHONY: docs-build
+docs-build:
+	$(PNPM_DOCS) install --frozen-lockfile
+	$(PNPM_DOCS) build
+
+.PHONY: docs-check
+docs-check: docs-source-check docs-site-check
 
 .PHONY: check
 check: lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test rust rust-floor build

@@ -1,0 +1,225 @@
+:root {
+  --rk-bg: #fafafa;
+  --rk-ink: #0a0a0a;
+  --rk-muted: #6b6b6b;
+  --rk-line: #e4e4e4;
+  --rk-ghost: #eeeeee;
+  --rk-accent: #e8480c;
+
+  --vp-c-bg: var(--rk-bg);
+  --vp-c-bg-alt: #f4f4f4;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #f1f1f1;
+  --vp-c-text-1: var(--rk-ink);
+  --vp-c-text-2: var(--rk-muted);
+  --vp-c-text-3: #858585;
+  --vp-c-divider: var(--rk-line);
+  --vp-c-border: var(--rk-line);
+  --vp-c-brand-1: #c83b08;
+  --vp-c-brand-2: #a83207;
+  --vp-c-brand-3: #862807;
+  --vp-c-brand-soft: #e8480c18;
+  --vp-button-brand-bg: var(--rk-ink);
+  --vp-button-brand-border: var(--rk-ink);
+  --vp-button-brand-hover-bg: var(--rk-accent);
+  --vp-button-brand-hover-border: var(--rk-accent);
+  --vp-button-alt-bg: transparent;
+  --vp-button-alt-border: var(--rk-line);
+  --vp-button-alt-hover-bg: var(--rk-ghost);
+  --vp-home-hero-name-color: var(--rk-ink);
+  --vp-font-family-base: Geist, Inter, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --vp-font-family-mono: "JetBrains Mono", "SFMono-Regular", Consolas,
+    "Liberation Mono", monospace;
+}
+
+.dark {
+  --rk-bg: #0a0a0a;
+  --rk-ink: #f9f9f9;
+  --rk-muted: #9a9a9a;
+  --rk-line: #262626;
+  --rk-ghost: #161616;
+  --rk-accent: #ff6a33;
+
+  --vp-c-bg-alt: #101010;
+  --vp-c-bg-elv: #141414;
+  --vp-c-bg-soft: #161616;
+  --vp-c-text-3: #777777;
+  --vp-c-brand-2: #ff865c;
+  --vp-c-brand-3: #ffa181;
+  --vp-c-brand-soft: #ff6a331f;
+  --vp-button-brand-bg: var(--rk-ink);
+  --vp-button-brand-border: var(--rk-ink);
+  --vp-button-brand-text: var(--rk-bg);
+}
+
+html {
+  font-feature-settings: "ss01" 1, "cv02" 1;
+}
+
+.VPNavBarTitle .logo {
+  width: 122px;
+  height: auto;
+}
+
+.VPHomeHero .image-container {
+  transform: none;
+}
+
+.VPHomeHero .image-src {
+  max-width: 290px;
+  max-height: 290px;
+}
+
+.VPHomeHero .name,
+.VPHomeHero .text {
+  letter-spacing: -0.035em;
+}
+
+.VPHomeHero .tagline {
+  max-width: 640px;
+}
+
+.hero-fast {
+  position: relative;
+  display: inline-block;
+  color: var(--rk-accent);
+  text-decoration: none;
+  transition: transform 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.hero-fast::after {
+  position: absolute;
+  right: 0;
+  bottom: 0.02em;
+  left: 0;
+  height: 0.055em;
+  background: currentColor;
+  content: "";
+  opacity: 0.38;
+  transform: scaleX(0.22);
+  transform-origin: left center;
+}
+
+.hero-fast:hover,
+.hero-fast:focus-visible {
+  transform: translateX(3px) skewX(-3deg);
+}
+
+.hero-fast:hover::after,
+.hero-fast:focus-visible::after {
+  animation: fast-streak 440ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+@keyframes fast-streak {
+  0% {
+    opacity: 0;
+    transform: translateX(-35%) scaleX(0.12);
+  }
+  45% {
+    opacity: 0.85;
+    transform: translateX(0) scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(115%) scaleX(0.32);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-fast,
+  .hero-fast:hover,
+  .hero-fast:focus-visible {
+    transform: none;
+    transition: none;
+  }
+
+  .hero-fast::after,
+  .hero-fast:hover::after,
+  .hero-fast:focus-visible::after {
+    animation: none;
+    opacity: 0.6;
+    transform: scaleX(1);
+  }
+}
+
+.VPFeature {
+  border-radius: 3px !important;
+}
+
+.VPButton {
+  border-radius: 3px !important;
+}
+
+.vp-doc a {
+  text-underline-offset: 3px;
+}
+
+.model-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 24px 0;
+  border: 1px solid var(--rk-line);
+  background: var(--rk-line);
+}
+
+.model-flow > div {
+  min-height: 130px;
+  padding: 20px;
+  background: var(--rk-bg);
+}
+
+.model-flow strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--rk-accent);
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.model-flow p {
+  margin: 0;
+  color: var(--rk-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.contract-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.contract-grid > div {
+  padding: 18px 20px;
+  border-top: 2px solid var(--rk-ink);
+  background: var(--vp-c-bg-soft);
+}
+
+.contract-grid h3 {
+  margin: 0 0 8px;
+  border: 0;
+  font-size: 17px;
+}
+
+.contract-grid p {
+  margin: 0;
+  color: var(--rk-muted);
+  font-size: 14px;
+}
+
+@media (max-width: 700px) {
+  .model-flow,
+  .contract-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .model-flow > div {
+    min-height: 0;
+  }
+}

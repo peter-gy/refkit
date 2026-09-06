@@ -9,3 +9,7 @@ refkit uses citation and bibliography components from the Typst project ecosyste
 
 Hayagriva and citationberg also acknowledge Citation Style Language style or
 locale resources under CC-BY-SA 3.0 in their upstream NOTICE files.
+
+The documentation site includes the Lucide icons `scan-text`, `quote`,
+`file-pen-line`, and `table-properties` under the ISC License. Source:
+https://github.com/lucide-icons/lucide

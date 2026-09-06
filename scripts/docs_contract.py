@@ -148,12 +148,26 @@ def _links(path: Path) -> list[tuple[int, str]]:
     return links
 
 
-def _local_target(source: Path, target: str) -> Path | None:
+def _local_target(root: Path, source: Path, target: str) -> Path | None:
     parsed = urlsplit(target)
     if parsed.scheme or parsed.netloc or not parsed.path:
         return None
     decoded = unquote(parsed.path)
-    return (source.parent / decoded).resolve()
+    docs = root / "docs"
+    if decoded.startswith("/") and _is_within(source, docs):
+        relative = Path(decoded.removeprefix("/"))
+        candidates = (
+            docs / relative.with_suffix(".md") if not relative.suffix else docs / relative,
+            docs / relative / "index.md",
+            docs / "public" / relative,
+        )
+        return next((path.resolve() for path in candidates if path.exists()), candidates[0].resolve())
+
+    resolved = (source.parent / decoded).resolve()
+    if resolved.exists() or Path(decoded).suffix:
+        return resolved
+    candidates = (resolved.with_suffix(".md"), resolved / "index.md")
+    return next((path for path in candidates if path.exists()), candidates[0])
 
 
 def _is_within(path: Path, directory: Path) -> bool:
@@ -190,7 +204,7 @@ def check_contract(root: Path = ROOT) -> list[str]:
     public_docs = _public_docs(root)
     for source in _markdown_files(root):
         for line_number, target in _links(source):
-            resolved = _local_target(source, target)
+            resolved = _local_target(root, source, target)
             if resolved is None:
                 continue
             location = f"{source.relative_to(root)}:{line_number}"

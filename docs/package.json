@@ -1,0 +1,28 @@
+{
+  "name": "refkit-docs",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.10.0",
+  "scripts": {
+    "dev": "portless",
+    "dev:direct": "vitepress dev",
+    "build": "pnpm typecheck && vitepress build && node scripts/verify-build.mjs",
+    "preview": "vitepress preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "verify": "node scripts/verify-build.mjs"
+  },
+  "portless": {
+    "name": "docs.refkit",
+    "script": "dev:direct"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "portless": "0.15.6",
+    "typescript": "6.0.3",
+    "vitepress": "2.0.0-alpha.19",
+    "vitepress-plugin-llms": "1.13.5"
+  }
+}
