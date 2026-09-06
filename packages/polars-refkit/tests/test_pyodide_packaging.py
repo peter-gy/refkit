@@ -59,22 +59,17 @@ def test_workflows_build_and_test_polars_refkit_pyemscripten_wheels() -> None:
     assert_polars_pyemscripten_smoke_job(
         ci_jobs["test-polars-refkit-pyemscripten"],
         artifact_names=[
-            "refkit_core_pypi_files_pyemscripten_${{ matrix.python-version }}",
-            "refkit_pypi_files",
             "polars_refkit_pypi_files_pyemscripten_${{ matrix.python-version }}",
         ],
     )
     assert_polars_pyemscripten_smoke_job(
         release_jobs["test-pyemscripten"],
         artifact_names=[
-            "release_refkit_dist",
-            "release_refkit_core_pyemscripten_3.14",
             "release_polars_refkit_pyemscripten_3.14",
         ],
     )
 
     assert {name for name in publish_jobs if name.startswith("publish-")} == {
-        "publish-refkit-core",
         "publish-refkit",
         "publish-polars-refkit",
     }

@@ -44,17 +44,6 @@ updates:
           - "*"
 
   - package-ecosystem: cargo
-    directory: /crates/bibtex-tidy-rs/
-    schedule:
-      interval: monthly
-    cooldown:
-      default-days: 7
-    groups:
-      rust:
-        patterns:
-          - "*"
-
-  - package-ecosystem: cargo
     directory: /packages/polars-refkit/rust/
     schedule:
       interval: monthly

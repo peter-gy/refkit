@@ -71,7 +71,6 @@ jobs:
         with:
           workspaces: |
             . -> target
-            crates/bibtex-tidy-rs -> target
             packages/polars-refkit/rust -> target
 
       - name: Lint
@@ -101,7 +100,6 @@ jobs:
           shared-key: msrv
           workspaces: |
             . -> target
-            crates/bibtex-tidy-rs -> target
             packages/polars-refkit/rust -> target
 
       - name: Check minimum Rust version
