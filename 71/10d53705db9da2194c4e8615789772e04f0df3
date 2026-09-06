@@ -1,0 +1,34 @@
+AGENTS.md
+  s_d6c1969625d69a::t_0995fc9df00068 3,5,7-13,15-36,42-44,46,48,50-66,72-73
+packages/refkit-bench/AGENTS.md
+  s_d6c1969625d69a::t_0995fc9df00068 5-6
+.github/AGENTS.md
+  s_d6c1969625d69a::t_0995fc9df00068 10-11
+development_docs/AGENTS.md
+  s_d6c1969625d69a::t_0995fc9df00068 1-11
+scripts/AGENTS.md
+  s_d6c1969625d69a::t_0995fc9df00068 13
+  s_d6c1969625d69a::t_dbf58b0288b205 12
+crates/refkit-core/AGENTS.md
+  s_d6c1969625d69a::t_0995fc9df00068 3,5-8,11,14-15
+packages/polars-refkit/AGENTS.md
+  s_d6c1969625d69a::t_0995fc9df00068 5-6,13
+packages/refkit/AGENTS.md
+  s_d6c1969625d69a::t_0995fc9df00068 1,3,5-11,13-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7110d53705db9da2194c4e8615789772e04f0df3",
+  "prompts": {},
+  "sessions": {
+    "s_d6c1969625d69a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07552-1c83-7ca1-94c1-af71c3cc9acc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
