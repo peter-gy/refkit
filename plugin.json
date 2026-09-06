@@ -1,0 +1,13 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "refkit",
+  "description": "Parse, inspect, render, format, and edit bibliography data from Python and Polars.",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Péter Ferenc Gyarmati",
+    "email": "dev.petergy@gmail.com"
+  },
+  "homepage": "https://peter-gy.github.io/refkit/",
+  "repository": "https://github.com/peter-gy/refkit",
+  "keywords": ["bibliography", "bibtex", "citations", "python", "polars"]
+}

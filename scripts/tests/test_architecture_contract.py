@@ -8,6 +8,7 @@ from scripts.architecture_contract import (
     _core_source_errors,
     _dependency_errors,
     _dependency_names,
+    _refkit_dependency_errors,
     _released_dependency_errors,
     check_contract,
 )
@@ -15,6 +16,14 @@ from scripts.architecture_contract import (
 
 def test_repository_matches_the_architecture_contract() -> None:
     assert check_contract(ROOT) == []
+
+
+def test_refkit_runtime_dependency_contract_rejects_additional_packages() -> None:
+    manifest = {"project": {"dependencies": ["agent-plugins==0.1.1", "requests"]}}
+
+    assert _refkit_dependency_errors(manifest) == [
+        "packages/refkit runtime dependencies must contain only agent-plugins==0.1.1"
+    ]
 
 
 def test_dependency_names_include_target_specific_dependencies() -> None:

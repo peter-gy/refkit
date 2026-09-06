@@ -56,6 +56,11 @@ jobs:
           working-directory: packages/refkit
           args: --locked --release --out dist --interpreter 3.11
 
+      - name: Package Agent Plugin
+        run: >-
+          uv run --no-project --with agent-plugins==0.1.1
+          python -m scripts.augment_agent_plugin "packages/refkit/dist/*.whl"
+
       - run: python -c "from pathlib import Path; print('\\n'.join(p.name for p in Path('packages/refkit/dist').iterdir()))"
 
       - run: |
@@ -112,6 +117,11 @@ jobs:
           args: --locked --release --out dist --interpreter ${{ matrix.python-version }}
           rust-toolchain: ${{ steps.pyodide.outputs.rust-toolchain }}
 
+      - name: Package Agent Plugin
+        run: >-
+          uv run --no-project --with agent-plugins==0.1.1
+          python -m scripts.augment_agent_plugin "packages/refkit/dist/*.whl"
+
       - run: ls -lh packages/refkit/dist
 
       - run: |
@@ -166,13 +176,24 @@ jobs:
           fi
           if [ "$PACKAGE" = "refkit" ]; then
             uv run --no-project --python "3.11" --with "${sdists[0]}" python - <<'PY'
+          from importlib.metadata import distribution
+
           import refkit as core
+          import refkit.agent as refkit_agent
 
           library = core.Library.parse_bibtex(
               "@article{doe2024, title={Fast Citations}, year={2024}}",
               recovery="error",
           )
           assert len(library) == 1
+          capability = next(
+              entry
+              for entry in distribution("refkit").entry_points
+              if entry.group == "marimo.agent.capability"
+          )
+          assert (capability.name, capability.value) == ("refkit", "refkit.agent")
+          assert capability.load() is refkit_agent
+          assert refkit_agent.agent_skill().path.name == "refkit"
           PY
           else
             uv run --no-project --python "3.11" --with "${sdists[0]}" python - <<'PY'
@@ -321,7 +342,7 @@ jobs:
       - run: |
           source .venv-pyodide/bin/activate
           python -m pip install -r .github/pyodide/pylock.314.toml
-          python -m pip install refkit --no-index --find-links dist
+          python -m pip install refkit --no-deps --no-index --find-links dist
           python .github/pyodide/smoke_refkit.py
           python -m pytest -q -c /dev/null .github/pyodide/test_refkit_runtime.py
 
@@ -403,8 +424,15 @@ jobs:
           name: refkit_pypi_files_${{ matrix.artifact-os }}_cp311
           path: dist
 
-      - run: |
-          uv run --no-project --python "${{ matrix.python-version }}" --no-index --find-links dist --with refkit python .github/pyodide/smoke_refkit.py
+      - shell: bash
+        run: |
+          wheels=(dist/refkit-*.whl)
+          if [ "${#wheels[@]}" -ne 1 ]; then
+            printf 'Expected one refkit wheel, found %s\n' "${#wheels[@]}" >&2
+            exit 1
+          fi
+          uv run --no-project --python "${{ matrix.python-version }}" \
+            --with "${wheels[0]}" python .github/pyodide/smoke_refkit.py
 
   test-polars-refkit-cpython:
     name: polars-refkit / Test CPython wheel (py${{ matrix.python-version }}, ${{ matrix.polars }})

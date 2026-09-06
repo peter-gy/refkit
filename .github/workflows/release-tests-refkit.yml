@@ -55,7 +55,13 @@ jobs:
       - name: Test installed package
         shell: bash
         run: |
-          uv run --no-project --python "${{ matrix.python-version }}" --no-index --find-links dist --with refkit python .github/pyodide/smoke_refkit.py
+          wheels=(dist/refkit-*.whl)
+          if [ "${#wheels[@]}" -ne 1 ]; then
+            printf 'Expected one refkit wheel, found %s\n' "${#wheels[@]}" >&2
+            exit 1
+          fi
+          uv run --no-project --python "${{ matrix.python-version }}" \
+            --with "${wheels[0]}" python .github/pyodide/smoke_refkit.py
 
   test-pyemscripten:
     name: refkit / Test PyEmscripten install
@@ -87,6 +93,6 @@ jobs:
         run: |
           source .venv-pyodide/bin/activate
           python -m pip install -r .github/pyodide/pylock.314.toml
-          python -m pip install refkit --no-index --find-links dist --force-reinstall
+          python -m pip install refkit --no-deps --no-index --find-links dist --force-reinstall
           python .github/pyodide/smoke_refkit.py
           python -m pytest -q -c /dev/null .github/pyodide/test_refkit_runtime.py

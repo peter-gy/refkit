@@ -14,6 +14,7 @@ POLARS_ADAPTER = Path("packages/polars-refkit/rust/Cargo.toml")
 REFKIT_PROJECT = Path("packages/refkit/pyproject.toml")
 NATIVE_PACKAGES = (REFKIT_PROJECT, Path("packages/polars-refkit/pyproject.toml"))
 RELEASED_CORE_DEPENDENCIES = ("biblatex", "hayagriva")
+REFKIT_RUNTIME_DEPENDENCIES = ["agent-plugins==0.1.1"]
 CARGO_LOCKS = (
     Path("Cargo.lock"),
     Path("packages/polars-refkit/rust/Cargo.lock"),
@@ -82,6 +83,16 @@ def _dependency_errors(
                 f"{manifest_path} contains unclassified {section}: " + ", ".join(sorted(unexpected))
             )
     return errors
+
+
+def _refkit_dependency_errors(manifest: dict[str, Any]) -> list[str]:
+    dependencies = manifest.get("project", {}).get("dependencies", [])
+    if dependencies == REFKIT_RUNTIME_DEPENDENCIES:
+        return []
+    return [
+        "packages/refkit runtime dependencies must contain only "
+        f"{', '.join(REFKIT_RUNTIME_DEPENDENCIES)}"
+    ]
 
 
 def _core_source_errors(root: Path) -> list[str]:
@@ -166,8 +177,7 @@ def check_contract(root: Path) -> list[str]:
         errors.append("Polars adapter must depend on the shared portable core")
 
     refkit = _load(root / REFKIT_PROJECT)
-    if refkit.get("project", {}).get("dependencies", []) != []:
-        errors.append("packages/refkit must keep the native adapter and Python API in one package")
+    errors.extend(_refkit_dependency_errors(refkit))
 
     for relative_path in NATIVE_PACKAGES:
         pyproject = _load(root / relative_path)

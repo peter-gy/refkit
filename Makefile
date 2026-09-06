@@ -37,6 +37,14 @@ typecheck:
 test:
 	$(UV_RUN) python -m pytest
 
+.PHONY: refkit-develop
+refkit-develop:
+	uv pip install --reinstall --no-deps --editable packages/refkit
+
+.PHONY: refkit-develop-release
+refkit-develop-release:
+	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install --reinstall --no-deps --editable packages/refkit
+
 .PHONY: benchmark-test
 benchmark-test:
 	$(UV_RUN) python -m pytest packages/refkit-bench/tests

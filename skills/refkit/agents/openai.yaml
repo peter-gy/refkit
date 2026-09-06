@@ -1,0 +1,4 @@
+interface:
+  display_name: "RefKit"
+  short_description: "Work with bibliography data through RefKit"
+  default_prompt: "Use $refkit to parse, inspect, render, format, or edit bibliography data."

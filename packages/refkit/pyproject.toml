@@ -22,11 +22,20 @@ classifiers = [
     "Programming Language :: Rust",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    "agent-plugins==0.1.1",
+]
+
+[project.entry-points."marimo.agent.capability"]
+refkit = "refkit.agent"
 
 [build-system]
-requires = ["maturin>=1.9,<2"]
-build-backend = "maturin"
+requires = ["agent-plugins==0.1.1", "maturin>=1.9,<2"]
+build-backend = "build_backend"
+backend-path = ["."]
+
+[tool.agent-plugins]
+root = "../.."
 
 [tool.maturin]
 manifest-path = "rust/Cargo.toml"
@@ -37,6 +46,9 @@ features = ["extension-module"]
 editable-profile = "dev"
 strip = true
 locked = true
+include = [
+    { path = "build_backend.py", format = "sdist" },
+]
 exclude = [
     "src/**/__pycache__/**",
     "src/**/*.pyc",

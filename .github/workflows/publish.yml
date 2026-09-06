@@ -75,9 +75,20 @@ jobs:
             exit 1
           fi
           uv run --no-project --python "3.11" --with "${sdists[0]}" python - <<'PY'
+          from importlib.metadata import distribution
+
           import refkit as core
+          import refkit.agent as refkit_agent
 
           assert core.__version__
+          capability = next(
+              entry
+              for entry in distribution("refkit").entry_points
+              if entry.group == "marimo.agent.capability"
+          )
+          assert (capability.name, capability.value) == ("refkit", "refkit.agent")
+          assert capability.load() is refkit_agent
+          assert refkit_agent.agent_skill().path.name == "refkit"
           PY
 
       - name: Upload sdist
@@ -129,6 +140,11 @@ jobs:
         with:
           working-directory: packages/refkit
           args: --locked --release --out dist --interpreter 3.11
+
+      - name: Package Agent Plugin
+        run: >-
+          uv run --no-project --with agent-plugins==0.1.1
+          python -m scripts.augment_agent_plugin "packages/refkit/dist/*.whl"
 
       - name: Check metadata
         run: |
@@ -189,6 +205,11 @@ jobs:
           target: wasm32-unknown-emscripten
           args: --locked --release --out dist --interpreter ${{ matrix.python-version }}
           rust-toolchain: ${{ steps.pyodide.outputs.rust-toolchain }}
+
+      - name: Package Agent Plugin
+        run: >-
+          uv run --no-project --with agent-plugins==0.1.1
+          python -m scripts.augment_agent_plugin "packages/refkit/dist/*.whl"
 
       - name: Check metadata
         run: |

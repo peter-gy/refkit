@@ -9,6 +9,7 @@ dependencies = [
 ]
 
 [tool.uv]
+exclude-newer = "3 days"
 package = false
 
 [tool.uv.sources]
@@ -27,6 +28,7 @@ members = [
 dev = [
     "hatchling>=1.31.0",
     "hypothesis>=6.156.5",
+    "marimo==0.24.0",
     "maturin>=1.14.1,<2",
     "pyrefly>=1.1.1",
     "pytest>=9.1.1",

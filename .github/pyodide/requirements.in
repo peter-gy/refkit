@@ -1,5 +1,6 @@
 # Runtime dependencies for the Pyodide contract tests.
 # Run `make pyodide-lock` from the repository root after changing this file.
 # The Polars version must match the plugin ABI mapping in runtime.json.
+agent-plugins==0.1.1
 polars==1.33.1
 pytest==9.1.1

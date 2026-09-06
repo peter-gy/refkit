@@ -1,12 +1,24 @@
 from __future__ import annotations
 
 import sys
+from importlib.metadata import distribution
 
 import refkit as rk
+import refkit.agent as refkit_agent
 
 
 def main() -> None:
     assert rk.build_info
+
+    capabilities = [
+        entry_point
+        for entry_point in distribution("refkit").entry_points
+        if entry_point.group == "marimo.agent.capability"
+    ]
+    assert [(entry.name, entry.value) for entry in capabilities] == [("refkit", "refkit.agent")]
+    assert capabilities[0].load() is refkit_agent
+    assert refkit_agent.agent_plugin().manifest.name == "refkit"
+    assert refkit_agent.agent_skill().path.name == "refkit"
 
     library = rk.Library.parse_bibtex(
         """
