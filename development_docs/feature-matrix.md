@@ -1,9 +1,12 @@
 # Feature Matrix
 
-This matrix compares the refkit workspace with the inspected local checkouts of
+This dated research matrix compares the RefKit workspace with the inspected local checkouts of
 citeproc-js, citeproc-py, and python-bibtexparser on 2026-06-10. It describes
 the features visible in the checked source trees, README files, tests, and
-package metadata. Upstream releases may differ.
+package metadata. Upstream releases may differ. The RefKit snapshot is commit
+`7110d53705db9da2194c4e8615789772e04f0df3`.
+
+Use the public exports, stubs, and user reference as the current API inventory. Refresh this research as one evidence set rather than updating isolated cells.
 
 Evidence paths are relative to the corresponding project root.
 
@@ -34,7 +37,7 @@ To refresh the matrix, select and record new upstream revisions, inspect the evi
 | citeproc-py | Python CSL processor with JSON and BibTeX source adapters. | `CitationStylesStyle`, `CitationStylesBibliography`, `Citation`, `CitationItem`, source adapters, and formatter modules. | Alpha API by package metadata. README states the Python support policy, lxml dependency, and partial citeproc test-suite coverage. |
 | python-bibtexparser | Python parser and writer for `.bib` documents. It preserves document blocks and supports transformation middleware. | `parse_string`, `parse_file`, `write_string`, `write_file`, `Library`, block classes, middleware, and `BibtexFormat`. | Beta API by README and metadata. It is a BibTeX document library, not a CSL renderer. |
 | refkit | Python package with a Rust/PyO3 extension. It combines normalized citation rendering with raw BibTeX formatting and editing. | `Library`, `Entry`, `Style`, `Locale`, `Citation`, `Cite`, `CitationGroup`, `Document`, `RenderedDocument`, `Rendered`, `BibDocument`, `TidyOptions`, `TidyResult`, `cite`, `full_bibliography`, `tidy_bibtex`, and `tidy_file`. | ABI3 CPython wheels cover Python 3.11 through 3.14. The PyEmscripten wheel targets Pyodide with Python 3.14. |
-| polars-refkit | Polars expression plugin backed by Rust through PyO3, pyo3-polars, and maturin. It parses, formats, inspects, projects, and renders BibTeX rows inside Polars query plans. | `cite`, `cite_each`, `cite_group`, `cite_html`, `full_bibliography_text`, `full_bibliography_html`, `entry_count`, `can_parse`, `has_diagnostics`, `keys`, `entries`, `parse_report`, `diagnostics`, `tidy_bibtex`, `tidy_bibtex_report`, and the `pl.Expr.refkit` namespace. | Current API supports the Python versions declared in package metadata and returns null for row-level parse or formatting failures where the expression has a scalar or list value result. Current package builds CPython and PyEmscripten wheels through the release workflow targets. |
+| polars-refkit | Polars expression plugin backed by Rust through PyO3, pyo3-polars, and maturin. It parses, formats, inspects, projects, and renders bibliography source rows inside Polars query plans. | `cite`, `cite_html`, `cite_rendered`, the three `cite_each` variants, the three `cite_group` variants, the three `full_bibliography` variants, `entry_count`, `can_parse`, `has_diagnostics`, `keys`, `entries`, `parse_report`, `diagnostics`, `tidy_bibtex`, `tidy_bibtex_report`, and the `pl.Expr.refkit` namespace. | Current API supports the Python versions declared in package metadata and returns null for row-local failures where the expression has a value result. Query configuration failures still abort execution. Current package builds CPython and PyEmscripten wheels through the release workflow targets. |
 
 ## High-Level Workflows
 
@@ -112,7 +115,7 @@ To refresh the matrix, select and record new upstream revisions, inspect the evi
 | Bibliography sorting | Yes. `updateItems` and registry sort keys drive bibliography order. | Yes. `sort_bibliography` and `CitationStylesBibliography.sort` exist. | No citation sorting. | Yes through Hayagriva rendering. |
 | Disambiguation | Yes. Dedicated disambiguation state and registry logic are implemented. | Partial. README lists several disambiguation and year-suffix features as missing. | No. | Partial through Hayagriva. refkit does not expose a separate disambiguation control API. |
 | Numeric citation numbering | Yes. Registry renumbering and numeric output mode are implemented. | Yes for supported CSL styles. | No. | Yes through CSL styles such as IEEE. |
-| Citation collapsing | Yes. citeproc-js handles collapse behavior. | No. README lists collapsing as missing. | No. | Partial through Hayagriva. Full CSL test-suite parity is not claimed by refkit. |
+| Citation collapsing | Yes. citeproc-js handles collapse behavior. | No. README lists collapsing as missing. | No. | Partial through Hayagriva. Full CSL test-suite parity is not claimed by RefKit. |
 | Et-al subsequent settings | Yes. Options exist for first and subsequent references. | No. README lists subsequent et-al settings as missing. | No. | Partial through Hayagriva. No public per-style override is exposed. |
 | Punctuation in quote | Yes. citeproc-js has locale and punctuation behavior. | No. README lists `punctuation-in-quote` as missing. | No. | Partial through Hayagriva style rendering. No public override is exposed. |
 | Display attributes | Yes. Output modes handle display classes such as block, left margin, right inline, and indent. | No. README lists `display` as missing. | No. | Yes for rendered HTML tree output where Hayagriva display metadata is present. |
@@ -194,7 +197,7 @@ To refresh the matrix, select and record new upstream revisions, inspect the evi
 | Package name from metadata | `citeproc`. | `citeproc-py`. | `bibtexparser`. | `refkit` and `polars-refkit`. |
 | Import name | `CSL` from bundled JS or CommonJS module. | `citeproc`. | `bibtexparser`. | `refkit` and `polars_refkit`. |
 | Python version support | Not applicable. | Declared in package metadata. | Declared in package metadata. | Declared in package metadata. |
-| Refkit workspace license | Not applicable. | Not applicable. | Not applicable. | Apache-2.0. |
+| RefKit workspace license | Not applicable. | Not applicable. | Not applicable. | Apache-2.0. |
 | Build system | JavaScript package and repo build scripts. | setuptools with versioneer and schema conversion. | setuptools. | uv workspace with maturin, PyO3, and pyo3-polars. |
 
 ## What refkit Unifies Today
@@ -212,7 +215,7 @@ refkit already covers the main overlap that requires two Python packages today:
 
 ## Migration Paths
 
-The [migration guide](../docs/migration.md) gives concrete replacements for common citeproc-py rendering flows and python-bibtexparser raw repair flows. The [API contracts guide](../docs/api-contracts.md) defines one-off helper inputs, structured return shapes, raw block records, and public errors.
+The [migration guide](../docs/migration.md) gives concrete replacements for common citeproc-py rendering flows and python-bibtexparser raw repair flows. The [Python reference](../docs/reference/python.md) and [data-shape reference](../docs/reference/data-shapes.md) define helper inputs, structured return shapes, raw block records, and public errors.
 
 ## Current refkit Gaps
 
@@ -222,11 +225,11 @@ Use the reference package named in the last column when a workflow needs one of 
 | --- | --- | --- |
 | Dynamic word-processor workflows | Citation IDs, insert-before and insert-after context, preview without mutation, state rebuild, uncited item APIs, and paged bibliography output. | citeproc-js. |
 | CSL-M and legal citation extensions | Jurisdiction modules, abbreviation hooks, multilingual preferences, and CSL-M extension APIs. | citeproc-js. |
-| Full CSL compatibility claim | Full citeproc-test-suite parity. Refkit uses Hayagriva and covers smoke plus regression behavior. | citeproc-js is the strongest reference from inspected docs. |
-| Raw BibTeX transform pipeline | Add, remove, reorder, formatting presets, middleware, LaTeX transforms, month transforms, and name transforms. Refkit preserves raw blocks and edits existing field values. | python-bibtexparser. |
+| Full CSL compatibility claim | Full citeproc-test-suite parity. RefKit uses Hayagriva and covers smoke plus regression behavior. | citeproc-js is the strongest reference from inspected docs. |
+| Raw BibTeX structural mutation | Add, remove, replace, or reorder raw fields and blocks through a live document API. RefKit preserves raw blocks, edits existing field values, and provides whole-document formatting transforms. | python-bibtexparser. |
 | CSL JSON import and export | `from_csl_json` and `to_csl_json` style workflows. | citeproc-py imports citeproc-js-like JSON. citeproc-js consumes host-supplied CSL item objects. |
-| Output formats | RTF, AsciiDoc, Formatting Objects, and reStructuredText. Refkit exposes text, HTML, and tree. | citeproc-js for RTF, AsciiDoc, and FO. citeproc-py for RST. |
-| Prefix and suffix on cite items | Prefix and suffix fields on individual cite items. Refkit `Cite` supports key, locator, and label. | citeproc-js and citeproc-py. |
+| Output formats | RTF, AsciiDoc, Formatting Objects, and reStructuredText. RefKit exposes text, HTML, and tree. | citeproc-js for RTF, AsciiDoc, and FO. citeproc-py for RST. |
+| Prefix and suffix on cite items | Prefix and suffix fields on individual cite items. RefKit `Cite` supports key, locator, and label. | citeproc-js and citeproc-py. |
 
 ## Evidence Map
 

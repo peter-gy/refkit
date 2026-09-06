@@ -7,7 +7,8 @@ RefKit keeps cross-file invariants executable. Each contract has one source-leve
 | Contract | Command | Protects |
 | --- | --- | --- |
 | Architecture | `make architecture-check` | Core dependency classification, host-boundary ownership, workspace composition, released engines, adapter direction, and locked native builds. |
-| Documentation | `make docs-check` | Markdown-only developer docs, local link targets, and the public-to-developer audience boundary. |
+| Documentation source | `make docs-source-check` | Markdown-only developer docs, local link targets, VitePress routes, and the public-to-developer audience boundary. |
+| Documentation site | `make docs-site-check` | Locked pnpm install, TypeScript, root and Pages-base VitePress output, routes, public assets, social metadata, raw Markdown, llms indexes, local links, and heading fragments. |
 | Release metadata | `make release-check` | Lockstep versions, exact native dependency pins, repository metadata, and release tag grammar. |
 | Pyodide runtime | `make pyodide-lock-check` | Runtime requirements, resolved wheels, hashes, and the tested Python-to-Rust Polars plugin ABI mapping. |
 | Distribution archive | `scripts/distribution_contract.py <archives>` | Bytecode exclusion, developer-doc exclusion, normalized SBOM references, and builder-path removal. |
@@ -79,8 +80,10 @@ Generated output should have an authoritative input, a reproducible command, and
 - `development_docs/` owns architecture, workflows, tests, packaging, release, and benchmark details.
 - `AGENTS.md` files keep short instructions close to the code they govern.
 
+`docs/.vitepress/config.mts` owns the rendered navigation, base path, llms plugin, and site metadata. `docs/scripts/verify-build.mjs` owns static output checks. `.github/workflows/pages.yml` owns the Pages artifact and deployment. The [documentation site guide](documentation.md) owns the build and browser workflow.
+
 Root `README.md` is the single public entry point allowed to link into the developer index. Public package READMEs remain self-contained because package indexes render them outside the repository.
 
 ## GitHub Actions
 
-Pin third-party actions to full commit SHAs. Keep source checks reusable, package builds separate from installed-artifact tests, and publish jobs ordered by runtime dependency. Native builds configure Rust path remapping before compilation and validate every archive before upload.
+Pin third-party actions to full commit SHAs. Keep source checks reusable and package builds separate from installed-artifact tests. The two package publish jobs run independently, then join at release completion. Native builds configure Rust path remapping before compilation. Publish jobs validate the merged archive set before trusted publication.

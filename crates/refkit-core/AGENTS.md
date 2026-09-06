@@ -1,6 +1,6 @@
 # Portable Core
 
-`refkit-core` is the inward bibliography capability port used by every host adapter.
+`refkit-core` is the portable core API used by every host adapter.
 
 - Expose RefKit-owned structs, enums, errors, and result records.
 - Accept source text or bytes. Keep filesystem paths, Python objects, Polars values, plugin registration, and serialized host shapes in adapters.

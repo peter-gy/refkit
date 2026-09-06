@@ -16,7 +16,7 @@ Use the [developer documentation](development_docs/README.md) for architecture, 
 
 ## Architecture
 
-- `crates/refkit-core` owns bibliography semantics. Its exported Rust types and operations are the inward capability port used by every adapter.
+- `crates/refkit-core` owns bibliography semantics. Its exported Rust types and operations form the portable core API used by every adapter.
 - `packages/refkit` adapts the core to Python objects and composes the public `refkit` package with the native extension at `refkit._native`.
 - `packages/polars-refkit` adapts the core to Polars expressions through its package-local Rust workspace.
 - `packages/refkit-bench`, `scripts/`, and GitHub Actions are outward tooling. Runtime packages never depend on them.
@@ -49,7 +49,7 @@ Reject changes that bypass this graph. Extend the executable contract when sourc
 
 - `Library` owns normalized citation data and parser diagnostics.
 - `BibDocument` owns source-order raw BibTeX, occurrence identity, and edit-preserving writeback.
-- `Document` owns one complete ordered render call. Separate calls do not share citation state.
+- `Document` owns prepared library, style, and locale inputs. Each render or bibliography call owns fresh citation state.
 - The Python and Polars adapters own host conversion, registration, filesystem access, and runtime lifecycle.
 - Release scripts own synchronized package versions and distribution metadata.
 
@@ -77,3 +77,5 @@ Read the nearest scoped instructions before editing a package, crate, script, wo
 | GitHub Actions | `actionlint .github/workflows/*.yml` plus affected package checks |
 
 Pyodide claims require built PyEmscripten wheels and runtime execution through `.github/pyodide`. Native artifacts require path remapping, wheel normalization, and distribution-contract validation.
+
+The user-facing documentation site lives under `docs/`. Keep its navigation exhaustive, preserve extensionless VitePress links, and run the pnpm typecheck, root and Pages-base builds, route, asset, llms, and link verifier through `make docs-check`. `pnpm --dir docs dev` serves `https://docs.refkit.localhost` through Portless. Use `pnpm --dir docs dev:direct` for the loopback VitePress server. `.github/workflows/pages.yml` deploys the `/refkit/` build.

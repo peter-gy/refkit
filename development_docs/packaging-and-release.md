@@ -2,6 +2,8 @@
 
 RefKit publishes two Python distributions from one synchronized release version. `refkit` contains the Python API and native bibliography extension. `polars-refkit` contains the native Polars plugin.
 
+A wheel is an installable Python archive. A source distribution, or sdist, contains source for a package build. ABI3 is Python's stable native extension application binary interface, which lets one compatible wheel cover several CPython releases.
+
 ## Artifact Graph
 
 | Distribution | Artifacts | Runtime relationship |
@@ -40,13 +42,15 @@ Creating or pushing a release tag changes public package state. Confirm release 
 
 Native release builds use locked Cargo resolution and path remapping. Remapping removes checkout, Cargo registry, Git checkout, Rust toolchain, and builder-home paths from compiled artifacts.
 
-Maturin emits wheel software bills of materials. `scripts.normalize_wheel` replaces local references with stable package references, removes generated timestamps and serial numbers, and refreshes the affected `RECORD` hashes. The distribution contract then rejects generated Python bytecode, developer documentation, local software-bill references, and embedded builder paths.
+Maturin is the Rust-backed Python package builder used by both distributions. It emits a software bill of materials (SBOM), an inventory of components inside the wheel. `scripts.normalize_wheel` replaces local references with stable package references, removes generated timestamps and serial numbers, and refreshes the affected wheel `RECORD` hashes. The distribution contract then rejects generated Python bytecode, developer documentation, local SBOM references, and embedded builder paths.
 
-Run `twine check --strict` and the distribution contract before an archive becomes a workflow artifact.
+Local `make build` normalizes and validates both wheel and sdist contents. The publish workflow uploads build artifacts, downloads the complete merged set, then runs `twine check --strict` and the distribution contract immediately before trusted publication.
 
 ## PyEmscripten Builds
 
-The Pyodide runtime source is `.github/pyodide/runtime.json`. The current contract targets Python 3.14 and records the xbuild environment, Polars wheel tag, and tested Polars plugin application binary interface family. `.github/actions/setup-pyodide` reads the corresponding Rust toolchain, Emscripten version, Pyodide ABI, and Rust flags from the pinned xbuild environment.
+[Pyodide](https://pyodide.org/) runs Python compiled through Emscripten in WebAssembly hosts. A PyEmscripten wheel contains a native Python extension built for that target. The xbuild environment pins the cross-build compiler, runtime application binary interface, and flags used to create those wheels.
+
+The runtime source is `.github/pyodide/runtime.json`. The current contract targets Python 3.14 and records the xbuild environment, Polars wheel tag, and tested Polars plugin application binary interface family. `.github/actions/setup-pyodide` reads the corresponding Rust toolchain, Emscripten version, Pyodide ABI, and Rust flags from the pinned xbuild environment.
 
 The essential build inputs are:
 
@@ -72,15 +76,25 @@ The Pyodide lane creates a virtual environment from the pinned xbuild environmen
 
 ## Publish Dependencies
 
-`.github/workflows/publish.yml` runs source checks and validates the tag before artifact work. It then performs these stages:
+`.github/workflows/publish.yml` validates the tag, then allows source checks and package artifact builds to run in parallel. It performs these stages:
 
 1. Build and test the `refkit` sdist, CPython wheels, and PyEmscripten wheel.
 2. Build and test the `polars-refkit` sdist, CPython wheels, and PyEmscripten wheel.
 3. Publish each validated distribution.
 4. Join both publish jobs at the release-complete check, then update release notes.
 
-Build jobs upload artifacts. Reusable release-test workflows validate those exact artifacts. Publish jobs download the validated artifact sets and use trusted publishing.
+Build jobs import each sdist, test each wheel, and upload the artifacts. Reusable release-test workflows install and validate the exact wheels. Publish jobs download the merged wheel and sdist sets, validate every archive, and use OpenID Connect (OIDC) trusted publishing so the workflow exchanges its GitHub identity for a short-lived package-index credential.
 
 ## Release Completion
 
 Before a release tag, run `make check` and validate the intended tag with the release contract. After publication, verify each public package version and install path from a clean environment. Handle a partial publish as external release state and preserve the same version during recovery.
+
+## Recover A Partial Publish
+
+1. Record which distribution version reached the package index and which publish job failed.
+2. Preserve the released version. Package indexes do not permit replacing an existing archive under the same filename.
+3. Re-run the failed package's artifact validation against the exact retained workflow artifacts.
+4. Publish the missing distribution with the same synchronized version when its artifacts remain valid.
+5. Run the release-complete checks and verify clean installs of both distributions.
+
+Escalate to a new version only when the retained artifact is invalid or the package index rejects the recovery upload.

@@ -4,6 +4,8 @@ Use package-focused rebuilds and checks while iterating. Run the complete reposi
 
 ## Bootstrap
 
+Install the uv, Rust, Node.js, and pnpm prerequisites from the [developer index](README.md), then synchronize the Python workspace. The development group provides Maturin for native adapter builds.
+
 ```bash
 uv sync --locked --all-packages --group dev
 (cd packages/refkit && uv run maturin develop)
@@ -21,7 +23,7 @@ uv sync --locked --all-packages --group dev
 | Native PyO3 adapter | `(cd packages/refkit && uv run maturin develop)` | `make typecheck test rust` |
 | Polars expressions or plugin Rust | `(cd packages/polars-refkit && uv run maturin develop)` | `make typecheck test rust` |
 | Benchmark runner | Build both adapters in release mode | `make benchmark-test` |
-| Documentation | None | `make docs-check test` |
+| User documentation or site | Install locked pnpm dependencies | `make docs-check test` |
 | Release or package metadata | Build affected distributions | `make release-check build` |
 | GitHub Actions | None | `actionlint .github/workflows/*.yml` plus affected package checks |
 
@@ -36,6 +38,46 @@ Use `make format` to apply Ruff and Rust formatting across all workspaces. `make
 5. Add tests through the nearest public boundary and update end-user API documentation.
 
 Keep Python dictionaries, Polars structs, JSON output, and exception mapping in adapters. Core records should describe bibliography behavior in Rust types.
+
+## Add A Capability
+
+1. Define the user behavior, input, result, failure modes, and state owner.
+2. Add portable behavior and RefKit-owned records to `crates/refkit-core`.
+3. Test the semantic contract through the core API.
+4. Project the result through each intended adapter using host-native values.
+5. Add adapter tests for conversion, lifecycle, and failure behavior.
+6. Update the public guides, exact reference, stubs, and the [capability map](capabilities.md).
+7. Extend an executable repository contract when source or artifact state can prove the new invariant.
+
+Keep one owner for each state transition. An adapter converts values and manages its host runtime. It should not reimplement bibliography semantics.
+
+## Add A Polars Expression
+
+Treat one expression as a cross-language surface. Update these parts together:
+
+1. Top-level builder in `polars_refkit/_expressions.py`.
+2. `pl.Expr.refkit` namespace method in `_namespace.py`.
+3. Runtime exports, `__all__`, and `__init__.pyi`.
+4. Static option conversion or serde keyword records.
+5. Rust expression registration and core call.
+6. Exact scalar, list, or struct dtype constructor.
+7. Default output name, null propagation, broadcasting, and lazy behavior.
+8. Eager, lazy, dtype, row-failure, and installed-wheel tests.
+9. Polars guide and expression reference.
+
+Static Python validation happens while constructing the expression. Dtype checks, style loading, projection validation, broadcasting, and row execution happen when an eager query runs or a lazy plan collects.
+
+## Change The Documentation Site
+
+Keep `docs/.vitepress/config.mts`, the public page tree, and the static build verifier aligned. Add every public page to the sidebar unless it is an intentional compatibility route.
+
+Run:
+
+```bash
+make docs-check test
+```
+
+Use the [documentation site guide](documentation.md) for browser and delivery validation.
 
 ## Change Rust Dependencies
 

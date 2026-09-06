@@ -1,6 +1,24 @@
 # RefKit Architecture
 
-RefKit keeps bibliography semantics in one portable Rust core. Python and Polars adapt the core-owned capability port to their host runtimes.
+RefKit keeps bibliography semantics in one portable Rust core. Python and Polars adapt the portable core API to their host runtimes.
+
+## Vocabulary And Boundaries
+
+Use these terms consistently across source, tests, and documentation:
+
+| Term | Meaning |
+| --- | --- |
+| Capability | A user behavior such as parsing, rendering, formatting, inspecting, or editing. |
+| Interface | A public call surface. Current interfaces are Python objects and Polars expressions. |
+| Adapter | Code that converts host inputs and outputs to and from the portable core API. |
+| Distribution | An installable package such as `refkit` or `polars-refkit`. |
+| Crate | A Rust package. `refkit-core` owns portable behavior. |
+| Native module | A compiled Python extension such as `refkit._native`. |
+| Plugin | The compiled Polars expression library loaded by Polars. |
+
+RefKit is the product and repository. `refkit` is both a Python distribution and import. `polars-refkit` is a Python distribution, while `polars_refkit` is its import.
+
+A bibliography source is text or a file in BibTeX, BibLaTeX, or Hayagriva bibliography YAML form. A normalized bibliography is the `Library` representation used for lookup and rendering. A raw BibTeX document is the source-order `BibDocument` representation used for preserving edits.
 
 ## Dependency Direction
 
@@ -27,9 +45,9 @@ Dependencies point inward toward `crates/refkit-core`:
 
 `scripts/architecture_contract.py` checks the permitted dependency sets, adapter paths, workspace membership, released engine sources, and host-boundary ownership.
 
-## Capability Port
+## Portable Core API
 
-The public Rust API of `crates/refkit-core` is the inward capability port. It accepts text or bytes and returns RefKit-owned records:
+The portable core API of `crates/refkit-core` accepts text or bytes and returns RefKit-owned records:
 
 - `Library::parse_biblatex(source, RecoveryPolicy)` parses normalized BibTeX or BibLaTeX.
 - `Library::parse_hayagriva_yaml(source)` parses normalized Hayagriva YAML.
@@ -40,11 +58,23 @@ The public Rust API of `crates/refkit-core` is the inward capability port. It ac
 
 Hayagriva, BibLaTeX, Citationberg, and serializers are pure in-process implementation libraries. Their concrete types stay behind RefKit-owned records. A trait port belongs in the core when the core must call replaceable I/O or a runtime service. Keep a pure dependency direct until a second implementation or runtime selection creates a substitution boundary.
 
+## Boundary Records
+
+Core records describe bibliography behavior before an adapter chooses a host shape:
+
+- `EntryRecord` becomes Python `Entry` objects or Polars entry structs.
+- `ParseReport` becomes Python diagnostics or a Polars parse-report struct.
+- `RawBlockInfo` and raw occurrence records become Python dictionaries and live raw handles.
+- `RenderedRecord` and `RenderedNode` become Python tree dictionaries. Polars rendered expressions project text and HTML into a struct.
+- `TidyResult` and `TidyWarning` become Python objects or Polars report fields.
+
+Keep Python dictionary keys, Polars dtype construction, JSON encoding, and host exceptions in adapters. Add a core record when more than one interface can reasonably consume the same semantic result.
+
 ## Adapters And Composition
 
 ### Python
 
-`packages/refkit/rust` translates the capability port into PyO3 classes, Python exceptions, dictionaries, and rendered trees. `filesystem.rs` reads paths, infers bibliography formats, attaches path-specific decode diagnostics, and writes raw BibTeX. `module.rs` registers the native classes and functions as `refkit._native`.
+`packages/refkit/rust` translates the portable core API into PyO3 classes, Python exceptions, dictionaries, and rendered trees. `filesystem.rs` reads paths, infers bibliography formats, attaches path-specific decode diagnostics, and writes raw BibTeX. `module.rs` registers the native classes and functions as `refkit._native`.
 
 `packages/refkit/src/refkit/__init__.py` is the Python composition root. It exposes the supported native objects and adds the path-based `cite`, `full_bibliography`, and `tidy_file` helpers.
 
@@ -60,8 +90,10 @@ The Polars workspace owns its Polars, PyO3, and `pyo3-polars` application binary
 | --- | --- |
 | `Library` | Normalized entries and parser diagnostics. |
 | `BibDocument` | Source-order raw BibTeX, occurrence identity, and edit-preserving writeback. |
-| `Style` and `Locale` | Prepared Citation Style Language inputs at the host boundary. |
-| `Document` | One complete ordered render call and its cited bibliography. |
+| `Style` | A prepared Citation Style Language style. |
+| `Locale` | A validated bundled locale code wrapper in the Python adapter. |
+| `Document` | Prepared library, style, and optional locale inputs. |
+| Render or bibliography call | Fresh processor state for one ordered operation. |
 | Python filesystem adapter | Path reads, extension detection, decode context, and writes. |
 | Python composition root | Public import surface and one-call helpers. |
 | Polars adapter | Expression registration, broadcasting, dtype shape, and row failure mapping. |
@@ -69,7 +101,7 @@ The Polars workspace owns its Polars, PyO3, and `pyo3-polars` application binary
 
 One transition has one owner. Adapter code converts values and lifecycle. Bibliography rules belong in the core.
 
-## Two Bibliography Models
+## Bibliography State Models
 
 `Library` is the normalized citation database used for selection, projection, rendering, and normalized export.
 
@@ -87,11 +119,11 @@ In-memory callers enter directly through `Library.parse_bibtex` or `Library.pars
 
 ### Render A Document
 
-`Document.render` creates a fresh driver, resolves the complete ordered citation list, and returns named citations plus the cited bibliography. Separate calls are independent. The core returns text, HTML, and typed rendered nodes. Adapters convert those records into host values.
+`Document` stores immutable library and style handles plus an optional locale code. `Document.render` creates a fresh driver, resolves the complete ordered citation list, and returns named citations plus the cited bibliography. Separate calls are independent. The core returns text, HTML, and typed rendered nodes. Adapters convert those records into host values.
 
 ### Edit Raw BibTeX
 
-`BibDocument` scans source-order blocks and indexes entry and field occurrences. A `BibField.value` assignment validates a replacement against the original delimiter mode and marks its source span. Rendering rewrites changed fields while preserving unrelated blocks.
+`BibDocument` scans source-order blocks and indexes entry and field occurrences. A `BibField.value` assignment validates a replacement against the original delimiter mode and records a value-span patch. Serialization applies changed spans to the original entry slices and preserves unrelated blocks.
 
 ### Execute A Polars Expression
 

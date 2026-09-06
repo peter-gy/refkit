@@ -46,6 +46,26 @@ uv run --locked --package refkit-bench python -m refkit_bench.runner \
 
 Result files belong in `packages/refkit-bench/results/` and remain local. Commit benchmark code and audited fixtures.
 
+## Command Selection
+
+The runner defaults to all four inputs, five measured rounds, and two warmups. Repeated `--input` values are deduplicated. Repeated `--lane` values schedule repeated lane runs. Explicit lanes take precedence over `--group`.
+
+The nine groups contain 32 lanes:
+
+| Group | Lanes |
+| --- | --- |
+| `input.normalized` | `input.bibtex-text`, `input.bibtex`, `input.dirty-bibtex`, `input.diagnostics` |
+| `raw-bibtex` | `raw-bibtex.parse`, `raw-bibtex.blocks`, `raw-bibtex.duplicates`, `raw-bibtex.write`, `raw-bibtex.roundtrip` |
+| `style` | `style.load`, `style.processor-setup` |
+| `render.prepared` | `render.prepared-citation`, `render.prepared-bibliography`, `render.cited-bibliography`, `render.repeated-citations` |
+| `render.output` | `render.output-text`, `render.output-html`, `render.output-tree` |
+| `render.one-off` | `render.one-off-cite`, `render.one-off-bibliography` |
+| `errors` | `errors.missing-reference` |
+| `inspect.entries` | `inspect.materialize`, `inspect.keys`, `inspect.lookup`, `inspect.fields` |
+| `bulk.polars` | `bulk.polars.materialize`, `bulk.polars.keys`, `bulk.polars.lookup`, `bulk.polars.fields`, `bulk.polars.citation`, `bulk.polars.bibliography`, `bulk.polars.repeated-citations` |
+
+A lane is one fair comparison contract. A group organizes related lanes. `capability` names the user behavior. `workflow` names the concrete path. `phase` and `operation_phase` name the measured boundary on successful rows. Both fields become `setup` on setup failure, so use `lane` to recover the intended operation.
+
 ## Lane Contract
 
 Compare rows only when `lane`, `input_size`, `source_format`, `setup_included`, and `execution_mode` describe the same workflow.
@@ -85,6 +105,10 @@ The runner generates deterministic `tiny`, `medium`, and `large` workloads. The 
 
 Generated workloads provide clean BibTeX, raw BibTeX with top-level blocks, malformed BibTeX, duplicate entries or fields, and CSL JSON for comparison renderers. The real workload uses the same clean bibliography for its clean, raw, and dirty source fields, so it provides syntax diversity rather than malformed-input recovery evidence. A lane selects the source form that matches its public workflow.
 
+Synthetic workloads contain 3, 48, and 192 entries for `tiny`, `medium`, and `large`. The tracked real workload contains 12 entries. Its provenance note and content hash preserve checkout-level reproducibility. A new real fixture needs reconstructable source identifiers, extraction date, hashes, item mapping, and license details.
+
+`style.load` ignores workload contents and currently runs once per selected input. Treat those rows as repeated measurements of the same style operation, not as input-scaling evidence.
+
 ## Comparison Rules
 
 - Schedule a package only when its public API owns the workflow.
@@ -94,5 +118,19 @@ Generated workloads provide clean BibTeX, raw BibTeX with top-level blocks, malf
 - Use release-mode native builds for timing claims.
 - Report failed and unsupported rows separately from successful timing comparisons.
 - Back every performance claim with the command, inputs, runtime metadata, and result artifact that produced it.
+
+## Runner Semantics
+
+The runner executes in one process with deterministic participant and input order. It records one raw row per measured round with `perf_counter`. Correctness checks run during warmups and after every timed operation, outside the recorded `seconds` value.
+
+A setup failure emits one zero-second failure row. A measured failure stops later rounds for that participant. Cleanup failure prints a diagnostic to standard error and leaves completed rows unchanged. The process exits nonzero when any row has `failed` status. Runs containing `ok` and `unsupported` rows exit zero.
+
+`--build-mode release` records a caller-supplied label. Use `--build-mode auto` to read `refkit.build_mode`, and build both adapters with `maturin develop --release` before a timing claim.
+
+## Measurement Limits
+
+The runner preserves reproducible raw rounds. It does not aggregate results, calculate confidence intervals, randomize participant order, isolate each participant in a new process, control the garbage collector, or set CPU affinity.
+
+Use the rows to inspect comparable workflows and prepare a dated analysis. A published performance claim should include environment, command, workload identity, raw result artifact, aggregation method, uncertainty, and known limitations.
 
 The current comparison adapters cover `bibtexparser`, `citeproc-py`, and Pybtex where their public workflows overlap a RefKit lane. The [feature matrix](feature-matrix.md) records the broader inspected capability context.
