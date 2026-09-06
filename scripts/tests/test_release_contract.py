@@ -91,10 +91,11 @@ def test_release_contract_reports_repository_drift(
     copy_contract_files(tmp_path)
     manifest = tmp_path / relative_path
     source = manifest.read_text(encoding="utf-8")
+    repository_key = "repository" if relative_path == "Cargo.toml" else "Repository"
     manifest.write_text(
         source.replace(
-            "https://github.com/peter-gy/refkit",
-            "https://example.invalid/refkit",
+            f'{repository_key} = "https://github.com/peter-gy/refkit"',
+            f'{repository_key} = "https://example.invalid/refkit"',
             1,
         ),
         encoding="utf-8",

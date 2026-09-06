@@ -8,7 +8,6 @@ license-files = ["LICENSE", "NOTICE"]
 authors = [
     { name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }
 ]
-urls = { Repository = "https://github.com/peter-gy/refkit" }
 requires-python = ">=3.11,<3.15"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -25,6 +24,11 @@ classifiers = [
 dependencies = [
     "agent-plugins==0.1.1",
 ]
+
+[project.urls]
+Documentation = "https://peter-gy.github.io/refkit/"
+Issues = "https://github.com/peter-gy/refkit/issues"
+Repository = "https://github.com/peter-gy/refkit"
 
 [project.entry-points."marimo.agent.capability"]
 refkit = "refkit.agent"

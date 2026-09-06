@@ -93,7 +93,7 @@ for `tidy_bibtex()` and `BibDocument.tidy()`.
 
 | Task | Interface | Start here |
 | --- | --- | --- |
-| Parse, render, inspect, and edit from Python | `refkit` | [Python guide](https://peter-gy.github.io/refkit/guides/python) |
+| Parse, render, inspect, and edit from Python | `refkit` | [Python quickstart](https://peter-gy.github.io/refkit/get-started) |
 | Apply bibliography operations to eager or lazy dataframes | `polars-refkit` and `pl.Expr.refkit` | [Polars guide](https://peter-gy.github.io/refkit/guides/polars) |
 | Run the Python interfaces in a browser-hosted Python runtime | WebAssembly wheels for [Pyodide](https://pyodide.org/) | [Pyodide guide](https://peter-gy.github.io/refkit/pyodide) |
 | Give a code-mode agent a version-matched RefKit workflow | `refkit.agent` and its packaged [Agent Skill](https://agentskills.io/specification) | [Agent integration](https://peter-gy.github.io/refkit/reference/agent-docs) |
@@ -134,7 +134,7 @@ installed with the wheel.
 
 - [Get started](https://peter-gy.github.io/refkit/get-started) reaches a complete render result.
 - [How RefKit works](https://peter-gy.github.io/refkit/concepts/how-refkit-works) defines the state owners and transitions.
-- [Guides](https://peter-gy.github.io/refkit/guides/python) cover Python, Polars, raw BibTeX editing, and custom Citation Style Language files.
+- [Guides](https://peter-gy.github.io/refkit/guides/parse-bibliographies) cover Python, Polars, raw BibTeX editing, and custom Citation Style Language files.
 - [Reference](https://peter-gy.github.io/refkit/reference/python) records the Python, Polars, Rust, data-shape, tidy, error, and agent contracts.
 - [Performance](https://peter-gy.github.io/refkit/performance) publishes reproducible benchmark evidence.
 - [Troubleshooting](https://peter-gy.github.io/refkit/troubleshooting) maps common failures to recovery steps.
