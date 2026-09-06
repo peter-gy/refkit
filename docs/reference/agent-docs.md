@@ -1,22 +1,14 @@
 ---
-description: Discover RefKit from marimo code mode, load its packaged Agent Skill, or read generated documentation as plain text.
+description: Use RefKit from code-mode agents, load its version-matched Agent Skill, or read generated documentation as plain text.
 ---
 
-# Agent-Readable Documentation
+# Agent integration
 
-RefKit installs a [marimo code-mode](https://github.com/marimo-team/marimo/pull/10399) capability and an [Agent Plugin](https://agent-plugins.org/) beside its Python API. The capability directs notebook agents to the public RefKit objects. The Agent Plugin carries version-matched workflow instructions with the distribution.
+The `refkit` wheel contains the Python library, an [Agent Plugin](https://agent-plugins.org/), and an [Agent Skill](https://agentskills.io/specification). Installing `refkit` places the library and its version-matched agent instructions in the same Python environment, so an agent reads workflows for the API version it can call.
 
-## Discover RefKit in code mode
+## Start with module help
 
-Marimo discovers capability metadata without importing RefKit:
-
-```python
-import marimo._code_mode as cm
-
-assert cm.capabilities()["refkit"] == "refkit.agent"
-```
-
-Import the advertised module and render its dynamic help:
+Any code-mode agent that can execute Python can import `refkit.agent`. Render its dynamic help for a complete parse and render workflow plus the installed resource paths:
 
 ```python
 import refkit.agent as refkit_agent
@@ -24,17 +16,36 @@ import refkit.agent as refkit_agent
 help(refkit_agent)
 ```
 
-The help output starts with a complete normalized parse and render workflow, then prints the installed Agent Plugin tree and the matching `SKILL.md` path. Access those resources directly when an agent needs the complete workflow:
+The help remains available when packaged-resource lookup fails and includes the reinstall action. Catch `refkit_agent.AgentPluginError` when code calls a resource function directly and needs to handle a damaged installation.
+
+## Load packaged instructions and resources
+
+`instructions()` returns the installed RefKit skill as Markdown. `resources()` returns the known skill files by relative name, with absolute `Path` values:
 
 ```python
-plugin = refkit_agent.agent_plugin()
-skill = refkit_agent.agent_skill()
-
-print(plugin.tree(max_depth=3))
-print(skill.body)
+instructions = refkit_agent.instructions()
+resources = refkit_agent.resources()
+workflow = resources["references/workflows.md"].read_text()
+contracts = resources["references/contracts.md"].read_text()
 ```
 
-Marimo currently exposes code mode through the internal `marimo._code_mode` module. Treat discovery as a preview integration while using RefKit's public API for bibliography operations.
+The agent workflow uses the same `Library`, `Document`, `BibDocument`, and tidy APIs as other Python callers. Any code-mode environment that can execute Python can use these imports directly. Clients that understand Agent Plugin metadata can also discover the packaged resources.
+
+Call `agent_plugin()` or `agent_skill()` when code needs the underlying `agent_plugins.Plugin` or `agent_plugins.Skill` handle.
+
+## Discover RefKit in marimo
+
+[Marimo](https://marimo.io/) is one environment that discovers the capability module automatically. Its code mode reads the entry-point metadata without importing RefKit:
+
+Install `refkit` in the Python environment that runs marimo, then inspect the capability map:
+
+```python
+import marimo._code_mode as cm
+
+assert cm.capabilities()["refkit"] == "refkit.agent"
+```
+
+Marimo currently exposes capability discovery through the internal preview `marimo._code_mode` module. The discovered `refkit.agent` module and the bibliography APIs it documents are regular Python modules.
 
 ## Read generated documentation
 

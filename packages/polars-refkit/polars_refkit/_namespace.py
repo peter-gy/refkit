@@ -47,7 +47,11 @@ class RefkitExprNamespace:
         locale: str = "en-US",
         recovery: RecoveryMode = "error",
     ) -> pl.Expr:
-        """Render one citation from each BibTeX row and key row."""
+        """Render one citation from each BibTeX row and key row.
+
+        A string `key_col` names a column. Use `pl.lit(...)` for a literal key.
+        Row-local parse failures, missing keys, and render failures return null.
+        """
 
         return cite(self._expr, key_col, style=style, locale=locale, recovery=recovery)
 

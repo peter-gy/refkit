@@ -75,6 +75,10 @@ impl CitationGroup {
     }
 }
 
+/// Identify one rendered citation occurrence and its bibliography input.
+///
+/// `id` is caller-defined and retrieves the result from `RenderedDocument`.
+/// `citation` accepts a bibliography key string, `Cite`, or `CitationGroup`.
 #[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Citation {

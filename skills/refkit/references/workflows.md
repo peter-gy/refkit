@@ -26,10 +26,12 @@ diagnostics = list(library.diagnostics)
 document = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 rendered = document.render(
     [
-        rk.Citation("introduction", "doe2024"),
+        rk.Citation(id="introduction", citation="doe2024"),
         rk.Citation(
-            "detail",
-            rk.CitationGroup([rk.Cite("doe2024", locator="12", label="page")]),
+            id="detail",
+            citation=rk.CitationGroup(
+                [rk.Cite("doe2024", locator="12", label="page")]
+            ),
         ),
     ]
 )
@@ -43,16 +45,24 @@ Each `render` call creates fresh citation processor state. Keep related citation
 ## Edit raw BibTeX while preserving surrounding source
 
 ```python
-raw = rk.BibDocument.parse(source)
-entry = raw.entries.get_all("doe2024")[0]
+duplicate_source = """% Keep this comment.
+@article{doe2024, TITLE={First title}, year={2024}}
+@article{doe2024, tItLe={Second title}, year={2025}}
+"""
+raw = rk.BibDocument.parse(duplicate_source)
+entries = raw.entries.get_all("doe2024")
+if len(entries) != 2:
+    raise ValueError(f"expected two doe2024 entries, found {len(entries)}")
+
+entry = entries[1]
 field = entry.fields.get_all("title")[0]
 field.value = "Corrected title"
 
 preview = raw.to_bibtex()
-preview
+print(preview)
 ```
 
-Entry keys are case-sensitive. Field lookup is case-insensitive. `get_all` makes duplicate occurrence selection explicit.
+Entry keys are case-sensitive. Field lookup is case-insensitive and preserves the source spelling of the field name. `get_all` makes duplicate occurrence selection explicit. `to_bibtex()` returns preview text and performs no filesystem write.
 
 After inspecting `preview`, commit the preserving write to the intended path:
 
@@ -63,9 +73,17 @@ raw.write("references.bib")
 ## Format and inspect warnings
 
 ```python
+duplicate_source = """
+@article{same, title={First}}
+@book{same, title={Second}}
+"""
 result = rk.tidy_bibtex(
-    source,
-    options=rk.TidyOptions(sort_fields=True, wrap=88),
+    duplicate_source,
+    options=rk.TidyOptions(
+        duplicates=["key"],
+        sort_fields=True,
+        wrap=88,
+    ),
 )
 
 formatted = result.bibtex
@@ -75,7 +93,7 @@ warnings = [
 ]
 ```
 
-`TidyResult.count` records parsed entry occurrences before duplicate merges.
+`duplicates=None` skips duplicate detection. `duplicates=["key"]` emits a `duplicate_entry` warning for repeated citation keys. `TidyResult.count` records parsed entry occurrences before duplicate merges.
 
 ## Process bibliography columns with Polars
 
@@ -87,11 +105,12 @@ import polars_refkit
 
 frame = pl.DataFrame({"bibtex": [source], "key": ["doe2024"]})
 result = frame.select(
-    citation=pl.col("bibtex").refkit.cite("key"),
+    citation_from_column=pl.col("bibtex").refkit.cite("key"),
+    citation_from_literal=pl.col("bibtex").refkit.cite(pl.lit("doe2024")),
     entries=pl.col("bibtex").refkit.entries(
         fields=["key", "entry_type", "title"]
     ),
 )
 ```
 
-A plain string argument names a column. Wrap literal source or citation keys with `pl.lit`.
+A plain string argument names a column. Wrap literal source or citation keys with `pl.lit(...)`. Importing `polars_refkit` registers `pl.Expr.refkit`. Citation expressions return null for row-local parse failures, missing keys, or rendering failures.

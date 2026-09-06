@@ -47,9 +47,12 @@ Expected output:
 
 Every `Rendered` value exposes text, rendered HTML, and a structured tree. `TidyOptions` configures canonical BibTeX formatting and duplicate handling.
 
-## Use From Marimo Code Mode
+## Use from code-mode agents
 
-RefKit registers `refkit.agent` as a marimo code-mode capability. Import the module named by `marimo._code_mode.capabilities()`, then call `help` for a version-matched workflow and packaged Agent Skill:
+Installing `refkit` also installs its [Agent Plugin](https://agent-plugins.org/)
+and version-matched [Agent Skill](https://agentskills.io/specification). Any
+code-mode agent that can execute Python can import `refkit.agent` and inspect
+the workflow for the installed API:
 
 ```python
 import refkit.agent as refkit_agent
@@ -57,9 +60,25 @@ import refkit.agent as refkit_agent
 help(refkit_agent)
 ```
 
-The capability guides agents to the same `Library`, `Document`, `BibDocument`, and tidy APIs used by regular Python callers.
+For programmatic access, `instructions()` returns the packaged skill as Markdown
+and `resources()` returns its known files by skill-relative name:
 
-Marimo exposes capability discovery through its internal preview code-mode module. The [agent-readable documentation](https://peter-gy.github.io/refkit/reference/agent-docs) records the current discovery and resource contract.
+```python
+instructions = refkit_agent.instructions()
+resources = refkit_agent.resources()
+workflow = resources["references/workflows.md"].read_text()
+```
+
+The agent workflow uses the same `Library`, `Document`, `BibDocument`, and tidy
+APIs as other Python callers. Any code-mode environment that can execute Python
+can use these imports directly. Clients that understand Agent Plugin metadata
+can also discover the packaged resources.
+
+[Marimo](https://marimo.io/) code mode also discovers `refkit.agent`
+automatically through the capability entry point installed with the wheel.
+Marimo currently exposes discovery through its internal preview code-mode
+module. The [agent integration guide](https://peter-gy.github.io/refkit/reference/agent-docs)
+records both the general Python path and marimo discovery.
 
 ## Documentation
 

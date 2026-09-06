@@ -1,15 +1,26 @@
-"""Use RefKit from notebook agents."""
+"""Use RefKit from code-mode agents."""
 
 from __future__ import annotations
 
-import sys
-from textwrap import indent
-from types import ModuleType
+import sys as _sys
+from textwrap import indent as _indent
+from types import ModuleType as _ModuleType
+from typing import TYPE_CHECKING as _TYPE_CHECKING
 
-import agent_plugins
+import agent_plugins as _agent_plugins
+
+if _TYPE_CHECKING:  # pragma: no cover - typing-only public annotation names
+    from pathlib import Path
+
+    import agent_plugins
+
+# Keep the future-feature binding out of the agent-facing module inventory.
+del annotations
 
 _DISTRIBUTION_NAME = "refkit"
 _SKILL_NAME = "refkit"
+
+AgentPluginError = _agent_plugins.AgentPluginError
 
 
 def agent_plugin() -> agent_plugins.Plugin:
@@ -19,16 +30,14 @@ def agent_plugin() -> agent_plugins.Plugin:
         AgentPluginError: The installed distribution has no usable plugin marker.
     """
 
-    return agent_plugins.locate(_DISTRIBUTION_NAME)
+    return _agent_plugins.locate(_DISTRIBUTION_NAME)
 
 
 def _agent_skill(plugin: agent_plugins.Plugin) -> agent_plugins.Skill:
     for skill in plugin.skills:
         if skill.path.name == _SKILL_NAME:
             return skill
-    raise agent_plugins.AgentPluginError(
-        "The RefKit Agent Plugin has no refkit skill. Reinstall refkit."
-    )
+    raise AgentPluginError("The RefKit Agent Plugin has no refkit skill. Reinstall refkit.")
 
 
 def agent_skill() -> agent_plugins.Skill:
@@ -39,6 +48,19 @@ def agent_skill() -> agent_plugins.Skill:
     """
 
     return _agent_skill(agent_plugin())
+
+
+def instructions() -> str:
+    """Return the installed RefKit Agent Skill instructions as Markdown."""
+
+    return agent_skill().body.lstrip("\n")
+
+
+def resources() -> dict[str, Path]:
+    """Return installed skill files keyed by skill-relative path."""
+
+    skill = agent_skill()
+    return {path.relative_to(skill.path).as_posix(): path for path in skill.files}
 
 
 def _sdk_help(summary: str) -> str:
@@ -54,16 +76,29 @@ Start with BibTeX source already in memory:
     )
     library = rk.Library.parse_bibtex(source, recovery="report")
     rows = library.project(["key", "title", "date", "doi"])
+    diagnostics = list(library.diagnostics)
 
-    document = rk.Document(library, rk.Style.load("apa"), locale="en-US")
-    rendered = document.render([rk.Citation("result", "doe2024")])
-    print(rendered["result"].text)
-    print(rendered.bibliography.text)
+    if diagnostics:
+        print({{
+            "status": "partial_recovery",
+            "entries": rows,
+            "diagnostics": diagnostics,
+        }})
+    else:
+        document = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+        rendered = document.render(
+            [rk.Citation(id="result", citation="doe2024")]
+        )
+        print(rendered["result"].text)
+        print(rendered.bibliography.text)
 
-Use `Library` for normalized lookup and rendering. Use `BibDocument` when
-source order, comments, duplicate occurrences, and preserving writes matter.
-Use `tidy_bibtex` for canonical formatting and inspect `TidyResult.warnings`
-before consuming the formatted source.
+Inspect `diagnostics` before consuming entries recovered with
+`recovery="report"`. Parsing still raises `RefkitError` when no entry survives
+recovery. Use `recovery="error"` when malformed input must stop the operation.
+Use `Library` for normalized lookup and rendering. Use `BibDocument` when source
+order, comments, duplicate occurrences, and preserving writes matter. Use
+`tidy_bibtex` for canonical formatting and inspect `TidyResult.warnings` before
+consuming the formatted source.
 
 Browse the published documentation map at:
 
@@ -76,8 +111,8 @@ def _module_help(summary: str) -> str:
     try:
         plugin = agent_plugin()
         skill = _agent_skill(plugin)
-        tree = indent(plugin.tree(max_depth=3, max_files=50), "    ")
-    except agent_plugins.AgentPluginError as error:
+        tree = _indent(plugin.tree(max_depth=3, max_files=50), "    ")
+    except AgentPluginError as error:
         return f"""{sdk}
 
 The installed Agent Plugin could not be resolved: {error}
@@ -95,21 +130,28 @@ Read the RefKit skill instructions at:
 
     {skill / "SKILL.md"}
 
-Traverse the same resources programmatically:
+Load the instructions and known resource files programmatically:
 
     import refkit.agent as refkit_agent
 
-    resources = refkit_agent.agent_plugin()
-    skill = refkit_agent.agent_skill()
-    print(resources)
-    print(skill.body)
+    instructions = refkit_agent.instructions()
+    resources = refkit_agent.resources()
+    workflow = resources["references/workflows.md"].read_text()
+
+Use `agent_plugin()` and `agent_skill()` when the underlying Agent Plugin
+handles are required.
 """
 
 
-__all__ = ["agent_plugin", "agent_skill"]
+__all__ = [
+    "agent_plugin",
+    "agent_skill",
+    "instructions",
+    "resources",
+]
 
 
-class _AgentModule(ModuleType):
+class _AgentModule(_ModuleType):
     @property
     def __doc__(self) -> str | None:  # pyrefly: ignore [bad-override]
         summary = self.__dict__.get("__doc__")
@@ -122,4 +164,4 @@ class _AgentModule(ModuleType):
         self.__dict__["__doc__"] = value
 
 
-sys.modules[__name__].__class__ = _AgentModule
+_sys.modules[__name__].__class__ = _AgentModule

@@ -18,10 +18,23 @@ PLUGIN_FILES = {
     "skills/refkit/references/contracts.md",
     "skills/refkit/references/workflows.md",
 }
+SKILL_FILES = {
+    "SKILL.md",
+    "agents/openai.yaml",
+    "references/contracts.md",
+    "references/workflows.md",
+}
 
 
 def test_agent_module_exports_resource_access() -> None:
-    assert refkit_agent.__all__ == ["agent_plugin", "agent_skill"]
+    assert refkit_agent.__all__ == [
+        "agent_plugin",
+        "agent_skill",
+        "instructions",
+        "resources",
+    ]
+    assert refkit_agent.AgentPluginError is agent_plugins.AgentPluginError
+    assert "annotations" not in dir(refkit_agent)
 
 
 def test_marimo_code_mode_discovers_and_loads_refkit_on_demand() -> None:
@@ -95,6 +108,17 @@ def test_agent_plugin_exposes_packaged_refkit_skill() -> None:
     assert {path.relative_to(plugin.path).as_posix() for path in plugin.files} == PLUGIN_FILES
 
 
+def test_agent_module_returns_instructions_and_known_resources() -> None:
+    skill = refkit_agent.agent_skill()
+    resources = refkit_agent.resources()
+
+    assert refkit_agent.instructions() == skill.body.lstrip("\n")
+    assert refkit_agent.instructions().startswith("# RefKit\n")
+    assert set(resources) == SKILL_FILES
+    assert all(path.is_file() for path in resources.values())
+    assert all(path.is_relative_to(skill.path) for path in resources.values())
+
+
 def test_agent_plugin_build_plan_contains_authored_resources() -> None:
     plan = agent_plugins.build_plan(ROOT / "packages/refkit")
 
@@ -109,16 +133,22 @@ def test_agent_module_help_points_to_sdk_and_installed_resources() -> None:
     assert str(plugin.path) in rendered
     assert str(skill / "SKILL.md") in rendered
     assert "Library.parse_bibtex" in rendered
+    assert "diagnostics = list(library.diagnostics)" in rendered
+    assert '"status": "partial_recovery"' in rendered
     assert "Document(library" in rendered
+    assert 'Citation(id="result", citation="doe2024")' in rendered
     assert '"@article{doe2024, author={Doe, Jane}, "' in rendered
+    assert "refkit_agent.instructions()" in rendered
+    assert 'resources["references/workflows.md"].read_text()' in rendered
     assert "https://peter-gy.github.io/refkit/llms.txt" in rendered
+    assert "Method resolution order" not in rendered
 
 
 def test_agent_module_help_preserves_sdk_when_plugin_lookup_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fail() -> agent_plugins.Plugin:
-        raise agent_plugins.AgentPluginError("marker unavailable")
+        raise refkit_agent.AgentPluginError("marker unavailable")
 
     monkeypatch.setattr(refkit_agent, "agent_plugin", fail)
     rendered = pydoc.render_doc(refkit_agent)

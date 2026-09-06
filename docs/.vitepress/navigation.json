@@ -43,7 +43,7 @@
         { "text": "Polars expressions", "link": "/reference/polars" },
         { "text": "Selectors", "link": "/reference/selectors" },
         { "text": "Rust core", "link": "/reference/rust" },
-        { "text": "Agent-readable docs", "link": "/reference/agent-docs" },
+        { "text": "Agent integration", "link": "/reference/agent-docs" },
         { "text": "Errors and diagnostics", "link": "/reference/errors" }
       ]
     },

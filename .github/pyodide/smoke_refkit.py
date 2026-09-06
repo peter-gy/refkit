@@ -19,6 +19,15 @@ def main() -> None:
     assert capabilities[0].load() is refkit_agent
     assert refkit_agent.agent_plugin().manifest.name == "refkit"
     assert refkit_agent.agent_skill().path.name == "refkit"
+    assert "refkit.Library" in refkit_agent.instructions()
+    resources = refkit_agent.resources()
+    assert set(resources) == {
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/contracts.md",
+        "references/workflows.md",
+    }
+    assert all(path.is_file() for path in resources.values())
 
     library = rk.Library.parse_bibtex(
         """
@@ -31,7 +40,7 @@ def main() -> None:
 """
     )
     document = rk.Document(library, rk.Style.load("apa"), locale="en-US")
-    rendered = document.render([rk.Citation("intro", "doe2024")])
+    rendered = document.render([rk.Citation(id="intro", citation="doe2024")])
 
     assert "Doe" in rendered["intro"].text
     assert rendered.bibliography.text

@@ -28,7 +28,11 @@ def cite(
     locale: str = "en-US",
     recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render one citation as plain text from each BibTeX row and key row."""
+    """Render one citation as plain text from each BibTeX row and key row.
+
+    String inputs name columns. Use `pl.lit(...)` for literal BibTeX or keys.
+    Row-local parse failures, missing keys, and render failures return null.
+    """
 
     return _cite_expr(
         "cite",

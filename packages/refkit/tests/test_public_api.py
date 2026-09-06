@@ -135,6 +135,15 @@ def test_document_accepts_named_citation_groups() -> None:
     assert rendered.bibliography.text
 
 
+def test_citation_runtime_help_defines_its_two_identifiers() -> None:
+    documentation = rk.Citation.__doc__ or ""
+
+    assert "`id` is caller-defined" in documentation
+    assert "bibliography key string" in documentation
+    assert "Cite" in documentation
+    assert "CitationGroup" in documentation
+
+
 def test_document_rejects_unnamed_iterable_citation_groups() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
