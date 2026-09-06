@@ -1,0 +1,62 @@
+skills/refkit/references/workflows.md
+  s_3f5f1d834d51b6::t_06d7a7a545ecdc 29,31-34,48-57,62,65,76-79,81-86,96,108-109,116
+packages/refkit/tests/test_agent.py
+  s_3f5f1d834d51b6::t_1ebc1cd97ca253 21-26,30-35,111-114,117-121,136,139,141-142,151
+  s_3f5f1d834d51b6::t_b75aae4d93476f 36,144
+  s_3f5f1d834d51b6::t_b5eef2642e2913 115-116,137
+  s_3f5f1d834d51b6::t_a4b77086ba73df 37
+skills/refkit/references/contracts.md
+  s_3f5f1d834d51b6::t_f7ffb15b64106b 53
+  s_3f5f1d834d51b6::t_d33a5a960b2064 18
+  s_3f5f1d834d51b6::t_06d7a7a545ecdc 23-26,33-34,41,59-60
+docs/.vitepress/navigation.json
+  s_3f5f1d834d51b6::t_f7ffb15b64106b 46
+packages/polars-refkit/polars_refkit/_expressions.py
+  s_3f5f1d834d51b6::t_654c8fafe8d704 31-35
+.github/pyodide/smoke_refkit.py
+  s_3f5f1d834d51b6::t_19251e04e95f05 22-30,43
+packages/refkit/rust/src/citation.rs
+  s_3f5f1d834d51b6::t_b5eef2642e2913 78-81
+packages/polars-refkit/polars_refkit/_namespace.py
+  s_3f5f1d834d51b6::t_654c8fafe8d704 50-54
+skills/refkit/SKILL.md
+  s_3f5f1d834d51b6::t_06d7a7a545ecdc 21,25,27-28,41
+  s_3f5f1d834d51b6::t_f7ffb15b64106b 20
+packages/refkit/README.md
+  s_3f5f1d834d51b6::t_263720651c86aa 50,72,76-81
+  s_3f5f1d834d51b6::t_3c422d02e17e5d 52-53,73-75
+  s_3f5f1d834d51b6::t_654c8fafe8d704 54-55,63-64,66-69
+docs/reference/agent-docs.md
+  s_3f5f1d834d51b6::t_f7ffb15b64106b 2,7,14,36-39,43,45,48
+  s_3f5f1d834d51b6::t_263720651c86aa 5
+  s_3f5f1d834d51b6::t_19251e04e95f05 40
+  s_3f5f1d834d51b6::t_654c8fafe8d704 9,11,16,19,21,23-29,33-34
+  s_3f5f1d834d51b6::t_3c422d02e17e5d 32
+packages/refkit/tests/test_public_api.py
+  s_3f5f1d834d51b6::t_04711dac05e92f 141
+  s_3f5f1d834d51b6::t_f811cebbd38021 138-140,142-146
+packages/refkit/src/refkit/agent.py
+  s_3f5f1d834d51b6::t_1ebc1cd97ca253 5-7,10,23-24,33,53-54,58,60-62,64-65,79,95,114-115,133,137-142,146-151,154,167
+  s_3f5f1d834d51b6::t_f7ffb15b64106b 1
+  s_3f5f1d834d51b6::t_a4b77086ba73df 8,13-16,18,59
+  s_3f5f1d834d51b6::t_1e89f3d10708e7 12
+  s_3f5f1d834d51b6::t_2abc17ef70dc4a 17
+  s_3f5f1d834d51b6::t_b0c074129821f8 40,63
+  s_3f5f1d834d51b6::t_b5eef2642e2913 56,81-93,96-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "540c8f04eb39401dea4b76c29ed0f832ae07edea",
+  "prompts": {},
+  "sessions": {
+    "s_3f5f1d834d51b6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0759c-2397-7560-954a-ecacd63f6a14",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
