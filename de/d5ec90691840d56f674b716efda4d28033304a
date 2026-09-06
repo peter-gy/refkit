@@ -1,0 +1,229 @@
+packages/refkit/rust/src/errors.rs
+  s_d6c1969625d69a::t_557cea2fe58d4c 5,7
+  s_d6c1969625d69a::t_a8575f36f35b98 8-12
+packages/refkit/tests/test_tidy_options.py
+  s_d6c1969625d69a::t_69daeb9ce989cd 11,13,46,63
+development_docs/feature-matrix.md
+  s_d6c1969625d69a::t_8e8abd484881c9 36
+  s_d6c1969625d69a::t_5b9f4d52aa4455 37,160-161
+  s_d6c1969625d69a::t_fe56178c588b4d 177,194-195,238
+Makefile
+  s_d6c1969625d69a::t_2b39e8b89f4d02 67,78,115
+packages/refkit/pyproject.toml
+  s_d6c1969625d69a::t_f61d97da1cfc78 25,28-29,31-43
+crates/refkit-core/src/source.rs
+  s_d6c1969625d69a::t_26dc3f6da168f8 1-5,7-10,13-22,67-77,80-86
+crates/refkit-core/src/library/parse.rs
+  s_d6c1969625d69a::t_9ababc48044ef3 12
+  s_d6c1969625d69a::t_6581a01c1e2e12 2,4,6,8-11,15-21,24-25,59,67
+packages/refkit/rust/src/module.rs
+  s_d6c1969625d69a::t_a8575f36f35b98 45,73
+  s_d6c1969625d69a::t_8f0d324932daa4 8,37
+packages/refkit/rust/src/raw.rs
+  s_d6c1969625d69a::t_557cea2fe58d4c 14,18
+  s_d6c1969625d69a::t_a8575f36f35b98 13,23,32-33,93,132,222,275,386
+scripts/tests/test_architecture_contract.py
+  s_d6c1969625d69a::t_c22944d2502f73 3-7,10-13,59-125
+  s_d6c1969625d69a::t_c3740f0f0b981f 8-9,27-32,34-46,58
+  s_d6c1969625d69a::t_a76bab414e235d 33,47-57
+packages/refkit/rust/src/lib.rs
+  s_d6c1969625d69a::t_a8575f36f35b98 6,19
+  s_d6c1969625d69a::t_66fff5a694e005 11
+docs/api-contracts.md
+  s_d6c1969625d69a::t_5b9f4d52aa4455 98,145
+crates/refkit-core/src/library/mod.rs
+  s_d6c1969625d69a::t_03a13f7c610836 238,240,260,270,291,295,306,315,330,339
+  s_d6c1969625d69a::t_40311fd588d352 5,42-51,53-59,129-137,183
+  s_d6c1969625d69a::t_a07f80ddb3dd42 11
+  s_d6c1969625d69a::t_68a9c09eabb9da 71,82,106,120,220
+  s_d6c1969625d69a::t_6581a01c1e2e12 14-15,60-65
+  s_d6c1969625d69a::t_45344595ca75bf 4,52
+  s_d6c1969625d69a::t_7d2b3d8c377bd3 6,87-105,107-110
+  s_d6c1969625d69a::t_8c0f1cedb117df 128,185
+  s_d6c1969625d69a::t_5e4b768f96177e 78,114-119,121-123,125,245,248-254
+  s_d6c1969625d69a::t_77982b0f202c09 12
+crates/refkit-core/src/document.rs
+  s_d6c1969625d69a::t_46e0186ab76f39 66
+  s_d6c1969625d69a::t_03a13f7c610836 14,54,171,234
+development_docs/development.md
+  s_d6c1969625d69a::t_f195535fc3174a 9,13,21,33-36,42
+  s_d6c1969625d69a::t_ad7ba8ff2c2da5 24
+Cargo.toml
+  s_d6c1969625d69a::t_f61d97da1cfc78 4
+docs/pyodide.md
+  s_d6c1969625d69a::t_e8481c10a0f167 3,17
+development_docs/README.md
+  s_d6c1969625d69a::t_f195535fc3174a 9
+packages/refkit/src/refkit/__init__.pyi
+  s_d6c1969625d69a::t_f61d97da1cfc78 3
+README.md
+  s_d6c1969625d69a::t_e8481c10a0f167 12
+  s_d6c1969625d69a::t_ad7ba8ff2c2da5 13
+  s_d6c1969625d69a::t_2c46d071d04597 145
+docs/migration.md
+  s_d6c1969625d69a::t_5b9f4d52aa4455 25-33
+  s_d6c1969625d69a::t_8e8abd484881c9 21
+  s_d6c1969625d69a::t_e8481c10a0f167 5,13,18,22-23
+packages/refkit/rust/src/citation.rs
+  s_d6c1969625d69a::t_557cea2fe58d4c 7,9
+  s_d6c1969625d69a::t_a8575f36f35b98 10-11,44,78
+packages/refkit/rust/src/tidy.rs
+  s_d6c1969625d69a::t_557cea2fe58d4c 6,9
+  s_d6c1969625d69a::t_a8575f36f35b98 12,141,164
+crates/refkit-core/src/render_tree.rs
+  s_d6c1969625d69a::t_536f56a831a178 3
+  s_d6c1969625d69a::t_77982b0f202c09 7-9
+packages/polars-refkit/polars_refkit/_plugin.py
+  s_d6c1969625d69a::t_23377cf8e80185 78,93,104,128,133-135
+crates/refkit-core/src/strings.rs
+  s_d6c1969625d69a::t_0b1c65b124ca58 160
+  s_d6c1969625d69a::t_557cea2fe58d4c 7
+  s_d6c1969625d69a::t_c8774f0fa02a7d 25,61,70,84,91,98,106,113,122
+packages/refkit/rust/src/document.rs
+  s_d6c1969625d69a::t_a8575f36f35b98 7,15,77
+packages/polars-refkit/polars_refkit/__init__.py
+  s_d6c1969625d69a::t_3a8cd108c2648e 48
+packages/refkit/tests/test_pyodide.py
+  s_d6c1969625d69a::t_a70da03928678e 45,78,82-83,87-88,93-95
+packages/polars-refkit/README.md
+  s_d6c1969625d69a::t_2c46d071d04597 99,145
+crates/refkit-core/Cargo.toml
+  s_d6c1969625d69a::t_c22944d2502f73 15
+  s_d6c1969625d69a::t_324e9333f805d2 18-19,21-22
+  s_d6c1969625d69a::t_f093d83590d152 9-12
+packages/refkit/src/refkit/_native.pyi
+  s_d6c1969625d69a::t_8c9351c3d68add 3
+  s_d6c1969625d69a::t_82efa9754af861 109,194,199
+  s_d6c1969625d69a::t_3928f76a8a1b68 10,184-185
+  s_d6c1969625d69a::t_8f0d324932daa4 174
+packages/refkit/rust/src/rendered.rs
+  s_d6c1969625d69a::t_557cea2fe58d4c 8,10
+  s_d6c1969625d69a::t_a8575f36f35b98 11-12
+development_docs/benchmarks.md
+  s_d6c1969625d69a::t_f195535fc3174a 11
+packages/refkit/tests/test_public_api.py
+  s_d6c1969625d69a::t_e5818760eed4a0 364-370,372,378
+  s_d6c1969625d69a::t_69daeb9ce989cd 360
+  s_d6c1969625d69a::t_2c46d071d04597 532-533,567
+  s_d6c1969625d69a::t_c22944d2502f73 562-563,565-566,568-569,571-573,576-581
+  s_d6c1969625d69a::t_edda6cfd21e7e0 570
+  s_d6c1969625d69a::t_acd2a5fa1cc68a 564,574-575
+scripts/architecture_contract.py
+  s_d6c1969625d69a::t_c22944d2502f73 16-20,100-132,144-146
+  s_d6c1969625d69a::t_71159caae4d05f 92,96
+  s_d6c1969625d69a::t_bd65bb9191bd11 12,14-15,21-22,25,30,40-41,72,76,85-91,97-99,140-143,149-151,168-170
+  s_d6c1969625d69a::t_8c6f352322dab3 23-24,27
+  s_d6c1969625d69a::t_a76bab414e235d 4,26,28-29,31-39,42-54,73-75,77-81,83-84,93-95
+  s_d6c1969625d69a::t_5771a543779477 82
+packages/refkit/rust/src/filesystem.rs
+  s_d6c1969625d69a::t_557cea2fe58d4c 5-6,8
+  s_d6c1969625d69a::t_a8575f36f35b98 1-3,9-62,73-79
+  s_d6c1969625d69a::t_8f0d324932daa4 4,7,63-72
+development_docs/repository-contracts.md
+  s_d6c1969625d69a::t_f195535fc3174a 9,22-24,39-40
+scripts/release_contract.py
+  s_d6c1969625d69a::t_e9350f636dfc06 33-36
+  s_d6c1969625d69a::t_858f26270caf35 87
+  s_d6c1969625d69a::t_8e8abd484881c9 57
+crates/refkit-core/src/render/mod.rs
+  s_d6c1969625d69a::t_c8774f0fa02a7d 43,48-51
+  s_d6c1969625d69a::t_5c93994ac5be44 7,26-42,59,68,70,78,80,88,90
+  s_d6c1969625d69a::t_03a13f7c610836 142,144,158,161,183,186
+  s_d6c1969625d69a::t_8c0f1cedb117df 60
+packages/refkit/NOTICE
+  s_d6c1969625d69a::t_eee801f7e45f0f 8
+packages/refkit/rust/src/conversion.rs
+  s_d6c1969625d69a::t_cae5ed47a91cbf 5,62-65
+  s_d6c1969625d69a::t_5aace455c9dfa8 49-51,60
+  s_d6c1969625d69a::t_3928f76a8a1b68 57
+  s_d6c1969625d69a::t_abb06df2d4c6fc 102
+  s_d6c1969625d69a::t_a8575f36f35b98 12,14-15
+  s_d6c1969625d69a::t_7d2b3d8c377bd3 52-56,58-59
+  s_d6c1969625d69a::t_41e6f961f49812 7-11,24,26-29,43,48,61,97-98,109-110,113-114
+packages/refkit/rust/src/entry.rs
+  s_d6c1969625d69a::t_a8575f36f35b98 19,50
+  s_d6c1969625d69a::t_3928f76a8a1b68 51-54
+  s_d6c1969625d69a::t_557cea2fe58d4c 5-7
+crates/refkit-core/tests/capability_contract.rs
+  s_d6c1969625d69a::t_cae5ed47a91cbf 12
+  s_d6c1969625d69a::t_68a9c09eabb9da 1,8,11
+  s_d6c1969625d69a::t_acd2a5fa1cc68a 2-7,9-10,13
+packages/refkit/rust/src/library.rs
+  s_d6c1969625d69a::t_a8575f36f35b98 9,16,18,22,28-32,35,65-70,73-77,83-86,92-94,100
+  s_d6c1969625d69a::t_40311fd588d352 71-72,87,95,152
+  s_d6c1969625d69a::t_3928f76a8a1b68 12
+  s_d6c1969625d69a::t_41e6f961f49812 167-174
+packages/refkit/rust/src/style.rs
+  s_d6c1969625d69a::t_557cea2fe58d4c 14
+  s_d6c1969625d69a::t_a8575f36f35b98 9,13,16,76
+  s_d6c1969625d69a::t_6b3a44c89abd43 90-92
+  s_d6c1969625d69a::t_211a678c0f3213 26-30,34-35,44-49,51,85-89
+packages/refkit/src/refkit/__init__.py
+  s_d6c1969625d69a::t_8f0d324932daa4 102
+  s_d6c1969625d69a::t_f61d97da1cfc78 8,13-14,17-18,22
+packages/refkit/rust/Cargo.toml
+  s_d6c1969625d69a::t_a8575f36f35b98 2,7,15
+development_docs/testing.md
+  s_d6c1969625d69a::t_f195535fc3174a 10,28,33
+packages/polars-refkit/tests/test_polars_refkit.py
+  s_d6c1969625d69a::t_d5cfd070b661ca 641
+  s_d6c1969625d69a::t_a3e6349d2865dc 224,227
+  s_d6c1969625d69a::t_5e09f40a81dce7 644
+  s_d6c1969625d69a::t_89b05d961bce6e 647,650
+  s_d6c1969625d69a::t_5ae5398385e30b 231
+  s_d6c1969625d69a::t_ad60aefd10c8e7 7,13
+  s_d6c1969625d69a::t_f9882340c9f312 640,642-643,645-646,648-649,651-656
+crates/refkit-core/src/lib.rs
+  s_d6c1969625d69a::t_5c93994ac5be44 23-24
+  s_d6c1969625d69a::t_26dc3f6da168f8 6,12,27
+  s_d6c1969625d69a::t_45344595ca75bf 14-15
+  s_d6c1969625d69a::t_557cea2fe58d4c 28
+packages/polars-refkit/rust/src/expressions/broadcast.rs
+  s_d6c1969625d69a::t_40311fd588d352 3,8
+  s_d6c1969625d69a::t_23377cf8e80185 7,9,12-15,19
+packages/polars-refkit/rust/src/expressions/entries.rs
+  s_d6c1969625d69a::t_684c512636ef60 4,28-29,39,51-52,63
+  s_d6c1969625d69a::t_2cce41be81ce8b 26
+  s_d6c1969625d69a::t_cae5ed47a91cbf 42-46
+development_docs/packaging-and-release.md
+  s_d6c1969625d69a::t_b7dc89cd1217a7 3,9,18,26-28,43,49,68,71,75,77-80,86
+testdata/contracts/biblatex-input.bib
+  s_d6c1969625d69a::t_acd2a5fa1cc68a 1-8
+packages/polars-refkit/rust/src/expressions/mod.rs
+  s_d6c1969625d69a::t_23377cf8e80185 8,11-26,29,34,42
+packages/refkit/rust/src/repr.rs
+  s_d6c1969625d69a::t_557cea2fe58d4c 1-13,15-16,19-20
+development_docs/architecture.md
+  s_d6c1969625d69a::t_9f4422a63c7c8e 41
+  s_d6c1969625d69a::t_052cb0985db104 3,8-17,20,22-26,28,30,32,34-40,42-47,49,51,53,55,57-59,61-78,80,82,84,86,88,90,92,94,96,98,103-104,106,108
+packages/polars-refkit/rust/src/expressions/parse.rs
+  s_d6c1969625d69a::t_2cce41be81ce8b 16,35,57,81,113,115,127
+  s_d6c1969625d69a::t_3a8cd108c2648e 3
+  s_d6c1969625d69a::t_42b8a611312cd2 7
+  s_d6c1969625d69a::t_46e0186ab76f39 114
+scripts/tests/test_release_contract.py
+  s_d6c1969625d69a::t_858f26270caf35 20,83,111
+  s_d6c1969625d69a::t_8e8abd484881c9 130-134,136-142
+packages/refkit/README.md
+  s_d6c1969625d69a::t_ad7ba8ff2c2da5 21
+  s_d6c1969625d69a::t_e8481c10a0f167 19
+  s_d6c1969625d69a::t_2c46d071d04597 138,184,190
+packages/polars-refkit/rust/src/expressions/render.rs
+  s_d6c1969625d69a::t_2cce41be81ce8b 7,96,109,131,151,181,193,217,237,248,269,288,317,326,347
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ded5ec90691840d56f674b716efda4d28033304a",
+  "prompts": {},
+  "sessions": {
+    "s_d6c1969625d69a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07552-1c83-7ca1-94c1-af71c3cc9acc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
