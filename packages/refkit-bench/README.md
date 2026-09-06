@@ -1,8 +1,8 @@
 # refkit-bench
 
-`refkit-bench` is the repository benchmark runner for RefKit parsing, raw BibTeX, rendering, inspection, and Polars workflows. It records workload provenance, measured phases, correctness status, and runtime metadata for each result row.
+`refkit-bench` is repository-internal benchmark tooling for RefKit parsing, raw BibTeX, rendering, inspection, and Polars workflows. It records workload provenance, measured phases, correctness status, and runtime metadata for each result row. The synchronized public release contains the `refkit` and `polars-refkit` distributions.
 
-Use the [benchmark developer guide](../../development_docs/benchmarks.md) for release-mode setup, lane commands, result fields, inputs, and comparison rules.
+Use the [benchmark developer guide](https://github.com/peter-gy/refkit/blob/main/development_docs/benchmarks.md) for release-mode setup, lane commands, result fields, inputs, and comparison rules.
 
 ## License
 

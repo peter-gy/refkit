@@ -1,24 +1,14 @@
 # refkit
 
-`refkit` reads BibTeX, BibLaTeX, and Hayagriva YAML, renders CSL citations, formats BibTeX, and edits raw BibTeX documents from Python.
+`refkit` parses bibliography source, renders Citation Style Language citations and bibliographies, formats BibTeX, and preserves raw BibTeX for targeted field edits.
 
 ## Install
 
 ```bash
-pip install refkit
+python -m pip install refkit
 ```
 
-In Pyodide 314.0.2, install from Python code that supports top-level `await`:
-
-```python
-import micropip
-
-await micropip.install("refkit")
-```
-
-`refkit` contains the Python API and its Rust/PyO3 extension at `refkit._native`, including PyEmscripten wheels for Pyodide.
-
-RefKit supports Python 3.11 through 3.14. Installation uses a compatible native wheel when available and builds from the source distribution on other platforms.
+RefKit supports Python 3.11 through 3.14. Pip selects a compatible native wheel when one is available. A source-distribution build requires a Rust toolchain and a working Python build environment.
 
 ## Render A Citation
 
@@ -30,234 +20,39 @@ library = rk.Library.parse_bibtex(
 @article{doe2024,
   author = {Doe, Jane},
   title = {Fast Citations},
-  journal = {Journal of Citation Tests},
   year = {2024}
-}
-@book{roe2022,
-  author = {Roe, Richard},
-  title = {Batch References},
-  publisher = {Example Press},
-  year = {2022}
 }
 """
 )
-style = rk.Style.load("apa")
-doc = rk.Document(library, style, locale="en-US")
-
-rendered = doc.render(
-    [
-        rk.Citation("intro", "doe2024"),
-        rk.Citation(
-            "detail",
-            rk.CitationGroup([rk.Cite("doe2024", locator="12", label="page"), "roe2022"]),
-        ),
-    ]
-)
+document = rk.Document(library, rk.Style.load("apa"), locale="en-US")
+rendered = document.render([rk.Citation("intro", "doe2024")])
 
 print(rendered["intro"].text)
-print(rendered["detail"].text)
-print(rendered.bibliography.text)
 ```
 
 Expected output:
 
 ```text
 (Doe, 2024)
-(Doe, 2024, p. 12; Roe, 2022)
-Doe, J. (2024). Fast Citations. Journal of Citation Tests.
-Roe, R. (2022). Batch References. Example Press.
 ```
 
-`Document.render` renders the whole citation document at once. It returns `RenderedDocument`, where `rendered["intro"]` and `rendered["detail"]` are named citation outputs and `rendered.bibliography` is the cited bibliography for those citations.
-`Cite` names one citation item. `CitationGroup` renders several items as one citation. `Citation(id, group)` gives that rendered citation a stable lookup name. Citation ids must be unique inside one `Document.render` call.
+`Library` owns normalized entries. `Document` stores the library, style, and locale inputs. Each render call receives the complete ordered citation document and returns named citations with their cited bibliography.
 
-For one-off scripts, pass a bibliography path directly:
+## Choose A Model
 
-```python
-rk.cite("refs.bib", "doe2024", style="ieee").text
-rk.full_bibliography("refs.bib", style="chicago-author-date").html
-```
-
-Use `Library.parse_bibtex`, `Library.parse_yaml`, and `Document` when the bibliography source is already in memory or when several citations share the same library and style.
-
-## Format BibTeX
-
-`tidy_bibtex` formats BibTeX text and returns `TidyResult` with the formatted source, warnings, and entry count.
-
-```python
-import refkit as rk
-
-result = rk.tidy_bibtex(
-    """
-@ARTICLE {doe2024,
-  pages={6-13},
-  year={2024},}
-"""
-)
-
-print(result.bibtex)
-print(result.count)
-```
-
-Use `TidyOptions` for formatting choices:
-
-```python
-options = rk.TidyOptions(sort_fields=True, wrap=88)
-result = rk.tidy_bibtex(source, options=options)
-```
-
-Warnings are structured objects:
-
-```python
-for warning in result.warnings:
-    print(warning.code, warning.rule, warning.message)
-```
-
-Raw edit flows can render the current document state before formatting:
-
-```python
-raw = rk.BibDocument.read("refs.bib")
-raw.entries["doe2024"].fields["title"].value = "Corrected title"
-result = raw.tidy(options=rk.TidyOptions(sort_fields=True))
-```
-
-Use `tidy_file` when the input is on disk. It writes a file when `output` is supplied.
-
-```python
-rk.tidy_file("refs.bib", output="refs.tidy.bib")
-```
-
-## Capabilities
-
-| Capability | Python surface |
+| Model | Use it for |
 | --- | --- |
-| Read normalized bibliography data | `Library.read`, `Library.parse_bibtex`, `Library.parse_yaml` |
-| Render citations | `Document.render`, `Citation`, `Cite`, `CitationGroup`, `cite` |
-| Render bibliographies | `Document.cited_bibliography`, `Document.full_bibliography`, `full_bibliography` |
-| Load styles and locales | `Style.load`, `Style.from_path`, `Style.from_xml`, `Locale.load` |
-| Inspect entries | mapping access, `keys`, `get`, `get_many`, `select`, and `project` |
-| Format BibTeX | `tidy_bibtex`, `tidy_file`, `TidyOptions`, `TidyResult` |
-| Edit raw BibTeX | `BibDocument.read`, `BibDocument.parse`, field assignment, `write` |
-| Inspect rendered output | `Rendered.text`, `Rendered.html`, `Rendered.tree` |
+| `Library` | Normalized parsing, lookup, selection, projection, and rendering. |
+| `BibDocument` | Source-order blocks, duplicate occurrences, byte spans, existing-field edits, and preserving writes. |
 
-## Input Formats
+Every `Rendered` value exposes text, rendered HTML, and a structured tree. `TidyOptions` configures canonical BibTeX formatting and duplicate handling.
 
-| API | Input | Result |
-| --- | --- | --- |
-| `Library.read(path)` | `.bib` | Normalized citation library from BibTeX or BibLaTeX. |
-| `Library.read(path)` | `.yaml`, `.yml` | Normalized citation library from Hayagriva YAML. |
-| `Library.parse_bibtex(source)` | BibTeX or BibLaTeX string | Normalized citation library. |
-| `Library.parse_yaml(source)` | Hayagriva YAML string | Normalized citation library. |
-| `BibDocument.read(path)` | `.bib` | Raw document model with comments, preambles, strings, failed blocks, order, spans, and editable fields. |
-| `Style.load(name)` | Bundled style name such as `apa` | CSL style for rendering. |
-| `Style.from_path(path)` | Independent CSL XML file | CSL style for rendering. |
-| `Style.from_xml(xml)` | Independent CSL XML string | CSL style for rendering. |
-| `Locale.load(code)` | Bundled locale code such as `en-US` | Locale object for rendering. |
+## Documentation
 
-Hayagriva YAML is a mapping from citation keys to entry mappings:
+- [Get started](https://github.com/peter-gy/refkit/blob/main/docs/get-started.md)
+- [Python API](https://github.com/peter-gy/refkit/blob/main/docs/reference/python.md)
+- [Raw BibTeX editing](https://github.com/peter-gy/refkit/blob/main/docs/guides/edit-bibtex.md)
+- [Tidy options](https://github.com/peter-gy/refkit/blob/main/docs/reference/tidy-options.md)
+- [Pyodide](https://github.com/peter-gy/refkit/blob/main/docs/pyodide.md)
 
-```yaml
-doe2024:
-  type: Article
-  author: Doe, Jane
-  title: Refkit for Bibliographies
-  date: 2024
-  parent:
-    type: Periodical
-    title: Journal of Citation Systems
-    volume: 12
-```
-
-```python
-library = rk.Library.parse_yaml(
-    """
-doe2024:
-  type: Article
-  title: Refkit for Bibliographies
-  date: 2024
-"""
-)
-```
-
-## Inspect A Library
-
-`Library` is the normalized citation database. Use it for rendering, selectors, mapping access, and typed field projection.
-
-```python
-library = rk.Library.read("refs.bib")
-
-print(library.keys())
-print(library.project(["key", "type", "title", "date", "doi", "volume"]))
-```
-
-`Library.select` accepts Hayagriva selector strings:
-
-```python
-for entry in library.select("article > periodical[volume]"):
-    print(entry.key, entry.title, entry.parents[0].title)
-```
-
-## Edit Raw BibTeX
-
-`BibDocument` preserves raw `.bib` comments, preambles, string definitions, failed blocks, order, and source spans.
-
-```python
-raw = rk.BibDocument.read("refs.bib")
-raw.entries["doe2024"].fields["title"].value = "Corrected title"
-raw.write("refs.bib")
-```
-
-Direct map lookup requires one matching entry key and one matching field name. `unique_keys()` returns one key per name. `occurrence_keys()` returns keys in source order, including duplicates. When a file contains duplicates, choose the source-order occurrence explicitly:
-
-```python
-raw = rk.BibDocument.read("refs.bib")
-
-second_entry = raw.entries.get_all("doe2024")[1]
-second_entry.fields.get_all("title")[0].value = "Corrected title"
-raw.write("refs.bib")
-```
-
-## Inspect Rendered Output
-
-`Document.render`, `Document.cited_bibliography`, `Document.full_bibliography`, `cite`, and `full_bibliography` return rendered values.
-
-```python
-rendered = doc.render([rk.Citation("intro", "doe2024")])
-citation = rendered["intro"]
-
-print(citation.text)
-print(citation.html)
-print(citation.tree)
-```
-
-`Rendered.tree` returns structured nodes for text, links, element metadata, transparent citation fragments, and bibliography entries.
-
-## Use With Polars
-
-Install `polars-refkit` when BibTeX source lives in a dataframe and the result should stay in a Polars query plan.
-
-```python
-import polars as pl
-import polars_refkit as prk
-
-df = pl.DataFrame(
-    {
-        "bibtex": ["@article{doe2024, title={Fast Citations}, year={2024}}"],
-        "key": ["doe2024"],
-        "keys": [["doe2024"]],
-    }
-)
-
-out = df.select(
-    citation=pl.col("bibtex").refkit.cite(pl.col("key")),
-    each_citation=pl.col("bibtex").refkit.cite_each(pl.col("keys")),
-    grouped_citation=pl.col("bibtex").refkit.cite_group(pl.col("keys")),
-    count=pl.col("bibtex").refkit.entry_count(),
-    keys=pl.col("bibtex").refkit.keys(),
-    entries=pl.col("bibtex").refkit.entries(),
-)
-```
-
-## License
-
-`refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE](LICENSE). See [NOTICE](NOTICE) for upstream citation and bibliography component acknowledgements.
+RefKit is licensed under the Apache License 2.0.

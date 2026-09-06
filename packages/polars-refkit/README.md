@@ -1,172 +1,69 @@
 # polars-refkit
 
-`polars-refkit` adds Rust-backed Polars expressions for BibTeX and BibLaTeX columns. It imports as `polars_refkit`.
+`polars-refkit` parses, inspects, renders, and formats bibliography source inside eager and lazy Polars queries.
 
 ## Install
 
 ```bash
-pip install polars-refkit
+python -m pip install polars-refkit
 ```
 
-`polars-refkit` supports Python 3.11 through 3.14 and Polars 1.29 or newer. The current PyEmscripten wheel is tested with Pyodide 314.0.2 and its Polars 1.33.1 wheel.
+The package supports Python 3.11 through 3.14 and Polars 1.29 or newer. Importing `polars_refkit` registers the `pl.Expr.refkit` namespace.
 
-Install that tested Pyodide pair with `micropip`:
-
-```python
-import micropip
-
-await micropip.install(["polars==1.33.1", "polars-refkit"])
-```
-
-## Render And Inspect Rows
+## Run a Citation Expression
 
 ```python
 import polars as pl
-import polars_refkit as prk
+import polars_refkit
 
-df = pl.DataFrame(
+frame = pl.DataFrame(
     {
         "bibtex": [
-            """
-@article{doe2024, title={Fast Citations}, year={2024}}
-@book{roe2022, title={Batch References}, year={2022}}
-""",
+            "@article{doe2024, author={Doe, Jane}, title={Fast Citations}, year={2024}}"
         ],
         "key": ["doe2024"],
-        "keys": [["doe2024", "roe2022"]],
     }
 )
 
-out = df.select(
-    citation=pl.col("bibtex").refkit.cite(pl.col("key")),
-    literal_citation=pl.col("bibtex").refkit.cite(pl.lit("doe2024")),
-    each_citation=pl.col("bibtex").refkit.cite_each(pl.col("keys")),
-    grouped_citation=pl.col("bibtex").refkit.cite_group(pl.col("keys")),
-    bibliography=pl.col("bibtex").refkit.full_bibliography_html(),
-    formatted=pl.col("bibtex").refkit.tidy_bibtex(sort_fields=True),
-    count=pl.col("bibtex").refkit.entry_count(),
-    keys=pl.col("bibtex").refkit.keys(),
-    entries=pl.col("bibtex").refkit.entries(),
+result = frame.select(
+    citation=pl.col("bibtex").refkit.cite("key"),
+    entries=pl.col("bibtex").refkit.entry_count(),
 )
 ```
 
-Each row is one BibTeX or BibLaTeX source. The expressions run inside eager `DataFrame.select` and lazy `LazyFrame.select(...).collect()` plans. Row-level parse and formatting failures return null for value expressions. Use `diagnostics`, `parse_report`, or `tidy_bibtex_report` when a query needs row messages.
+Result:
 
-`recovery="error"` uses strict parsing. In a Polars expression, a strict row parse failure returns null for value expressions, `False` from `can_parse`, and a failed `parse_report` instead of aborting the query. `recovery="report"` keeps recoverable entries in that row and preserves parser diagnostics.
-
-String arguments name columns. Use `pl.lit(...)` for literal BibTeX sources or citation keys:
-
-```python
-keys = pl.DataFrame({"key": ["doe2024"]})
-out = keys.select(citation=pl.lit(df["bibtex"][0]).refkit.cite(pl.col("key")))
+```text
+shape: (1, 2)
+┌─────────────┬─────────┐
+│ citation    ┆ entries │
+│ ---         ┆ ---     │
+│ str         ┆ u32     │
+╞═════════════╪═════════╡
+│ (Doe, 2024) ┆ 1       │
+└─────────────┴─────────┘
 ```
 
-Use `cite_each` when one row has an ordered list of citation keys and each key should render as a separate citation:
+A plain string argument names a column. Wrap literal bibliography source and citation keys with `pl.lit(...)`.
 
-```python
-batch = pl.DataFrame({"keys": [["doe2024", "roe2022"]]})
-out = batch.select(citations=pl.lit(df["bibtex"][0]).refkit.cite_each(pl.col("keys")))
-```
+## Expression Groups
 
-Use `cite_group` when one row has an ordered list of citation keys and the list should render as one grouped citation:
-
-```python
-batch = pl.DataFrame({"keys": [["doe2024", "roe2022"]]})
-out = batch.select(citation=pl.lit(df["bibtex"][0]).refkit.cite_group(pl.col("keys")))
-```
-
-Use `tidy_bibtex` to format BibTeX rows in the same query plan:
-
-```python
-out = df.select(
-    formatted=pl.col("bibtex").refkit.tidy_bibtex(sort_fields=True, wrap=88),
-    report=pl.col("bibtex").refkit.tidy_bibtex_report(sort_fields=True),
-)
-```
-
-`tidy_bibtex_report` returns `{ok, bibtex, count, warnings, error}`. `warnings` is a list of `{code, rule, message}` structs. Invalid static option values raise during query construction or execution.
-
-Top-level functions and namespace methods use stable default output names, so multiple expressions over the same `bibtex` column can be selected without manual aliases. Use `alias` or named `select` expressions when a result column needs a different name.
-
-## Capabilities
-
-| Capability | Polars surface |
+| Job | Expressions |
 | --- | --- |
-| Read normalized bibliography data | `entry_count`, `can_parse`, `has_diagnostics`, `keys`, `entries`, `parse_report`, `diagnostics` |
-| Render citations | `cite`, `cite_html`, `cite_rendered`, `cite_each`, `cite_group`, and their HTML or struct variants |
-| Render bibliographies | `full_bibliography_text`, `full_bibliography_html`, `full_bibliography_rendered` |
-| Format BibTeX | `tidy_bibtex`, `tidy_bibtex_report` |
-| Inspect entries | `keys`, `entries` |
-| Process dataframe columns | eager `DataFrame.select` and lazy `LazyFrame.select(...).collect()` |
-| Use expression namespace | `pl.Expr.refkit` methods with the same capability set |
+| Parse and inspect | `entry_count`, `can_parse`, `has_diagnostics`, `keys`, `entries`, `diagnostics`, `parse_report` |
+| Render one citation | `cite`, `cite_html`, `cite_rendered` |
+| Render key lists | `cite_each*`, `cite_group*` |
+| Render every entry | `full_bibliography_text`, `full_bibliography_html`, `full_bibliography_rendered` |
+| Format source | `tidy_bibtex`, `tidy_bibtex_report` |
 
-## Expressions
+Each bibliography source row is an independent normalized library and render boundary. Value expressions map row-local input, parse, missing-key, and render failures to null. Report expressions expose parser or formatter details. Invalid dtypes, styles, projections, and broadcasting lengths raise when the query executes.
 
-| Function | Return | Behavior |
-| --- | --- | --- |
-| `cite(bibtex_col, key_col, style="apa", locale="en-US", recovery="error")` | `String` | Renders one citation as text. Missing keys and row parse failures return null. |
-| `cite_html(bibtex_col, key_col, style="apa", locale="en-US", recovery="error")` | `String` | Renders one citation as escaped HTML. |
-| `cite_rendered(bibtex_col, key_col, style="apa", locale="en-US", recovery="error")` | `Struct[text, html]` | Renders one citation with both text and HTML fields. |
-| `cite_each(bibtex_col, keys_col, style="apa", locale="en-US", recovery="error")` | `List[String]` | Renders each key in a `List[String]` column as a separate citation. Missing keys and row parse failures return null for the row. |
-| `cite_each_html(bibtex_col, keys_col, style="apa", locale="en-US", recovery="error")` | `List[String]` | Renders each key as separate citation HTML. |
-| `cite_each_rendered(bibtex_col, keys_col, style="apa", locale="en-US", recovery="error")` | `List[Struct[text, html]]` | Renders each key as a separate citation struct. |
-| `cite_group(bibtex_col, keys_col, style="apa", locale="en-US", recovery="error")` | `String` | Renders one grouped citation from a `List[String]` key column. |
-| `cite_group_html(bibtex_col, keys_col, style="apa", locale="en-US", recovery="error")` | `String` | Renders one grouped citation as HTML. |
-| `cite_group_rendered(bibtex_col, keys_col, style="apa", locale="en-US", recovery="error")` | `Struct[text, html]` | Renders one grouped citation with both text and HTML fields. |
-| `full_bibliography_html(bibtex_col, style="apa", locale="en-US", recovery="error")` | `String` | Renders all entries in the row as an HTML bibliography. Row parse failures return null. |
-| `full_bibliography_text(bibtex_col, style="apa", locale="en-US", recovery="error")` | `String` | Renders all entries in the row as plain text. |
-| `full_bibliography_rendered(bibtex_col, style="apa", locale="en-US", recovery="error")` | `Struct[text, html]` | Renders all entries in the row with both bibliography formats. |
-| `entry_count(bibtex_col, recovery="error")` | `UInt32` | Counts normalized entries in each BibTeX string. |
-| `can_parse(bibtex_col, recovery="error")` | `Boolean` | Returns whether the row can produce a normalized library. |
-| `has_diagnostics(bibtex_col, recovery="error")` | `Boolean` | Returns whether parsing produced diagnostics. |
-| `keys(bibtex_col, recovery="error")` | `List[String]` | Returns normalized entry keys in source order. |
-| `entries(bibtex_col, fields=("key", "title", "doi", "volume"), recovery="error")` | `List[Struct]` | Projects normalized entries into Polars-native rows. |
-| `parse_report(bibtex_col, recovery="error")` | `Struct[ok, entry_count, keys, diagnostics]` | Parses each row once and returns a summary struct. |
-| `diagnostics(bibtex_col, recovery="error")` | `List[String]` | Returns an empty list for valid rows and parse messages for invalid rows. |
-| `tidy_bibtex(bibtex_col, sort_fields=False, wrap=False, ...)` | `String` | Formats each BibTeX row. Row formatting failures return null. |
-| `tidy_bibtex_report(bibtex_col, sort_fields=False, wrap=False, ...)` | `Struct[ok, bibtex, count, warnings, error]` | Formats each row and reports formatter warnings or row errors. |
+## Documentation
 
-## Expression Namespace
+- [Polars guide](https://github.com/peter-gy/refkit/blob/main/docs/guides/polars.md)
+- [Expression reference](https://github.com/peter-gy/refkit/blob/main/docs/reference/polars.md)
+- [Data shapes](https://github.com/peter-gy/refkit/blob/main/docs/reference/data-shapes.md)
+- [Tidy options](https://github.com/peter-gy/refkit/blob/main/docs/reference/tidy-options.md)
+- [Pyodide compatibility](https://github.com/peter-gy/refkit/blob/main/docs/pyodide.md)
 
-The same operations are available from `pl.Expr.refkit`.
-
-```python
-out = df.select(
-    keys=pl.col("bibtex").refkit.keys(),
-    count=pl.col("bibtex").refkit.entry_count(),
-    citation=pl.col("bibtex").refkit.cite(pl.col("key")),
-    each_citation=pl.col("bibtex").refkit.cite_each(pl.col("keys")),
-    grouped_citation=pl.col("bibtex").refkit.cite_group(pl.col("keys")),
-    entries=pl.col("bibtex").refkit.entries(),
-    formatted=pl.col("bibtex").refkit.tidy_bibtex(sort_fields=True),
-)
-```
-
-Top-level functions and namespace methods expose one name per capability. They return expressions with names that match the method, such as `keys`, `entry_count`, `cite`, and `tidy_bibtex`. Name outputs in `select`, `with_columns`, or `alias` when a call site needs a different column name.
-
-Typed code can cast the namespace when the type checker does not know Polars plugin namespaces:
-
-```python
-from typing import cast
-
-namespace = cast(prk.RefkitExprNamespace, pl.col("bibtex").refkit)
-out = df.select(citation=namespace.cite(pl.col("key")))
-```
-
-`entries` returns a list of structs. Explode and unnest it to query entries as rows:
-
-```python
-entries = (
-    df.select(entries=pl.col("bibtex").refkit.entries())
-    .explode("entries")
-    .unnest("entries")
-)
-```
-
-## Scope
-
-Use `polars-refkit` when BibTeX source lives in a dataframe and the result should stay in a Polars query plan. Use `refkit.BibDocument` when a workflow edits raw documents with comments, preambles, string definitions, failed blocks, ordering, and source spans.
-
-## License
-
-`polars-refkit` is licensed under the Apache License, Version 2.0, available in [LICENSE](LICENSE). See [NOTICE](NOTICE) for upstream citation and bibliography component acknowledgements.
+`polars-refkit` is licensed under the Apache License 2.0.
