@@ -27,9 +27,7 @@ RefKit decodes UTF-8 first. A file that requires the Windows-1252-compatible fal
 ## Parse an in-memory string
 
 ```python
-library = rk.Library.parse_bibtex(
-    "@article{doe2024, title={Fast Citations}, year={2024}}"
-)
+library = rk.Library.parse_bibtex("@article{doe2024, title={Fast Citations}, year={2024}}")
 ```
 
 Use `Library.parse_yaml(source)` for Hayagriva YAML.

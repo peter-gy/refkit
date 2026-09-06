@@ -11,9 +11,7 @@ description: Choose Library for normalized behavior or BibDocument for source-pr
 ```python
 import refkit as rk
 
-library = rk.Library.parse_bibtex(
-    "@article{doe2024, title={Fast Citations}, year={2024}}"
-)
+library = rk.Library.parse_bibtex("@article{doe2024, title={Fast Citations}, year={2024}}")
 
 entry = library["doe2024"]
 print(entry.key, entry.entry_type, entry.title)

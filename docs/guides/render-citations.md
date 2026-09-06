@@ -62,9 +62,7 @@ Pass a prepared `Style`, `Cite`, or `CitationGroup` when the helper needs richer
 Use the boundary that matches the document:
 
 ```python
-cited = document.cited_bibliography(
-    [rk.Citation("opening", "doe2024")]
-)
+cited = document.cited_bibliography([rk.Citation("opening", "doe2024")])
 complete = document.full_bibliography()
 ```
 

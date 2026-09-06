@@ -29,9 +29,7 @@ rendered = document.render(
         rk.Citation(id="introduction", citation="doe2024"),
         rk.Citation(
             id="detail",
-            citation=rk.CitationGroup(
-                [rk.Cite("doe2024", locator="12", label="page")]
-            ),
+            citation=rk.CitationGroup([rk.Cite("doe2024", locator="12", label="page")]),
         ),
     ]
 )
@@ -107,9 +105,7 @@ frame = pl.DataFrame({"bibtex": [source], "key": ["doe2024"]})
 result = frame.select(
     citation_from_column=pl.col("bibtex").refkit.cite("key"),
     citation_from_literal=pl.col("bibtex").refkit.cite(pl.lit("doe2024")),
-    entries=pl.col("bibtex").refkit.entries(
-        fields=["key", "entry_type", "title"]
-    ),
+    entries=pl.col("bibtex").refkit.entries(fields=["key", "entry_type", "title"]),
 )
 ```
 

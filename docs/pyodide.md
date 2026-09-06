@@ -77,9 +77,7 @@ import polars_refkit
 
 frame = pl.DataFrame(
     {
-        "bibtex": [
-            "@article{doe2024, author={Doe, Jane}, title={Browser Citations}, year={2024}}"
-        ],
+        "bibtex": ["@article{doe2024, author={Doe, Jane}, title={Browser Citations}, year={2024}}"],
         "key": ["doe2024"],
     }
 )

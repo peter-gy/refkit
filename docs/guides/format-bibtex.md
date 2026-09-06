@@ -11,9 +11,7 @@ description: Canonically format BibTeX strings, raw documents, or files and insp
 ```python
 import refkit as rk
 
-result = rk.tidy_bibtex(
-    "@ARTICLE {doe2024, pages={6-13}, year={2024},}\n"
-)
+result = rk.tidy_bibtex("@ARTICLE {doe2024, pages={6-13}, year={2024},}\n")
 
 print(result.bibtex)
 print(result.count)

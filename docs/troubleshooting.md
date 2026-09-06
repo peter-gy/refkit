@@ -43,9 +43,7 @@ Dependent CSL styles require parent resolution and are rejected by the explicit-
 Check parsing first:
 
 ```python
-frame.select(
-    pl.col("bibtex").refkit.parse_report(recovery="report")
-)
+frame.select(pl.col("bibtex").refkit.parse_report(recovery="report"))
 ```
 
 A successful parse with a null render result usually indicates a missing key, null key input, or render failure. The current Polars interface has no render-report expression. Reproduce that row with the Python `refkit` API when the exact render error is required.

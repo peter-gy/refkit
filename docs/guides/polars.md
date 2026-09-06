@@ -24,9 +24,7 @@ Importing `polars_refkit` registers `pl.Expr.refkit`. The same operations are al
 ```python
 frame = pl.DataFrame(
     {
-        "bibtex": [
-            "@article{doe2024, title={Fast Citations}, year={2024}}"
-        ],
+        "bibtex": ["@article{doe2024, title={Fast Citations}, year={2024}}"],
         "key": ["doe2024"],
     }
 )
@@ -34,9 +32,7 @@ frame = pl.DataFrame(
 result = frame.select(
     count=pl.col("bibtex").refkit.entry_count(),
     keys=pl.col("bibtex").refkit.keys(),
-    entries=pl.col("bibtex").refkit.entries(
-        fields=["key", "entry_type", "title"]
-    ),
+    entries=pl.col("bibtex").refkit.entries(fields=["key", "entry_type", "title"]),
 )
 ```
 
@@ -67,9 +63,7 @@ The `*` families provide text, HTML, and `{text, html}` rendered variants. `full
 Citation operations accept equal-length inputs or a length-one input on either side. A singleton valid bibliography source is parsed once within that expression and reused for every key row.
 
 ```python
-result = pl.DataFrame({"key": ["doe2024", "roe2022"]}).select(
-    pl.lit(source).refkit.cite("key")
-)
+result = pl.DataFrame({"key": ["doe2024", "roe2022"]}).select(pl.lit(source).refkit.cite("key"))
 ```
 
 Other unequal lengths raise a Polars `ComputeError` when the query executes.
@@ -106,11 +100,7 @@ The report contains `ok`, `bibtex`, `count`, `warnings`, and `error`. Read [Pola
 Every operation returns `pl.Expr` and works in lazy plans:
 
 ```python
-result = (
-    frame.lazy()
-    .select(pl.col("bibtex").refkit.entry_count().alias("entries"))
-    .collect()
-)
+result = frame.lazy().select(pl.col("bibtex").refkit.entry_count().alias("entries")).collect()
 ```
 
 Separate expressions parse independently. Name or alias repeated operations such as two `cite` expressions because their default output names are identical.

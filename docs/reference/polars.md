@@ -13,9 +13,9 @@ description: Look up all 21 polars-refkit expressions, dtypes, defaults, broadca
 Rendering expressions share:
 
 ```python
-style="apa"
-locale="en-US"
-recovery="error"
+style = "apa"
+locale = "en-US"
+recovery = "error"
 ```
 
 `style` names a bundled style and is loaded case-insensitively. An unknown style aborts the query with `ComputeError`. The Polars interface accepts bundled style names rather than `Style` objects, paths, or CSL XML.

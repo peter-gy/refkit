@@ -24,9 +24,7 @@ rendered = document.render(
         rk.Citation("intro", "doe2024"),
         rk.Citation(
             "detail",
-            rk.CitationGroup(
-                [rk.Cite("doe2024", locator="12", label="page"), "roe2022"]
-            ),
+            rk.CitationGroup([rk.Cite("doe2024", locator="12", label="page"), "roe2022"]),
         ),
     ]
 )

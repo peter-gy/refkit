@@ -13,9 +13,7 @@ RefKit 0.0.4 packages the native extension inside the `refkit` distribution. Imp
 ```python
 import refkit as rk
 
-library = rk.Library.parse_bibtex(
-    "@article{doe2024, title={Fast Citations}}"
-)
+library = rk.Library.parse_bibtex("@article{doe2024, title={Fast Citations}}")
 ```
 
 Replace direct `refkit_core` imports with `refkit`. Runtime metadata remains available as `rk.build_info` and `rk.build_mode`.
@@ -64,9 +62,7 @@ rendered = document.render(
     [
         rk.Citation(
             "detail",
-            rk.CitationGroup(
-                [rk.Cite("doe2024", locator="12", label="page"), "roe2022"]
-            ),
+            rk.CitationGroup([rk.Cite("doe2024", locator="12", label="page"), "roe2022"]),
         )
     ]
 )
