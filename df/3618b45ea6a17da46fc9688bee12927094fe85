@@ -1,0 +1,19 @@
+.github/workflows/docs.yml
+  s_9fddfede21feba::t_62ad95d830c4fc 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "df3618b45ea6a17da46fc9688bee12927094fe85",
+  "prompts": {},
+  "sessions": {
+    "s_9fddfede21feba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07d16-eb2f-7103-95c3-d5cca6784a83",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
