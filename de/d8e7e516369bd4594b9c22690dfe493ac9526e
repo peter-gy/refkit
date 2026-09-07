@@ -1,0 +1,27 @@
+.github/workflows/artifacts-polars-refkit.yml
+  s_9fddfede21feba::t_2e732f79fac696 287-311
+.github/workflows/artifacts-refkit.yml
+  s_9fddfede21feba::t_2e732f79fac696 280-304
+development_docs/packaging-and-release.md
+  s_9fddfede21feba::t_c1dc81fcc213ae 87-88
+.gitattributes
+  s_9fddfede21feba::t_2e732f79fac696 1
+.github/AGENTS.md
+  s_9fddfede21feba::t_c1dc81fcc213ae 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ded8e7e516369bd4594b9c22690dfe493ac9526e",
+  "prompts": {},
+  "sessions": {
+    "s_9fddfede21feba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07d16-eb2f-7103-95c3-d5cca6784a83",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
