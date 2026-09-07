@@ -84,6 +84,8 @@ The Pyodide lane creates a virtual environment from the pinned xbuild environmen
 
 Each build records a manifest with the source revision, exact build constraints, tool versions, archive filenames, and SHA-256 hashes. Publication verifies the merged package artifact set before uploading it. Package build compatibility bounds remain separate from the pinned release environment.
 
+Each artifact workflow also validates its complete archive set on Linux. This checks Windows, macOS, Linux, and Pyodide resources against the same source bytes before the workflow succeeds. `.gitattributes` fixes text checkout line endings to LF on every operating system.
+
 Native wheel jobs cover Linux, macOS, and Windows in both PR and release runs. Wheels rebuilt from sdists execute the same installed behavior probes as direct wheels.
 
 ## Publish Dependencies
