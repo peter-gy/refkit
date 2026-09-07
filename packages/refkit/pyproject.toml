@@ -1,6 +1,6 @@
 [project]
 name = "refkit"
-version = "0.0.6"
+version = "0.0.7"
 description = "Fast Python citation parsing, rendering, and BibTeX editing backed by Rust"
 readme = "README.md"
 license = "Apache-2.0"
