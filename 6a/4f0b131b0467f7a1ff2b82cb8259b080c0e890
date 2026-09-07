@@ -1,0 +1,576 @@
+development_docs/testing.md
+  s_9fddfede21feba::t_8550ee2b9c65d8 32
+  s_9fddfede21feba::t_7142a0e82bad9f 14,17,31
+  s_9fddfede21feba::t_e6a022fa32306b 10,15,30,36-60
+docs/reference/rust.md
+  s_9fddfede21feba::t_f926642d7820ed 15-17,19-20
+packages/refkit-bench/AGENTS.md
+  s_9fddfede21feba::t_a656c4c7d7bc13 10-11
+Makefile
+  s_9fddfede21feba::t_017696b000f937 4
+  s_9fddfede21feba::t_5db1af7e0e49d7 50-57
+  s_9fddfede21feba::t_31735f9a3fc107 157-159,180
+  s_9fddfede21feba::t_c9eee1652272a5 3,13-14,20-21,60,80,83,138-139,147,151,155,169
+packages/refkit/src/refkit/__init__.py
+  s_9fddfede21feba::t_ed760c1e992262 39,61
+  s_9fddfede21feba::t_887202ce894ff0 82
+crates/refkit-core/src/tidy/latex.rs
+  s_9fddfede21feba::t_ad7305e8a2504e 64,66-68
+  s_9fddfede21feba::t_7ed35e0412d45e 71
+  s_9fddfede21feba::t_98caae16f568a9 63,65,69-70,73-84,143
+packages/refkit-tests/src/refkit_tests/test_refkit_runtime.py
+  s_9fddfede21feba::t_da485c0ffadd29 50-52,54-59,61
+  s_9fddfede21feba::t_2fe565cb42387e 53
+  s_9fddfede21feba::t_3c5c1e49be2769 1-49
+  s_9fddfede21feba::t_277db3ce41fd02 60
+packages/refkit-bench/src/refkit_bench/fixtures.py
+  s_9fddfede21feba::t_af84fcac643946 18,182-184,208,304-307,318-319,338-343,345-348
+  s_9fddfede21feba::t_754981388116d4 20,85-86,116-117
+  s_9fddfede21feba::t_22b617ee851d03 312,316
+  s_9fddfede21feba::t_cedc91ffdceb39 308-311
+  s_9fddfede21feba::t_631a8c3591bbd4 22,313-315,317
+  s_9fddfede21feba::t_d3a990eee593b0 13,134,138
+packages/polars-refkit/polars_refkit/_namespace.py
+  s_9fddfede21feba::t_0ca550035447a6 7,9,28-30,41-42,54-56,58,66-68,70,74,79-80,84,87,90,93,98,101,104,106-107,109-110
+crates/refkit-core/src/tidy/render/sort.rs
+  s_9fddfede21feba::t_8ed70545f60b0e 1,81
+  s_9fddfede21feba::t_9dedaf2de6e8c0 3
+packages/polars-refkit/build_backend.py
+  s_9fddfede21feba::t_7737e6695c38b4 1-21
+crates/refkit-core/src/render/html.rs
+  s_9fddfede21feba::t_0053a9afaf2a07 143
+scripts/AGENTS.md
+  s_9fddfede21feba::t_b157400bf502a8 12,14-16
+pyproject.toml
+  s_9fddfede21feba::t_79cdb85e7b06d7 15,49,54
+  s_9fddfede21feba::t_e64d2eb90052b2 28,31-32,45,62,92,108,136
+  s_9fddfede21feba::t_cda89818d52dec 21
+docs/reference/python.md
+  s_9fddfede21feba::t_2383ffe421cf3a 27,84,86,128,136,166,182-190
+  s_9fddfede21feba::t_54ce9e13c80d5f 140-141
+  s_9fddfede21feba::t_7142a0e82bad9f 123
+  s_9fddfede21feba::t_50b0f771efb12f 17,62,117
+skills/refkit/references/inspect.md
+  s_9fddfede21feba::t_8acfd6016386ee 33-46,48
+  s_9fddfede21feba::t_f92a680ad0fc1b 17-22,30
+  s_9fddfede21feba::t_6a55bc4274ad10 1-2,4-16,23-29,31-32
+  s_9fddfede21feba::t_a6912b5abe589b 3
+  s_9fddfede21feba::t_7b0cb9dce6f98a 47
+packages/refkit-bench/src/refkit_bench/data/real-bibliography/records.json
+  s_9fddfede21feba::t_af84fcac643946 1-570
+development_docs/adapters.md
+  s_9fddfede21feba::t_7142a0e82bad9f 20,24,32,54,58
+  s_9fddfede21feba::t_e6a022fa32306b 62
+crates/refkit-core/AGENTS.md
+  s_9fddfede21feba::t_35b355bde949e3 15
+  s_9fddfede21feba::t_fc0a9f4e01fd40 13-14
+  s_9fddfede21feba::t_b58512105df41f 16-18
+docs/reference/agent-docs.md
+  s_9fddfede21feba::t_211a18a56e2fc7 2,5,7,9-13,15,18,20,23-33,35,37,40-44,47,49-54,56,58,60,65-67,70,72,74,76,78-80,82,89
+.github/workflows/test-support.yml
+  s_9fddfede21feba::t_894d69135c7b43 1-35
+packages/refkit/rust/src/rendered.rs
+  s_9fddfede21feba::t_46cc986a5a617a 4,8,21-27,35-39,114-115,138,142-143,147-148,155-159,162-164,168-176
+  s_9fddfede21feba::t_6e3bb188eb995e 28-34,80,132-135,165-167
+scripts/tests/test_artifact_manifest.py
+  s_9fddfede21feba::t_78600d1f6d1721 1-8,11-28,40-69
+  s_9fddfede21feba::t_f6fedc3e942ad8 31-32
+  s_9fddfede21feba::t_63a27e2bbe0fab 29-30,33-39
+packages/refkit-tests/src/refkit_tests/smoke_polars_refkit.py
+  s_9fddfede21feba::t_e64d2eb90052b2 6-8,10-57
+  s_9fddfede21feba::t_894d69135c7b43 9
+packages/polars-refkit/rust/src/expressions/render.rs
+  s_9fddfede21feba::t_a99577921d5930 5,7,13-14,19,22-23,25-30,52,57,62,67,72,77,94-99,104-107,110-115,117-144,149,152-153,157-158,163-164,170,172-175,177-179,181-187,190,192-194,203-214,219-224,228-231,233-236,239-244,246-251,253-255,259-262,267-276,279-282,291-293,296-297,300-302,304-308,314-316,321-325,328-331,340-349
+  s_9fddfede21feba::t_d3de0fcbc9b2be 6,11,16,24,31-34,39,44,49,54,59,64,69,74,79,84,89,102-103,109,116,145-146,155-156,160-162,165,168,195-202,218,226-227,232,237-238,252,256-258,263-266,277-278,283-286,288,298-299,303,313,318,320,326-327,332-333,335,338-339,350-352
+docs/reference/polars.md
+  s_9fddfede21feba::t_a441b207136433 47
+  s_9fddfede21feba::t_b2619ab131022a 2,7,9,11,13,15,19-27,29,31,33,36-38,41,43-46,49,52,55,57,60,63,65,67,70-71,74,76-77,79-81,83,85,87,89,91,93,95,99-100
+scripts/tests/test_architecture_contract.py
+  s_9fddfede21feba::t_b157400bf502a8 192-193,195-199,201-207,212-220
+  s_9fddfede21feba::t_96c41cfca3c994 30-31,43-52,162-191,194,200,208-211,221
+  s_9fddfede21feba::t_f01c908fcf6838 131
+  s_9fddfede21feba::t_67d9b48101901b 32-39,141-145,155-159
+  s_9fddfede21feba::t_c8eb6d157a2b38 3,7-8,40-42,53-66
+packages/refkit/rust/src/errors.rs
+  s_9fddfede21feba::t_9ff6c2f6554b4f 54-55
+  s_9fddfede21feba::t_6c10ab4e98ff37 17-22,35-37,59-60
+  s_9fddfede21feba::t_7737e6695c38b4 50-51,53,56-58,61-64
+  s_9fddfede21feba::t_ed760c1e992262 10,52
+docs/concepts/citation-rendering.md
+  s_9fddfede21feba::t_2895b123e0aee4 37,59-61,63
+docs/troubleshooting.md
+  s_9fddfede21feba::t_211a18a56e2fc7 49-53
+  s_9fddfede21feba::t_798836371129e5 87
+.github/workflows/publish.yml
+  s_9fddfede21feba::t_894d69135c7b43 170-172,175-177,181-182
+  s_9fddfede21feba::t_6862cec38814e7 5,25,29,31,44,54,58,60,64,66,71-74,76,82,92,96,98,102,104,109-114,151,156,158
+  s_9fddfede21feba::t_f6fedc3e942ad8 45,83,179-180
+  s_9fddfede21feba::t_3739f8a3fceb05 2,169,173-174,178
+crates/refkit-core/tests/styles.rs
+  s_9fddfede21feba::t_9d0eac4378cf9b 67-88
+  s_9fddfede21feba::t_35b355bde949e3 43-66
+packages/polars-refkit/agent-plugin/plugin.json
+  s_9fddfede21feba::t_6a55bc4274ad10 1-6
+crates/refkit-core/tests/rendering.rs
+  s_9fddfede21feba::t_2acea91a0a5857 1-24,31-40,47,54-56,65-70,73,77-80,84-95,98-99,123-130,143,152-155,161-174,186-200,202-205,208,214,222
+  s_9fddfede21feba::t_b58512105df41f 201
+  s_9fddfede21feba::t_733eea5d3c48db 25-30,41-46,48-53,57-64,71-72,74-76,81-83,96-97,100-122,131-142,144-151,156-160,175-185,206-207,209-213,215-221
+crates/refkit-core/src/tidy/render.rs
+  s_9fddfede21feba::t_8ed70545f60b0e 1-2,18,67,238
+  s_9fddfede21feba::t_9dedaf2de6e8c0 76,223
+skills/refkit/SKILL.md
+  s_9fddfede21feba::t_6a55bc4274ad10 3,8,10-16,18,20,22,24
+packages/refkit-bench/src/refkit_bench/_adapters/common.py
+  s_9fddfede21feba::t_c441b0e73b60ac 243-267,272-275
+  s_9fddfede21feba::t_366a568a53f588 334-337
+  s_9fddfede21feba::t_5daa3c4b1a7504 293-307,309-313,315,319-333,338-342,346-347
+  s_9fddfede21feba::t_3a26d9a0db18da 3-4,61-104
+  s_9fddfede21feba::t_631a8c3591bbd4 9-10,316-318,343-345,350,352
+  s_9fddfede21feba::t_9e652c262a2b20 348-349,351
+  s_9fddfede21feba::t_eaaa9ea689ae07 8,60
+development_docs/documentation.md
+  s_9fddfede21feba::t_51e65613acc1e9 56,58,96
+  s_9fddfede21feba::t_7142a0e82bad9f 41,72,90,105-110,112-113,115-116
+  s_9fddfede21feba::t_8550ee2b9c65d8 111,114
+packages/polars-refkit/agent-plugin/skills/polars-refkit/agents/openai.yaml
+  s_9fddfede21feba::t_6a55bc4274ad10 1-4
+docs/guides/render-output.md
+  s_9fddfede21feba::t_2895b123e0aee4 1-70
+.github/AGENTS.md
+  s_9fddfede21feba::t_894d69135c7b43 7,12-15
+scripts/pyodide_lock.py
+  s_9fddfede21feba::t_9bbfef0bede0d8 6,14,47-71,84-87,133-134,144-146,150-151,155
+  s_9fddfede21feba::t_241951a68f4d6a 135-139
+  s_9fddfede21feba::t_67d9b48101901b 140-143,147-149,152-154,230-232
+crates/refkit-core/src/library/parse.rs
+  s_9fddfede21feba::t_25216913b89801 22-23,29-39
+  s_9fddfede21feba::t_00d4a3c87a7de5 1-3,9-10,14,18-19,50,64-69
+  s_9fddfede21feba::t_0ee268de5e3447 8,11-13,15-17,51-59,70-74
+development_docs/development.md
+  s_9fddfede21feba::t_798836371129e5 91-100
+  s_9fddfede21feba::t_211a18a56e2fc7 12,24
+  s_9fddfede21feba::t_51e65613acc1e9 72
+crates/refkit-core/src/raw/sanitize.rs
+  s_9fddfede21feba::t_31e691af9a0469 11,14,20-21
+  s_9fddfede21feba::t_00d4a3c87a7de5 1,3-4,6,8,10,12-13,24-25,29-30,34,38-44,47-49
+  s_9fddfede21feba::t_0ee268de5e3447 15-19,26-28,31-33,35-37,45-46,50-53
+packages/polars-refkit/rust/src/expressions/dtypes.rs
+  s_9fddfede21feba::t_9dedaf2de6e8c0 80,114-119,127-133,138-148,166-167,172-173
+  s_9fddfede21feba::t_a99577921d5930 149,179-205
+  s_9fddfede21feba::t_b704941d95c55d 102-105,120-126,134-137,150-165,168-171,174-175,177-178
+  s_9fddfede21feba::t_0161e2d85af4a8 176
+packages/refkit/rust/src/document.rs
+  s_9fddfede21feba::t_f210de4e364780 1,81,108-110,121-125,128
+  s_9fddfede21feba::t_44a70378eb444e 43,58
+AGENTS.md
+  s_9fddfede21feba::t_4bba8f803be2d8 34
+packages/refkit-bench/src/refkit_bench/_adapters/refkit.py
+  s_9fddfede21feba::t_63a27e2bbe0fab 5,59
+  s_9fddfede21feba::t_631a8c3591bbd4 82-84,93-95,523
+  s_9fddfede21feba::t_366a568a53f588 148,524-534
+  s_9fddfede21feba::t_d3a990eee593b0 34-58,60-74
+  s_9fddfede21feba::t_ccfba2629822d7 125
+  s_9fddfede21feba::t_5daa3c4b1a7504 20,225,244,519-522,535
+crates/refkit-core/src/lib.rs
+  s_9fddfede21feba::t_c6e750796b5692 11,13,31-32
+  s_9fddfede21feba::t_07edb6dfaa6bce 14,20-21
+  s_9fddfede21feba::t_4bba8f803be2d8 23-25
+development_docs/capabilities.md
+  s_9fddfede21feba::t_f926642d7820ed 16,18-20
+packages/polars-refkit/rust/src/expressions/parse.rs
+  s_9fddfede21feba::t_9dedaf2de6e8c0 4,8,11,50,53-60,62,68-75,80-81,83-86,88-89,91-92,94-97,99,101-104,108-111,113-123,125,127-130,132-141,143-146,148-152,154-157,159-162,164-168,170-172
+crates/refkit-core/src/tidy/duplicates.rs
+  s_9fddfede21feba::t_8ed70545f60b0e 3,20-23,26,67,69-79,85-99,155-157
+packages/refkit/rust/src/module.rs
+  s_9fddfede21feba::t_ed760c1e992262 7,21
+docs/guides/polars.md
+  s_9fddfede21feba::t_e1f03210fc85bb 20-22,35-36
+  s_9fddfede21feba::t_07edb6dfaa6bce 67
+  s_9fddfede21feba::t_54ce9e13c80d5f 66
+  s_9fddfede21feba::t_b2619ab131022a 46-47,55-57,59,88-99,104-105,109
+packages/refkit/rust/src/citation.rs
+  s_9fddfede21feba::t_44a70378eb444e 87-88,95-96,98-100,102,132-136
+packages/polars-refkit/AGENTS.md
+  s_9fddfede21feba::t_5c7d84d01b523a 12-13,17
+scripts/artifact_manifest.py
+  s_9fddfede21feba::t_a0fac9e943bdda 59-60,67,124
+  s_9fddfede21feba::t_0f2aefc004d9e8 29-30,41-46,95-103,156,162
+  s_9fddfede21feba::t_67d9b48101901b 18,28,31-33,35-40,47-48,50,52-53,58,61-66,68-70,76,78-80,84-90,106,108,110-116,118,131,134-135,137-141,143,148-150,152-155,158,161,164,167,169,174
+  s_9fddfede21feba::t_492e5b9bca6c0b 25,93
+  s_9fddfede21feba::t_c9eee1652272a5 1-17,19-24,26-27,34,49,51,54-57,71,75,77,81-83,107,109,117,129-130,132-133,136,142,144-147,151,157,159-160,163,165-166,168,170-173,175
+  s_9fddfede21feba::t_29d48209e0dd49 72-74,91-92,94,104-105,119-123,125-128
+skills/refkit/references/edit.md
+  s_9fddfede21feba::t_6a55bc4274ad10 1-19,21-29
+docs/reference/data-shapes.md
+  s_9fddfede21feba::t_641cef593e7782 49,52-53,60
+  s_9fddfede21feba::t_0c079ace469fe4 16,22-23
+  s_9fddfede21feba::t_2383ffe421cf3a 2,7-15,17-21,24-25,31,35,41,43,45,47-48,50-51,54,56,58,62-68,70,72,74,76-81,83,85,87,91-94,98,100,102,115-126,128-130,137,141,143,148-150,155,157,160-167,170
+  s_9fddfede21feba::t_696f4be77ce2e2 114
+docs/performance.md
+  s_9fddfede21feba::t_521ba1bc933adc 11-12,15-19
+packages/refkit/rust/src/entry.rs
+  s_9fddfede21feba::t_7df6d554663f51 12,18,27,32,37,42,57,62,68-69
+scripts/tests/test_distribution_contract.py
+  s_9fddfede21feba::t_67d9b48101901b 29-32,217,359
+  s_9fddfede21feba::t_78600d1f6d1721 367-394,399-410
+  s_9fddfede21feba::t_f9cddb0e912a38 45-55,75,395-398,411-421
+  s_9fddfede21feba::t_54232be18ff2b6 422-461
+development_docs/architecture.md
+  s_9fddfede21feba::t_211a18a56e2fc7 47
+  s_9fddfede21feba::t_e6a022fa32306b 34,44,139
+  s_9fddfede21feba::t_f926642d7820ed 56,67,70,123
+docs/concepts/parsing-and-recovery.md
+  s_9fddfede21feba::t_0c079ace469fe4 11,23,28-29,32-45,65
+  s_9fddfede21feba::t_ea2e14a244c352 46
+crates/refkit-core/tests/tidy_spec.rs
+  s_9fddfede21feba::t_9dedaf2de6e8c0 4
+  s_9fddfede21feba::t_57c83abde4e167 68-75
+crates/refkit-core/src/style/validate.rs
+  s_9fddfede21feba::t_c101ddacfd47fb 1-13,15-28,39-300
+  s_9fddfede21feba::t_35b355bde949e3 14,29-38
+packages/refkit-tests/pyproject.toml
+  s_9fddfede21feba::t_e64d2eb90052b2 1-14
+crates/refkit-core/src/library/recovery.rs
+  s_9fddfede21feba::t_6648976c6ac839 63-64,68,229-230
+  s_9fddfede21feba::t_00d4a3c87a7de5 3,6-9,12,18-27,31-38,40,42-44,50-51,57,59,61-62,70-79,81-84,88-95,97,106-107,114-117,120,125,127,134-140,145,149-152,156-157,161,165-171,173-184,192,198-205,210,228,232-238,252,265,267,270
+  s_9fddfede21feba::t_0ee268de5e3447 10,14,16-17,28-30,45-48,65-67,85-87,101-105,109-113,121-124,128-133,146-148,153-155,158-160,162-164,185-191,193-197,206-209,211-227,244-250,255-264,266
+crates/refkit-core/src/library/diagnostic.rs
+  s_9fddfede21feba::t_0ee268de5e3447 98-100
+  s_9fddfede21feba::t_06c4e097d82ecd 1-97,101-102
+docs/pyodide.md
+  s_9fddfede21feba::t_50b0f771efb12f 9,22
+packages/refkit-tests/src/refkit_tests/smoke_refkit.py
+  s_9fddfede21feba::t_e64d2eb90052b2 4-7,9-58
+  s_9fddfede21feba::t_894d69135c7b43 8
+packages/refkit-bench/src/refkit_bench/runner.py
+  s_9fddfede21feba::t_3a26d9a0db18da 61-67,80-81,753-754,798-799,818,834
+  s_9fddfede21feba::t_a9837957c7bf7d 504
+  s_9fddfede21feba::t_54d75a19f7070d 516
+  s_9fddfede21feba::t_eaaa9ea689ae07 755
+  s_9fddfede21feba::t_4b13b163407681 820-832
+  s_9fddfede21feba::t_d3a990eee593b0 22,123-149,503
+packages/polars-refkit/agent-plugin/skills/polars-refkit/SKILL.md
+  s_9fddfede21feba::t_6a55bc4274ad10 1-18
+crates/refkit-core/src/library/guard.rs
+  s_9fddfede21feba::t_7ee74650a39512 1-3,5-12,14-16,52-54,95-103,111-120,122-124,129-133,139-149,154-159,174,176,178-179,189-194,199,251-257,259,269-272,275-281,283-285,287,295-298,307,312-321,331-338
+  s_9fddfede21feba::t_9ff6c2f6554b4f 4,13,20,22-25,27,31-36,41,43-51,55-94
+  s_9fddfede21feba::t_e607a6bee4b072 18,175,200-214,217-245,258,260-268,273-274,282,286,288-294,322-330
+  s_9fddfede21feba::t_0ee268de5e3447 104-110,125-128,134-138,150-153,163-173,181-188,195-198,246-250,299-306,308-311
+  s_9fddfede21feba::t_cedc91ffdceb39 121
+  s_9fddfede21feba::t_7ed35e0412d45e 26
+  s_9fddfede21feba::t_6648976c6ac839 177,180
+packages/polars-refkit/rust/src/expressions/mod.rs
+  s_9fddfede21feba::t_d3de0fcbc9b2be 43-44
+packages/refkit-tests/src/refkit_tests/test_polars_refkit_runtime.py
+  s_9fddfede21feba::t_3c5c1e49be2769 1-54
+docs/.vitepress/navigation.json
+  s_9fddfede21feba::t_51e65613acc1e9 35-36
+  s_9fddfede21feba::t_54ce9e13c80d5f 31
+packages/polars-refkit/polars_refkit/_expressions.py
+  s_9fddfede21feba::t_0ca550035447a6 22,32,34,36,57,59,61,63,82,86,88,100,106,108,110,112,123,125,127,132,134-136,140,205-206,208-210,216-217,219-221
+  s_9fddfede21feba::t_63a27e2bbe0fab 9,17-19,37,40,62,65,84,87,90,111,114,119,137-139,141,212,225
+packages/polars-refkit/agent-plugin/skills/polars-refkit/references/inspect.md
+  s_9fddfede21feba::t_f9bcdcfcbc99a4 1-10,19-28
+  s_9fddfede21feba::t_b704941d95c55d 11-18
+packages/polars-refkit/polars_refkit/_plugin.py
+  s_9fddfede21feba::t_0ca550035447a6 13,161-168
+packages/polars-refkit/agent-plugin/skills/polars-refkit/references/render.md
+  s_9fddfede21feba::t_f9bcdcfcbc99a4 1-9,17-31
+  s_9fddfede21feba::t_b704941d95c55d 10-16
+development_docs/benchmarks.md
+  s_9fddfede21feba::t_f926642d7820ed 53,83-84,129,138-150
+  s_9fddfede21feba::t_211a18a56e2fc7 12,105,107,109
+  s_9fddfede21feba::t_641cef593e7782 137
+scripts/architecture_contract.py
+  s_9fddfede21feba::t_4aeab9b6430a7a 55
+  s_9fddfede21feba::t_40731c14bc2120 71,78-82,88
+  s_9fddfede21feba::t_8cbf5f4ebf2247 28
+  s_9fddfede21feba::t_96c41cfca3c994 179-181,191-196,199,206-210,236-238
+  s_9fddfede21feba::t_e3ea3a7df7d53d 17-18,130,140-141,155-161
+  s_9fddfede21feba::t_fe13c8e3347b29 19-20,166-178,182-185,187-190,200-205,211
+  s_9fddfede21feba::t_67d9b48101901b 74-77,83-87,89-91,131-139,224-231
+  s_9fddfede21feba::t_a0a4d30039d3db 197-198
+packages/refkit/rust/src/raw.rs
+  s_9fddfede21feba::t_a75e8e47c48d1c 329-330,345,349-350
+  s_9fddfede21feba::t_d4e74427d6ce90 8,10,32-37,83,89,469-512,514
+  s_9fddfede21feba::t_7737e6695c38b4 25,40,49,53-55
+development_docs/AGENTS.md
+  s_9fddfede21feba::t_8550ee2b9c65d8 10
+crates/refkit-core/src/library/source.rs
+  s_9fddfede21feba::t_06c4e097d82ecd 1-4,6-9,14-16,23-41,45,47-48
+  s_9fddfede21feba::t_0ee268de5e3447 5,10-13,17-22,42-44,46
+packages/polars-refkit/polars_refkit/__init__.pyi
+  s_9fddfede21feba::t_b704941d95c55d 1,5-6,8,12,15,19,22,26-50
+  s_9fddfede21feba::t_0ca550035447a6 2-4,7,9-11,13-14,16-18,20-21
+.github/workflows/artifacts-polars-refkit.yml
+  s_9fddfede21feba::t_6862cec38814e7 21-23,25-47,49-57,59-65,77,79-116,118-124,130-149,158-181,183-196,202-204,217-233,239-240,242-243,258-270,276-278
+  s_9fddfede21feba::t_f6fedc3e942ad8 8,48,58,117
+  s_9fddfede21feba::t_3739f8a3fceb05 1-7,9-20,24,66-76,78,125-129,150-157,182,211-216,249-257
+  s_9fddfede21feba::t_894d69135c7b43 197-201,205-207,234-238,241,244-246,248,271-275,279-285
+.github/workflows/artifacts-refkit.yml
+  s_9fddfede21feba::t_3739f8a3fceb05 1-7,9-20,24,65-75,77,123-127,148-155,174,204-209,242-250
+  s_9fddfede21feba::t_894d69135c7b43 190-194,198-200,227-231,234,237-239,241,264-268,272-278
+  s_9fddfede21feba::t_f6fedc3e942ad8 8,47,57,115
+  s_9fddfede21feba::t_6862cec38814e7 21-23,25-46,48-56,58-64,76,78-114,116-122,128-147,156-173,175-189,195-197,210-226,232-233,235-236,251-263,269-271
+development_docs/feature-matrix.md
+  s_9fddfede21feba::t_51e65613acc1e9 37
+  s_9fddfede21feba::t_a441b207136433 1,3,5,7,11-13,15,17,19,21-25,27,29,31-35,39,41,43-46
+.github/workflows/source-checks.yml
+  s_9fddfede21feba::t_3739f8a3fceb05 2-3,6-9,100-104
+  s_9fddfede21feba::t_6862cec38814e7 17,21,23,32,40,49,64,70,72,86,90,92,105-112
+  s_9fddfede21feba::t_31735f9a3fc107 33
+crates/refkit-core/src/tidy/mod.rs
+  s_9fddfede21feba::t_7ed35e0412d45e 115
+  s_9fddfede21feba::t_9dedaf2de6e8c0 86-88,149-151,159-167,169
+  s_9fddfede21feba::t_b58512105df41f 137-146,148,152-153,367
+  s_9fddfede21feba::t_8ed70545f60b0e 5,11,20-27,74,106,154-158,168,170-174,177-178,181,184
+  s_9fddfede21feba::t_f6495846344b6d 96-103,112-114,116-126
+packages/refkit/src/refkit/agent.py
+  s_9fddfede21feba::t_7737e6695c38b4 17,27,43,51,53,55-56,58,60-61,63-65,67-72,76
+  s_9fddfede21feba::t_f3e51eba96b4bf 4-5
+packages/refkit-tests/src/refkit_tests/check_examples.py
+  s_9fddfede21feba::t_31735f9a3fc107 1-63
+development_docs/packaging-and-release.md
+  s_9fddfede21feba::t_e6a022fa32306b 74,79-82,98
+  s_9fddfede21feba::t_7142a0e82bad9f 47,76-77,83-87
+packages/refkit-bench/src/refkit_bench/_adapters/pybtex.py
+  s_9fddfede21feba::t_5daa3c4b1a7504 13,116-120,128,133-135
+  s_9fddfede21feba::t_631a8c3591bbd4 31-33,42-44,121-127,129-132
+packages/refkit/src/refkit/_native.pyi
+  s_9fddfede21feba::t_34d5c2b1f06b9b 23-25
+  s_9fddfede21feba::t_39b088e1df90fd 3,6-11,84-85,119,128,170-174,181-182,188,252-253,267,269
+packages/refkit-bench/src/refkit_bench/data/real-bibliography/README.md
+  s_9fddfede21feba::t_af84fcac643946 1,3,5,7,9
+crates/refkit-core/src/tidy/keys.rs
+  s_9fddfede21feba::t_7737e6695c38b4 1,3-4,40-46,49-51,53-70,72,74-75,473-480
+  s_9fddfede21feba::t_9dedaf2de6e8c0 5
+  s_9fddfede21feba::t_b58512105df41f 26-27
+packages/refkit/rust/src/library.rs
+  s_9fddfede21feba::t_f210de4e364780 7,105-109
+  s_9fddfede21feba::t_7737e6695c38b4 12-13,16,23,28,51-55,58-60,70,78,82-83
+docs/guides/render-citations.md
+  s_9fddfede21feba::t_50b0f771efb12f 49-59,103
+  s_9fddfede21feba::t_798836371129e5 97
+.github/workflows/docs.yml
+  s_9fddfede21feba::t_3739f8a3fceb05 1-13
+  s_9fddfede21feba::t_6862cec38814e7 14-39
+.github/workflows/ci.yml
+  s_9fddfede21feba::t_6862cec38814e7 22-24,71-73
+  s_9fddfede21feba::t_3739f8a3fceb05 2-3,7,46-48,51-53,56-60,62-70
+  s_9fddfede21feba::t_cac989bcf7b890 61
+  s_9fddfede21feba::t_894d69135c7b43 25,49-50,54-55,74-75
+  s_9fddfede21feba::t_b58512105df41f 12
+packages/refkit/rust/src/conversion.rs
+  s_9fddfede21feba::t_7737e6695c38b4 123-124,128-135,137-144
+crates/refkit-core/src/tidy/render/value.rs
+  s_9fddfede21feba::t_8ed70545f60b0e 1
+  s_9fddfede21feba::t_9dedaf2de6e8c0 19-21
+docs/guides/format-bibtex.md
+  s_9fddfede21feba::t_2895b123e0aee4 79-88
+  s_9fddfede21feba::t_e1f03210fc85bb 18-19
+packages/refkit/README.md
+  s_9fddfede21feba::t_e1f03210fc85bb 1-5,9,18,25,27,29-30,38-40,42,44-46,49,51,55,57,59-63,65,67
+crates/refkit-core/src/style.rs
+  s_9fddfede21feba::t_677090805b045d 9,86,201-203
+  s_9fddfede21feba::t_c101ddacfd47fb 10-12,236-249
+  s_9fddfede21feba::t_733eea5d3c48db 18,33,94-97,150-161,163-200,259-266
+  s_9fddfede21feba::t_e78ab95db4cf44 162
+  s_9fddfede21feba::t_eef20e7b4d9a29 115-126
+  s_9fddfede21feba::t_7158ebcae23c49 204-235,250-258
+packages/refkit/rust/src/filesystem.rs
+  s_9fddfede21feba::t_7737e6695c38b4 5,7,21,42,50-62,64
+  s_9fddfede21feba::t_458bd665996508 63
+packages/polars-refkit/rust/src/expressions/tidy.rs
+  s_9fddfede21feba::t_9dedaf2de6e8c0 6,10,13,22,210,218,257-258,260,302-306,308-316,318-321,323-326,328-332,334-336
+development_docs/repository-contracts.md
+  s_9fddfede21feba::t_211a18a56e2fc7 9
+  s_9fddfede21feba::t_e6a022fa32306b 79,100
+  s_9fddfede21feba::t_51e65613acc1e9 90
+  s_9fddfede21feba::t_7142a0e82bad9f 14,30-31,94
+  s_9fddfede21feba::t_641cef593e7782 80
+packages/polars-refkit/polars_refkit/agent.py
+  s_9fddfede21feba::t_7737e6695c38b4 1-3,6-97
+  s_9fddfede21feba::t_b5f6f105ebe62f 4-5
+packages/polars-refkit/tests/test_polars_refkit.py
+  s_9fddfede21feba::t_b704941d95c55d 56,87,108-110,285,406,433-434,452-453,455-456,478-479,540,594,624-628,653-654
+  s_9fddfede21feba::t_ab72213721d69b 94
+  s_9fddfede21feba::t_63a27e2bbe0fab 123,127-131,136-139,143-144,260-261
+  s_9fddfede21feba::t_b4d8d7c584d98b 111,161-162,198-201,264,267,270,273,276,279,282,288,291,314-324,327-332,382-386,391-393,725-727
+  s_9fddfede21feba::t_23eb08701f1081 126,132-134,140-142,145-147
+  s_9fddfede21feba::t_820ecbd5f93238 813-833
+  s_9fddfede21feba::t_3c958178778818 394
+docs/reference/errors.md
+  s_9fddfede21feba::t_0c079ace469fe4 33,68
+  s_9fddfede21feba::t_2383ffe421cf3a 14,27-28,72
+  s_9fddfede21feba::t_50b0f771efb12f 26,40
+scripts/tests/test_pyodide_lock.py
+  s_9fddfede21feba::t_2e3f6ea7bfbd50 58-64,77-79,84-92,96
+  s_9fddfede21feba::t_67d9b48101901b 65-76,80-83,93-95,97-99
+packages/polars-refkit/tests/test_pyodide_packaging.py
+  s_9fddfede21feba::t_4e04ba9ecd5df0 72-73
+  s_9fddfede21feba::t_e64d2eb90052b2 10-11,74,94,97
+  s_9fddfede21feba::t_5158a13be6fcdc 33
+development_docs/README.md
+  s_9fddfede21feba::t_211a18a56e2fc7 19
+  s_9fddfede21feba::t_e6a022fa32306b 33
+  s_9fddfede21feba::t_51e65613acc1e9 45
+  s_9fddfede21feba::t_a441b207136433 38
+crates/refkit-core/src/library/mod.rs
+  s_9fddfede21feba::t_6648976c6ac839 271
+  s_9fddfede21feba::t_31e691af9a0469 282-285,288-295,308-309,314-320,341-343,389-392,397-400,405-417,433-434,438-454,463-468,477,479-486,505-510,516-533
+  s_9fddfede21feba::t_25216913b89801 50,57,321,323-340
+  s_9fddfede21feba::t_e607a6bee4b072 487-504
+  s_9fddfede21feba::t_7ed35e0412d45e 18
+  s_9fddfede21feba::t_06c4e097d82ecd 1-2,17,24,29,44,49,158
+  s_9fddfede21feba::t_0ee268de5e3447 5,275-278,296-307,310-313,393-396,401-404,418-428,435-437,455-462,469-476,511-515,535,538
+  s_9fddfede21feba::t_e70024b62584a0 344-355,358-372
+crates/refkit-core/src/tidy/references.rs
+  s_9fddfede21feba::t_9dedaf2de6e8c0 2,4,8,10-38,74-77,88-91,95-97,128,130,132,134-141,224
+  s_9fddfede21feba::t_a3f6703cb06e12 39-61,143-144
+  s_9fddfede21feba::t_f6495846344b6d 3,5-7,62-73,92-94,98-115,121-127,129,142,145-195
+crates/refkit-core/src/render_tree.rs
+  s_9fddfede21feba::t_1a5f3cc159415f 439-443,445,447,451-452,455,459-460,462,464,466,468-470
+  s_9fddfede21feba::t_e0c6e635db19b7 181-182,205-206,231-232,256-257,284-285,314-315,340-341,375,422-423,425-429
+  s_9fddfede21feba::t_b10b6ab2462998 1-2,24,26,52-55,59,70,89-90,94-97,106-111,144-156,159-166,171-180,183-190,195-204,207-214,220-230,233-241,246-255,258-262,265,272-283,286-295,302-311,316-321,323-325,330-337,342-349,364,368,376-377,400-401,405-409,418-419,424
+  s_9fddfede21feba::t_733eea5d3c48db 13-16,30-42,56-58,63,65,71-74,78,85,91-93,101-102,121-122,135,139-140,167-170,191-194,215-219,242-245,266-271,296-301,326-329,351-354,360-363,372,386,390,395,402-404,410-417
+crates/refkit-core/tests/tidy_transform.rs
+  s_9fddfede21feba::t_7b0cb9dce6f98a 206-236,238-259,263-295
+  s_9fddfede21feba::t_a3f6703cb06e12 61,91,108,118,186-204
+  s_9fddfede21feba::t_7ed35e0412d45e 379-401
+  s_9fddfede21feba::t_ad7305e8a2504e 326-337
+  s_9fddfede21feba::t_571c692ce0e852 260-262
+  s_9fddfede21feba::t_23777d5c7a5d1b 296-325,338-378,402
+  s_9fddfede21feba::t_896ce2882e7dfb 1-60,62-90,92-107,109-117,119-172,174,176-181,184,205
+  s_9fddfede21feba::t_ffd71a35cadebf 173,175,182-183,185
+crates/refkit-core/src/render/citation.rs
+  s_9fddfede21feba::t_36e29ff8bb0a0f 1,3-4,6-7,10,12,14-16,18-19,24-27,32-33,55,69,74,77,86
+  s_9fddfede21feba::t_733eea5d3c48db 28-31,34-54,56-57,60,64-68,70-72,78-83,87-91
+skills/refkit/references/contracts.md
+  s_9fddfede21feba::t_9fd79e7b015bb5 47-48
+  s_9fddfede21feba::t_6a55bc4274ad10 41,61
+  s_9fddfede21feba::t_a6912b5abe589b 18
+crates/refkit-core/src/render/bibliography.rs
+  s_9fddfede21feba::t_10924ca11b6b58 21-25,32-33,77-79,89,91
+  s_9fddfede21feba::t_36e29ff8bb0a0f 3,9,11
+  s_9fddfede21feba::t_733eea5d3c48db 15-20,26-31,40-44,80-85
+  s_9fddfede21feba::t_0053a9afaf2a07 1,5,14,34-35,68-73,76,86
+development_docs/core-semantics.md
+  s_9fddfede21feba::t_50b0f771efb12f 80
+  s_9fddfede21feba::t_798836371129e5 72
+  s_9fddfede21feba::t_f926642d7820ed 11-12,19,58-62,64,78,88
+  s_9fddfede21feba::t_0c079ace469fe4 14,18
+packages/refkit/rust/src/tidy.rs
+  s_9fddfede21feba::t_b58512105df41f 281-283
+  s_9fddfede21feba::t_46acaa0348d040 3,173,178-190,233
+packages/refkit/AGENTS.md
+  s_9fddfede21feba::t_894d69135c7b43 14
+  s_9fddfede21feba::t_488d7d3255048f 11
+docs/scripts/verify-build.mjs
+  s_9fddfede21feba::t_521ba1bc933adc 28-30,189-192,214-235,238-241
+skills/refkit/references/tidy.md
+  s_9fddfede21feba::t_5c7d84d01b523a 25-35
+  s_9fddfede21feba::t_6a55bc4274ad10 1-24
+packages/refkit-bench/src/refkit_bench/_adapters/bibtexparser_v2.py
+  s_9fddfede21feba::t_631a8c3591bbd4 45-47,58-60,419-431
+  s_9fddfede21feba::t_366a568a53f588 144
+  s_9fddfede21feba::t_5daa3c4b1a7504 21,237,258,409-418,432
+packages/refkit-tests/src/refkit_tests/__init__.py
+  s_9fddfede21feba::t_e64d2eb90052b2 1
+packages/polars-refkit/polars_refkit/__init__.py
+  s_9fddfede21feba::t_0ca550035447a6 22,26,30,54
+docs/reference/tidy-options.md
+  s_9fddfede21feba::t_2895b123e0aee4 89-111,113-114
+  s_9fddfede21feba::t_0c079ace469fe4 112
+packages/polars-refkit/README.md
+  s_9fddfede21feba::t_e1f03210fc85bb 1,3,5,7,9,29,33,36,38,40,42-64
+packages/refkit/tests/test_public_api.py
+  s_9fddfede21feba::t_34d5c2b1f06b9b 46,48,391,414,421-422,439-441,451,455-456,632,659
+  s_9fddfede21feba::t_c205cfca64786f 614,656,675,692-694,711-712,731,1475-1476
+  s_9fddfede21feba::t_887202ce894ff0 1765-1770,1774-1800,1802-1811,1815-1833,1836-1859
+  s_9fddfede21feba::t_499a7a71e5b89b 423-425
+  s_9fddfede21feba::t_9ff6c2f6554b4f 1890-1897
+  s_9fddfede21feba::t_cfa37963dfe13a 1771-1773,1812-1814,1834-1835,1860-1889
+  s_9fddfede21feba::t_d4e74427d6ce90 1801
+packages/refkit/src/refkit/types.py
+  s_9fddfede21feba::t_34d5c2b1f06b9b 65,73,76,79,83,86,91,95,98,101,112-113,116
+  s_9fddfede21feba::t_4ce0ac3119ebaa 66-70,81
+  s_9fddfede21feba::t_d4e74427d6ce90 117
+  s_9fddfede21feba::t_39b088e1df90fd 1-64,71,74-75,78,80,82,84,87-90,92-94,96,99-100,107-111,115,118-172
+packages/polars-refkit/polars_refkit/_tidy_options.py
+  s_9fddfede21feba::t_63a27e2bbe0fab 71-72
+  s_9fddfede21feba::t_0ca550035447a6 3,38-70,74
+packages/polars-refkit/agent-plugin/skills/polars-refkit/references/tidy.md
+  s_9fddfede21feba::t_5c7d84d01b523a 24-40
+  s_9fddfede21feba::t_f9bcdcfcbc99a4 1-23
+packages/polars-refkit/pyproject.toml
+  s_9fddfede21feba::t_79cdb85e7b06d7 26,34-35,40,42-43,58-64
+skills/refkit/references/render.md
+  s_9fddfede21feba::t_6a55bc4274ad10 1,3,8-9,11-14,18-19,22-26,31,33,35
+  s_9fddfede21feba::t_f9bcdcfcbc99a4 27-28
+  s_9fddfede21feba::t_9fd79e7b015bb5 37,42-52
+packages/refkit/tests/test_agent.py
+  s_9fddfede21feba::t_9fd79e7b015bb5 3,7,9-10,16-20,23-29,37,39-41,43-44,48-59,61-64,66-69,72-75,84,88,90-91,93-94,96-99,102,107-111
+  s_9fddfede21feba::t_f3e51eba96b4bf 34-35,38,42,85,103
+  s_9fddfede21feba::t_e64d2eb90052b2 77
+scripts/distribution_contract.py
+  s_9fddfede21feba::t_3839d7862ab786 17-36,151,153-154,158-171,174,184,186,216-217,227,230-231,240,246,249,256-257
+  s_9fddfede21feba::t_f5d887d74beafb 204-213
+packages/refkit/src/refkit/__init__.pyi
+  s_9fddfede21feba::t_ed760c1e992262 18,42
+  s_9fddfede21feba::t_887202ce894ff0 3,63
+packages/refkit-bench/src/refkit_bench/_adapters/polars_refkit.py
+  s_9fddfede21feba::t_d3a990eee593b0 30-35,37-39,41-52,54-58
+  s_9fddfede21feba::t_754981388116d4 36,40,53
+  s_9fddfede21feba::t_3a26d9a0db18da 173
+crates/refkit-core/src/raw/parse.rs
+  s_9fddfede21feba::t_06c4e097d82ecd 7,647
+development_docs/troubleshooting.md
+  s_9fddfede21feba::t_211a18a56e2fc7 20
+crates/refkit-core/src/raw.rs
+  s_9fddfede21feba::t_07edb6dfaa6bce 309-312
+  s_9fddfede21feba::t_7ee74650a39512 29,38,123,129,166,176,438,456
+  s_9fddfede21feba::t_a75e8e47c48d1c 263,308
+  s_9fddfede21feba::t_06c4e097d82ecd 14
+crates/refkit-core/src/render/mod.rs
+  s_9fddfede21feba::t_733eea5d3c48db 8,16,52-55,79-80,84-86,88-89
+  s_9fddfede21feba::t_36e29ff8bb0a0f 12,14-15,42-43,51,56-57,65-67,74-78,81-83,87,90-91,183
+crates/refkit-core/src/document.rs
+  s_9fddfede21feba::t_2acea91a0a5857 54
+  s_9fddfede21feba::t_733eea5d3c48db 50-52,88-97,101-107,120,122-127,164-171
+  s_9fddfede21feba::t_7737e6695c38b4 4,25-36,41-42,49,53,132,150,190,192,209-210
+packages/refkit-tests/AGENTS.md
+  s_9fddfede21feba::t_31735f9a3fc107 9
+  s_9fddfede21feba::t_1d2e873e62ac21 8
+  s_9fddfede21feba::t_e64d2eb90052b2 1-7,10-13
+packages/refkit-bench/tests/test_benchmark.py
+  s_9fddfede21feba::t_f926642d7820ed 1351-1393
+  s_9fddfede21feba::t_78e5c98543a7fe 69-70
+  s_9fddfede21feba::t_54d75a19f7070d 296
+  s_9fddfede21feba::t_22b617ee851d03 88,101
+  s_9fddfede21feba::t_631a8c3591bbd4 61-62,64-65,67-68,71-87,89-100,102-106,252,263,266,269-295,297-305,307-309,315,1227,1339
+  s_9fddfede21feba::t_214a5a2ada9791 677-683,1410-1426,1430-1470
+  s_9fddfede21feba::t_ccfba2629822d7 989,1006,1009
+  s_9fddfede21feba::t_960bbe6b8cec5e 1394-1409,1427-1429
+README.md
+  s_9fddfede21feba::t_a156fbe1028c71 6
+  s_9fddfede21feba::t_e974b5c487e51c 12,16-19,22,24-31,35,44,51,53,55-56,64-67,69,71-73,76,78,81-82,84,86-90,92,94-96
+docs/guides/edit-bibtex.md
+  s_9fddfede21feba::t_07edb6dfaa6bce 17-20
+  s_9fddfede21feba::t_e1f03210fc85bb 23,38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6a4f0b131b0467f7a1ff2b82cb8259b080c0e890",
+  "prompts": {},
+  "sessions": {
+    "s_9fddfede21feba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07d16-eb2f-7103-95c3-d5cca6784a83",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
