@@ -11,10 +11,7 @@ mod tests;
 
 use self::edit::{render_raw_document, set_raw_field_value};
 use self::parse::parse_raw_document;
-pub(crate) use self::sanitize::{
-    remove_block_containing_span, sanitize_biblatex_for_library,
-    sanitize_biblatex_for_library_literals,
-};
+pub(crate) use self::sanitize::sanitize_biblatex_for_library;
 use crate::quoted;
 
 #[derive(Debug, Clone)]
@@ -29,7 +26,7 @@ pub struct RawFieldData {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RawValueMode {
+pub(crate) enum RawValueMode {
     Bare,
     Braced,
     Expression,
@@ -38,7 +35,7 @@ pub enum RawValueMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawValueAtom {
+pub(crate) struct RawValueAtom {
     pub value: String,
     pub value_mode: RawValueMode,
 }
@@ -123,13 +120,13 @@ pub struct RawEntryId(usize);
 pub struct RawFieldId(usize);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawSyntaxDocument {
+pub(crate) struct RawSyntaxDocument {
     pub blocks: Vec<RawSyntaxBlock>,
     pub entries: Vec<RawSyntaxEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RawSyntaxBlock {
+pub(crate) enum RawSyntaxBlock {
     Whitespace {
         raw: String,
         span: Range<usize>,
@@ -166,7 +163,7 @@ pub enum RawSyntaxBlock {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawSyntaxEntry {
+pub(crate) struct RawSyntaxEntry {
     pub id: RawEntryId,
     pub key: String,
     pub kind: String,
@@ -176,7 +173,7 @@ pub struct RawSyntaxEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawSyntaxField {
+pub(crate) struct RawSyntaxField {
     pub id: RawFieldId,
     pub name: String,
     pub value: String,
@@ -263,7 +260,7 @@ impl RawDocument {
     }
 
     pub fn entry_count(&self) -> usize {
-        self.data.entries.len()
+        self.data.entry_blocks.len()
     }
 
     pub fn block_count(&self) -> usize {
@@ -306,6 +303,13 @@ impl RawDocument {
             .entry_blocks
             .get(entry_id.0)
             .map(|entry| entry_info(entry_id, entry))
+    }
+
+    pub fn field_count(&self, entry_id: RawEntryId) -> Option<usize> {
+        self.data
+            .entry_blocks
+            .get(entry_id.0)
+            .map(|entry| entry.field_blocks.len())
     }
 
     pub fn field_keys(&self, entry_id: RawEntryId) -> Option<Vec<String>> {
@@ -431,7 +435,7 @@ impl RawDocument {
         self.data.blocks.iter().map(raw_block_info).collect()
     }
 
-    pub fn syntax(&self) -> RawSyntaxDocument {
+    pub(crate) fn syntax(&self) -> RawSyntaxDocument {
         RawSyntaxDocument {
             blocks: self.data.blocks.iter().map(raw_syntax_block).collect(),
             entries: self
@@ -449,7 +453,7 @@ impl RawDocument {
     }
 }
 
-pub fn normalize_raw_at_command(raw: &str) -> String {
+pub(crate) fn normalize_raw_at_command(raw: &str) -> String {
     let Some(rest) = raw.strip_prefix('@') else {
         return raw.to_string();
     };

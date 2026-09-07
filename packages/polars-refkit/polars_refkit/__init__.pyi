@@ -1,354 +1,50 @@
-from collections.abc import Iterable
-from typing import Literal, TypeAlias
-
-import polars as pl
+from ._expressions import can_parse as can_parse
+from ._expressions import cite as cite
+from ._expressions import cite_each as cite_each
+from ._expressions import cite_group as cite_group
+from ._expressions import diagnostics as diagnostics
+from ._expressions import entries as entries
+from ._expressions import entry_count as entry_count
+from ._expressions import full_bibliography as full_bibliography
+from ._expressions import has_diagnostics as has_diagnostics
+from ._expressions import keys as keys
+from ._expressions import parse_report as parse_report
+from ._expressions import render_report as render_report
+from ._expressions import tidy_bibtex as tidy_bibtex
+from ._expressions import tidy_bibtex_report as tidy_bibtex_report
+from ._internal import build_mode as build_mode
+from ._namespace import RefkitExprNamespace as RefkitExprNamespace
+from ._plugin import ColumnExpr as ColumnExpr
+from ._plugin import OutputFormat as OutputFormat
+from ._plugin import RecoveryMode as RecoveryMode
+from ._tidy_options import DuplicateRule as DuplicateRule
+from ._tidy_options import MergeStrategy as MergeStrategy
+from ._tidy_options import TidyOptions as TidyOptions
 
 __version__: str
 
-RecoveryMode: TypeAlias = Literal["error", "report"]
-DuplicateRule: TypeAlias = Literal["doi", "key", "abstract", "citation"]
-MergeStrategy: TypeAlias = Literal["first", "last", "combine", "overwrite"]
-ColumnExpr: TypeAlias = str | pl.Expr
-_TidyStringList: TypeAlias = Iterable[str] | None
-_TidyDuplicateRules: TypeAlias = Iterable[DuplicateRule] | None
-_TidyDefaultableUsize: TypeAlias = bool | int | None
-_TidyDefaultableString: TypeAlias = bool | str | None
-_TidyDefaultableStringList: TypeAlias = bool | Iterable[str] | None
-
-class RefkitExprNamespace:
-    def __init__(self, expr: pl.Expr) -> None: ...
-    def cite(
-        self,
-        key_col: ColumnExpr,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def cite_html(
-        self,
-        key_col: ColumnExpr,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def cite_rendered(
-        self,
-        key_col: ColumnExpr,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def cite_each(
-        self,
-        keys_col: ColumnExpr,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def cite_each_html(
-        self,
-        keys_col: ColumnExpr,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def cite_each_rendered(
-        self,
-        keys_col: ColumnExpr,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def cite_group(
-        self,
-        keys_col: ColumnExpr,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def cite_group_html(
-        self,
-        keys_col: ColumnExpr,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def cite_group_rendered(
-        self,
-        keys_col: ColumnExpr,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def full_bibliography_html(
-        self,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def full_bibliography_text(
-        self,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def full_bibliography_rendered(
-        self,
-        *,
-        style: str = "apa",
-        locale: str = "en-US",
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def entry_count(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-    def can_parse(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-    def has_diagnostics(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-    def keys(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-    def entries(
-        self,
-        *,
-        fields: Iterable[str] | None = None,
-        recovery: RecoveryMode = "error",
-    ) -> pl.Expr: ...
-    def diagnostics(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-    def parse_report(self, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-    def tidy_bibtex(
-        self,
-        *,
-        omit: _TidyStringList = ...,
-        curly: bool = ...,
-        numeric: bool = ...,
-        months: bool = ...,
-        space: int = ...,
-        tab: bool = ...,
-        align: _TidyDefaultableUsize = ...,
-        blank_lines: bool = ...,
-        sort: _TidyDefaultableStringList = ...,
-        duplicates: _TidyDuplicateRules = ...,
-        merge: MergeStrategy | None = ...,
-        strip_enclosing_braces: bool = ...,
-        drop_all_caps: bool = ...,
-        escape: bool = ...,
-        sort_fields: _TidyDefaultableStringList = ...,
-        strip_comments: bool = ...,
-        trailing_commas: bool = ...,
-        encode_urls: bool = ...,
-        tidy_comments: bool = ...,
-        remove_empty_fields: bool = ...,
-        remove_duplicate_fields: bool = ...,
-        generate_keys: _TidyDefaultableString = ...,
-        max_authors: int | None = ...,
-        lowercase: bool = ...,
-        enclosing_braces: _TidyDefaultableStringList = ...,
-        remove_braces: _TidyDefaultableStringList = ...,
-        wrap: _TidyDefaultableUsize = ...,
-    ) -> pl.Expr: ...
-    def tidy_bibtex_report(
-        self,
-        *,
-        omit: _TidyStringList = ...,
-        curly: bool = ...,
-        numeric: bool = ...,
-        months: bool = ...,
-        space: int = ...,
-        tab: bool = ...,
-        align: _TidyDefaultableUsize = ...,
-        blank_lines: bool = ...,
-        sort: _TidyDefaultableStringList = ...,
-        duplicates: _TidyDuplicateRules = ...,
-        merge: MergeStrategy | None = ...,
-        strip_enclosing_braces: bool = ...,
-        drop_all_caps: bool = ...,
-        escape: bool = ...,
-        sort_fields: _TidyDefaultableStringList = ...,
-        strip_comments: bool = ...,
-        trailing_commas: bool = ...,
-        encode_urls: bool = ...,
-        tidy_comments: bool = ...,
-        remove_empty_fields: bool = ...,
-        remove_duplicate_fields: bool = ...,
-        generate_keys: _TidyDefaultableString = ...,
-        max_authors: int | None = ...,
-        lowercase: bool = ...,
-        enclosing_braces: _TidyDefaultableStringList = ...,
-        remove_braces: _TidyDefaultableStringList = ...,
-        wrap: _TidyDefaultableUsize = ...,
-    ) -> pl.Expr: ...
-
-def cite(
-    bibtex_col: ColumnExpr,
-    key_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def cite_html(
-    bibtex_col: ColumnExpr,
-    key_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def cite_rendered(
-    bibtex_col: ColumnExpr,
-    key_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def cite_each(
-    bibtex_col: ColumnExpr,
-    keys_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def cite_each_html(
-    bibtex_col: ColumnExpr,
-    keys_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def cite_each_rendered(
-    bibtex_col: ColumnExpr,
-    keys_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def cite_group(
-    bibtex_col: ColumnExpr,
-    keys_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def cite_group_html(
-    bibtex_col: ColumnExpr,
-    keys_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def cite_group_rendered(
-    bibtex_col: ColumnExpr,
-    keys_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def full_bibliography_html(
-    bibtex_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def full_bibliography_text(
-    bibtex_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def full_bibliography_rendered(
-    bibtex_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def entry_count(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-def can_parse(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-def has_diagnostics(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-def keys(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-def entries(
-    bibtex_col: ColumnExpr,
-    *,
-    fields: Iterable[str] | None = None,
-    recovery: RecoveryMode = "error",
-) -> pl.Expr: ...
-def diagnostics(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-def parse_report(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr: ...
-def tidy_bibtex(
-    bibtex_col: ColumnExpr,
-    *,
-    omit: _TidyStringList = ...,
-    curly: bool = ...,
-    numeric: bool = ...,
-    months: bool = ...,
-    space: int = ...,
-    tab: bool = ...,
-    align: _TidyDefaultableUsize = ...,
-    blank_lines: bool = ...,
-    sort: _TidyDefaultableStringList = ...,
-    duplicates: _TidyDuplicateRules = ...,
-    merge: MergeStrategy | None = ...,
-    strip_enclosing_braces: bool = ...,
-    drop_all_caps: bool = ...,
-    escape: bool = ...,
-    sort_fields: _TidyDefaultableStringList = ...,
-    strip_comments: bool = ...,
-    trailing_commas: bool = ...,
-    encode_urls: bool = ...,
-    tidy_comments: bool = ...,
-    remove_empty_fields: bool = ...,
-    remove_duplicate_fields: bool = ...,
-    generate_keys: _TidyDefaultableString = ...,
-    max_authors: int | None = ...,
-    lowercase: bool = ...,
-    enclosing_braces: _TidyDefaultableStringList = ...,
-    remove_braces: _TidyDefaultableStringList = ...,
-    wrap: _TidyDefaultableUsize = ...,
-) -> pl.Expr: ...
-def tidy_bibtex_report(
-    bibtex_col: ColumnExpr,
-    *,
-    omit: _TidyStringList = ...,
-    curly: bool = ...,
-    numeric: bool = ...,
-    months: bool = ...,
-    space: int = ...,
-    tab: bool = ...,
-    align: _TidyDefaultableUsize = ...,
-    blank_lines: bool = ...,
-    sort: _TidyDefaultableStringList = ...,
-    duplicates: _TidyDuplicateRules = ...,
-    merge: MergeStrategy | None = ...,
-    strip_enclosing_braces: bool = ...,
-    drop_all_caps: bool = ...,
-    escape: bool = ...,
-    sort_fields: _TidyDefaultableStringList = ...,
-    strip_comments: bool = ...,
-    trailing_commas: bool = ...,
-    encode_urls: bool = ...,
-    tidy_comments: bool = ...,
-    remove_empty_fields: bool = ...,
-    remove_duplicate_fields: bool = ...,
-    generate_keys: _TidyDefaultableString = ...,
-    max_authors: int | None = ...,
-    lowercase: bool = ...,
-    enclosing_braces: _TidyDefaultableStringList = ...,
-    remove_braces: _TidyDefaultableStringList = ...,
-    wrap: _TidyDefaultableUsize = ...,
-) -> pl.Expr: ...
+__all__ = [
+    "__version__",
+    "build_mode",
+    "RefkitExprNamespace",
+    "TidyOptions",
+    "OutputFormat",
+    "ColumnExpr",
+    "RecoveryMode",
+    "DuplicateRule",
+    "MergeStrategy",
+    "cite",
+    "cite_each",
+    "cite_group",
+    "full_bibliography",
+    "render_report",
+    "entry_count",
+    "can_parse",
+    "has_diagnostics",
+    "keys",
+    "entries",
+    "diagnostics",
+    "parse_report",
+    "tidy_bibtex",
+    "tidy_bibtex_report",
+]

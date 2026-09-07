@@ -8,7 +8,6 @@ from typing import Any, cast
 import pytest
 
 import refkit as rk
-from refkit import _native
 
 NATIVE_STUB = Path(__file__).parents[1] / "src" / "refkit" / "_native.pyi"
 EXPECTED_TIDY_OPTION_NAMES = (
@@ -57,10 +56,6 @@ def _stub_tidy_option_names() -> tuple[str, ...]:
 
 def test_tidy_options_stub_lists_public_keywords() -> None:
     assert _stub_tidy_option_names() == EXPECTED_TIDY_OPTION_NAMES
-
-
-def test_tidy_options_native_allowlist_lists_public_keywords() -> None:
-    assert tuple(_native._tidy_option_names) == EXPECTED_TIDY_OPTION_NAMES
 
 
 def test_tidy_options_runtime_signature_lists_public_keywords() -> None:

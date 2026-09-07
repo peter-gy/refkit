@@ -25,43 +25,9 @@ const routes = configuredLinks.map((link) =>
   link === "/" ? "index.html" : `${link.slice(1)}.html`,
 )
 
-const brandAssets = {
-  "refkit-wordmark-light": [339, 221],
-  "refkit-wordmark-dark": [339, 221],
-  "refkit-mark-light": [288, 288],
-  "refkit-mark-dark": [288, 288],
-  "refkit-favicon-light": [192, 192],
-  "refkit-favicon-dark": [192, 192],
-  "refkit-lockup-horizontal-light": [491, 253],
-  "refkit-lockup-horizontal-dark": [491, 253],
-  "refkit-lockup-vertical-light": [403, 457],
-  "refkit-lockup-vertical-dark": [403, 457],
-}
-
-const publicFiles = [
-  ...Object.keys(brandAssets).flatMap((name) => [
-    `brand/${name}.svg`,
-    `brand/${name}.png`,
-  ]),
-  "brand/refkit-lockup-horizontal-light-transparent.svg",
-  "brand/refkit-lockup-horizontal-dark-transparent.svg",
-  "og.png",
-  "og-dark.png",
-  "og-light.png",
-  "robots.txt",
-  "icons/scan-text-light.svg",
-  "icons/scan-text-dark.svg",
-  "icons/quote-light.svg",
-  "icons/quote-dark.svg",
-  "icons/file-pen-line-light.svg",
-  "icons/file-pen-line-dark.svg",
-  "icons/table-properties-light.svg",
-  "icons/table-properties-dark.svg",
-  "icons/LICENSE.txt",
-  "benchmarks/refkit-0.0.4rc5-macos-arm64-2026-09-06.json",
-  "favicon.ico",
-  ".nojekyll",
-]
+const publicRoot = join(docsRoot, "public")
+const publicFiles = readdirSync(publicRoot, { recursive: true })
+  .filter((path) => statSync(join(publicRoot, path)).isFile())
 
 const errors = []
 
@@ -220,46 +186,10 @@ for (const value of [
   if (!index.includes(value)) errors.push(`home metadata or asset reference is missing: ${value}`)
 }
 
-function pngSize(path) {
-  const buffer = readFileSync(path)
-  if (buffer.toString("hex", 0, 8) !== "89504e470d0a1a0a") {
-    errors.push(`invalid PNG signature: ${relative(outputRoot, path)}`)
-    return [0, 0]
-  }
-  return [buffer.readUInt32BE(16), buffer.readUInt32BE(20)]
-}
-
-for (const [name, logicalSize] of Object.entries(brandAssets)) {
-  const actual = pngSize(join(outputRoot, "brand", `${name}.png`))
-  const expected = logicalSize.map((value) => value * 2)
-  if (actual[0] !== expected[0] || actual[1] !== expected[1]) {
-    errors.push(`unexpected brand PNG size for ${name}: ${actual.join("x")}`)
-  }
-  const svg = readFileSync(join(outputRoot, "brand", `${name}.svg`), "utf8")
-  const viewBox = `viewBox="0 0 ${logicalSize[0]} ${logicalSize[1]}"`
-  if (!svg.includes(viewBox)) errors.push(`unexpected SVG viewBox for ${name}`)
-  if (name.startsWith("refkit-favicon-") && /<rect\b/.test(svg)) {
-    errors.push(`favicon SVG contains a background rectangle: ${name}`)
-  }
-}
-
-for (const name of [
-  "refkit-lockup-horizontal-light-transparent",
-  "refkit-lockup-horizontal-dark-transparent",
-]) {
-  const svg = readFileSync(join(outputRoot, "brand", `${name}.svg`), "utf8")
-  if (!svg.includes('viewBox="0 0 491 253"')) {
-    errors.push(`unexpected SVG viewBox for ${name}`)
-  }
-  if (/<rect\b/.test(svg)) {
-    errors.push(`transparent navbar SVG contains a background rectangle: ${name}`)
-  }
-}
-
-for (const name of ["og.png", "og-dark.png", "og-light.png"]) {
-  const actual = pngSize(join(outputRoot, name))
-  if (actual[0] !== 2400 || actual[1] !== 1260) {
-    errors.push(`unexpected social image size for ${name}: ${actual.join("x")}`)
+for (const path of publicFiles) {
+  if (path === "robots.txt" || !existsSync(join(outputRoot, path))) continue
+  if (!readFileSync(join(publicRoot, path)).equals(readFileSync(join(outputRoot, path)))) {
+    errors.push(`published asset differs from source: ${path}`)
   }
 }
 
@@ -281,26 +211,34 @@ if (
   errors.push("performance evidence has an unexpected status, build mode, or source path")
 }
 
-const expectedMedians = new Map([
-  ["input.bibtex-text|refkit", 41.4],
-  ["input.bibtex-text|bibtexparser-2.x", 90.3],
-  ["input.bibtex-text|pybtex", 180.5],
-  ["render.prepared-citation|refkit", 321.8],
-  ["render.prepared-citation|citeproc-py", 1350.9],
-])
-const groupedRows = Map.groupBy(
-  benchmark.rows,
-  (row) => `${row.lane}|${row.package}`,
-)
-for (const [key, expected] of expectedMedians) {
-  const seconds = groupedRows.get(key)?.map((row) => row.seconds).sort((a, b) => a - b)
-  if (!seconds || seconds.length !== 12) {
-    errors.push(`performance evidence has an unexpected round count for ${key}`)
+const performance = readFileSync(join(docsRoot, "performance.md"), "utf8")
+const tableRows = [...performance.matchAll(
+  /^\| `([^`]+)` \| ([^|]+?) \| ([\d,.]+) µs \|$/gm,
+)]
+const groupedRows = Map.groupBy(benchmark.rows, (row) => `${row.lane}|${row.package}`)
+if (tableRows.length !== groupedRows.size) {
+  errors.push("performance table must describe every measured lane and package once")
+}
+const described = new Set()
+for (const [, lane, packageLabel, publishedMedian] of tableRows) {
+  const matching = [...groupedRows.entries()].find(([, rows]) =>
+    rows[0].lane === lane && `${rows[0].package} ${rows[0].package_version}` === packageLabel,
+  )
+  if (!matching || described.has(matching[0])) {
+    errors.push(`performance table has an unknown or repeated measurement: ${lane} ${packageLabel}`)
     continue
   }
-  const median = ((seconds[5] + seconds[6]) / 2) * 1_000_000
-  if (Math.round(median * 10) / 10 !== expected) {
-    errors.push(`performance median drifted for ${key}: ${median}`)
+  const [key, rows] = matching
+  described.add(key)
+  const seconds = rows.map((row) => row.seconds).sort((a, b) => a - b)
+  if (seconds.length !== rows[0].rounds || seconds.some((value) => !Number.isFinite(value) || value < 0)) {
+    errors.push(`performance evidence has invalid measurements for ${key}`)
+    continue
+  }
+  const middle = Math.floor(seconds.length / 2)
+  const median = (seconds.length % 2 ? seconds[middle] : (seconds[middle - 1] + seconds[middle]) / 2) * 1_000_000
+  if (Number(publishedMedian.replaceAll(",", "")) !== Math.round(median * 10) / 10) {
+    errors.push(`performance table median does not match evidence for ${key}`)
   }
 }
 

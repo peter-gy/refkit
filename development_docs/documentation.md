@@ -38,7 +38,7 @@ The published site is `https://peter-gy.github.io/refkit/`. GitHub Pages serves 
 
 `BASE_PATH` carries the Pages deployment path into VitePress. The configuration applies it to site navigation, scripts, styles, and static head assets. Canonical URLs, Open Graph URLs, `sitemap.xml`, `robots.txt`, and agent-readable Markdown URLs always use the published site URL.
 
-`make docs-check` builds and verifies both `/refkit/` and `/`. `make docs-build` builds one artifact with the current `BASE_PATH`.
+`make docs-check` builds and verifies `/` followed by `/refkit/`, leaving the deployable Pages artifact last. `make docs-build` builds one artifact with the current `BASE_PATH`.
 
 `make docs-check` composes the Markdown audience-boundary check with the locked VitePress install and build.
 
@@ -53,9 +53,9 @@ Public pages follow this reader path:
 3. Concepts define normalized and raw bibliography models, ordered rendering, and recovery.
 4. Guides complete parsing, rendering, raw editing, formatting, Polars, and Pyodide tasks.
 5. Reference pages define exact Python, Polars, data-shape, option, selector, error, Rust adapter, and agent-readable documentation contracts.
-6. Migration and troubleshooting pages support change and recovery.
+6. Troubleshooting diagnoses failures and provides recovery steps.
 
-Every public page must appear in navigation or be an intentional compatibility route. Use extensionless internal links because VitePress owns the output suffix.
+Every public page must appear in navigation. Use extensionless internal links because VitePress owns the output suffix.
 
 ## Agent-Readable Output
 
@@ -69,7 +69,7 @@ The plugin uses the configured navigation order. The verifier compares both llms
 
 ## GitHub Pages
 
-`.github/workflows/pages.yml` builds documentation for pull requests and `main`. Pull requests prove the root-based build. A `main` build reads `base_path` from `actions/configure-pages`, builds the `/refkit/` artifact, uploads `docs/.vitepress/dist`, and deploys that exact artifact.
+`.github/workflows/docs.yml` validates both deployment bases for pull requests and `main`. On `main`, it uploads the final `/refkit/` build from `docs/.vitepress/dist`. The `deploy-docs` job in `ci.yml` deploys that exact artifact after validation.
 
 The workflow includes `.nojekyll` so GitHub Pages serves VitePress asset directories and generated Markdown files directly.
 
@@ -87,13 +87,13 @@ VitePress copies `docs/public` to the static output root. The site uses:
 
 The feature icons are decorative because each card has a visible title. Keep their alternative text empty and preserve the Lucide license beside the public assets.
 
-Keep image dimensions, alternative text, social metadata, and public filenames stable together. The static build verifier checks publication and references. Use browser inspection to confirm which themed asset is active.
+Keep alternative text, social metadata, and public filenames aligned. The static build verifier compares copied assets with their authored bytes and checks publication references. Use browser inspection to confirm which themed asset is active.
 
 ## Validate Delivery
 
 Inspect the built preview at desktop and narrow widths. Check:
 
-- Home, concept, guide, reference, migration, troubleshooting, and unknown routes.
+- Home, concept, guide, reference, troubleshooting, and unknown routes.
 - Top navigation, sidebar, previous and next links, source links, and local search.
 - Search results for `Library`, `BibDocument`, `Document`, `Citation Style Language`, `TidyOptions`, and Polars.
 - Light and dark logos, hero assets, colors, and persisted theme preference.
@@ -102,3 +102,15 @@ Inspect the built preview at desktop and narrow widths. Check:
 - Root and `/refkit/` asset, navigation, search, Markdown, llms, sitemap, and canonical URLs.
 
 Run `make docs-check test` after changing documentation source, configuration, validation, or published assets.
+
+## Execute authored examples
+
+After installing both native adapters, run:
+
+```bash
+make docs-examples-check
+```
+
+This target invokes `python -m refkit_tests.check_examples --root .` from the installed test-support package. The runner extracts the first Python example from the READMEs and selected task guides, executes each in an isolated temporary directory, and compares documented output or executes the example's assertions. Source integration runs it with the installed packages. Static documentation builds remain independent of native imports.
+
+The performance verifier computes medians from the published result rows and compares them with the authored performance table. Update the evidence and page together when publishing a new measurement.

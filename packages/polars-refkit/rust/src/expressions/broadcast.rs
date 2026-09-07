@@ -9,16 +9,6 @@ pub(super) fn parse_value_library_source(
     Library::parse_biblatex(source, recovery)
 }
 
-pub(super) fn parse_broadcast_library(
-    bibtex: &StringChunked,
-    recovery: RecoveryPolicy,
-) -> Option<Library> {
-    if bibtex.len() != 1 {
-        return None;
-    }
-    parse_value_library_source(bibtex.get(0)?, recovery).ok()
-}
-
 pub(super) fn load_style(name: &str) -> PolarsResult<std::sync::Arc<PreparedStyle>> {
     load_prepared_style(name).map_err(|err| compute_error(err.to_string()))
 }

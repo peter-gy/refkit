@@ -7,6 +7,14 @@ pub use pyo3_polars::derive::{_polars_plugin_get_last_error_message, _polars_plu
 #[pymodule]
 fn _internal(_py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("__version__", python_version(env!("CARGO_PKG_VERSION")))?;
+    module.add(
+        "build_mode",
+        if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        },
+    )?;
     Ok(())
 }
 

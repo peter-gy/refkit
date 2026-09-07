@@ -1,116 +1,29 @@
 from collections.abc import Iterable
 from os import PathLike
-from typing import Literal, TypeAlias, TypedDict
+from typing import Literal, TypeAlias
 
-class _ProjectionRow(TypedDict, total=False):
-    key: str
-    entry_type: str
-    type: str
-    title: str | None
-    date: str | None
-    doi: str | None
-    volume: str | None
-
-class _TreeFormatting(TypedDict):
-    font_style: str
-    font_variant: str
-    font_weight: str
-    text_decoration: str
-    vertical_align: str
-
-class _TreeText(TypedDict):
-    kind: Literal["Text"]
-    text: str
-    formatting: _TreeFormatting
-
-class _TreeElement(TypedDict):
-    kind: Literal["Element"]
-    display: str | None
-    meta: str | None
-    children: list[_TreeNode]
-
-class _TreeMarkup(TypedDict):
-    kind: Literal["Markup"]
-    value: str
-
-class _TreeLink(TypedDict):
-    kind: Literal["Link"]
-    text: str
-    url: str
-    formatting: _TreeFormatting
-
-class _TreeTransparent(TypedDict):
-    kind: Literal["Transparent"]
-    cite_idx: int
-    format: str
-
-_TreeNode: TypeAlias = _TreeText | _TreeElement | _TreeMarkup | _TreeLink | _TreeTransparent
-
-class _BibliographyEntry(TypedDict):
-    kind: Literal["bibliography-entry"]
-    key: str
-    first_field: _TreeNode | None
-    children: list[_TreeNode]
-
-_RenderedTree: TypeAlias = list[_TreeNode | _BibliographyEntry]
-_RawSpan: TypeAlias = list[int]
-
-class _RawWhitespaceBlock(TypedDict):
-    kind: Literal["whitespace"]
-    span: _RawSpan
-
-class _RawCommentBlock(TypedDict):
-    kind: Literal["comment"]
-    raw: str
-    span: _RawSpan
-
-class _RawPreambleBlock(TypedDict):
-    kind: Literal["preamble"]
-    value: str
-    span: _RawSpan
-
-class _RawStringBlock(TypedDict):
-    kind: Literal["string"]
-    key: str
-    value: str
-    span: _RawSpan
-
-class _RawEntryBlock(TypedDict):
-    kind: Literal["entry"]
-    id: int
-    key: str
-    span: _RawSpan
-
-class _RawFailedBlock(TypedDict):
-    kind: Literal["failed"]
-    raw: str
-    error: str
-    span: _RawSpan
-
-class _RawOtherBlock(TypedDict):
-    kind: Literal["other"]
-    raw: str
-    span: _RawSpan
-
-_RawBlock: TypeAlias = (
-    _RawWhitespaceBlock
-    | _RawCommentBlock
-    | _RawPreambleBlock
-    | _RawStringBlock
-    | _RawEntryBlock
-    | _RawFailedBlock
-    | _RawOtherBlock
+from .types import (
+    BibliographyLayout,
+    Diagnostic,
+    ProjectionRow,
+    RawBlock,
+    RawFailedBlock,
+    RenderedTree,
+    TidyRename,
 )
 
 __version__: str
 build_info: str
 build_mode: Literal["debug", "release"]
-_tidy_option_names: list[str]
 _RecoveryPolicy: TypeAlias = Literal["error", "report"]
 _DuplicateRule: TypeAlias = Literal["doi", "key", "abstract", "citation"]
 _MergeStrategy: TypeAlias = Literal["first", "last", "combine", "overwrite"]
 
 class RefkitError(Exception): ...
+
+class ParseError(RefkitError):
+    diagnostics: list[Diagnostic]
+
 class MissingReferenceError(RefkitError): ...
 class TidyError(RefkitError): ...
 
@@ -168,6 +81,8 @@ class TidyResult:
     @property
     def warnings(self) -> list[TidyWarning]: ...
     @property
+    def renames(self) -> list[TidyRename]: ...
+    @property
     def count(self) -> int: ...
 
 def tidy_bibtex(source: str, *, options: TidyOptions | None = None) -> TidyResult: ...
@@ -201,7 +116,7 @@ class Library:
     @staticmethod
     def parse_yaml(source: str) -> Library: ...
     @property
-    def diagnostics(self) -> list[str]: ...
+    def diagnostics(self) -> list[Diagnostic]: ...
     def keys(self) -> list[str]: ...
     def get_many(self, keys: Iterable[str]) -> list[Entry]: ...
     def values(self) -> list[Entry]: ...
@@ -210,7 +125,7 @@ class Library:
     def select(self, selector: str) -> list[Entry]: ...
     def project(
         self, fields: Iterable[str] | None = None, *, keys: Iterable[str] | None = None
-    ) -> list[_ProjectionRow]: ...
+    ) -> list[ProjectionRow]: ...
     def __len__(self) -> int: ...
     def __bool__(self) -> bool: ...
     def __contains__(self, key: str) -> bool: ...
@@ -252,7 +167,11 @@ class CitationGroup:
     def __len__(self) -> int: ...
 
 class Citation:
-    def __init__(self, id: str, citation: str | Cite | CitationGroup) -> None: ...
+    def __init__(
+        self, id: str, citation: str | Cite | CitationGroup, *, note_number: int | None = None
+    ) -> None: ...
+    @property
+    def note_number(self) -> int | None: ...
     @property
     def id(self) -> str: ...
     @property
@@ -260,14 +179,13 @@ class Citation:
 
 class Rendered:
     @property
+    def layout(self) -> BibliographyLayout | None: ...
+    @property
     def text(self) -> str: ...
     @property
     def html(self) -> str: ...
     @property
-    def tree(self) -> _RenderedTree: ...
-    def to_text(self) -> str: ...
-    def to_html(self) -> str: ...
-    def to_tree(self) -> _RenderedTree: ...
+    def tree(self) -> RenderedTree: ...
 
 class RenderedDocument:
     @property
@@ -331,6 +249,8 @@ class BibEntryMap:
     def __getitem__(self, key: str) -> BibEntry: ...
 
 class BibDocument:
+    @property
+    def diagnostics(self) -> list[Diagnostic]: ...
     @staticmethod
     def read(path: str | PathLike[str]) -> BibDocument: ...
     @staticmethod
@@ -344,9 +264,9 @@ class BibDocument:
     @property
     def strings(self) -> dict[str, str]: ...
     @property
-    def failed_blocks(self) -> list[_RawFailedBlock]: ...
+    def failed_blocks(self) -> list[RawFailedBlock]: ...
     @property
-    def blocks(self) -> list[_RawBlock]: ...
+    def blocks(self) -> list[RawBlock]: ...
     def to_bibtex(self) -> str: ...
     def tidy(self, *, options: TidyOptions | None = None) -> TidyResult: ...
     def write(self, path: str | PathLike[str]) -> None: ...

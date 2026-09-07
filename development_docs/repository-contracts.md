@@ -6,12 +6,12 @@ RefKit keeps cross-file invariants executable. Each contract has one source-leve
 
 | Contract | Command | Protects |
 | --- | --- | --- |
-| Architecture | `make architecture-check` | Core dependency classification, host-boundary ownership, workspace composition, released engines, adapter direction, and locked native builds. |
+| Architecture | `make architecture-check` | Core dependency classification, host-boundary ownership, workspace composition, audited engine sources, adapter direction, and locked native builds. |
 | Documentation source | `make docs-source-check` | Markdown-only developer docs, local link targets, VitePress routes, and the public-to-developer audience boundary. |
 | Documentation site | `make docs-site-check` | Locked pnpm install, TypeScript, root and Pages-base VitePress output, routes, public assets, social metadata, raw Markdown, llms indexes, local links, and heading fragments. |
 | Release metadata | `make release-check` | Lockstep versions, exact native dependency pins, repository metadata, and release tag grammar. |
 | Pyodide runtime | `make pyodide-lock-check` | Runtime requirements, resolved wheels, hashes, and the tested Python-to-Rust Polars plugin ABI mapping. |
-| Distribution archive | `scripts/distribution_contract.py <archives>` | Bytecode exclusion, developer-doc exclusion, normalized SBOM references, builder-path removal, and exact RefKit Agent Plugin resources. |
+| Distribution archive | `scripts/distribution_contract.py <archives>` | Bytecode exclusion, developer-doc exclusion, normalized SBOM references, builder-path removal, and exact package-specific Agent Plugin resources. |
 | Wheel normalization | `python -m scripts.normalize_wheel <wheels>` | Stable SBOM references and matching `RECORD` hashes before archive validation. |
 
 Contract diagnostics should name the offending source or archive member and return a nonzero exit status. Keep validation deterministic and free from network access. Test a new failure mode beside the script before adding it to `make check` or CI.
@@ -27,8 +27,8 @@ Contract diagnostics should name the offending source or archive member and retu
 
 ### Agent capability
 
-- root `plugin.json` and the curated `skills/refkit` tree
-- `packages/refkit/src/refkit/agent.py`
+- root `plugin.json` and `skills/refkit`, plus the Polars package plugin and skill tree
+- `packages/refkit/src/refkit/agent.py` and `packages/polars-refkit/polars_refkit/agent.py`
 - the `marimo.agent.capability` entry point and package runtime dependency
 - package-local Agent Plugins build backend
 - direct-Maturin wheel augmentation
@@ -76,7 +76,8 @@ Run `make pyodide-lock` to regenerate the lock, then `make pyodide-lock-check`.
 | Cargo and uv locks | Tracked resolution contracts. Validate them before tests. |
 | Pyodide lock | Tracked generated runtime input. Regenerate through `scripts/pyodide_lock.py`. |
 | Wheels and sdists | Derived build output. Validate archives and leave them untracked. |
-| Agent Plugin wheel payload | Derived from root `plugin.json` and `skills/refkit`. Validate its exact inventory in wheels and sdists. |
+| Installed-test support wheel | Built from `packages/refkit-tests` and installed alongside candidate adapters. Run its probes outside the checkout. |
+| Agent Plugin wheel payload | Derived from each package's configured plugin manifest and skill tree. Validate its exact inventory in wheels and sdists. |
 | Wheel SBOMs | Derived by native builds, normalized before archive validation. |
 | Benchmark JSON and CSV | Local evidence under `packages/refkit-bench/results`. Keep audited code and fixtures tracked. |
 | `development_docs/` | Tracked maintainer guidance. Excluded from published distributions. |
@@ -86,14 +87,14 @@ Generated output should have an authoritative input, a reproducible command, and
 ## Documentation Ownership
 
 - Root and package READMEs introduce installation and public package use.
-- `docs/` owns public API contracts, runtime guides, and migration paths.
+- `docs/` owns public API contracts and runtime guides.
 - `development_docs/` owns architecture, workflows, tests, packaging, release, and benchmark details.
 - `AGENTS.md` files keep short instructions close to the code they govern.
 
-`docs/.vitepress/config.mts` owns the rendered navigation, base path, llms plugin, and site metadata. `docs/scripts/verify-build.mjs` owns static output checks. `.github/workflows/pages.yml` owns the Pages artifact and deployment. The [documentation site guide](documentation.md) owns the build and browser workflow.
+`docs/.vitepress/config.mts` owns the rendered navigation, base path, llms plugin, and site metadata. `docs/scripts/verify-build.mjs` owns static output checks. `.github/workflows/docs.yml` owns the Pages artifact, and `ci.yml` owns deployment. The [documentation site guide](documentation.md) owns the build and browser workflow.
 
 Root `README.md` is the single public entry point allowed to link into the developer index. Public package READMEs remain self-contained because package indexes render them outside the repository.
 
 ## GitHub Actions
 
-Pin third-party actions to full commit SHAs. Keep source checks reusable and package builds separate from installed-artifact tests. The two package publish jobs run independently, then join at release completion. Native builds configure Rust path remapping before compilation. Publish jobs validate the merged archive set before trusted publication.
+Pin third-party actions to full commit SHAs. Build the shared `refkit-tests` support wheel through `test-support.yml`. Reuse each package artifact workflow for CI and publication, with build jobs feeding installed-artifact tests. The two package publish jobs run independently, then join at release completion. Native builds configure Rust path remapping before compilation. Publish jobs validate the merged archive set before trusted publication.

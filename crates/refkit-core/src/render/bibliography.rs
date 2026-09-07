@@ -1,59 +1,47 @@
-use std::fmt;
+use std::fmt::{self, Write as _};
 
-use hayagriva::citationberg::{IndependentStyle, LocaleCode};
-use hayagriva::{
-    BibliographyDriver, BibliographyItem, BibliographyRequest, BufWriteFormat, CitationItem,
-    CitationRequest, Library as HayLibrary,
-};
+use hayagriva::{BibliographyItem, BufWriteFormat, RenderedBibliography};
 
-use super::html::{render_child_html, render_children_html};
+use super::html::{render_child_html, render_children_html, write_html_escaped};
 use super::text::elem_children_to_string;
-use super::{RenderedOutput, bundled_locales};
-
-pub(crate) fn render_bibliography(
-    library: &HayLibrary,
-    style: &IndependentStyle,
-    locale: Option<&str>,
-    all: bool,
-) -> Result<RenderedOutput, String> {
-    let locales = bundled_locales();
-    let locale = locale.map(|code| LocaleCode(code.to_string()));
-    let mut driver = BibliographyDriver::new();
-
-    if all {
-        for entry in library.iter() {
-            driver.citation(CitationRequest::new(
-                vec![CitationItem::with_entry(entry)],
-                style,
-                locale.clone(),
-                locales,
-                None,
-            ));
-        }
-    }
-
-    let rendered = driver.finish(BibliographyRequest::new(style, locale, locales));
-    let Some(bibliography) = rendered.bibliography else {
-        return Ok(RenderedOutput {
-            text: String::new(),
-            html: String::new(),
-        });
-    };
-    let (text, html) = bibliography_to_text_html(&bibliography.items)?;
-    Ok(RenderedOutput { text, html })
-}
 
 pub(crate) fn bibliography_to_text_html(
-    items: &[BibliographyItem],
+    bibliography: &RenderedBibliography,
 ) -> Result<(String, String), String> {
+    let items = &bibliography.items;
     let mut text = String::with_capacity(items.len() * 224);
     let mut html = String::with_capacity(items.len() * 384);
-    for item in items {
+    if !items.is_empty() {
+        write!(
+            html,
+            "<div class=\"csl-bib-body\" style=\"line-height:{};",
+            bibliography.line_spacing
+        )
+        .map_err(|err| err.to_string())?;
+        if let Some(align) = bibliography.second_field_align {
+            let columns = match align {
+                hayagriva::citationberg::SecondFieldAlign::Flush => "max-content minmax(0,1fr)",
+                hayagriva::citationberg::SecondFieldAlign::Margin => "0 minmax(0,1fr)",
+            };
+            write!(
+                html,
+                "display:grid;grid-template-columns:{columns};column-gap:0.5em;row-gap:{}em;",
+                bibliography.entry_spacing
+            )
+            .map_err(|err| err.to_string())?;
+        }
+        html.push_str("\">");
+    }
+    for (index, item) in items.iter().enumerate() {
         if !text.is_empty() {
             text.push('\n');
         }
         write_bibliography_item_text(item, &mut text)?;
-        render_bibliography_item_html(item, &mut html).map_err(|err| err.to_string())?;
+        render_bibliography_item_html(item, bibliography, index, &mut html)
+            .map_err(|err| err.to_string())?;
+    }
+    if !items.is_empty() {
+        html.push_str("</div>");
     }
     Ok((text, html))
 }
@@ -77,14 +65,30 @@ fn write_bibliography_item_text(
     Ok(())
 }
 
-fn render_bibliography_item_html(item: &BibliographyItem, output: &mut String) -> fmt::Result {
+fn render_bibliography_item_html(
+    item: &BibliographyItem,
+    bibliography: &RenderedBibliography,
+    index: usize,
+    output: &mut String,
+) -> fmt::Result {
     output.push_str("<div class=\"csl-entry\" data-key=\"");
     write_html_escaped(output, &item.key);
+    output.push_str("\" style=\"");
+    if bibliography.second_field_align.is_some() {
+        output.push_str("display:contents;");
+    } else {
+        if index > 0 {
+            write!(output, "margin-top:{}em;", bibliography.entry_spacing)?;
+        }
+        if bibliography.hanging_indent {
+            output.push_str("padding-left:2em;text-indent:-2em;");
+        }
+    }
     output.push_str("\">");
     if let Some(first_field) = &item.first_field {
-        output.push_str("<div class=\"csl-left-margin\">");
+        output.push_str("<div class=\"csl-left-margin\" style=\"grid-column:1;justify-self:end;white-space:nowrap;\">");
         render_child_html(first_field, output)?;
-        output.push_str("</div><div class=\"csl-right-inline\">");
+        output.push_str("</div><div class=\"csl-right-inline\" style=\"grid-column:2;\">");
         render_children_html(&item.content, output)?;
         output.push_str("</div>");
     } else {
@@ -92,17 +96,4 @@ fn render_bibliography_item_html(item: &BibliographyItem, output: &mut String) -
     }
     output.push_str("</div>");
     Ok(())
-}
-
-fn write_html_escaped(output: &mut String, value: &str) {
-    for ch in value.chars() {
-        match ch {
-            '&' => output.push_str("&amp;"),
-            '<' => output.push_str("&lt;"),
-            '>' => output.push_str("&gt;"),
-            '"' => output.push_str("&quot;"),
-            '\'' => output.push_str("&#39;"),
-            _ => output.push(ch),
-        }
-    }
 }

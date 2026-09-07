@@ -86,6 +86,31 @@ Concatenated `#` expressions preserve their atoms and delimiter modes. Value tra
 [auth:required:lower][year:required][veryshorttitle:lower][duplicateNumber]
 ```
 
-Templates can use author markers, title markers, `year`, uppercase field names, `duplicateLetter`, and `duplicateNumber`. Modifiers are `required`, `lower`, `upper`, and `capitalize`. RefKit adds `[duplicateLetter]` when a custom template contains no duplicate marker. Missing required source data keeps the original key.
+| Marker | Result |
+| --- | --- |
+| `auth` | First author's surname. |
+| `authEtAl` | First two surnames, followed by `EtAl` when there are more authors. |
+| `authors` | Every author surname. |
+| `authors2` | First two surnames, followed by `EtAl` when truncated. Replace `2` with the desired count. |
+| `veryshorttitle` | First title word after removing common function words. |
+| `shorttitle` | First three title words after removing common function words. |
+| `title` | Capitalized title words. |
+| `fulltitle` | All title words with their source capitalization. |
+| `year` | Digits from the year field. |
+| Uppercase field name, such as `DOI` | Words from the named field. |
+| `duplicateLetter` | Letter suffix when multiple entries generate the same key. |
+| `duplicateNumber` | Numeric suffix when multiple entries generate the same key. |
+
+Markers use square brackets. Append modifiers with `:`, in execution order: `required`, `lower`, `upper`, and `capitalize`.
+
+```python
+options = rk.TidyOptions(generate_keys="[auth:lower][year:required]")
+```
+
+For `author={Doe, Jane}` and `year={2024}`, this template produces `doe2024`. A duplicate receives a suffix. Missing required source data keeps the entry's original key. Literal text outside markers is retained subject to citation-key character validation.
+
+The formatter assigns globally unique final keys, including entries that retain their original key. It updates `crossref` and `xdata` references, then sorts by the emitted keys when key sorting is enabled. A source reference that could identify multiple final entries, or a transformation that creates a reference cycle, raises `TidyError` before output is returned.
+
+`TidyResult.renames` records the source occurrence, old key, and final key for changed identities, including entries merged into another entry. Update citation keys in external documents from this report.
 
 Malformed source raises `TidySyntaxError`. Invalid option types, duplicate rules, merge strategies, and key templates raise `TypeError`, `ValueError`, or `TidyError` before a formatted result is returned.

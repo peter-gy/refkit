@@ -46,7 +46,17 @@ page = rk.Cite("doe2024", locator="12", label="page")
 
 The style controls the visible form. An unknown locator label raises `ValueError` during rendering.
 
-## Use a Path Helper
+## Cite a numbered note
+
+Give a citation its document note number when the style uses note distance or first-reference note numbers:
+
+```python
+note = rk.Citation("detail-note", rk.Cite("doe2024", locator="12"), note_number=8)
+```
+
+`note_number` belongs to the citation occurrence. Pass the complete ordered sequence to `Document.render` so repeated citations can use earlier notes.
+
+## Use a path helper
 
 The path helper loads the library and style for one result:
 
@@ -84,10 +94,10 @@ style = rk.Style.from_path("journal.csl")
 style_from_memory = rk.Style.from_xml(csl_xml)
 ```
 
-Independent CSL styles are accepted. A dependent style that requires parent resolution raises `ValueError`. Use `Style.load(name)` when the style is part of the bundled archive.
+Independent CSL styles are accepted after XML and macro validation. Custom XML is limited to 2 MiB, 100,000 XML nodes, 64 nested elements, and 256 attributes per element, including namespace declarations. Expanded rendering is limited to 100,000 elements and 64 levels of combined element nesting and macro calls. Missing, duplicate, or cyclic macros and exceeded limits raise `ValueError` before rendering. A dependent style that requires parent resolution raises `ValueError`. Use `Style.load(name)` when the style is part of the bundled archive.
 
 ## Render safely for the web
 
 `Rendered.html` emits CSL markup and escapes bibliography data. Link nodes allow safe URL schemes. A URL with an unsafe scheme remains visible as text without becoming a link.
 
-Use `Rendered.tree` when an application needs to control its own element creation and styling. Read [Data Shapes](/reference/data-shapes) for the exact node records.
+Use `Rendered.tree` when an application needs to control its own element creation and styling. Read [Data Shapes](/reference/data-shapes) for node records, source identities, and bibliography layout. [Render structured output](/guides/render-output) shows a complete custom text consumer.

@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import importlib.metadata as metadata_module
 import json
-import sys
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -59,43 +58,52 @@ def assert_prepared_fails_as_benchmark_row(
     assert rows[0]["status"] == "failed"
 
 
-def test_materialize_real_workload_uses_packaged_bibtex(tmp_path: Path) -> None:
+def test_real_inputs_preserve_complete_bibliographic_records(tmp_path: Path) -> None:
+    from pybtex.database.input.bibtex import Parser
+
     workload = fixtures.materialize_workload("real", tmp_path)
-
-    assert workload.family == "real_bibliography_subset"
-    assert workload.record_count == 12
-    assert workload.keys[:3] == ["ijcai2019p684", "10.1145/3325887", "Kimi_K2.5"]
-    assert "DeepResearchGym" in workload.bibtex
-    assert "Ancient–Modern Chinese Translation" in workload.bibtex
+    parsed = Parser().parse_string(workload.bibtex)
     assert workload.bibtex_path.read_text(encoding="utf-8") == workload.bibtex
-    assert workload.source_name("bibtex") == "real_bibliography_subset:real:bibtex"
-    assert workload.source_license("bibtex") == "mixed-source-licenses"
-    assert workload.source_byte_count("bibtex") == len(workload.bibtex.encode("utf-8"))
-    assert len(workload.source_sha256("bibtex")) == 64
-    assert workload.duplicate_entry_key == "ijcai2019p684"
-    assert workload.duplicate_field_key == "10.1145/3325887"
-    assert "Duplicate benchmark field" in workload.source_text("duplicate_bibtex")
-    assert workload.csl_json[0]["id"] == "ijcai2019p684"
-    assert workload.csl_json[0]["type"] == "paper-conference"
-
-
-def test_real_bibliography_resource_is_package_owned() -> None:
-    path = fixtures.real_bibliography_path()
-
-    assert path.name == "references.bib"
-    assert path.parent.name == "real-bibliography"
-    assert "refkit_bench" in path.parts
-    assert path.is_file()
-
-
-def test_real_bibliography_resource_reports_missing_data(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(fixtures, "REAL_BIBLIOGRAPHY_PATH", tmp_path / "missing.bib")
-
-    with pytest.raises(FileNotFoundError, match="real bibliography fixture is missing"):
-        fixtures.real_bibliography_path()
+    assert workload.source_license("bibtex") == "CC0-1.0"
+    assert len(parsed.entries) == len(workload.csl_json) == 12
+    for source_item in workload.csl_json:
+        item = cast(dict[str, Any], source_item)
+        entry = parsed.entries[item["id"]]
+        fields = entry.fields
+        assert fields["title"].replace("{", "").replace("}", "") == item["title"]
+        assert entry.type == ("inproceedings" if item["type"] == "paper-conference" else "article")
+        assert int(fields["year"]) == item["issued"]["date-parts"][0][0]
+        assert fields.get("doi") == item.get("DOI")
+        assert fields.get("volume") == item.get("volume")
+        assert fields.get("pages") == item.get("page")
+        assert fields.get("journal", fields.get("booktitle")) == item["container-title"]
+        assert [
+            {
+                "family": " ".join(person.last_names),
+                "given": " ".join(person.first_names + person.middle_names),
+            }
+            for person in entry.persons["author"]
+        ] == item["author"]
+    records = {record.key: record for record in workload.records}
+    assert [list(author) for author in records["DeepResearchGym"].authors] == [
+        ["Coelho", "João"],
+        ["Ning", "Jingjie"],
+        ["He", "Jingyuan"],
+        ["Mao", "Kangrui"],
+        ["Paladugu", "Abhijay"],
+        ["Setlur", "Pranav"],
+        ["Jin", "Jiahe"],
+        ["Callan", "Jamie"],
+        ["Magalhães", "João"],
+        ["Martins", "Bruno"],
+        ["Xiong", "Chenyan"],
+    ]
+    assert [list(author) for author in records["BioAgent_Bench"].authors] == [
+        ["Fa", "Dionizije"],
+        ["Culjak", "Marko"],
+        ["Pandza", "Bruno"],
+        ["Cupic", "Mateo"],
+    ]
 
 
 def test_records_for_size_rejects_unknown_size() -> None:
@@ -241,11 +249,7 @@ def test_package_version_reports_missing_distribution() -> None:
     assert runner.package_version("definitely-not-installed-refkit-benchmark") == "not-installed"
 
 
-def test_refkit_commit_returns_value() -> None:
-    assert runner.refkit_commit()
-
-
-def test_refkit_commit_handles_failure_and_empty_output(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_runner_commit_handles_failure_and_empty_output(monkeypatch: pytest.MonkeyPatch) -> None:
     class Completed:
         stdout = ""
 
@@ -256,98 +260,64 @@ def test_refkit_commit_handles_failure_and_empty_output(monkeypatch: pytest.Monk
         raise OSError("git unavailable")
 
     monkeypatch.setattr(runner.subprocess, "run", empty_run)
-    assert runner.refkit_commit() == "unknown"
+    assert runner.runner_commit() == "unknown"
 
     monkeypatch.setattr(runner.subprocess, "run", failing_run)
-    assert runner.refkit_commit() == "unknown"
+    assert runner.runner_commit() == "unknown"
 
 
-def test_machine_metadata_accepts_explicit_build_mode() -> None:
-    assert runner.machine_metadata("release")["build_mode"] == "release"
+def test_result_rows_separate_artifact_provenance_from_runner_assertions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from refkit_bench._adapters import common
 
+    artifact = tmp_path / "native.so"
+    artifact.write_bytes(b"measured artifact")
+    package = SimpleNamespace(__file__=str(artifact), build_mode="debug")
+    installed = SimpleNamespace(
+        read_text=lambda name: {
+            "direct_url.json": json.dumps(
+                {
+                    "url": "https://example.org/source.git",
+                    "vcs_info": {"commit_id": "artifact-revision"},
+                }
+            ),
+            "RECORD": "native.so,sha256=test,17",
+        }[name]
+    )
+    monkeypatch.setattr(common, "distribution", lambda name: installed)
+    monkeypatch.setattr(common.importlib, "import_module", lambda name: package)
+    metadata = runner.machine_metadata("release")
+    row = runner.base_row(
+        adapters.RefkitAdapter(),
+        runner.LANES["input.bibtex"],
+        fixtures.materialize_workload("tiny", tmp_path),
+        metadata,
+        1,
+        0,
+    )
+    assert row["build_mode"] == "debug"
+    assert row["asserted_build_mode"] == "release"
+    assert row["artifact_source_revision"] == "artifact-revision"
+    assert row["artifact_source_url"] == "https://example.org/source.git"
+    assert row["artifact_path"] == str(artifact)
+    from hashlib import sha256
 
-def test_machine_metadata_uses_refkit_public_build_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setitem(sys.modules, "refkit", SimpleNamespace(build_mode="release"))
-    assert runner.machine_metadata("auto")["build_mode"] == "release"
-
-    monkeypatch.setitem(sys.modules, "refkit", SimpleNamespace(build_mode="custom"))
-    assert runner.machine_metadata("auto")["build_mode"] == "unknown"
+    assert row["artifact_sha256"] == sha256(artifact.read_bytes()).hexdigest()
+    assert row["runner_commit"] == metadata["runner_commit"]
+    assert runner.machine_metadata()["asserted_build_mode"] == ""
 
 
 def test_machine_metadata_contains_versions() -> None:
     metadata = runner.machine_metadata("release")
 
-    assert metadata["build_mode"] == "release"
+    assert metadata["asserted_build_mode"] == "release"
     assert metadata["packages"]["refkit"] == metadata_module.version("refkit")
     assert metadata["packages"]["polars-refkit"] == metadata_module.version("polars-refkit")
     assert metadata["packages"]["citeproc-py"] != "not-installed"
     assert metadata["packages"]["bibtexparser"] != "not-installed"
     assert metadata["packages"]["pybtex"] != "not-installed"
-
-
-def test_adapter_registry_contains_current_benchmark_packages() -> None:
-    names = [adapter.name for adapter in adapters.adapters()]
-
-    assert set(names) == {
-        "refkit",
-        "polars-refkit",
-        "citeproc-py",
-        "bibtexparser-2.x",
-        "pybtex",
-    }
-
-
-def test_adapters_prepare_supported_lane_operations(tmp_path: Path) -> None:
-    workload = fixtures.materialize_workload("tiny", tmp_path)
-    refkit = adapters.RefkitAdapter()
-    polars_refkit = adapters.PolarsRefkitAdapter()
-    bibtexparser_v2 = adapters.BibtexparserV2Adapter()
-    pybtex = adapters.PybtexAdapter()
-
-    prepared = refkit.prepare("parse_bibtex", workload, tmp_path)
-    outcome = run_prepared(prepared)
-    assert outcome.count == 3
-
-    prepared = pybtex.prepare("parse_bibtex_text", workload, tmp_path)
-    outcome = run_prepared(prepared)
-    assert outcome.count == 3
-
-    prepared = polars_refkit.prepare("project_fields_eager", workload, tmp_path)
-    outcome = run_prepared(prepared)
-    assert outcome.count == 3
-
-    prepared = polars_refkit.prepare("render_citation_expression_eager", workload, tmp_path)
-    outcome = run_prepared(prepared)
-    assert outcome.count == 1
-
-    prepared = polars_refkit.prepare("render_bibliography_expression_eager", workload, tmp_path)
-    outcome = run_prepared(prepared)
-    assert outcome.count == 3
-
-    prepared = polars_refkit.prepare("render_citation_each_eager", workload, tmp_path)
-    outcome = run_prepared(prepared)
-    assert outcome.count == 3
-
-    prepared = refkit.prepare("extract_diagnostics", workload, tmp_path)
-    outcome = run_prepared(prepared)
-    assert outcome.count == 4
-
-    prepared = refkit.prepare("materialize_raw_blocks", workload, tmp_path)
-    outcome = run_prepared(prepared)
-    assert outcome.count >= len(workload.records)
-
-    prepared = bibtexparser_v2.prepare("handle_duplicates", workload, tmp_path)
-    outcome = run_prepared(prepared)
-    assert outcome.count == 2
-
-    with pytest.raises(adapters.MissingBenchmarkOperation, match="no benchmark operation"):
-        bibtexparser_v2.prepare("render_one_prepared_citation", workload, tmp_path)
-
-    with pytest.raises(adapters.MissingBenchmarkOperation, match="no benchmark operation"):
-        pybtex.prepare("render_one_prepared_citation", workload, tmp_path)
-
-    with pytest.raises(adapters.MissingBenchmarkOperation, match="no benchmark operation"):
-        refkit.prepare("unknown_operation", workload, tmp_path)
 
 
 def test_bibtexparser_v2_adapter_requires_requested_beta(
@@ -704,7 +674,13 @@ def test_benchmark_reports_failed_rows_for_invalid_raw_roundtrip_outputs(tmp_pat
         encoding="utf-8",
     )
 
-    for path in (missing_text, missing_entry_count):
+    missing_comment = tmp_path / "missing-comment.bib"
+    missing_comment.write_text(
+        workload.bibtex.replace(workload.records[0].title, "Edited Benchmark Title"),
+        encoding="utf-8",
+    )
+
+    for path in (missing_text, missing_entry_count, missing_comment):
         assert_prepared_fails_as_benchmark_row(
             replace(prepared, operation=lambda path=path: adapters.OperationOutcome(path, 3)),
             workload,
@@ -989,21 +965,6 @@ def test_polars_benchmark_lanes_record_execution_mode(tmp_path: Path) -> None:
     assert lazy["setup_included"] is True
 
 
-def test_polars_inspection_lanes_project_expected_rows(tmp_path: Path) -> None:
-    workload = fixtures.materialize_workload("tiny", tmp_path)
-    adapter = adapters.PolarsRefkitAdapter()
-    prepared = [
-        adapter.prepare("materialize_entry_rows_eager", workload, tmp_path),
-        adapter.prepare("lookup_entries_eager", workload, tmp_path),
-        adapter.prepare("project_fields_eager", workload, tmp_path),
-    ]
-
-    for item in prepared:
-        outcome = item.operation()
-        item.check(outcome)
-        assert outcome.count >= 1
-
-
 def test_run_adapter_lane_emits_unsupported_rows_for_missing_operation(tmp_path: Path) -> None:
     metadata = runner.machine_metadata("release")
     workload = fixtures.materialize_workload("tiny", tmp_path)
@@ -1025,7 +986,7 @@ def test_run_adapter_lane_emits_unsupported_rows_for_missing_operation(tmp_path:
     assert "benchmark operation" in str(rows[0]["detail"])
 
 
-def test_real_workload_records_citeproc_bibtex_path_limitation(
+def test_real_workload_citeproc_bibtex_path_matches_complete_records(
     tmp_path: Path,
 ) -> None:
     metadata = runner.machine_metadata("release")
@@ -1042,10 +1003,10 @@ def test_real_workload_records_citeproc_bibtex_path_limitation(
     )
 
     assert len(rows) == 1
-    assert rows[0]["status"] == "unsupported"
+    assert rows[0]["status"] == "ok"
     assert rows[0]["input"] == "real"
     assert rows[0]["workload_family"] == "real_bibliography_subset"
-    assert "non-entry bibliography rows" in str(rows[0]["detail"])
+    assert rows[0]["operation_count"] == 12
 
 
 def test_run_adapter_lane_emits_failed_setup_rows(
@@ -1263,7 +1224,7 @@ def test_run_suite_exercises_real_workload() -> None:
     assert {row["input"] for row in rows} == {"real"}
     assert {row["workload_family"] for row in rows} == {"real_bibliography_subset"}
     assert {row["record_count"] for row in rows} == {12}
-    assert all(row["source_license"] == "mixed-source-licenses" for row in rows)
+    assert all(row["source_license"] == "CC0-1.0" for row in rows)
     assert any(row["package"] == "citeproc-py" for row in rows)
     assert any(row["package"] == "polars-refkit" for row in rows)
 
@@ -1375,7 +1336,7 @@ def test_main_returns_failure_for_failed_rows(
                     "os": "test",
                     "cpu": "test",
                     "refkit_version": "0.0.3",
-                    "refkit_commit": "test",
+                    "runner_commit": "test",
                     "build_mode": "release",
                 }
             ],
@@ -1387,3 +1348,123 @@ def test_main_returns_failure_for_failed_rows(
     summary = json.loads(capsys.readouterr().out)
     assert summary["rows"] == 1
     assert summary["status"] == {"failed": 1}
+
+
+def test_parse_lanes_reject_same_count_with_corrupted_fields(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("real", tmp_path)
+    altered = replace(workload, bibtex=workload.bibtex.replace("Ning, Jingjie", "Ning, Wrong"))
+    for adapter in (adapters.BibtexparserV2Adapter(), adapters.PybtexAdapter()):
+        prepared = adapter.prepare("parse_bibtex_text", altered, tmp_path)
+        assert_prepared_fails_as_benchmark_row(prepared, workload, tmp_path)
+
+
+def test_raw_write_rejects_title_edit_on_another_occurrence(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    prepared = adapters.BibtexparserV2Adapter().prepare(
+        "write_edited_raw_bibtex", workload, tmp_path
+    )
+    path = tmp_path / "wrong-entry.bib"
+    path.write_text(
+        workload.raw_bibtex.replace(workload.records[-1].title, "Edited Benchmark Title"),
+        encoding="utf-8",
+    )
+    assert_prepared_fails_as_benchmark_row(
+        replace(prepared, operation=lambda: adapters.OperationOutcome(path, 3)), workload, tmp_path
+    )
+
+
+def test_artifact_provenance_reports_python_and_unavailable_packages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from refkit_bench._adapters import common
+
+    metadata = adapters.PybtexAdapter().artifact_metadata
+    assert metadata["build_mode"] == "python"
+    assert Path(metadata["artifact_path"]).is_file()
+    assert len(metadata["artifact_sha256"]) == 64
+    monkeypatch.setattr(
+        common,
+        "distribution",
+        lambda name: (_ for _ in ()).throw(metadata_module.PackageNotFoundError(name)),
+    )
+    unknown = adapters.RefkitAdapter().artifact_metadata
+    assert unknown["build_mode"] == "unknown"
+    assert unknown["artifact_source_revision"] == "unknown"
+    assert unknown["artifact_sha256"] == "unknown"
+
+
+def test_bibliography_check_rejects_changed_author_initials_and_order(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("real", tmp_path)
+    prepared = adapters.CiteprocPyAdapter().prepare(
+        "render_prepared_bibliography", workload, tmp_path
+    )
+    original = str(prepared.operation().value)
+    for altered in (
+        original.replace("Coelho, J., Ning, J.", "Coelho, J., Ning, X."),
+        original.replace("Coelho, J., Ning, J.", "Ning, J., Coelho, J."),
+    ):
+        assert_prepared_fails_as_benchmark_row(
+            replace(
+                prepared, operation=lambda altered=altered: adapters.OperationOutcome(altered, 12)
+            ),
+            workload,
+            tmp_path,
+        )
+
+
+def test_tidy_benchmark_rejects_incomplete_output_and_wrong_rename_reports(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("tiny", tmp_path)
+    prepared = adapters.RefkitAdapter().prepare("tidy_generate_keys", workload, tmp_path)
+    original = cast(Any, prepared.operation().value)
+    for source, renames in (
+        ("", original.renames),
+        (original.bibtex, []),
+        (original.bibtex.replace(workload.records[1].title, "Wrong title"), original.renames),
+    ):
+        value = SimpleNamespace(bibtex=source, renames=renames)
+        assert_prepared_fails_as_benchmark_row(
+            replace(prepared, operation=lambda value=value: adapters.OperationOutcome(value, 3)),
+            workload,
+            tmp_path,
+        )
+
+
+def test_failed_broadcast_records_source_identity_and_rejects_non_null_rows(tmp_path: Path) -> None:
+    workload = fixtures.materialize_workload("real", tmp_path)
+    rows = runner.run_suite(
+        lane_names=["scaling.failed-broadcast"],
+        input_sizes=["tiny"],
+        rounds=1,
+        warmups=0,
+    )["rows"]
+    assert rows[0]["status"] == "ok"
+    assert rows[0]["source_format"] == "failed_bibtex"
+    assert rows[0]["source_license"] == "Apache-2.0"
+    assert rows[0]["input_sha256"] == workload.source_sha256("failed_bibtex")
+    prepared = adapters.PolarsRefkitAdapter().prepare("failed_scalar_broadcast", workload, tmp_path)
+    assert_prepared_fails_as_benchmark_row(
+        replace(prepared, operation=lambda: adapters.OperationOutcome(["unexpected citation"], 1)),
+        workload,
+        tmp_path,
+    )
+
+
+def test_installed_artifact_with_missing_metadata_reports_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from refkit_bench._adapters import common
+
+    monkeypatch.setattr(
+        common, "distribution", lambda name: SimpleNamespace(read_text=lambda name: None)
+    )
+    monkeypatch.setattr(common.importlib, "import_module", lambda name: SimpleNamespace())
+    metadata = adapters.RefkitAdapter().artifact_metadata
+    assert metadata["build_mode"] == "unknown"
+    assert metadata["artifact_sha256"] == "unknown"
+    assert metadata["distribution_record_sha256"] == "unknown"
+
+    def unavailable(name: str) -> None:
+        raise ImportError("native extension unavailable")
+
+    monkeypatch.setattr(common.importlib, "import_module", unavailable)
+    assert adapters.RefkitAdapter().artifact_metadata == metadata

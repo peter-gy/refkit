@@ -1,0 +1,570 @@
+[
+  {
+    "key": "ijcai2019p684",
+    "title": "Sentiment-Controllable Chinese Poetry Generation",
+    "year": 2019,
+    "volume": null,
+    "doi": "10.24963/ijcai.2019/684",
+    "raw_title": "",
+    "container": "Proceedings of the Twenty-Eighth International Joint Conference on Artificial Intelligence, IJCAI-19",
+    "pages": "4925-4931",
+    "item_type": "paper-conference",
+    "authors": [
+      [
+        "Chen",
+        "Huimin"
+      ],
+      [
+        "Yi",
+        "Xiaoyuan"
+      ],
+      [
+        "Sun",
+        "Maosong"
+      ],
+      [
+        "Li",
+        "Wenhao"
+      ],
+      [
+        "Yang",
+        "Cheng"
+      ],
+      [
+        "Guo",
+        "Zhipeng"
+      ]
+    ],
+    "citation_text": "(Chen et al., 2019)",
+    "source_url": "https://dblp.org/rec/conf/ijcai/ChenYSLYG19",
+    "source_status": "catalog_record_identified"
+  },
+  {
+    "key": "10.1145/3325887",
+    "title": "Ancient-Modern Chinese Translation with a New Large Training Dataset",
+    "year": 2020,
+    "volume": "19",
+    "doi": "10.1145/3325887",
+    "raw_title": "",
+    "container": "ACM Trans. Asian Low-Resour. Lang. Inf. Process.",
+    "pages": "6:1-6:13",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "Liu",
+        "Dayiheng"
+      ],
+      [
+        "Yang",
+        "Kexin"
+      ],
+      [
+        "Qu",
+        "Qian"
+      ],
+      [
+        "Lv",
+        "Jiancheng"
+      ]
+    ],
+    "citation_text": "(Liu et al., 2020)",
+    "source_url": "https://dblp.org/rec/journals/talip/LiuYQL20",
+    "source_status": "catalog_record_identified"
+  },
+  {
+    "key": "Kimi_K2.5",
+    "title": "Kimi K2.5: Visual Agentic Intelligence",
+    "year": 2026,
+    "volume": "abs/2602.02276",
+    "doi": "10.48550/ARXIV.2602.02276",
+    "raw_title": "Kimi {K2.5:} Visual Agentic Intelligence",
+    "container": "Corr",
+    "pages": "",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "Team",
+        "Kimi"
+      ]
+    ],
+    "citation_text": "(Team, 2026)",
+    "source_url": "https://dblp.org/rec/journals/corr/abs-2602-02276.bib",
+    "source_status": "source_url_from_embedded_biburl"
+  },
+  {
+    "key": "DeepSeek-V3.2",
+    "title": "DeepSeek-V3.2: Pushing the Frontier of Open Large Language Models",
+    "year": 2025,
+    "volume": "abs/2512.02556",
+    "doi": "10.48550/ARXIV.2512.02556",
+    "raw_title": "",
+    "container": "Corr",
+    "pages": "",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "DeepSeek-AI",
+        ""
+      ]
+    ],
+    "citation_text": "(DeepSeek-AI, 2025)",
+    "source_url": "https://dblp.org/rec/journals/corr/abs-2512-02556.bib",
+    "source_status": "source_url_from_embedded_biburl"
+  },
+  {
+    "key": "DeepResearchGym",
+    "title": "DeepResearchGym: A Free, Transparent, and Reproducible Evaluation Sandbox for Deep Research",
+    "year": 2025,
+    "volume": "abs/2505.19253",
+    "doi": "10.48550/ARXIV.2505.19253",
+    "raw_title": "DeepResearchGym: {A} Free, Transparent, and Reproducible Evaluation Sandbox for Deep Research",
+    "container": "Corr",
+    "pages": "",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "Coelho",
+        "João"
+      ],
+      [
+        "Ning",
+        "Jingjie"
+      ],
+      [
+        "He",
+        "Jingyuan"
+      ],
+      [
+        "Mao",
+        "Kangrui"
+      ],
+      [
+        "Paladugu",
+        "Abhijay"
+      ],
+      [
+        "Setlur",
+        "Pranav"
+      ],
+      [
+        "Jin",
+        "Jiahe"
+      ],
+      [
+        "Callan",
+        "Jamie"
+      ],
+      [
+        "Magalhães",
+        "João"
+      ],
+      [
+        "Martins",
+        "Bruno"
+      ],
+      [
+        "Xiong",
+        "Chenyan"
+      ]
+    ],
+    "citation_text": "(Coelho et al., 2025)",
+    "source_url": "https://dblp.org/rec/journals/corr/abs-2505-19253.bib",
+    "source_status": "source_url_from_embedded_biburl"
+  },
+  {
+    "key": "BioAgent_Bench",
+    "title": "BioAgent Bench: An AI Agent Evaluation Suite for Bioinformatics",
+    "year": 2026,
+    "volume": "abs/2601.21800",
+    "doi": "10.48550/ARXIV.2601.21800",
+    "raw_title": "BioAgent Bench: An {AI} Agent Evaluation Suite for Bioinformatics",
+    "container": "Corr",
+    "pages": "",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "Fa",
+        "Dionizije"
+      ],
+      [
+        "Culjak",
+        "Marko"
+      ],
+      [
+        "Pandza",
+        "Bruno"
+      ],
+      [
+        "Cupic",
+        "Mateo"
+      ]
+    ],
+    "citation_text": "(Fa et al., 2026)",
+    "source_url": "https://dblp.org/rec/journals/corr/abs-2601-21800.bib",
+    "source_status": "source_url_from_embedded_biburl"
+  },
+  {
+    "key": "AutoEnv",
+    "title": "AutoEnv: Automated Environments for Measuring Cross-Environment Agent Learning",
+    "year": 2025,
+    "volume": "abs/2511.19304",
+    "doi": "10.48550/ARXIV.2511.19304",
+    "raw_title": "",
+    "container": "Corr",
+    "pages": "",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "Zhang",
+        "Jiayi"
+      ],
+      [
+        "Peng",
+        "Yiran"
+      ],
+      [
+        "Kong",
+        "Fanqi"
+      ],
+      [
+        "Yang",
+        "Cheng"
+      ],
+      [
+        "Wu",
+        "Yifan"
+      ],
+      [
+        "Yu",
+        "Zhaoyang"
+      ],
+      [
+        "Xiang",
+        "Jinyu"
+      ],
+      [
+        "Ruan",
+        "Jianhao"
+      ],
+      [
+        "Wang",
+        "Jinlin"
+      ],
+      [
+        "Song",
+        "Maojia"
+      ],
+      [
+        "Liu",
+        "HongZhang"
+      ],
+      [
+        "Tang",
+        "Xiangru"
+      ],
+      [
+        "Liu",
+        "Bang"
+      ],
+      [
+        "Wu",
+        "Chenglin"
+      ],
+      [
+        "Luo",
+        "Yuyu"
+      ]
+    ],
+    "citation_text": "(Zhang et al., 2025)",
+    "source_url": "https://dblp.org/rec/journals/corr/abs-2511-19304.bib",
+    "source_status": "source_url_from_embedded_biburl"
+  },
+  {
+    "key": "AgentSynth",
+    "title": "AgentSynth: Scalable Task Generation for Generalist Computer-Use Agents",
+    "year": 2025,
+    "volume": "abs/2506.14205",
+    "doi": "10.48550/ARXIV.2506.14205",
+    "raw_title": "",
+    "container": "Corr",
+    "pages": "",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "Xie",
+        "Jingxu"
+      ],
+      [
+        "Xu",
+        "Dylan"
+      ],
+      [
+        "Zhao",
+        "Xuandong"
+      ],
+      [
+        "Song",
+        "Dawn"
+      ]
+    ],
+    "citation_text": "(Xie et al., 2025)",
+    "source_url": "https://dblp.org/rec/journals/corr/abs-2506-14205.bib",
+    "source_status": "source_url_from_embedded_biburl"
+  },
+  {
+    "key": "AutoForge",
+    "title": "AutoForge: Automated Environment Synthesis for Agentic Reinforcement Learning",
+    "year": 2025,
+    "volume": "abs/2512.22857",
+    "doi": "10.48550/ARXIV.2512.22857",
+    "raw_title": "",
+    "container": "Corr",
+    "pages": "",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "Cai",
+        "Shihao"
+      ],
+      [
+        "Fang",
+        "Runnan"
+      ],
+      [
+        "Wu",
+        "Jialong"
+      ],
+      [
+        "Li",
+        "Baixuan"
+      ],
+      [
+        "Wang",
+        "Xinyu"
+      ],
+      [
+        "Jiang",
+        "Yong"
+      ],
+      [
+        "Su",
+        "Liangcai"
+      ],
+      [
+        "Zhang",
+        "Liwen"
+      ],
+      [
+        "Yin",
+        "Wenbiao"
+      ],
+      [
+        "Zhang",
+        "Zhen"
+      ],
+      [
+        "Feng",
+        "Fuli"
+      ],
+      [
+        "Xie",
+        "Pengjun"
+      ],
+      [
+        "Wang",
+        "Xiaobin"
+      ]
+    ],
+    "citation_text": "(Cai et al., 2025)",
+    "source_url": "https://dblp.org/rec/journals/corr/abs-2512-22857.bib",
+    "source_status": "source_url_from_embedded_biburl"
+  },
+  {
+    "key": "EnvScaler",
+    "title": "EnvScaler: Scaling Tool-Interactive Environments for LLM Agent via Programmatic Synthesis",
+    "year": 2026,
+    "volume": "abs/2601.05808",
+    "doi": "10.48550/ARXIV.2601.05808",
+    "raw_title": "EnvScaler: Scaling Tool-Interactive Environments for {LLM} Agent via Programmatic Synthesis",
+    "container": "Corr",
+    "pages": "",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "Song",
+        "Xiaoshuai"
+      ],
+      [
+        "Chang",
+        "Haofei"
+      ],
+      [
+        "Dong",
+        "Guanting"
+      ],
+      [
+        "Zhu",
+        "Yutao"
+      ],
+      [
+        "Dou",
+        "Zhicheng"
+      ],
+      [
+        "Wen",
+        "Ji-Rong"
+      ]
+    ],
+    "citation_text": "(Song et al., 2026)",
+    "source_url": "https://dblp.org/rec/journals/corr/abs-2601-05808.bib",
+    "source_status": "source_url_from_embedded_biburl"
+  },
+  {
+    "key": "TaskCraft",
+    "title": "TaskCraft: Automated Generation of Agentic Tasks",
+    "year": 2025,
+    "volume": "abs/2506.10055",
+    "doi": "10.48550/ARXIV.2506.10055",
+    "raw_title": "",
+    "container": "Corr",
+    "pages": "",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "Shi",
+        "Dingfeng"
+      ],
+      [
+        "Cao",
+        "Jingyi"
+      ],
+      [
+        "Chen",
+        "Qianben"
+      ],
+      [
+        "Sun",
+        "Weichen"
+      ],
+      [
+        "Li",
+        "Weizhen"
+      ],
+      [
+        "Lu",
+        "Hongxuan"
+      ],
+      [
+        "Dong",
+        "Fangchen"
+      ],
+      [
+        "Qin",
+        "Tianrui"
+      ],
+      [
+        "Zhu",
+        "King"
+      ],
+      [
+        "Liu",
+        "Minghao"
+      ],
+      [
+        "Yang",
+        "Jian"
+      ],
+      [
+        "Zhang",
+        "Ge"
+      ],
+      [
+        "Liu",
+        "Jiaheng"
+      ],
+      [
+        "Zhang",
+        "Changwang"
+      ],
+      [
+        "Wang",
+        "Jun"
+      ],
+      [
+        "Jiang",
+        "Yuchen Eleanor"
+      ],
+      [
+        "Zhou",
+        "Wangchunshu"
+      ]
+    ],
+    "citation_text": "(Shi et al., 2025)",
+    "source_url": "https://dblp.org/rec/journals/corr/abs-2506-10055.bib",
+    "source_status": "source_url_from_embedded_biburl"
+  },
+  {
+    "key": "Agent2World",
+    "title": "Agent2World: Learning to Generate Symbolic World Models via Adaptive Multi-Agent Feedback",
+    "year": 2025,
+    "volume": "abs/2512.22336",
+    "doi": "10.48550/ARXIV.2512.22336",
+    "raw_title": "",
+    "container": "Corr",
+    "pages": "",
+    "item_type": "article-journal",
+    "authors": [
+      [
+        "Hu",
+        "Mengkang"
+      ],
+      [
+        "Xia",
+        "Bowei"
+      ],
+      [
+        "Wu",
+        "Yuran"
+      ],
+      [
+        "Yu",
+        "Ailing"
+      ],
+      [
+        "Zou",
+        "Yude"
+      ],
+      [
+        "Chen",
+        "Qiguang"
+      ],
+      [
+        "Wang",
+        "Shijian"
+      ],
+      [
+        "Jin",
+        "Jiarui"
+      ],
+      [
+        "Li",
+        "Kexin"
+      ],
+      [
+        "Jiao",
+        "Wenxiang"
+      ],
+      [
+        "Lu",
+        "Yuan"
+      ],
+      [
+        "Luo",
+        "Ping"
+      ]
+    ],
+    "citation_text": "(Hu et al., 2025)",
+    "source_url": "https://dblp.org/rec/journals/corr/abs-2512-22336.bib",
+    "source_status": "source_url_from_embedded_biburl"
+  }
+]

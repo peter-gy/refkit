@@ -1,5 +1,7 @@
 POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
 UV_RUN := uv run --locked --all-packages --group dev
+PYTHON := python3
+UV_LINT := uv run --isolated --locked --only-group lint
 PNPM_DOCS := pnpm --dir docs
 DOCS_PAGES_BASE_PATH := /refkit
 RUST_FLOOR := 1.88
@@ -8,15 +10,15 @@ RUST_REMAP_FLAGS := --remap-path-prefix=$(HOME)=home --remap-path-prefix=$(HOME)
 
 .PHONY: format
 format:
-	$(UV_RUN) ruff check --fix .
-	$(UV_RUN) ruff format .
+	$(UV_LINT) ruff check --fix .
+	$(UV_LINT) ruff format .
 	cargo fmt --all
 	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all
 
 .PHONY: python-lint
 python-lint:
-	$(UV_RUN) ruff check .
-	$(UV_RUN) ruff format --check .
+	$(UV_LINT) ruff check .
+	$(UV_LINT) ruff format --check .
 
 .PHONY: rust-lint
 rust-lint:
@@ -45,9 +47,17 @@ refkit-develop:
 refkit-develop-release:
 	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install --reinstall --no-deps --editable packages/refkit
 
+.PHONY: polars-refkit-develop
+polars-refkit-develop:
+	uv pip install --reinstall --no-deps --editable packages/polars-refkit
+
+.PHONY: polars-refkit-develop-release
+polars-refkit-develop-release:
+	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install --reinstall --no-deps --editable packages/polars-refkit
+
 .PHONY: benchmark-test
 benchmark-test:
-	$(UV_RUN) python -m pytest packages/refkit-bench/tests
+	$(UV_RUN) python -m pytest -c packages/refkit-bench/pyproject.toml packages/refkit-bench/tests
 
 .PHONY: rust
 rust:
@@ -67,10 +77,10 @@ rust-floor:
 
 .PHONY: pyodide-lock pyodide-lock-check
 pyodide-lock:
-	$(UV_RUN) python scripts/pyodide_lock.py
+	$(PYTHON) scripts/pyodide_lock.py
 
 pyodide-lock-check:
-	$(UV_RUN) python scripts/pyodide_lock.py --check
+	$(PYTHON) scripts/pyodide_lock.py --check
 
 .PHONY: clean-dist
 clean-dist:
@@ -125,8 +135,8 @@ build: clean-dist
 	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package refkit --wheel --no-create-gitignore
 	uv build --package polars-refkit --sdist --no-create-gitignore
 	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package polars-refkit --wheel --no-create-gitignore
-	$(UV_RUN) python -m scripts.normalize_wheel 'dist/*.whl'
-	$(UV_RUN) python scripts/distribution_contract.py dist/*
+	$(PYTHON) -m scripts.normalize_wheel 'dist/*.whl'
+	$(PYTHON) scripts/distribution_contract.py dist/*
 
 .PHONY: lock
 lock:
@@ -134,15 +144,19 @@ lock:
 
 .PHONY: release-check
 release-check:
-	$(UV_RUN) python scripts/release_contract.py
+	$(PYTHON) scripts/release_contract.py
 
 .PHONY: architecture-check
 architecture-check:
-	$(UV_RUN) python scripts/architecture_contract.py
+	$(PYTHON) scripts/architecture_contract.py
 
 .PHONY: docs-source-check
 docs-source-check:
-	$(UV_RUN) python scripts/docs_contract.py
+	$(PYTHON) scripts/docs_contract.py
+
+.PHONY: docs-examples-check
+docs-examples-check:
+	$(UV_RUN) python -m refkit_tests.check_examples --root .
 
 .PHONY: docs-dev
 docs-dev:
@@ -151,8 +165,8 @@ docs-dev:
 .PHONY: docs-site-check
 docs-site-check:
 	$(PNPM_DOCS) install --frozen-lockfile
-	BASE_PATH=$(DOCS_PAGES_BASE_PATH) $(PNPM_DOCS) build
 	$(PNPM_DOCS) build
+	BASE_PATH=$(DOCS_PAGES_BASE_PATH) $(PNPM_DOCS) build
 
 .PHONY: docs-build
 docs-build:
@@ -163,4 +177,4 @@ docs-build:
 docs-check: docs-source-check docs-site-check
 
 .PHONY: check
-check: lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test rust rust-floor build
+check: lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test docs-examples-check rust rust-floor build

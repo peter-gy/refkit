@@ -6,26 +6,16 @@ use refkit_core::EntryRecord;
 
 use crate::repr::quoted;
 
-struct EntryData {
-    record: EntryRecord,
-}
-
-impl EntryData {
-    fn new(record: EntryRecord) -> Self {
-        Self { record }
-    }
-}
-
 #[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Entry {
-    data: Arc<EntryData>,
+    data: Arc<EntryRecord>,
 }
 
 impl Entry {
     pub(crate) fn from_record(record: EntryRecord) -> Self {
         Self {
-            data: Arc::new(EntryData::new(record)),
+            data: Arc::new(record),
         }
     }
 }
@@ -34,28 +24,27 @@ impl Entry {
 impl Entry {
     #[getter]
     fn key(&self) -> String {
-        self.data.record.key.clone()
+        self.data.key.clone()
     }
 
     #[getter]
     fn entry_type(&self) -> String {
-        self.data.record.entry_type.clone()
+        self.data.entry_type.clone()
     }
 
     #[getter]
     fn title(&self) -> Option<String> {
-        self.data.record.title.clone()
+        self.data.title.clone()
     }
 
     #[getter]
     fn date(&self) -> Option<String> {
-        self.data.record.date.clone()
+        self.data.date.clone()
     }
 
     #[getter]
     fn parents(&self) -> Vec<Entry> {
         self.data
-            .record
             .parents
             .iter()
             .cloned()
@@ -65,19 +54,19 @@ impl Entry {
 
     #[getter]
     fn volume(&self) -> Option<String> {
-        self.data.record.volume.clone()
+        self.data.volume.clone()
     }
 
     #[getter]
     fn doi(&self) -> Option<String> {
-        self.data.record.doi.clone()
+        self.data.doi.clone()
     }
 
     fn __repr__(&self) -> String {
         format!(
             "Entry(key={}, type={})",
-            quoted(&self.data.record.key),
-            quoted(&self.data.record.entry_type)
+            quoted(&self.data.key),
+            quoted(&self.data.entry_type)
         )
     }
 }

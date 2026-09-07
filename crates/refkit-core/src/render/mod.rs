@@ -4,16 +4,16 @@ mod html;
 mod text;
 
 use std::sync::OnceLock;
-use std::{error::Error, fmt};
 
+use hayagriva::BufWriteFormat;
 use hayagriva::archive;
 use hayagriva::citationberg::Locale as CslLocale;
 
-use crate::library::Library;
-use crate::style::PreparedStyle;
+use crate::{DocumentError, Library, PreparedStyle};
 
-pub(crate) use self::bibliography::{bibliography_to_text_html, render_bibliography};
-pub(crate) use self::citation::{render_citation, render_citation_each, render_citation_group};
+pub(crate) use self::bibliography::bibliography_to_text_html;
+use self::citation::request_for_keys;
+pub(crate) use self::citation::{full_bibliography_requests, process_citations};
 pub(crate) use self::html::{elem_children_to_html, safe_href};
 pub(crate) use self::text::elem_children_to_string;
 
@@ -22,23 +22,6 @@ pub struct RenderedOutput {
     pub text: String,
     pub html: String,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderError(String);
-
-impl RenderError {
-    fn new(message: String) -> Self {
-        Self(message)
-    }
-}
-
-impl fmt::Display for RenderError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl Error for RenderError {}
 
 pub(crate) fn bundled_locales() -> &'static [CslLocale] {
     static LOCALES: OnceLock<Vec<CslLocale>> = OnceLock::new();
@@ -56,8 +39,8 @@ pub fn render_library_citation(
     key: &str,
     style: &PreparedStyle,
     locale: Option<&str>,
-) -> Result<RenderedOutput, RenderError> {
-    render_citation(library.inner(), key, style.inner.as_ref(), locale).map_err(RenderError::new)
+) -> Result<RenderedOutput, DocumentError> {
+    render_library_citation_group(library, &[key], style, locale)
 }
 
 pub fn render_library_citation_each(
@@ -65,9 +48,13 @@ pub fn render_library_citation_each(
     keys: &[&str],
     style: &PreparedStyle,
     locale: Option<&str>,
-) -> Result<Vec<RenderedOutput>, RenderError> {
-    render_citation_each(library.inner(), keys, style.inner.as_ref(), locale)
-        .map_err(RenderError::new)
+) -> Result<Vec<RenderedOutput>, DocumentError> {
+    let requests = keys
+        .iter()
+        .map(|key| request_for_keys(&[key]))
+        .collect::<Vec<_>>();
+    let rendered = process_citations(library, style, locale, &requests)?;
+    rendered.citations.iter().map(citation_output).collect()
 }
 
 pub fn render_library_citation_group(
@@ -75,19 +62,33 @@ pub fn render_library_citation_group(
     keys: &[&str],
     style: &PreparedStyle,
     locale: Option<&str>,
-) -> Result<RenderedOutput, RenderError> {
-    render_citation_group(library.inner(), keys, style.inner.as_ref(), locale)
-        .map_err(RenderError::new)
+) -> Result<RenderedOutput, DocumentError> {
+    let rendered = process_citations(library, style, locale, &[request_for_keys(keys)])?;
+    citation_output(&rendered.citations[0])
 }
 
 pub fn render_library_bibliography(
     library: &Library,
     style: &PreparedStyle,
     locale: Option<&str>,
-    all: bool,
-) -> Result<RenderedOutput, RenderError> {
-    render_bibliography(library.inner(), style.inner.as_ref(), locale, all)
-        .map_err(RenderError::new)
+) -> Result<RenderedOutput, DocumentError> {
+    let rendered = process_citations(library, style, locale, &full_bibliography_requests(library))?;
+    let (text, html) = match rendered.bibliography {
+        Some(bibliography) => bibliography_to_text_html(&bibliography),
+        None => Ok((String::new(), String::new())),
+    }
+    .map_err(DocumentError::Render)?;
+    Ok(RenderedOutput { text, html })
+}
+
+fn citation_output(
+    citation: &hayagriva::RenderedCitation,
+) -> Result<RenderedOutput, DocumentError> {
+    Ok(RenderedOutput {
+        text: elem_children_to_string(&citation.citation, BufWriteFormat::Plain)
+            .map_err(DocumentError::Render)?,
+        html: elem_children_to_html(&citation.citation).map_err(DocumentError::Render)?,
+    })
 }
 
 #[cfg(test)]
@@ -179,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn citation_each_falls_back_for_ambiguous_fast_texts() {
+    fn citation_each_disambiguates_same_author_and_year() {
         let library = Library::parse_biblatex(
             "@article{doe2024a, author = {Doe, Jane}, title = {Alpha}, year = {2024}}
              @article{doe2024b, author = {Doe, Jane}, title = {Beta}, year = {2024}}",

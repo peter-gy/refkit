@@ -17,7 +17,7 @@ Inspect `refkit.build_info` and `refkit.build_mode` when the loaded artifact rem
 Rebuild the package-local native plugin:
 
 ```bash
-(cd packages/polars-refkit && uv run maturin develop)
+make polars-refkit-develop
 ```
 
 Keep Python Polars, Rust Polars, PyO3, and `pyo3-polars` within the tested application binary interface family. Update the package-local Cargo lockfile when that family changes.

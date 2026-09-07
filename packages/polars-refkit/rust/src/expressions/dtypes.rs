@@ -77,7 +77,7 @@ fn parse_report_struct_dtype() -> DataType {
         Field::new("keys".into(), DataType::List(Box::new(DataType::String))),
         Field::new(
             "diagnostics".into(),
-            DataType::List(Box::new(DataType::String)),
+            DataType::List(Box::new(diagnostic_struct_dtype())),
         ),
     ])
 }
@@ -99,6 +99,10 @@ fn tidy_report_struct_dtype() -> DataType {
             "warnings".into(),
             DataType::List(Box::new(tidy_warning_struct_dtype())),
         ),
+        Field::new(
+            "renames".into(),
+            DataType::List(Box::new(tidy_rename_struct_dtype())),
+        ),
         Field::new("error".into(), DataType::String),
     ])
 }
@@ -106,4 +110,97 @@ fn tidy_report_struct_dtype() -> DataType {
 fn fixed_output(input_fields: &[Field], dtype: DataType) -> PolarsResult<Field> {
     let field = input_fields[0].clone();
     Ok(Field::new(field.name, dtype))
+}
+
+pub(super) fn diagnostic_struct_dtype() -> DataType {
+    DataType::Struct(vec![
+        Field::new("code".into(), DataType::String),
+        Field::new("severity".into(), DataType::String),
+        Field::new("action".into(), DataType::String),
+        Field::new(
+            "span".into(),
+            DataType::Struct(vec![
+                Field::new("start".into(), DataType::UInt64),
+                Field::new("end".into(), DataType::UInt64),
+            ]),
+        ),
+        Field::new("entry".into(), DataType::String),
+        Field::new("field".into(), DataType::String),
+        Field::new("message".into(), DataType::String),
+    ])
+}
+
+pub(super) fn diagnostics_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    fixed_output(
+        input_fields,
+        DataType::List(Box::new(diagnostic_struct_dtype())),
+    )
+}
+
+pub(super) fn tidy_rename_struct_dtype() -> DataType {
+    DataType::Struct(vec![
+        Field::new("entry_id".into(), DataType::UInt64),
+        Field::new("old_key".into(), DataType::String),
+        Field::new("new_key".into(), DataType::String),
+    ])
+}
+
+pub(super) fn render_report_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    validate_key_lists(input_fields)?;
+    fixed_output(
+        input_fields,
+        DataType::Struct(vec![
+            Field::new("ok".into(), DataType::Boolean),
+            Field::new(
+                "citations".into(),
+                DataType::List(Box::new(rendered_struct_dtype())),
+            ),
+            Field::new(
+                "diagnostics".into(),
+                DataType::List(Box::new(diagnostic_struct_dtype())),
+            ),
+            Field::new("error_code".into(), DataType::String),
+            Field::new("error".into(), DataType::String),
+        ]),
+    )
+}
+
+pub(super) fn with_struct_validity(
+    chunked: StructChunked,
+    valid: impl Iterator<Item = bool>,
+) -> PolarsResult<Series> {
+    use pyo3_polars::export::polars_arrow::bitmap::Bitmap;
+    let valid = Bitmap::from_iter(valid);
+    Ok(chunked
+        .rechunk()
+        .into_owned()
+        .with_outer_validity(Some(valid))
+        .into_series())
+}
+
+fn validate_key_lists(input_fields: &[Field]) -> PolarsResult<()> {
+    if input_fields[1].dtype != DataType::List(Box::new(DataType::String)) {
+        polars_bail!(InvalidOperation: "citation keys must have dtype List[String], got {}", input_fields[1].dtype);
+    }
+    Ok(())
+}
+
+pub(super) fn each_string_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    validate_key_lists(input_fields)?;
+    keys_output(input_fields)
+}
+
+pub(super) fn each_rendered_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    validate_key_lists(input_fields)?;
+    rendered_list_output(input_fields)
+}
+
+pub(super) fn group_string_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    validate_key_lists(input_fields)?;
+    string_output(input_fields)
+}
+
+pub(super) fn group_rendered_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    validate_key_lists(input_fields)?;
+    rendered_output(input_fields)
 }

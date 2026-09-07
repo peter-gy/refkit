@@ -1,18 +1,19 @@
+use std::sync::OnceLock;
+
 use hayagriva::{BibliographyItem, BufWriteFormat, ElemChild, ElemChildren, RenderedCitation};
 
 use crate::RenderedOutput;
 use crate::render::{
     bibliography_to_text_html, elem_children_to_html, elem_children_to_string, safe_href,
 };
-use crate::strings::{
-    display_name, elem_meta_name, font_style_name, font_variant_name, font_weight_name,
-    formatting_summary, text_decoration_name, vertical_align_name,
-};
 
 #[derive(Debug, Clone)]
 enum RenderedTree {
     Empty,
-    Citation(ElemChildren),
+    Citation {
+        children: ElemChildren,
+        keys: Vec<String>,
+    },
     Bibliography(Vec<BibliographyItem>),
 }
 
@@ -20,12 +21,25 @@ enum RenderedTree {
 pub struct RenderedRecord {
     pub text: String,
     pub html: String,
+    pub layout: Option<BibliographyLayout>,
     tree: RenderedTree,
+    nodes: OnceLock<Vec<RenderedNode>>,
 }
 
 impl RenderedRecord {
-    fn new(text: String, html: String, tree: RenderedTree) -> Self {
-        Self { text, html, tree }
+    fn new(
+        text: String,
+        html: String,
+        layout: Option<BibliographyLayout>,
+        tree: RenderedTree,
+    ) -> Self {
+        Self {
+            text,
+            html,
+            layout,
+            tree,
+            nodes: OnceLock::new(),
+        }
     }
 
     pub fn output(&self) -> RenderedOutput {
@@ -35,47 +49,66 @@ impl RenderedRecord {
         }
     }
 
-    pub fn tree_nodes(&self) -> Vec<RenderedNode> {
-        rendered_tree_nodes(&self.tree)
+    pub fn tree_nodes(&self) -> &[RenderedNode] {
+        self.nodes.get_or_init(|| match &self.tree {
+            RenderedTree::Empty => Vec::new(),
+            RenderedTree::Citation { children, keys } => children_to_tree(children, keys),
+            RenderedTree::Bibliography(items) => {
+                items.iter().map(bibliography_item_to_tree).collect()
+            }
+        })
     }
 }
 
-pub fn rendered_record_from_citation(
+pub(crate) fn rendered_record_from_citation(
     citation: &RenderedCitation,
+    keys: Vec<String>,
 ) -> Result<RenderedRecord, String> {
     Ok(RenderedRecord::new(
         elem_children_to_string(&citation.citation, BufWriteFormat::Plain)?,
         elem_children_to_html(&citation.citation)?,
-        RenderedTree::Citation(citation.citation.clone()),
+        None,
+        RenderedTree::Citation {
+            children: citation.citation.clone(),
+            keys,
+        },
     ))
 }
 
-pub fn rendered_record_from_bibliography(
+pub(crate) fn rendered_record_from_bibliography(
     bibliography: Option<hayagriva::RenderedBibliography>,
 ) -> Result<RenderedRecord, String> {
     let Some(bibliography) = bibliography else {
         return Ok(RenderedRecord::new(
             String::new(),
             String::new(),
+            None,
             RenderedTree::Empty,
         ));
     };
-
-    let items = bibliography.items;
-    let (text, html) = bibliography_to_text_html(&items)?;
+    let layout = BibliographyLayout {
+        hanging_indent: bibliography.hanging_indent,
+        second_field_align: bibliography
+            .second_field_align
+            .map(SecondFieldAlign::from_engine),
+        line_spacing: bibliography.line_spacing.get(),
+        entry_spacing: bibliography.entry_spacing,
+    };
+    let (text, html) = bibliography_to_text_html(&bibliography)?;
     Ok(RenderedRecord::new(
         text,
         html,
-        RenderedTree::Bibliography(items),
+        Some(layout),
+        RenderedTree::Bibliography(bibliography.items),
     ))
 }
 
-fn rendered_tree_nodes(tree: &RenderedTree) -> Vec<RenderedNode> {
-    match tree {
-        RenderedTree::Empty => Vec::new(),
-        RenderedTree::Citation(children) => children_to_tree(children),
-        RenderedTree::Bibliography(items) => items.iter().map(bibliography_item_to_tree).collect(),
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BibliographyLayout {
+    pub hanging_indent: bool,
+    pub second_field_align: Option<SecondFieldAlign>,
+    pub line_spacing: i16,
+    pub entry_spacing: i16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,8 +118,8 @@ pub enum RenderedNode {
         formatting: RenderedFormatting,
     },
     Element {
-        display: Option<&'static str>,
-        meta: Option<&'static str>,
+        display: Option<RenderedDisplay>,
+        meta: Option<RenderedMeta>,
         children: Vec<RenderedNode>,
     },
     Markup {
@@ -99,55 +132,249 @@ pub enum RenderedNode {
     },
     Transparent {
         cite_idx: usize,
-        format: String,
+        formatting: RenderedFormatting,
     },
     BibliographyEntry {
         key: String,
-        first_field: Option<Box<RenderedNode>>,
-        children: Vec<RenderedNode>,
+        label: Option<Box<RenderedNode>>,
+        content: Vec<RenderedNode>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderedMeta {
+    Names { roles: Vec<String> },
+    Date,
+    Text,
+    Number,
+    Label,
+    CitationNumber,
+    Name { role: String, index: usize },
+    Entry { key: String, item_index: usize },
+    CitationLabel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RenderedFormatting {
-    pub font_style: &'static str,
-    pub font_variant: &'static str,
-    pub font_weight: &'static str,
-    pub text_decoration: &'static str,
-    pub vertical_align: &'static str,
+    pub font_style: FontStyle,
+    pub font_variant: FontVariant,
+    pub font_weight: FontWeight,
+    pub text_decoration: TextDecoration,
+    pub vertical_align: VerticalAlign,
 }
 
-fn children_to_tree(children: &ElemChildren) -> Vec<RenderedNode> {
-    children.0.iter().map(child_to_tree).collect()
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontStyle {
+    Normal,
+    Italic,
 }
 
-fn bibliography_item_children_to_tree(item: &BibliographyItem) -> Vec<RenderedNode> {
-    let mut children = Vec::new();
-    if let Some(first_field) = &item.first_field {
-        children.push(child_to_tree(first_field));
+impl FontStyle {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "Normal",
+            Self::Italic => "Italic",
+        }
     }
-    children.extend(children_to_tree(&item.content));
+}
+
+impl FontStyle {
+    fn from_engine(value: hayagriva::citationberg::FontStyle) -> Self {
+        match value {
+            hayagriva::citationberg::FontStyle::Normal => Self::Normal,
+            hayagriva::citationberg::FontStyle::Italic => Self::Italic,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontVariant {
+    Normal,
+    SmallCaps,
+}
+
+impl FontVariant {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "Normal",
+            Self::SmallCaps => "SmallCaps",
+        }
+    }
+}
+
+impl FontVariant {
+    fn from_engine(value: hayagriva::citationberg::FontVariant) -> Self {
+        match value {
+            hayagriva::citationberg::FontVariant::Normal => Self::Normal,
+            hayagriva::citationberg::FontVariant::SmallCaps => Self::SmallCaps,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontWeight {
+    Normal,
+    Bold,
+    Light,
+}
+
+impl FontWeight {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "Normal",
+            Self::Bold => "Bold",
+            Self::Light => "Light",
+        }
+    }
+}
+
+impl FontWeight {
+    fn from_engine(value: hayagriva::citationberg::FontWeight) -> Self {
+        match value {
+            hayagriva::citationberg::FontWeight::Normal => Self::Normal,
+            hayagriva::citationberg::FontWeight::Bold => Self::Bold,
+            hayagriva::citationberg::FontWeight::Light => Self::Light,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextDecoration {
+    None,
+    Underline,
+}
+
+impl TextDecoration {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Underline => "Underline",
+        }
+    }
+}
+
+impl TextDecoration {
+    fn from_engine(value: hayagriva::citationberg::TextDecoration) -> Self {
+        match value {
+            hayagriva::citationberg::TextDecoration::None => Self::None,
+            hayagriva::citationberg::TextDecoration::Underline => Self::Underline,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerticalAlign {
+    None,
+    Baseline,
+    Sup,
+    Sub,
+}
+
+impl VerticalAlign {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Baseline => "Baseline",
+            Self::Sup => "Sup",
+            Self::Sub => "Sub",
+        }
+    }
+}
+
+impl VerticalAlign {
+    fn from_engine(value: hayagriva::citationberg::VerticalAlign) -> Self {
+        match value {
+            hayagriva::citationberg::VerticalAlign::None => Self::None,
+            hayagriva::citationberg::VerticalAlign::Baseline => Self::Baseline,
+            hayagriva::citationberg::VerticalAlign::Sup => Self::Sup,
+            hayagriva::citationberg::VerticalAlign::Sub => Self::Sub,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderedDisplay {
+    Block,
+    LeftMargin,
+    RightInline,
+    Indent,
+}
+
+impl RenderedDisplay {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Block => "Block",
+            Self::LeftMargin => "LeftMargin",
+            Self::RightInline => "RightInline",
+            Self::Indent => "Indent",
+        }
+    }
+}
+
+impl RenderedDisplay {
+    fn from_engine(value: hayagriva::citationberg::Display) -> Self {
+        match value {
+            hayagriva::citationberg::Display::Block => Self::Block,
+            hayagriva::citationberg::Display::LeftMargin => Self::LeftMargin,
+            hayagriva::citationberg::Display::RightInline => Self::RightInline,
+            hayagriva::citationberg::Display::Indent => Self::Indent,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecondFieldAlign {
+    Margin,
+    Flush,
+}
+
+impl SecondFieldAlign {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Margin => "Margin",
+            Self::Flush => "Flush",
+        }
+    }
+}
+
+impl SecondFieldAlign {
+    fn from_engine(value: hayagriva::citationberg::SecondFieldAlign) -> Self {
+        match value {
+            hayagriva::citationberg::SecondFieldAlign::Margin => Self::Margin,
+            hayagriva::citationberg::SecondFieldAlign::Flush => Self::Flush,
+        }
+    }
+}
+
+fn children_to_tree(children: &ElemChildren, keys: &[String]) -> Vec<RenderedNode> {
     children
+        .0
+        .iter()
+        .map(|child| child_to_tree(child, keys))
+        .collect()
 }
 
 fn bibliography_item_to_tree(item: &BibliographyItem) -> RenderedNode {
     RenderedNode::BibliographyEntry {
         key: item.key.clone(),
-        first_field: item.first_field.as_ref().map(child_to_tree).map(Box::new),
-        children: bibliography_item_children_to_tree(item),
+        label: item
+            .first_field
+            .as_ref()
+            .map(|field| Box::new(child_to_tree(field, &[]))),
+        content: children_to_tree(&item.content, &[]),
     }
 }
 
-fn child_to_tree(child: &ElemChild) -> RenderedNode {
+fn child_to_tree(child: &ElemChild, keys: &[String]) -> RenderedNode {
     match child {
         ElemChild::Text(text) => RenderedNode::Text {
             text: text.text.clone(),
-            formatting: formatting_to_tree(text.formatting),
+            formatting: RenderedFormatting::from_engine(text.formatting),
         },
         ElemChild::Elem(elem) => RenderedNode::Element {
-            display: elem.display.map(display_name),
-            meta: elem.meta.as_ref().map(elem_meta_name),
-            children: children_to_tree(&elem.children),
+            display: elem.display.map(RenderedDisplay::from_engine),
+            meta: elem.meta.as_ref().and_then(|meta| metadata(meta, keys)),
+            children: children_to_tree(&elem.children, keys),
         },
         ElemChild::Markup(value) => RenderedNode::Markup {
             value: value.clone(),
@@ -156,123 +383,91 @@ fn child_to_tree(child: &ElemChild) -> RenderedNode {
             Some(href) => RenderedNode::Link {
                 text: text.text.clone(),
                 url: href.to_string(),
-                formatting: formatting_to_tree(text.formatting),
+                formatting: RenderedFormatting::from_engine(text.formatting),
             },
             None => RenderedNode::Text {
                 text: text.text.clone(),
-                formatting: formatting_to_tree(text.formatting),
+                formatting: RenderedFormatting::from_engine(text.formatting),
             },
         },
         ElemChild::Transparent { cite_idx, format } => RenderedNode::Transparent {
             cite_idx: *cite_idx,
-            format: formatting_summary(*format),
+            formatting: RenderedFormatting::from_engine(*format),
         },
     }
 }
 
-fn formatting_to_tree(formatting: hayagriva::Formatting) -> RenderedFormatting {
-    RenderedFormatting {
-        font_style: font_style_name(formatting.font_style),
-        font_variant: font_variant_name(formatting.font_variant),
-        font_weight: font_weight_name(formatting.font_weight),
-        text_decoration: text_decoration_name(formatting.text_decoration),
-        vertical_align: vertical_align_name(formatting.vertical_align),
+fn metadata(meta: &hayagriva::ElemMeta, keys: &[String]) -> Option<RenderedMeta> {
+    Some(match meta {
+        hayagriva::ElemMeta::Names(names) => RenderedMeta::Names {
+            roles: names.iter().map(|(_, role)| role.to_string()).collect(),
+        },
+        hayagriva::ElemMeta::Date => RenderedMeta::Date,
+        hayagriva::ElemMeta::Text => RenderedMeta::Text,
+        hayagriva::ElemMeta::Number => RenderedMeta::Number,
+        hayagriva::ElemMeta::Label => RenderedMeta::Label,
+        hayagriva::ElemMeta::CitationNumber => RenderedMeta::CitationNumber,
+        hayagriva::ElemMeta::Name(role, index) => RenderedMeta::Name {
+            role: role.to_string(),
+            index: *index,
+        },
+        hayagriva::ElemMeta::Entry(index) => RenderedMeta::Entry {
+            key: keys.get(*index)?.clone(),
+            item_index: *index,
+        },
+        hayagriva::ElemMeta::CitationLabel => RenderedMeta::CitationLabel,
+    })
+}
+
+impl RenderedFormatting {
+    fn from_engine(value: hayagriva::Formatting) -> Self {
+        Self {
+            font_style: FontStyle::from_engine(value.font_style),
+            font_variant: FontVariant::from_engine(value.font_variant),
+            font_weight: FontWeight::from_engine(value.font_weight),
+            text_decoration: TextDecoration::from_engine(value.text_decoration),
+            vertical_align: VerticalAlign::from_engine(value.vertical_align),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use hayagriva::citationberg::Display;
-    use hayagriva::{ElemChild, ElemChildren};
-
     use super::*;
 
     #[test]
-    fn rendered_empty_tree_has_no_nodes() {
-        assert_eq!(rendered_tree_nodes(&RenderedTree::Empty), Vec::new());
-    }
-
-    #[test]
-    fn citation_tree_contains_public_node_shapes() {
+    fn tree_preserves_opaque_fragments_and_filters_links() {
+        let text = hayagriva::Formatted {
+            text: "label".to_string(),
+            formatting: hayagriva::Formatting::default(),
+        };
         let children = ElemChildren(vec![
-            ElemChild::Text(formatted("plain")),
-            ElemChild::Elem(hayagriva::Elem {
-                children: ElemChildren(vec![ElemChild::Text(formatted("nested"))]),
-                display: Some(Display::Block),
-                meta: Some(hayagriva::ElemMeta::Text),
-            }),
-            ElemChild::Markup("<raw/>".to_string()),
+            ElemChild::Markup("<fragment>".to_string()),
             ElemChild::Link {
-                text: formatted("safe"),
+                text: text.clone(),
                 url: "https://example.com".to_string(),
             },
             ElemChild::Link {
-                text: formatted("unsafe"),
-                url: "javascript:alert(1)".to_string(),
+                text,
+                url: "data:text/html,fragment".to_string(),
             },
             ElemChild::Transparent {
-                cite_idx: 7,
+                cite_idx: 2,
                 format: hayagriva::Formatting::default(),
             },
         ]);
-
-        let nodes = rendered_tree_nodes(&RenderedTree::Citation(children));
-
-        assert!(matches!(&nodes[0], RenderedNode::Text { text, .. } if text == "plain"));
+        let nodes = children_to_tree(&children, &[]);
+        assert!(matches!(&nodes[0], RenderedNode::Markup { value } if value == "<fragment>"));
         assert!(
-            matches!(&nodes[1], RenderedNode::Element { display, meta, children } if *display == Some("Block") && *meta == Some("Text") && matches!(&children[0], RenderedNode::Text { text, .. } if text == "nested"))
+            matches!(&nodes[1], RenderedNode::Link { url, .. } if url == "https://example.com")
         );
-        assert!(matches!(&nodes[2], RenderedNode::Markup { value } if value == "<raw/>"));
+        assert!(matches!(&nodes[2], RenderedNode::Text { text, .. } if text == "label"));
         assert!(
-            matches!(&nodes[3], RenderedNode::Link { url, .. } if url == "https://example.com")
+            matches!(&nodes[3], RenderedNode::Transparent { cite_idx: 2, formatting } if formatting.font_style == FontStyle::Normal)
         );
-        assert!(matches!(&nodes[4], RenderedNode::Text { text, .. } if text == "unsafe"));
-        assert!(
-            matches!(&nodes[5], RenderedNode::Transparent { cite_idx, format } if *cite_idx == 7 && format == "Normal")
+        assert_eq!(
+            elem_children_to_html(&children).unwrap(),
+            "&lt;fragment&gt;<a href=\"https://example.com\">label</a>label"
         );
-    }
-
-    #[test]
-    fn bibliography_tree_contains_entries_and_first_field() {
-        let items = vec![BibliographyItem {
-            key: "doe2024".to_string(),
-            first_field: Some(ElemChild::Text(formatted("[1]"))),
-            content: ElemChildren(vec![ElemChild::Text(formatted("Doe, 2024."))]),
-        }];
-
-        let tree = rendered_tree_nodes(&RenderedTree::Bibliography(items));
-        let RenderedNode::BibliographyEntry {
-            key,
-            first_field,
-            children,
-        } = &tree[0]
-        else {
-            panic!("bibliography tree should contain entry nodes");
-        };
-
-        assert_eq!(key, "doe2024");
-        assert!(
-            matches!(first_field.as_deref(), Some(RenderedNode::Text { text, .. }) if text == "[1]")
-        );
-        assert!(matches!(&children[0], RenderedNode::Text { text, .. } if text == "[1]"));
-        assert!(matches!(&children[1], RenderedNode::Text { text, .. } if text == "Doe, 2024."));
-    }
-
-    #[test]
-    fn default_formatting_maps_to_public_tree_strings() {
-        let formatting = formatting_to_tree(hayagriva::Formatting::default());
-
-        assert_eq!(formatting.font_style, "Normal");
-        assert_eq!(formatting.font_variant, "Normal");
-        assert_eq!(formatting.font_weight, "Normal");
-        assert_eq!(formatting.text_decoration, "None");
-        assert_eq!(formatting.vertical_align, "None");
-    }
-
-    fn formatted(text: &str) -> hayagriva::Formatted {
-        hayagriva::Formatted {
-            text: text.to_string(),
-            formatting: hayagriva::Formatting::default(),
-        }
     }
 }

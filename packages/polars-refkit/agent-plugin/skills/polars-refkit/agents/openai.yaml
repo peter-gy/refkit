@@ -1,0 +1,4 @@
+interface:
+  display_name: "Polars RefKit"
+  short_description: "Process bibliography columns with Polars expressions"
+  default_prompt: "Use $polars-refkit to inspect bibliography columns, render citations, or format BibTeX."

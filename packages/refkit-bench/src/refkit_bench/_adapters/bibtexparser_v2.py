@@ -18,6 +18,7 @@ from refkit_bench._adapters.common import (
     _entries_match,
     _keys_are,
     _lookup_keys,
+    _parsed_records_match,
     _prepared,
     _projection_contains,
     _raw_blocks_cover,
@@ -41,7 +42,9 @@ class BibtexparserV2Adapter(PackageAdapter):
             database = bibtexparser.parse_file(str(workload.bibtex_path))
             return OperationOutcome(database, len(database.entries))
 
-        return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
+        return _prepared(
+            operation, _parsed_records_match(workload.records, _parsed_rows), setup_included=True
+        )
 
     def prepare_parse_bibtex_text(self, workload: Workload, directory: Path) -> PreparedOperation:
         import bibtexparser
@@ -52,7 +55,9 @@ class BibtexparserV2Adapter(PackageAdapter):
             database = bibtexparser.parse_string(workload.bibtex)
             return OperationOutcome(database, len(database.entries))
 
-        return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
+        return _prepared(
+            operation, _parsed_records_match(workload.records, _parsed_rows), setup_included=True
+        )
 
     def prepare_recover_dirty_bibtex(
         self, workload: Workload, directory: Path
@@ -136,7 +141,7 @@ class BibtexparserV2Adapter(PackageAdapter):
 
         return _prepared(
             operation,
-            _count_is(len(workload.records)),
+            _parsed_records_match(workload.records, _parsed_rows),
             source_format="raw_bibtex",
             setup_included=True,
         )
@@ -229,7 +234,7 @@ class BibtexparserV2Adapter(PackageAdapter):
 
         return _prepared(
             operation,
-            _raw_roundtrip_check(workload.keys, workload.raw_preservation_terms),
+            _raw_roundtrip_check(workload),
             source_format="raw_bibtex",
         )
 
@@ -250,7 +255,7 @@ class BibtexparserV2Adapter(PackageAdapter):
 
         return _prepared(
             operation,
-            _raw_roundtrip_check(workload.keys, workload.raw_preservation_terms),
+            _raw_roundtrip_check(workload),
             source_format="raw_bibtex",
             setup_included=True,
         )
@@ -401,3 +406,27 @@ def _bibtexparser_v2_recovery_matches(
 def _bibtexparser_block_key(raw: object) -> str | None:
     after_open = str(raw).partition("{")[2]
     return after_open.split(",", 1)[0].strip() or None
+
+
+def _parsed_rows(database: Any) -> list[dict[str, Any]]:
+    rows = []
+    for entry in database.entries:
+        fields = {field.key: field.value for field in entry.fields}
+        authors = []
+        for name in fields.get("author", "").split(" and "):
+            family, separator, given = name.partition(", ")
+            authors.append([family, given if separator else ""])
+        rows.append(
+            {
+                "key": entry.key,
+                "type": entry.entry_type,
+                "title": fields.get("title"),
+                "year": fields.get("year"),
+                "doi": fields.get("doi"),
+                "volume": fields.get("volume"),
+                "pages": fields.get("pages", "").replace("--", "-"),
+                "container": fields.get("journal", fields.get("booktitle", "")),
+                "authors": authors,
+            }
+        )
+    return rows

@@ -55,3 +55,45 @@ def test_pyodide_lock_rejects_rust_plugin_abi_drift(
     errors = pyodide_lock.validate_lock(LOCK_PATH)
 
     assert "pyo3-polars must resolve to 0.24.0 for the Polars plugin ABI" in errors
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "message"),
+    [
+        ('lock-version = "1.0"', 'lock-version = "2.0"', "lock-version 1.0"),
+        ('name = "iniconfig"', 'name = "agent-plugins"', "duplicate package"),
+        ("https://files.pythonhosted.org/", "https://example.org/", "unsupported wheel source"),
+        (
+            "https://files.pythonhosted.org/",
+            "http://files.pythonhosted.org/",
+            "unsupported wheel source",
+        ),
+        ("/pyodide/v314.0.2/full/", "/pyodide/v314.0.1/full/", "must come from Pyodide"),
+        (
+            'sha256 = "94dd4f5d15f8688691c3628f2848fbe92d110baf96e7314c147fcc775ce45a50"',
+            'sha256 = "' + "z" * 64 + '"',
+            "invalid SHA-256",
+        ),
+    ],
+)
+def test_pyodide_lock_rejects_invalid_artifact_provenance(
+    tmp_path: Path,
+    before: str,
+    after: str,
+    message: str,
+) -> None:
+    invalid = tmp_path / "pylock.toml"
+    invalid.write_text(LOCK_PATH.read_text().replace(before, after))
+
+    assert any(message in error for error in pyodide_lock.validate_lock(invalid))
+
+
+def test_pyodide_lock_requires_installable_wheel_records(tmp_path: Path) -> None:
+    invalid = tmp_path / "pylock.toml"
+    invalid.write_text(
+        'lock-version = "1.0"\n[[packages]]\nname = "agent-plugins"\nversion = "0.2.0"\n'
+    )
+
+    assert pyodide_lock.validate_lock(invalid) == [
+        "agent-plugins must resolve to exactly one wheel"
+    ]

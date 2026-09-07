@@ -9,7 +9,7 @@ Install the uv, Rust, Node.js, and pnpm prerequisites from the [developer index]
 ```bash
 uv sync --locked --all-packages --group dev
 make refkit-develop
-(cd packages/polars-refkit && uv run maturin develop)
+make polars-refkit-develop
 ```
 
 `refkit` and `polars-refkit` contain native modules. Rebuild the affected module after Rust changes or Python tests can exercise an older editable binary.
@@ -21,7 +21,7 @@ make refkit-develop
 | Pure Python facade or stubs | None | `make python-lint typecheck test` |
 | Portable Rust core | Rebuild each affected Python adapter | `make rust-lint rust rust-floor` |
 | Native PyO3 adapter or Agent Plugin | `make refkit-develop` | `make typecheck test rust` |
-| Polars expressions or plugin Rust | `(cd packages/polars-refkit && uv run maturin develop)` | `make typecheck test rust` |
+| Polars expressions or plugin Rust | `make polars-refkit-develop` | `make typecheck test rust` |
 | Benchmark runner | Build both adapters in release mode | `make benchmark-test` |
 | User documentation or site | Install locked pnpm dependencies | `make docs-check test` |
 | Release or package metadata | Build affected distributions | `make release-check build` |
@@ -69,7 +69,7 @@ Static Python validation happens while constructing the expression. Dtype checks
 
 ## Change The Documentation Site
 
-Keep `docs/.vitepress/config.mts`, the public page tree, and the static build verifier aligned. Add every public page to the sidebar unless it is an intentional compatibility route.
+Keep `docs/.vitepress/config.mts`, the public page tree, and the static build verifier aligned. Add every public page to the sidebar.
 
 Run:
 
@@ -88,7 +88,16 @@ The repository contains two Cargo workspaces:
 
 Update every lockfile whose manifest resolves the changed dependency. Keep Polars, `polars-core`, PyO3, and `pyo3-polars` aligned inside the package-local workspace. Run `make rust rust-floor` after resolution changes.
 
-RefKit consumes released Hayagriva and BibLaTeX crates. Inspect the resolved registry source and upstream release notes before changing their feature or version contract.
+RefKit uses these qualified bibliography and XML sources:
+
+| Dependency | Source |
+| --- | --- |
+| BibLaTeX `0.12.0` | crates.io registry. |
+| Hayagriva `0.10.1` | Canonical Git revision `e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e`, including the multi-group disambiguation correction. |
+| [Citationberg](https://github.com/typst/citationberg) `0.7.0`, the CSL XML model | Canonical Git revision `06a591e2f237d25e1dfdedac3f3d1494c496c52d`, patched in both Rust workspaces. |
+| [quick-xml](https://github.com/tafia/quick-xml), the XML reader | Direct dependency `0.41.0`, with every resolved copy at least `0.41.0` from crates.io. |
+
+Inspect the exact resolved source and regressions before changing these dependencies. Cargo source builds require Git and network access to fetch the pinned Hayagriva and Citationberg revisions unless they are already cached.
 
 ## Record Durable Knowledge
 

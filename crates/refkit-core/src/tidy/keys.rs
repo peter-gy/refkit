@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::{
-    RawEntryId, RawSyntaxDocument, RawSyntaxEntry, RawSyntaxField, RawValueAtom, RawValueMode,
-};
+use indexmap::IndexMap;
+
+use crate::raw::{RawEntryId, RawSyntaxEntry, RawSyntaxField, RawValueAtom, RawValueMode};
 
 use super::TidyOptions;
 
@@ -23,8 +23,8 @@ struct Name {
     last: String,
 }
 
-pub(crate) fn generated_keys(
-    doc: &RawSyntaxDocument,
+pub(crate) fn generated_keys<'a>(
+    entries: impl IntoIterator<Item = &'a RawSyntaxEntry>,
     options: &TidyOptions,
 ) -> Result<HashMap<RawEntryId, String>, String> {
     let Some(template) = options.generate_keys.as_deref() else {
@@ -37,38 +37,44 @@ pub(crate) fn generated_keys(
             format!("{template}[duplicateLetter]")
         };
     let template = parse_template(&template)?;
-    let mut entries_by_key: Vec<(String, Vec<&RawSyntaxEntry>)> = Vec::new();
-
-    for entry in &doc.entries {
-        let values = entry_values(entry);
-        if let Some(key) = generate_key(&values, &template, None)? {
-            if let Some((_, entries)) = entries_by_key
-                .iter_mut()
-                .find(|(candidate, _)| candidate == &key)
-            {
-                entries.push(entry);
-            } else {
-                entries_by_key.push((key, vec![entry]));
-            }
+    let mut groups: IndexMap<String, Vec<&RawSyntaxEntry>> = IndexMap::new();
+    let mut reserved = HashSet::new();
+    for entry in entries {
+        if let Some(key) = generate_key(&entry_values(entry), &template, None)? {
+            groups.entry(key).or_default().push(entry);
+        } else {
+            reserved.insert(entry.key.clone());
         }
     }
-
+    let retained = reserved.clone();
+    // Reserve unsuffixed keys before assigning suffixes across all groups.
+    reserved.extend(groups.keys().cloned());
     let mut generated = HashMap::new();
-    for (key, entries) in entries_by_key {
-        let regenerate_duplicate = entries.len() > 1;
-        for (index, entry) in entries.into_iter().enumerate() {
-            let new_key = if regenerate_duplicate {
-                let values = entry_values(entry);
-                generate_key(&values, &template, Some(index + 1))?
+    for (base, entries) in groups {
+        let duplicate = entries.len() > 1 || retained.contains(&base);
+        let mut suffix = 1;
+        for entry in entries {
+            let values = entry_values(entry);
+            let candidate = if duplicate {
+                let mut attempted = HashSet::new();
+                loop {
+                    let mut candidate = generate_key(&values, &template, Some(suffix))?
+                        .unwrap_or_else(|| base.clone());
+                    if !attempted.insert(candidate.clone()) {
+                        candidate = format!("{base}{}", num_to_letter(suffix));
+                    }
+                    suffix += 1;
+                    if !reserved.contains(&candidate) {
+                        break candidate;
+                    }
+                }
             } else {
-                Some(key.clone())
+                base.clone()
             };
-            if let Some(new_key) = new_key {
-                generated.insert(entry.id, new_key);
-            }
+            reserved.insert(candidate.clone());
+            generated.insert(entry.id, candidate);
         }
     }
-
     Ok(generated)
 }
 
@@ -464,8 +470,14 @@ fn is_function_word(word: &str) -> bool {
     )
 }
 
-fn num_to_letter(value: usize) -> char {
-    char::from_u32(96 + value as u32).unwrap_or_default()
+fn num_to_letter(mut value: usize) -> String {
+    let mut letters = Vec::new();
+    while value > 0 {
+        value -= 1;
+        letters.push((b'a' + (value % 26) as u8) as char);
+        value /= 26;
+    }
+    letters.into_iter().rev().collect()
 }
 
 fn remove_unsafe_key_chars(value: &str) -> String {
@@ -494,47 +506,4 @@ fn remove_unsafe_key_chars(value: &str) -> String {
             ) && !ch.is_whitespace()
         })
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn generated(entry: &[(&str, &str)], template: &str) -> String {
-        let values = entry
-            .iter()
-            .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
-            .collect::<HashMap<_, _>>();
-        generate_key(&values, &parse_template(template).unwrap(), None)
-            .unwrap()
-            .unwrap()
-    }
-
-    #[test]
-    fn generates_author_year_title_keys() {
-        assert_eq!(
-            generated(
-                &[
-                    ("author", "Bar, Foo and Mee, Moo"),
-                    ("year", "2018"),
-                    ("title", "A story of 2 foo and 1 bar: the best story")
-                ],
-                "[auth:upper][year][shorttitle:capitalize]"
-            ),
-            "BAR2018Story2Foo"
-        );
-    }
-
-    #[test]
-    fn keeps_existing_key_when_required_data_is_missing() {
-        let values = HashMap::from([("title".to_string(), "No Author".to_string())]);
-        let key = generate_key(
-            &values,
-            &parse_template("[auth:required][title]").unwrap(),
-            None,
-        )
-        .unwrap();
-
-        assert_eq!(key, None);
-    }
 }

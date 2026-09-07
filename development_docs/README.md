@@ -16,7 +16,7 @@ Workspace synchronization installs [Maturin](https://www.maturin.rs/), the build
 ```bash
 uv sync --locked --all-packages --group dev
 make refkit-develop
-(cd packages/polars-refkit && uv run maturin develop)
+make polars-refkit-develop
 ```
 
 Run `make check` before handing off a repository change. It validates locks, release metadata, architecture, documentation, Pyodide inputs, Python and Rust code, tests, the Rust 1.88 floor, and built distributions.
@@ -30,18 +30,18 @@ Run `make check` before handing off a repository change. It validates locks, rel
 | Preserve parser, raw edit, tidy, and render invariants | [Core semantics](core-semantics.md) |
 | Change Python, Polars, or Pyodide host boundaries | [Adapter contracts](adapters.md) |
 | Set up an edit and rebuild loop | [Development workflow](development.md) |
-| Choose the test boundary and completion gate | [Testing](testing.md) |
+| Choose the test boundary, installed `refkit-tests` probes, and completion gate | [Testing](testing.md) |
 | Build and validate the VitePress site | [Documentation site](documentation.md) |
 | Update locks, stubs, generated state, or repository policy | [Repository contracts](repository-contracts.md) |
 | Build wheels, validate Pyodide, or prepare a release | [Packaging and release](packaging-and-release.md) |
 | Measure a capability or interpret benchmark output | [Benchmarks](benchmarks.md) |
-| Compare a dated RefKit snapshot with reference packages | [Feature matrix research](feature-matrix.md) |
+| Choose an equivalent reference-package workflow | [Bibliography package boundaries](feature-matrix.md) |
 | Diagnose local build, plugin, runtime, or docs failures | [Development troubleshooting](troubleshooting.md) |
 
 The nearest `AGENTS.md` owns short, local invariants. Put explanations and cross-package workflows in this directory. When an invariant can be checked from source or an artifact, extend the corresponding script under `scripts/` and keep it in `make check`.
 
 ## Documentation Boundary
 
-End-user documentation covers installation, supported inputs, public APIs, return values, errors, migration paths, and runtime use. Developer documentation covers source ownership, dependency direction, build tools, test topology, benchmarks, CI, packaging, and release procedures.
+End-user documentation covers installation, supported inputs, public APIs, return values, errors, and runtime use. Developer documentation covers source ownership, dependency direction, build tools, test topology, benchmarks, CI, packaging, and release procedures.
 
 `make docs-check` validates Markdown boundaries, installs the locked VitePress dependencies, typechecks and builds the site, then verifies routes, public assets, metadata, and local links. `scripts/distribution_contract.py` verifies that built distributions exclude this directory.

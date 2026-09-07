@@ -1,5 +1,8 @@
+mod diagnostic;
+mod guard;
 mod parse;
 mod recovery;
+mod source;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -11,17 +14,19 @@ use hayagriva::{Entry as HayEntry, Library as HayLibrary, Selector};
 use crate::quoted;
 use crate::strings::entry_type_name;
 
+pub use self::diagnostic::{Diagnostic, DiagnosticAction, DiagnosticSeverity, ParseFailure};
+pub(crate) use self::guard::{normalize_reference, validate_literal, validate_source};
 pub use self::parse::parse_bibtex_report;
 use self::parse::{parse_biblatex_library, parse_hayagriva_yaml};
 
 pub(crate) struct ParsedLibrary {
     pub(crate) inner: HayLibrary,
-    pub(crate) diagnostics: Vec<String>,
+    pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
 pub struct Library {
     inner: Arc<HayLibrary>,
-    diagnostics: Vec<String>,
+    diagnostics: Vec<Diagnostic>,
     keys: OnceLock<Vec<String>>,
     records: OnceLock<RecordCache>,
 }
@@ -36,20 +41,20 @@ pub struct ParseReport {
     pub ok: bool,
     pub entry_count: Option<usize>,
     pub keys: Option<Vec<String>>,
-    pub diagnostics: Vec<String>,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LibraryError {
-    Biblatex(String),
-    HayagrivaYaml(String),
+    Biblatex(ParseFailure),
+    HayagrivaYaml(ParseFailure),
     Selector(String),
 }
 
 impl fmt::Display for LibraryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Biblatex(message) | Self::HayagrivaYaml(message) => f.write_str(message),
+            Self::Biblatex(failure) | Self::HayagrivaYaml(failure) => failure.fmt(f),
             Self::Selector(message) => write!(f, "invalid selector: {message}"),
         }
     }
@@ -150,7 +155,7 @@ impl Library {
         self.inner.as_ref()
     }
 
-    pub fn diagnostics(&self) -> &[String] {
+    pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
 
@@ -256,37 +261,6 @@ mod tests {
     }
 
     #[test]
-    fn non_strict_recovery_keeps_valid_entries_and_reports_malformed_blocks() {
-        let parsed = parse_biblatex_library(
-            concat!(
-                "@article{valid,\n",
-                "  author = {Doe, Jane},\n",
-                "  title = {Kept Entry},\n",
-                "  year = {2024}\n",
-                "}\n",
-                "@broken{missing,\n",
-                "  title = {No close}\n",
-            ),
-            RecoveryPolicy::Report,
-        )
-        .unwrap();
-
-        let keys = parsed
-            .inner
-            .iter()
-            .map(|entry| entry.key().to_string())
-            .collect::<Vec<_>>();
-
-        assert_eq!(keys, vec!["valid"]);
-        assert!(
-            parsed
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.contains("ignored malformed BibTeX block"))
-        );
-    }
-
-    #[test]
     fn bibtex_value_parse_treats_recovered_empty_source_as_failure() {
         let err = match parse_biblatex_library("@broken{missing", RecoveryPolicy::Report) {
             Ok(_) => panic!("expected recovered empty source to fail"),
@@ -294,58 +268,274 @@ mod tests {
         };
         let report = parse_bibtex_report("@broken{missing", RecoveryPolicy::Report);
 
-        assert!(err.contains("malformed BibTeX block"));
+        assert!(err.to_string().contains("malformed BibTeX block"));
         assert!(!report.ok);
         assert_eq!(report.entry_count, None);
         assert_eq!(report.keys, None);
-        assert!(report.diagnostics[0].contains("malformed BibTeX block"));
+        assert!(
+            report.diagnostics[0]
+                .message
+                .contains("malformed BibTeX block")
+        );
+    }
+}
+
+#[cfg(test)]
+mod recovery_contracts {
+    use super::*;
+
+    #[test]
+    fn recovery_preserves_resolved_fields_and_original_diagnostic_spans() {
+        let source = concat!(
+            "@string{known={Correct title}}\n",
+            "@book{good,title=known,note={Already \\% escaped}}\n",
+            "@book{first,title=missing # { suffix}}\n",
+            "@book{second,title=absent}\n",
+        );
+        let library = Library::parse_biblatex(source, RecoveryPolicy::Report).unwrap();
+        assert_eq!(
+            library.get_record("good").unwrap().title.as_deref(),
+            Some("Correct title")
+        );
+        assert_eq!(
+            library.get_record("first").unwrap().title.as_deref(),
+            Some("missing suffix")
+        );
+        assert_eq!(
+            library.get_record("second").unwrap().title.as_deref(),
+            Some("absent")
+        );
+        let diagnostics = library.diagnostics();
+        assert_eq!(diagnostics.len(), 2);
+        for (diagnostic, word, key) in [
+            (&diagnostics[0], "missing", "first"),
+            (&diagnostics[1], "absent", "second"),
+        ] {
+            let start = source.find(word).unwrap();
+            assert_eq!(diagnostic.span, Some(start..start + word.len()));
+            assert_eq!(diagnostic.code, "unknown_abbreviation");
+            assert_eq!(diagnostic.action, DiagnosticAction::Literalized);
+            assert_eq!(diagnostic.entry.as_deref(), Some(key));
+            assert_eq!(diagnostic.field.as_deref(), Some("title"));
+        }
     }
 
     #[test]
-    fn non_strict_recovery_removes_invalid_typed_fields() {
-        let parsed = parse_biblatex_library(
-            concat!(
-                "@article{badmonth,\n",
-                "  author = {Doe, Jane},\n",
-                "  title = {Bad Month},\n",
-                "  year = {2024},\n",
-                "  month = {16}\n",
-                "}\n",
-            ),
-            RecoveryPolicy::Report,
-        )
-        .unwrap();
+    fn yaml_failure_has_a_structured_source_diagnostic() {
+        let source = "broken:\n  title: Broken\n";
+        let error = match Library::parse_hayagriva_yaml(source) {
+            Ok(_) => panic!("expected a missing entry type error"),
+            Err(error) => error,
+        };
+        let LibraryError::HayagrivaYaml(failure) = error else {
+            panic!("expected a YAML failure");
+        };
+        assert_eq!(failure.diagnostics.len(), 1);
+        let diagnostic = &failure.diagnostics[0];
+        assert_eq!(diagnostic.code, "yaml_parse_error");
+        assert_eq!(diagnostic.severity, DiagnosticSeverity::Error);
+        assert_eq!(diagnostic.action, DiagnosticAction::Rejected);
+        let span = diagnostic.span.as_ref().unwrap();
+        assert!(source.is_char_boundary(span.start));
+        assert!(source.is_char_boundary(span.end));
+    }
 
-        assert_eq!(parsed.inner.len(), 1);
-        assert!(
-            parsed
+    #[test]
+    fn typed_recovery_keeps_original_spans_inside_literalized_values() {
+        let source = "@book{a,title={A},year=bogus}\n@book{b,title=未定,month=錯誤}";
+        let report = parse_bibtex_report(source, RecoveryPolicy::Report);
+        assert!(report.ok);
+        assert_eq!(report.entry_count, Some(2));
+        for (token, field, count) in [
+            ("bogus", "year", 2),
+            ("未定", "title", 1),
+            ("錯誤", "month", 2),
+        ] {
+            let start = source.find(token).unwrap();
+            let diagnostics = report
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.contains("ignored BibTeX field \"month\""))
+                .filter(|diagnostic| diagnostic.field.as_deref() == Some(field))
+                .collect::<Vec<_>>();
+            assert_eq!(diagnostics.len(), count);
+            for diagnostic in diagnostics {
+                assert_eq!(
+                    diagnostic.span,
+                    Some(start..start + token.len()),
+                    "{diagnostic:?}"
+                );
+                assert_eq!(&source[diagnostic.span.clone().unwrap()], token);
+            }
+        }
+    }
+
+    #[test]
+    fn typed_recovery_preserves_the_literalized_macro_definition_span() {
+        let source = "@string{badyear=unknown}\n@book{a,title={A},year=badyear}";
+        let report = parse_bibtex_report(source, RecoveryPolicy::Report);
+        assert!(report.ok);
+        assert_eq!(report.diagnostics.len(), 2);
+        let start = source.find("unknown").unwrap();
+        for diagnostic in &report.diagnostics {
+            assert_eq!(diagnostic.span, Some(start..start + "unknown".len()));
+        }
+        let diagnostic = &report.diagnostics[1];
+        assert_eq!(diagnostic.code, "invalid_field");
+        assert_eq!(diagnostic.entry.as_deref(), Some("a"));
+        assert_eq!(diagnostic.field.as_deref(), Some("year"));
+    }
+
+    #[test]
+    fn unicode_macro_names_share_strict_recovery_and_tidy_grammar() {
+        let source = "@string{café={Coffee}}\n@book{a,title=café}";
+        for policy in [RecoveryPolicy::Error, RecoveryPolicy::Report] {
+            let library = Library::parse_biblatex(source, policy).unwrap();
+            assert_eq!(
+                library.get_record("a").unwrap().title.as_deref(),
+                Some("Coffee")
+            );
+            assert!(library.diagnostics().is_empty());
+        }
+        let tidy = crate::tidy_bibtex(source, crate::TidyOptions::default()).unwrap();
+        let library = Library::parse_biblatex(&tidy.bibtex, RecoveryPolicy::Error).unwrap();
+        assert_eq!(
+            library.get_record("a").unwrap().title.as_deref(),
+            Some("Coffee")
         );
     }
 
     #[test]
-    fn non_strict_recovery_literalizes_unknown_abbreviations() {
-        let parsed = parse_biblatex_library(
-            concat!(
-                "@article{macro,\n",
-                "  author = {Doe, Jane},\n",
-                "  title = {Macro Journal},\n",
-                "  year = {2024},\n",
-                "  journal = JMLR # { Extra}\n",
-                "}\n",
-            ),
-            RecoveryPolicy::Report,
-        )
-        .unwrap();
+    fn recovery_keeps_first_live_duplicate_after_percent_comments() {
+        let source = concat!(
+            "% @string{hidden={Hidden}} @book{same,title={Hidden}} % tail\n",
+            "@book{same,title={First}}\n",
+            "@book{same,title={Second}}\n",
+            "@book{other,title={Other}}\n",
+            "@broken{unfinished\n",
+        );
+        let library = Library::parse_biblatex(source, RecoveryPolicy::Report).unwrap();
+        assert_eq!(library.keys(), ["same", "other"]);
+        assert_eq!(
+            library.get_record("same").unwrap().title.as_deref(),
+            Some("First")
+        );
+        assert_eq!(
+            library
+                .diagnostics()
+                .iter()
+                .map(|diagnostic| diagnostic.code)
+                .collect::<Vec<_>>(),
+            ["duplicate_key", "malformed_block"]
+        );
+    }
 
-        assert_eq!(parsed.inner.len(), 1);
+    #[test]
+    fn strict_reference_cycles_return_typed_failures() {
+        for field in ["crossref", "xdata"] {
+            let source = format!(
+                "@book{{a,title={{A}},{field}={{b}}}}\n@book{{b,title={{B}},{field}={{a}}}}"
+            );
+            let report = parse_bibtex_report(&source, RecoveryPolicy::Error);
+            assert!(!report.ok);
+            assert_eq!(report.diagnostics[0].code, "cyclic_reference");
+            assert_eq!(report.diagnostics[0].severity, DiagnosticSeverity::Error);
+            let library = Library::parse_biblatex(&source, RecoveryPolicy::Report).unwrap();
+            assert_eq!(library.len(), 2);
+            assert_eq!(library.diagnostics()[0].code, "cyclic_reference");
+        }
+    }
+
+    #[test]
+    fn abbreviation_cycles_return_errors_and_recover_locally() {
+        let source = "@string{one=two,two=one}\n@book{bad,title=one}\n@book{good,title={Good}}";
+        let report = parse_bibtex_report(source, RecoveryPolicy::Error);
+        assert!(!report.ok);
+        assert_eq!(report.diagnostics[0].code, "cyclic_abbreviation");
+        let library = Library::parse_biblatex(source, RecoveryPolicy::Report).unwrap();
+        assert_eq!(
+            library.get_record("good").unwrap().title.as_deref(),
+            Some("Good")
+        );
+        assert_eq!(
+            library.diagnostics()[0].action,
+            DiagnosticAction::Literalized
+        );
+    }
+
+    #[test]
+    fn shared_ancestry_is_not_a_reference_cycle() {
+        let source = "@book{a,title={A},crossref={parent}}\n@book{b,title={B},crossref={parent}}\n@book{parent,year={2024}}";
+        let library = Library::parse_biblatex(source, RecoveryPolicy::Error).unwrap();
+        assert_eq!(
+            library.get_record("a").unwrap().date.as_deref(),
+            Some("2024")
+        );
+        assert_eq!(
+            library.get_record("b").unwrap().date.as_deref(),
+            Some("2024")
+        );
+    }
+
+    #[test]
+    fn deeply_nested_source_returns_a_resource_diagnostic() {
+        let source = format!("@book{{a,title={}{}}}", "{".repeat(65), "}".repeat(65));
+        for policy in [RecoveryPolicy::Error, RecoveryPolicy::Report] {
+            let report = parse_bibtex_report(&source, policy);
+            assert!(!report.ok);
+            assert_eq!(report.diagnostics[0].code, "resource_limit");
+        }
+    }
+
+    #[test]
+    fn percent_comment_braces_do_not_consume_the_nesting_budget() {
+        let source = format!("% {}\n@book{{a,title={{Visible}}}}", "{".repeat(100));
+        let library = Library::parse_biblatex(&source, RecoveryPolicy::Error).unwrap();
+        assert_eq!(
+            library.get_record("a").unwrap().title.as_deref(),
+            Some("Visible")
+        );
+    }
+
+    #[test]
+    fn protected_reference_keys_use_normalized_identity_for_cycle_detection() {
+        let source = "@book{a,title={A},crossref={{a}}}";
+        let report = parse_bibtex_report(source, RecoveryPolicy::Error);
+        assert!(!report.ok);
+        assert_eq!(report.diagnostics[0].code, "cyclic_reference");
+    }
+
+    #[test]
+    fn empty_macro_expansion_has_a_work_budget() {
+        let mut source = "@string{a0={}}\n".to_string();
+        for index in 1..19 {
+            source.push_str(&format!(
+                "@string{{a{index}=a{} # a{}}}\n",
+                index - 1,
+                index - 1
+            ));
+        }
+        source.push_str("@book{a,title=a18}");
+        let report = parse_bibtex_report(&source, RecoveryPolicy::Error);
+        assert!(!report.ok);
+        assert_eq!(report.diagnostics[0].code, "resource_limit");
+    }
+
+    #[test]
+    fn fatal_report_preserves_each_recovery_diagnostic() {
+        let source = "@book{one,title={One},month={invalid}}\n@broken{unfinished";
+        let report = parse_bibtex_report(source, RecoveryPolicy::Report);
+        assert!(report.ok);
+        assert_eq!(report.diagnostics.len(), 2);
+        assert_eq!(report.diagnostics[0].field.as_deref(), Some("month"));
+        assert_eq!(report.diagnostics[1].code, "malformed_block");
+        let empty = parse_bibtex_report("@bad{one\n@bad{two", RecoveryPolicy::Report);
+        assert!(!empty.ok);
+        assert_eq!(empty.diagnostics.len(), 2);
         assert!(
-            parsed
+            empty
                 .diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.contains("unknown abbreviation"))
+                .all(|diagnostic| diagnostic.code == "malformed_block")
         );
     }
 }

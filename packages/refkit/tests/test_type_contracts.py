@@ -3,16 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 
 import refkit as rk
+from refkit.types import Diagnostic, RawBlock, RenderedTree, TidyRename
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def rendered_tree_kinds(rendered: rk.Rendered) -> list[str]:
-    return [node["kind"] for node in rendered.tree]
+def rendered_tree_kinds(tree: RenderedTree) -> list[str]:
+    return [node["kind"] for node in tree]
 
 
-def raw_block_starts(raw: rk.BibDocument) -> list[int]:
-    return [block["span"][0] for block in raw.blocks]
+def raw_block_starts(blocks: list[RawBlock]) -> list[int]:
+    return [block["span"][0] for block in blocks]
 
 
 def failed_block_errors(raw: rk.BibDocument) -> list[str]:
@@ -36,8 +37,8 @@ def test_type_checked_structured_return_samples() -> None:
 
     rendered = doc.render([rk.Citation("first", "doe2024")])
 
-    assert rendered_tree_kinds(rendered["first"]) == ["Text", "Element", "Text"]
-    assert raw_block_starts(raw)[0] == 0
+    assert rendered_tree_kinds(rendered["first"].tree) == ["Text", "Element", "Text"]
+    assert raw_block_starts(raw.blocks)[0] == 0
     assert failed_block_errors(raw) == ["entry ended before closing delimiter"]
     duplicate_raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")
     assert duplicate_entry_titles(duplicate_raw, "dup") == [
@@ -50,3 +51,19 @@ def test_type_checked_structured_return_samples() -> None:
     )
     assert isinstance(tidied.bibtex, str)
     assert tidy_warning_codes(tidied) == []
+
+
+def diagnostic_messages(diagnostics: list[Diagnostic]) -> list[str]:
+    return [diagnostic["message"] for diagnostic in diagnostics]
+
+
+def renamed_keys(renames: list[TidyRename]) -> list[str]:
+    return [rename["new_key"] for rename in renames]
+
+
+def test_public_record_types_support_consumer_annotations() -> None:
+    source = "@article{old,author={Doe, Jane},title={Work},year={2024}}"
+    library = rk.Library.parse_bibtex(source)
+    result = rk.tidy_bibtex(source, options=rk.TidyOptions(generate_keys="[auth:lower][year]"))
+    assert diagnostic_messages(library.diagnostics) == []
+    assert renamed_keys(result.renames) == ["doe2024"]

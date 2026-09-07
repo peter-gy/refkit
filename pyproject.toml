@@ -12,19 +12,24 @@ dependencies = [
 exclude-newer = "3 days"
 exclude-newer-package = { agent-plugins = "2026-09-07T00:00:00Z" }
 package = false
+build-constraint-dependencies = ["maturin==1.15.0", "agent-plugins==0.2.0", "hatchling==1.32.0"]
 
 [tool.uv.sources]
 refkit-bench = { workspace = true }
 polars-refkit = { workspace = true }
 refkit = { workspace = true }
+refkit-tests = {workspace = true}
 
 [tool.uv.workspace]
 members = [
     "packages/refkit-bench",
     "packages/refkit",
     "packages/polars-refkit",
+    "packages/refkit-tests",
 ]
 
+[tool.ty.environment]
+extra-paths = ["packages/refkit-tests/src"]
 [dependency-groups]
 dev = [
     "hatchling>=1.32.0",
@@ -37,13 +42,16 @@ dev = [
     "pyyaml>=6.0.3",
     "ruff>=0.16.5",
     "ty>=0.0.78",
+    "refkit-tests",
 ]
 build = [
     "twine==7.0.0",
+    "agent-plugins==0.2.0",
 ]
 pyodide-build = [
     "pyodide-build==0.35.1; python_version >= '3.12'",
 ]
+lint = ["ruff==0.16.5"]
 
 [tool.pytest.ini_options]
 testpaths = [
@@ -51,6 +59,7 @@ testpaths = [
     "packages/polars-refkit/tests",
     "packages/refkit-bench/tests",
     "scripts/tests",
+    "packages/refkit-tests/src/refkit_tests",
 ]
 addopts = [
     "--strict",
@@ -80,6 +89,7 @@ project-includes = [
     "packages/refkit-bench/src/refkit_bench",
     "packages/refkit-bench/tests",
     "scripts",
+    "packages/refkit-tests/src/refkit_tests",
 ]
 project-excludes = [
     "**/__pycache__",
@@ -95,6 +105,7 @@ search-path = [
     "packages/refkit-bench/src",
     "packages/refkit/src",
     "packages/polars-refkit",
+    "packages/refkit-tests/src",
 ]
 
 [tool.ruff]
@@ -122,6 +133,7 @@ known-first-party = [
     "polars_refkit",
     "refkit",
     "tests",
+    "refkit_tests",
 ]
 
 [tool.ruff.lint.per-file-ignores]

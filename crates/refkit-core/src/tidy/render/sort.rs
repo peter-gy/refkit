@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
-use crate::{RawEntryId, RawSyntaxBlock, RawSyntaxDocument, RawSyntaxEntry};
+use crate::raw::{RawSyntaxBlock, RawSyntaxDocument, RawSyntaxEntry};
 
 use super::{LinearRenderState, RenderContext, render_block};
 use crate::tidy::{TidyOptions, duplicates::DuplicatePlan};
@@ -18,7 +18,6 @@ pub(super) fn render_sorted_document(
     doc: &RawSyntaxDocument,
     options: &TidyOptions,
     duplicate_plan: &DuplicatePlan,
-    key_plan: &HashMap<RawEntryId, String>,
     sort: &[String],
 ) {
     let sort = if sort.is_empty() {
@@ -48,7 +47,6 @@ pub(super) fn render_sorted_document(
         doc,
         options,
         duplicate_plan,
-        key_plan,
     };
     let mut state = LinearRenderState::default();
     for block in blocks {
@@ -80,10 +78,7 @@ fn sorted_blocks<'a>(
                 if duplicate_plan.should_skip(*id) {
                     continue;
                 }
-                doc.entries
-                    .iter()
-                    .find(|entry| entry.id == *id)
-                    .map(|entry| duplicate_plan.entry(entry))
+                doc.entries.get(id.index())
             }
             _ => None,
         };

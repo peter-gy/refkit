@@ -10,6 +10,12 @@
 - Keep raw BibTeX parsing and tidy formatting on one syntax model.
 - Add semantic behavior here before exposing it through an adapter.
 
+Validate bibliography macro and inheritance dependencies before upstream normalization. Keep recovery diagnostics structured and map every span to the original UTF-8 source. Recover a failing value locally while preserving valid macro definitions and unrelated entries.
+
+Rendering uses one citation-request processor for scalar, ordered-list, grouped, and document operations. Keep one fresh driver per operation and preserve request-local note context. Map rendered item indices to the original request items and reference keys. Preserve bibliography layout and keep each label separate from entry content. Formatting and display states use RefKit-owned enums. Bound custom XML size, nodes, nesting, and per-element attributes before deserialization. Validate macro dependencies and combined rendering-element expansion limits before preparing a style.
+
+Tidy computes duplicate groups before allocating final keys. Preserve source occurrence identity in rename reports, rewrite `crossref` and `xdata` with final keys, and sort emitted keys. Reference values preserve key case and punctuation through text formatting options. `RawEntryId.index()` addresses source-order syntax entries, so retain that vector order through planning.
+
 Rendering changes should cover ordered citations within one render call, bibliography sorting, text, HTML, and rendered-tree output when those boundaries are affected.
 
 Run `make rust-lint rust rust-floor` from the repository root.

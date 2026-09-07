@@ -1,8 +1,4 @@
-use hayagriva::citationberg::{
-    Display, FontStyle, FontVariant, FontWeight, TextDecoration, VerticalAlign,
-};
 use hayagriva::types::EntryType;
-use hayagriva::{ElemMeta, Formatting};
 
 pub(crate) fn quoted(value: &str) -> String {
     let mut output = String::with_capacity(value.len() + 2);
@@ -58,95 +54,8 @@ pub(crate) fn entry_type_name(entry_type: &EntryType) -> &'static str {
     }
 }
 
-pub(crate) fn display_name(display: Display) -> &'static str {
-    match display {
-        Display::Block => "Block",
-        Display::LeftMargin => "LeftMargin",
-        Display::RightInline => "RightInline",
-        Display::Indent => "Indent",
-    }
-}
-
-pub(crate) fn elem_meta_name(meta: &ElemMeta) -> &'static str {
-    match meta {
-        ElemMeta::Names(_) => "Names",
-        ElemMeta::Date => "Date",
-        ElemMeta::Text => "Text",
-        ElemMeta::Number => "Number",
-        ElemMeta::Label => "Label",
-        ElemMeta::CitationNumber => "CitationNumber",
-        ElemMeta::Name(_, _) => "Name",
-        ElemMeta::Entry(_) => "Entry",
-        ElemMeta::CitationLabel => "CitationLabel",
-    }
-}
-
-pub(crate) fn font_style_name(font_style: FontStyle) -> &'static str {
-    match font_style {
-        FontStyle::Normal => "Normal",
-        FontStyle::Italic => "Italic",
-    }
-}
-
-pub(crate) fn font_variant_name(font_variant: FontVariant) -> &'static str {
-    match font_variant {
-        FontVariant::Normal => "Normal",
-        FontVariant::SmallCaps => "SmallCaps",
-    }
-}
-
-pub(crate) fn font_weight_name(font_weight: FontWeight) -> &'static str {
-    match font_weight {
-        FontWeight::Normal => "Normal",
-        FontWeight::Bold => "Bold",
-        FontWeight::Light => "Light",
-    }
-}
-
-pub(crate) fn text_decoration_name(text_decoration: TextDecoration) -> &'static str {
-    match text_decoration {
-        TextDecoration::None => "None",
-        TextDecoration::Underline => "Underline",
-    }
-}
-
-pub(crate) fn vertical_align_name(vertical_align: VerticalAlign) -> &'static str {
-    match vertical_align {
-        VerticalAlign::None => "None",
-        VerticalAlign::Baseline => "Baseline",
-        VerticalAlign::Sup => "Sup",
-        VerticalAlign::Sub => "Sub",
-    }
-}
-
-pub(crate) fn formatting_summary(formatting: Formatting) -> String {
-    if formatting == Formatting::default() {
-        return "Normal".to_string();
-    }
-
-    [
-        ("font_style", font_style_name(formatting.font_style)),
-        ("font_variant", font_variant_name(formatting.font_variant)),
-        ("font_weight", font_weight_name(formatting.font_weight)),
-        (
-            "text_decoration",
-            text_decoration_name(formatting.text_decoration),
-        ),
-        (
-            "vertical_align",
-            vertical_align_name(formatting.vertical_align),
-        ),
-    ]
-    .into_iter()
-    .map(|(key, value)| format!("{key}={value}"))
-    .collect::<Vec<_>>()
-    .join(",")
-}
-
 #[cfg(test)]
 mod tests {
-    use hayagriva::citationberg::taxonomy::NameVariable;
-
     use super::*;
 
     #[test]
@@ -162,21 +71,5 @@ mod tests {
         assert_eq!(quoted("O'Reilly\\n"), "\"O'Reilly\\\\n\"");
         assert_eq!(quoted("line\nbreak"), "\"line\\nbreak\"");
         assert_eq!(quoted("quote\""), "\"quote\\\"\"");
-    }
-
-    #[test]
-    fn rendered_public_names_do_not_depend_on_debug_payloads() {
-        assert_eq!(display_name(Display::LeftMargin), "LeftMargin");
-        assert_eq!(elem_meta_name(&ElemMeta::Entry(42)), "Entry");
-        assert_eq!(
-            elem_meta_name(&ElemMeta::Name(NameVariable::Author, 0)),
-            "Name"
-        );
-        assert_eq!(font_style_name(FontStyle::Italic), "Italic");
-        assert_eq!(font_variant_name(FontVariant::SmallCaps), "SmallCaps");
-        assert_eq!(font_weight_name(FontWeight::Bold), "Bold");
-        assert_eq!(text_decoration_name(TextDecoration::Underline), "Underline");
-        assert_eq!(vertical_align_name(VerticalAlign::Sup), "Sup");
-        assert_eq!(formatting_summary(Formatting::default()), "Normal");
     }
 }

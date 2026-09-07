@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use pyo3::exceptions::PyKeyError;
@@ -39,7 +40,7 @@ impl Document {
             .collect::<Vec<_>>();
         let groups = parsed
             .into_iter()
-            .map(|citation| citation.into_core_group())
+            .map(|citation| citation.into_core_request())
             .collect();
         let rendered = py.detach(|| self.inner.render(groups));
         rendered
@@ -54,7 +55,7 @@ impl Document {
     ) -> PyResult<Rendered> {
         let groups = parse_document_citations(citations)?
             .into_iter()
-            .map(|citation| citation.into_core_group())
+            .map(|citation| citation.into_core_request())
             .collect();
         let rendered = py.detach(|| self.inner.cited_bibliography(groups));
         rendered
@@ -77,6 +78,7 @@ impl Document {
 #[pyclass(module = "refkit", skip_from_py_object)]
 pub struct RenderedDocument {
     citation_ids: Vec<String>,
+    citation_index: HashMap<String, usize>,
     citations: Vec<Rendered>,
     bibliography: Rendered,
 }
@@ -103,10 +105,9 @@ impl RenderedDocument {
     }
 
     fn __getitem__(&self, id: &str) -> PyResult<Rendered> {
-        self.citation_ids
-            .iter()
-            .position(|candidate| candidate == id)
-            .map(|index| self.citations[index].clone())
+        self.citation_index
+            .get(id)
+            .map(|&index| self.citations[index].clone())
             .ok_or_else(|| PyKeyError::new_err(id.to_string()))
     }
 
@@ -117,8 +118,14 @@ impl RenderedDocument {
 
 impl RenderedDocument {
     fn from_core(ids: Vec<String>, document: CoreRenderedDocument) -> Self {
+        let citation_index = ids
+            .iter()
+            .enumerate()
+            .map(|(index, id)| (id.clone(), index))
+            .collect();
         Self {
             citation_ids: ids,
+            citation_index,
             citations: document
                 .citations
                 .into_iter()

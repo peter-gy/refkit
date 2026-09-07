@@ -31,7 +31,7 @@ Dependencies point inward toward `crates/refkit-core`.
 - Hayagriva, BibLaTeX, and serializer types stay private when a RefKit type can express the contract.
 - Rust adapters depend on the public `refkit-core` API and adapter support libraries. They never call Hayagriva or BibLaTeX directly.
 - A new core dependency is an architecture decision. Classify it as a pure implementation library or place the reached capability behind a port.
-- `scripts/architecture_contract.py` enforces allowed dependency sets, host-boundary ownership, workspace composition, released engine sources, and locked native builds.
+- `scripts/architecture_contract.py` enforces allowed dependency sets, host-boundary ownership, workspace composition, pinned engine sources, and locked native builds.
 
 Reject changes that bypass this graph. Extend the executable contract when source or artifact state can prove a new invariant.
 

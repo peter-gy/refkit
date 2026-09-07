@@ -1,5 +1,6 @@
 from os import PathLike
 
+from . import types as types
 from ._native import (
     BibDocument,
     BibEntry,
@@ -14,6 +15,7 @@ from ._native import (
     Library,
     Locale,
     MissingReferenceError,
+    ParseError,
     RefkitError,
     Rendered,
     RenderedDocument,
@@ -37,6 +39,7 @@ __all__ = [
     "Cite",
     "CitationGroup",
     "RefkitError",
+    "ParseError",
     "Document",
     "Entry",
     "Library",
@@ -57,6 +60,7 @@ __all__ = [
     "tidy_bibtex",
     "tidy_file",
     "__version__",
+    "types",
 ]
 
 __version__: str

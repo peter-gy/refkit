@@ -11,6 +11,7 @@ RefKit separates failed operations, parser diagnostics, and successful formattin
 ```text
 Exception
 └── RefkitError
+    ├── ParseError
     ├── MissingReferenceError
     └── TidyError
         └── TidySyntaxError
@@ -22,21 +23,21 @@ Argument shape and lookup failures can use built-in `TypeError`, `ValueError`, a
 
 | Operation | Failure |
 | --- | --- |
-| `Library.read` | `RefkitError` for file reads, missing or unsupported extensions, and parser failure. |
-| `Library.parse_bibtex` | `RefkitError` when the selected recovery policy cannot produce a library. |
-| `Library.parse_yaml` | `RefkitError` for invalid Hayagriva YAML. |
+| `Library.read` | `RefkitError` for file reads or unsupported extensions, and `ParseError` for parser failure. |
+| `Library.parse_bibtex` | `ParseError` when the selected recovery policy cannot produce a library. |
+| `Library.parse_yaml` | `ParseError` for invalid Hayagriva YAML. |
 | `Library[key]`, `get_many` | `KeyError` for a missing citation key. |
 | `Library.select` | `ValueError` for invalid selector syntax. |
 | `Library.project` | `TypeError` for invalid collection arguments, `ValueError` for an unknown field, and `KeyError` for an absent requested key. |
 
-Report recovery keeps recoverable entries and parser diagnostic strings. A diagnostic describes parsing or decode recovery. It is not an exception object.
+Report recovery keeps recoverable entries and `Diagnostic` dictionaries. Each diagnostic includes a code, severity, recovery action, optional source span, entry key, field, and message. `ParseError` also exposes these records through `error.diagnostics`. YAML failures include `yaml_parse_error` or `resource_limit` diagnostics. See [Data Shapes](/reference/data-shapes).
 
 ## Styles and rendering
 
 | Operation | Failure |
 | --- | --- |
 | `Style.load` | `ValueError` for an unknown bundled style. |
-| `Style.from_xml` | `ValueError` for invalid or dependent CSL XML. |
+| `Style.from_xml` | `ValueError` for invalid or dependent CSL XML, missing/duplicate/cyclic macros, or excessive macro expansion. |
 | `Style.from_path` | `RefkitError` for file reads and `ValueError` for invalid style XML. |
 | `Locale.load` | `ValueError` for an unknown bundled locale code. |
 | `CitationGroup` | `TypeError` for invalid item input and `ValueError` for an empty group. |
@@ -64,11 +65,11 @@ Report recovery keeps recoverable entries and parser diagnostic strings. A diagn
 | `character` | First character of the failing block when available. |
 | `message` | Parser message without the location prefix. |
 
-`TidyError` also covers key-template and name-processing failures. A successful `TidyResult` can contain structured `TidyWarning` values for missing keys and duplicate entries.
+`TidyError` also covers key-template, name-processing, ambiguous reference-rewrite, and cyclic reference-rewrite failures. A successful `TidyResult` can contain structured `TidyWarning` values for missing keys and duplicate entries.
 
 ## Polars failures
 
-Value expressions turn row-local input, parse, missing-key, and render failures into null. Report expressions preserve parser or formatter details in structs.
+Value expressions turn row-local input, parse, missing-key, and render failures into null. Report expressions preserve parser, renderer, or formatter details in structs.
 
 Invalid static options can raise during expression construction. Invalid dtypes, projection fields, styles, output-name collisions, and broadcasting lengths raise from Polars when the query executes.
 

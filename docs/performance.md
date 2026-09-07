@@ -8,13 +8,15 @@ RefKit moves bibliography parsing and rendering into an in-process Rust core. A 
 
 ## Results
 
+`input.bibtex-text` parses three clean entries from an in-memory string. `render.prepared-citation` renders one prepared [APA](https://apastyle.apa.org/) citation. The comparison packages are [bibtexparser](https://github.com/sciunto-org/python-bibtexparser), [Pybtex](https://pybtex.org/), and [citeproc-py](https://github.com/citeproc-py/citeproc-py).
+
 | Lane | Package | Median |
 | --- | --- | ---: |
-| Parse three clean BibTeX entries from an in-memory string | RefKit 0.0.4rc5 | 41.4 µs |
-| Parse the same string | [bibtexparser](https://github.com/sciunto-org/python-bibtexparser) 2.0.0b9 | 90.3 µs |
-| Parse the same string | [Pybtex](https://pybtex.org/) 0.26.1 | 180.5 µs |
-| Render one prepared [APA](https://apastyle.apa.org/) citation | RefKit 0.0.4rc5 | 321.8 µs |
-| Render the same prepared citation | [citeproc-py](https://github.com/citeproc-py/citeproc-py) 0.10.1 | 1,350.9 µs |
+| `input.bibtex-text` | refkit 0.0.4rc5 | 41.4 µs |
+| `input.bibtex-text` | bibtexparser-2.x 2.0.0b9 | 90.3 µs |
+| `input.bibtex-text` | pybtex 0.26.1 | 180.5 µs |
+| `render.prepared-citation` | refkit 0.0.4rc5 | 321.8 µs |
+| `render.prepared-citation` | citeproc-py 0.10.1 | 1,350.9 µs |
 
 Each median covers 12 measured rounds after three warmups. The runner checked the expected result after every timed operation.
 

@@ -1,21 +1,12 @@
 """Use RefKit from code-mode agents."""
 
-from __future__ import annotations
-
 import sys as _sys
+from importlib.metadata import version as _version
+from pathlib import Path as _Path
 from textwrap import indent as _indent
 from types import ModuleType as _ModuleType
-from typing import TYPE_CHECKING as _TYPE_CHECKING
 
 import agent_plugins as _agent_plugins
-
-if _TYPE_CHECKING:  # pragma: no cover - typing-only public annotation names
-    from pathlib import Path
-
-    import agent_plugins
-
-# Keep the future-feature binding out of the agent-facing module inventory.
-del annotations
 
 _DISTRIBUTION_NAME = "refkit"
 _SKILL_NAME = "refkit"
@@ -23,7 +14,7 @@ _SKILL_NAME = "refkit"
 AgentPluginError = _agent_plugins.AgentPluginError
 
 
-def agent_plugin() -> agent_plugins.Plugin:
+def agent_plugin() -> _agent_plugins.Plugin:
     """Return the Agent Plugin installed with this RefKit version.
 
     Raises:
@@ -33,7 +24,7 @@ def agent_plugin() -> agent_plugins.Plugin:
     return _agent_plugins.locate(_DISTRIBUTION_NAME)
 
 
-def agent_skill() -> agent_plugins.Skill:
+def agent_skill() -> _agent_plugins.Skill:
     """Return the packaged RefKit Agent Skill.
 
     Raises:
@@ -49,94 +40,40 @@ def instructions() -> str:
     return agent_skill().body.lstrip("\n")
 
 
-def resources() -> dict[str, Path]:
+def resources() -> dict[str, _Path]:
     """Return installed skill files keyed by skill-relative path."""
 
     skill = agent_skill()
     return {path.relative_to(skill.path).as_posix(): path for path in skill.files}
 
 
-def _sdk_help(summary: str) -> str:
-    return f"""{summary}
-
-Start with BibTeX source already in memory:
-
-    import refkit as rk
-
-    source = (
-        "@article{{doe2024, author={{Doe, Jane}}, "
-        "title={{Fast Citations}}, year={{2024}}}}"
-    )
-    library = rk.Library.parse_bibtex(source, recovery="report")
-    rows = library.project(["key", "title", "date", "doi"])
-    diagnostics = list(library.diagnostics)
-
-    if diagnostics:
-        print({{
-            "status": "partial_recovery",
-            "entries": rows,
-            "diagnostics": diagnostics,
-        }})
-    else:
-        document = rk.Document(library, rk.Style.load("apa"), locale="en-US")
-        rendered = document.render(
-            [rk.Citation(id="result", citation="doe2024")]
-        )
-        print(rendered["result"].text)
-        print(rendered.bibliography.text)
-
-Inspect `diagnostics` before consuming entries recovered with
-`recovery="report"`. Parsing still raises `RefkitError` when no entry survives
-recovery. Use `recovery="error"` when malformed input must stop the operation.
-Use `Library` for normalized lookup and rendering. Use `BibDocument` when source
-order, comments, duplicate occurrences, and preserving writes matter. Use
-`tidy_bibtex` for canonical formatting and inspect `TidyResult.warnings` before
-consuming the formatted source.
-
-Browse the published documentation map at:
-
-    https://peter-gy.github.io/refkit/llms.txt
-"""
-
-
 def _module_help(summary: str) -> str:
-    sdk = _sdk_help(summary)
+    introduction = f"""{summary}
+
+Installed refkit version: {_version(_DISTRIBUTION_NAME)}.
+
+Use `refkit.Library` to inspect normalized bibliography data, `refkit.Document`
+to render ordered citations, and `refkit.BibDocument` to edit raw BibTeX.
+
+    import refkit.agent as agent
+
+    print(agent.instructions())
+    print(agent.resources()["references/inspect.md"].read_text(encoding="utf-8"))
+
+Packaged instructions describe the installed API. Read the task resource before
+executing its example. The website at https://peter-gy.github.io/refkit/ describes
+the current published API and can differ from this installed version.
+"""
     try:
-        plugin = agent_plugin()
-        skill = plugin.skill(_SKILL_NAME)
-        tree = _indent(plugin.tree(max_depth=3, max_files=50), "    ")
+        skill = agent_skill()
+        tree = _indent(skill.tree(), "    ")
     except AgentPluginError as error:
-        return f"""{sdk}
-
-The installed Agent Plugin could not be resolved: {error}
-Reinstall refkit to restore its version-matched skill resources.
-"""
-
-    return f"""{sdk}
-
-The installed Agent Plugin carries the complete RefKit workflow and resources
-that match this package version:
-
-{tree}
-
-Read the RefKit skill instructions at:
-
-    {skill.file("SKILL.md")}
-
-Load the instructions and known resource files programmatically:
-
-    import refkit.agent as refkit_agent
-
-    instructions = refkit_agent.instructions()
-    resources = refkit_agent.resources()
-    workflow = resources["references/workflows.md"].read_text()
-
-Use `agent_plugin()` and `agent_skill()` when the underlying Agent Plugin
-handles are required.
-"""
+        return f"{introduction}\nAgent Plugin unavailable: {error}\nReinstall refkit.\n"
+    return f"{introduction}\nInstalled task resources:\n\n{tree}\n"
 
 
 __all__ = [
+    "AgentPluginError",
     "agent_plugin",
     "agent_skill",
     "instructions",

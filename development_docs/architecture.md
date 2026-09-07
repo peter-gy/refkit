@@ -31,7 +31,7 @@ A bibliography source is text or a file in BibTeX, BibLaTeX, or Hayagriva biblio
                  |                     |
           Python callers          Polars query plans
 
-packages/refkit-bench, scripts, and GitHub Actions consume the public packages
+packages/refkit-bench, packages/refkit-tests, scripts, and GitHub Actions consume the public packages
 from outside the runtime graph.
 ```
 
@@ -41,9 +41,10 @@ Dependencies point inward toward `crates/refkit-core`:
 - [`packages/refkit`](../packages/refkit) owns the Python adapter, filesystem access, native module registration, Python helpers, stubs, and the `refkit` distribution.
 - [`packages/polars-refkit`](../packages/polars-refkit) owns the Polars adapter and its package-local Rust workspace.
 - [`packages/refkit-bench`](../packages/refkit-bench) measures public workflows through concrete comparison adapters.
+- [`packages/refkit-tests`](../packages/refkit-tests) owns shared installed-artifact probes, runtime tests, and agent-example execution. Its support wheel is installed beside candidate adapters.
 - [`scripts`](../scripts) and [GitHub Actions](../.github/workflows) compose validation, packaging, and release operations.
 
-`scripts/architecture_contract.py` checks the permitted dependency sets, adapter paths, workspace membership, released engine sources, and host-boundary ownership.
+`scripts/architecture_contract.py` checks the permitted dependency sets, adapter paths, workspace membership, audited engine sources, and host-boundary ownership.
 
 ## Portable Core API
 
@@ -52,7 +53,7 @@ The portable core API of `crates/refkit-core` accepts text or bytes and returns 
 - `Library::parse_biblatex(source, RecoveryPolicy)` parses normalized BibTeX or BibLaTeX.
 - `Library::parse_hayagriva_yaml(source)` parses normalized Hayagriva YAML.
 - `RawDocument::parse(source)` preserves raw blocks, occurrences, spans, and edits.
-- `Document` renders an ordered citation document from a library, style, and locale.
+- `Document` renders ordered `CitationRequest` values from a library, style, and locale.
 - `tidy_bibtex(source, options)` formats raw BibTeX and returns structured warnings.
 - `decode_bibliography(bytes)` performs deterministic UTF-8 and Windows-1252-compatible decoding in memory.
 
@@ -63,10 +64,10 @@ Hayagriva, BibLaTeX, Citationberg, and serializers are pure in-process implement
 Core records describe bibliography behavior before an adapter chooses a host shape:
 
 - `EntryRecord` becomes Python `Entry` objects or Polars entry structs.
-- `ParseReport` becomes Python diagnostics or a Polars parse-report struct.
+- `Diagnostic`, `ParseFailure`, and `ParseReport` become Python diagnostic dictionaries and exceptions or Polars report structs.
 - `RawBlockInfo` and raw occurrence records become Python dictionaries and live raw handles.
 - `RenderedRecord` and `RenderedNode` become Python tree dictionaries. Polars rendered expressions project text and HTML into a struct.
-- `TidyResult` and `TidyWarning` become Python objects or Polars report fields.
+- `TidyResult`, `TidyWarning`, and `TidyRename` become Python objects/dictionaries or Polars report fields.
 
 Keep Python dictionary keys, Polars dtype construction, JSON encoding, and host exceptions in adapters. Add a core record when more than one interface can reasonably consume the same semantic result.
 
@@ -119,7 +120,7 @@ In-memory callers enter directly through `Library.parse_bibtex` or `Library.pars
 
 ### Render A Document
 
-`Document` stores immutable library and style handles plus an optional locale code. `Document.render` creates a fresh driver, resolves the complete ordered citation list, and returns named citations plus the cited bibliography. Separate calls are independent. The core returns text, HTML, and typed rendered nodes. Adapters convert those records into host values.
+`Document` stores immutable library and style handles plus an optional locale code. `Document.render` creates a fresh driver, resolves the complete ordered citation list, and returns named citations plus the cited bibliography. Separate calls are independent. The core returns text, HTML, typed rendered nodes, source identity, and bibliography layout. Adapters convert those records into host values.
 
 ### Edit Raw BibTeX
 
@@ -135,6 +136,7 @@ The Python namespace translates columns or literals into a plugin call. Rust rec
 - Put filesystem access, Python conversion, exceptions, GIL policy, and native registration in `packages/refkit`.
 - Put dataframe broadcasting, dtype construction, and row-failure behavior in `packages/polars-refkit`.
 - Keep benchmark orchestration and comparison-package behavior in `packages/refkit-bench`.
+- Keep shared installed-artifact verification in `packages/refkit-tests`. Runtime adapters remain independent of test support.
 - Keep build, release, and archive policy in `scripts`, package manifests, and GitHub Actions.
 
 A public change is complete when runtime exports, stubs, documentation, boundary tests, and every affected adapter agree. Add semantic behavior to the core before exposing it through another host.

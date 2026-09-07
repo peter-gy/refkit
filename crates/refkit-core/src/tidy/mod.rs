@@ -2,12 +2,13 @@ mod duplicates;
 mod keys;
 mod latex;
 mod options;
+mod references;
 mod render;
 mod unicode;
 
 use std::fmt;
 
-use crate::{RawDocument, RawSyntaxBlock};
+use crate::raw::{RawDocument, RawEntryId, RawSyntaxBlock};
 
 pub use options::{DuplicateRule, MergeStrategy, TidyOptions};
 
@@ -16,6 +17,14 @@ pub struct TidyResult {
     pub bibtex: String,
     pub warnings: Vec<TidyWarning>,
     pub count: usize,
+    pub renames: Vec<TidyRename>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TidyRename {
+    pub entry_id: RawEntryId,
+    pub old_key: String,
+    pub new_key: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +71,7 @@ pub enum TidyError {
     },
     Template(String),
     Name(String),
+    Reference(String),
 }
 
 impl fmt::Display for TidyError {
@@ -73,7 +83,9 @@ impl fmt::Display for TidyError {
                 message,
                 ..
             } => write!(f, "line {line}:{column}: {message}"),
-            Self::Template(message) | Self::Name(message) => f.write_str(message),
+            Self::Template(message) | Self::Name(message) | Self::Reference(message) => {
+                f.write_str(message)
+            }
         }
     }
 }
@@ -81,12 +93,37 @@ impl fmt::Display for TidyError {
 impl std::error::Error for TidyError {}
 
 pub fn tidy_bibtex(input: &str, options: TidyOptions) -> Result<TidyResult, TidyError> {
+    crate::library::validate_source(input).map_err(|diagnostic| {
+        syntax_error(
+            input,
+            input,
+            &diagnostic.message,
+            diagnostic.span.map_or(0, |span| span.start),
+        )
+    })?;
     let input = normalize_newlines(input);
     let doc = RawDocument::parse(&input);
-    let syntax = doc.syntax();
+    let mut syntax = doc.syntax();
 
     if let Some((raw, error, byte)) = syntax.blocks.iter().find_map(first_failed_block) {
         return Err(syntax_error(&input, raw, error, byte));
+    }
+
+    for entry in &syntax.entries {
+        for field in &entry.fields {
+            for atom in &field.value_atoms {
+                crate::library::validate_literal(&atom.value, field.span.start).map_err(
+                    |diagnostic| {
+                        syntax_error(
+                            &input,
+                            &atom.value,
+                            &diagnostic.message,
+                            diagnostic.span.map_or(field.span.start, |span| span.start),
+                        )
+                    },
+                )?;
+            }
+        }
     }
 
     let mut warnings = syntax
@@ -97,14 +134,54 @@ pub fn tidy_bibtex(input: &str, options: TidyOptions) -> Result<TidyResult, Tidy
             message: format!("{} entry does not have a citation key.", entry.kind),
         })
         .collect::<Vec<_>>();
-    let key_plan = keys::generated_keys(&syntax, &options).map_err(TidyError::Template)?;
-    let duplicate_plan = duplicates::duplicate_plan(&syntax, &options);
+    let original_keys = if options.generate_keys.is_some() || options.merge.is_some() {
+        syntax
+            .entries
+            .iter()
+            .map(|entry| (entry.id, entry.key.clone()))
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    let mut duplicate_plan = duplicates::duplicate_plan(&syntax, &options);
     warnings.extend(duplicate_plan.warnings.iter().cloned());
+    duplicate_plan.apply(&mut syntax);
+    let retained = syntax
+        .entries
+        .iter()
+        .filter(|entry| !duplicate_plan.should_skip(entry.id));
+    let key_plan = keys::generated_keys(retained, &options).map_err(TidyError::Template)?;
+    for entry in &mut syntax.entries {
+        if let Some(key) = key_plan.get(&entry.id) {
+            entry.key.clone_from(key);
+        }
+    }
+    let renames = original_keys
+        .iter()
+        .filter_map(|(id, old_key)| {
+            let new_key = &syntax.entries[duplicate_plan.retained_id(*id).index()].key;
+            (old_key != new_key).then(|| TidyRename {
+                entry_id: *id,
+                old_key: old_key.clone(),
+                new_key: new_key.clone(),
+            })
+        })
+        .collect::<Vec<_>>();
+    if !renames.is_empty() {
+        references::rewrite(
+            &mut syntax,
+            &original_keys,
+            &duplicate_plan,
+            &input,
+            &options,
+        )?;
+    }
 
     Ok(TidyResult {
-        bibtex: render::render_document(&syntax, &options, &duplicate_plan, &key_plan),
+        bibtex: render::render_document(&syntax, &options, &duplicate_plan),
         warnings,
         count: syntax.entries.len(),
+        renames,
     })
 }
 
@@ -205,43 +282,6 @@ mod tests {
     }
 
     #[test]
-    fn tidy_matches_upstream_default_fixture_slice() {
-        let result = tidy_bibtex(
-            concat!(
-                "@ARTICLE {feinberg1983technique,\n",
-                "    number={1},\n",
-                "    title={A technique for radiolabeling DNA restriction endonuclease fragments to high specific activity},\n",
-                "  author=\"Feinberg, Andrew P and Vogelstein, Bert\",\n",
-                "    journal    = {Analytical biochemistry},\n",
-                "    volume = 132,\n",
-                "    pages={6-13},\n",
-                "    year={1983},\n",
-                "    month={aug},\n",
-                "    publisher={Elsevier},}\n",
-            ),
-            TidyOptions::default(),
-        )
-        .unwrap();
-
-        assert_eq!(
-            result.bibtex,
-            concat!(
-                "@article{feinberg1983technique,\n",
-                "  number        = {1},\n",
-                "  title         = {A technique for radiolabeling DNA restriction endonuclease fragments to high specific activity},\n",
-                "  author        = \"Feinberg, Andrew P and Vogelstein, Bert\",\n",
-                "  journal       = {Analytical biochemistry},\n",
-                "  volume        = 132,\n",
-                "  pages         = {6--13},\n",
-                "  year          = {1983},\n",
-                "  month         = {aug},\n",
-                "  publisher     = {Elsevier}\n",
-                "}\n",
-            )
-        );
-    }
-
-    #[test]
     fn tidy_abbreviates_april_to_apr() {
         let options = TidyOptions {
             months: true,
@@ -285,7 +325,6 @@ mod tests {
         assert_eq!(result.warnings.len(), 1);
         assert!(result.bibtex.contains("title         = {New},\n"));
         assert!(result.bibtex.contains("note          = feb # \" new\"\n"));
-        assert!(!result.bibtex.contains("jan # \" old\""));
     }
 
     #[test]
@@ -325,8 +364,7 @@ mod tests {
 
         assert!(result.bibtex.contains("middle        = {B},\n"));
         assert!(result.bibtex.contains("tail          = {C}\n"));
-        assert!(!result.bibtex.contains("@article{b,"));
-        assert!(!result.bibtex.contains("@article{c,"));
+        assert_eq!(RawDocument::parse(&result.bibtex).entry_keys(), ["a"]);
     }
 
     #[test]

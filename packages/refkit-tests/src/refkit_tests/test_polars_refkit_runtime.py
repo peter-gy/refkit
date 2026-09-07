@@ -24,7 +24,7 @@ def test_polars_parse_render_and_tidy_contracts() -> None:
     row = frame.select(
         report=prk.parse_report("bibtex"),
         citation=prk.cite("bibtex", "key", style="apa"),
-        tidy=prk.tidy_bibtex_report("bibtex", sort_fields=True),
+        tidy=prk.tidy_bibtex_report("bibtex", options={"sort_fields": True}),
     ).to_dicts()[0]
 
     assert prk.__version__
@@ -36,14 +36,19 @@ def test_polars_parse_render_and_tidy_contracts() -> None:
 
 
 def test_polars_row_failures_stay_local() -> None:
-    frame = pl.DataFrame({"bibtex": [BIBTEX, "@broken{missing"]})
+    frame = pl.DataFrame(
+        {"bibtex": [BIBTEX, "@broken{missing", "@book{loop,title={Loop},crossref={loop}}"]}
+    )
 
     rows = frame.select(
-        count=prk.entry_count("bibtex"),
-        report=prk.parse_report("bibtex"),
+        count=prk.entry_count("bibtex", recovery="error"),
+        report=prk.parse_report("bibtex", recovery="error"),
     ).to_dicts()
 
     assert rows[0]["count"] == 1
     assert rows[0]["report"]["ok"] is True
     assert rows[1]["count"] is None
     assert rows[1]["report"]["ok"] is False
+    assert rows[2]["count"] is None
+    assert rows[2]["report"]["ok"] is False
+    assert rows[2]["report"]["diagnostics"][0]["code"] == "cyclic_reference"

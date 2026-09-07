@@ -1,16 +1,12 @@
 name: Source Checks
-
-on:
-  workflow_call:
-
-env:
-  CARGO_TERM_COLOR: always
-  FORCE_COLOR: "1"
-  RUST_BACKTRACE: "1"
-
+'on':
+  workflow_call: null
 permissions:
   contents: read
-
+env:
+  CARGO_TERM_COLOR: always
+  FORCE_COLOR: '1'
+  RUST_BACKTRACE: '1'
 jobs:
   python:
     name: Python
@@ -18,121 +14,99 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
       - name: Set up uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
         with:
-          python-version: "3.14"
+          python-version: '3.14'
           enable-cache: true
           cache-dependency-glob: uv.lock
-
       - name: Lint
         run: make python-lint
-
       - name: Check types
         run: make typecheck
-
       - name: Test
         run: make test
-
-      - name: Check release contract
-        run: make release-check
-
-      - name: Check architecture contract
-        run: make architecture-check
-
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "26"
-          package-manager-cache: false
-
-      - name: Set up pnpm
-        run: npm install --global pnpm@11.10.0 --ignore-scripts --no-audit --no-fund
-
-      - name: Check documentation contract
-        run: make docs-check
-
-      - name: Check Pyodide runtime lock
-        run: make pyodide-lock-check
-
+      - name: Test documentation examples
+        run: make docs-examples-check
   rust:
     name: Rust
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
         with:
           toolchain: stable
           components: clippy, rustfmt
-
       - name: Cache Rust builds
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: |
             . -> target
             packages/polars-refkit/rust -> target
-
       - name: Lint
         run: make rust-lint
-
       - name: Test
         run: make rust
-
   msrv:
     name: Rust 1.88
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
       - name: Set up Rust 1.88
         uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
         with:
-          toolchain: "1.88"
-
+          toolchain: '1.88'
       - name: Cache Rust builds
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           shared-key: msrv
           workspaces: |
             . -> target
             packages/polars-refkit/rust -> target
-
       - name: Check minimum Rust version
         run: make rust-floor
-
   release-notes:
     name: Release notes
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: "26"
+          node-version: '26'
           package-manager-cache: false
-
       - name: Check release note generator
         working-directory: .github/release-notes
         run: |
           npm ci --ignore-scripts --omit=dev --no-audit --no-fund
           npm audit --omit=dev --audit-level=high
           ./node_modules/.bin/changelogithub --version
+  contracts:
+    name: Repository contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.14'
+          enable-cache: false
+      - run: make release-check architecture-check pyodide-lock-check docs-source-check

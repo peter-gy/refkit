@@ -14,7 +14,7 @@ Reads `.bib`, `.yaml`, or `.yml` and returns a `Library`. File extensions are ma
 
 ### `Library.parse_bibtex(source, *, recovery="error")`
 
-Parses BibTeX or BibLaTeX source in memory. `"error"` raises on parser diagnostics. `"report"` keeps recoverable entries and exposes messages through `diagnostics`.
+Parses BibTeX or BibLaTeX source in memory. `"error"` raises `ParseError` on parser diagnostics. `"report"` keeps recoverable entries and exposes structured records through `diagnostics`.
 
 ### `Library.parse_yaml(source)`
 
@@ -24,7 +24,7 @@ Parses a Hayagriva YAML bibliography in memory.
 
 | Member | Contract |
 | --- | --- |
-| `diagnostics` | Returns a new list of parser diagnostic strings. |
+| `diagnostics` | Returns a new list of `refkit.types.Diagnostic` dictionaries. |
 | `keys()` | Returns citation keys in library order. |
 | `values()` | Returns normalized `Entry` objects in library order. |
 | `get(key)` | Returns one entry or `None`. |
@@ -59,7 +59,7 @@ Loads a bundled independent CSL style. Lookup is case-insensitive. An unknown na
 
 ### `Style.from_xml(xml)`
 
-Prepares independent CSL XML. Invalid or dependent styles raise `ValueError`. `id` is `"xml"`.
+Prepares independent CSL XML. Invalid XML, dependent styles, and invalid macro graphs raise `ValueError`. `id` is `"xml"`.
 
 ### `Style.from_path(path)`
 
@@ -81,9 +81,9 @@ Creates one group from an iterable of citation-key strings and `Cite` objects. A
 
 `items` returns a new list of normalized `Cite` objects. `len(group)` returns its item count.
 
-### `Citation(id, citation)`
+### `Citation(id, citation, *, note_number=None)`
 
-Creates a named citation from a key string, `Cite`, or `CitationGroup`. `id` names the result inside one render call. `group` returns the normalized `CitationGroup`.
+Creates a named citation from a key string, `Cite`, or `CitationGroup`. `id` names the result inside one render call. `group` returns the normalized `CitationGroup`. `note_number` identifies the document note containing this occurrence and is returned by the property of the same name.
 
 ## Rendering
 
@@ -114,17 +114,18 @@ Renders every entry in the library with fresh citation state. Returns `Rendered`
 
 ### `Rendered`
 
-`text` and `to_text()` return plain text. `html` and `to_html()` return rendered HTML. `tree` and `to_tree()` return fresh JSON-shaped Python data. Read [Data Shapes](/reference/data-shapes) for the tree protocol.
+`text` returns plain text. `html` returns rendered HTML. `tree` returns fresh JSON-shaped Python data. `layout` returns a `BibliographyLayout` dictionary for bibliography output and `None` for a citation. Read [Data Shapes](/reference/data-shapes) for the tree and layout protocols.
 
 ## Raw BibTeX
 
 ### `BibDocument.read(path)` and `BibDocument.parse(source)`
 
-Create a live raw BibTeX document from a file or string. Malformed blocks remain available through `failed_blocks`.
+Create a live raw BibTeX document from a file or string. Malformed blocks remain available through `failed_blocks`. The document and its live views must be used on the Python thread that created them.
 
 | Member | Contract |
 | --- | --- |
 | `entries` | Live `BibEntryMap` view. |
+| `diagnostics` | Source decode diagnostics as `Diagnostic` dictionaries. |
 | `comments` | New source-order list of comment strings. |
 | `preamble` | Preamble values joined with ` # `. |
 | `strings` | New dictionary of string definitions sorted by key. |
@@ -132,9 +133,11 @@ Create a live raw BibTeX document from a file or string. Malformed blocks remain
 | `blocks` | New list of every source-order block record. |
 | `to_bibtex()` | Serializes the current in-memory state. |
 | `tidy(*, options=None)` | Strictly formats the current state into `TidyResult`. |
-| `write(path)` | Writes the current state to a path. |
+| `write(path)` | Writes the current state as UTF-8. |
 
 ### `BibEntryMap` and `BibFieldMap`
+
+Both lengths count source occurrences, including duplicates. `unique_keys()` counts names through its returned list.
 
 Both lookup views provide `unique_keys()`, `occurrence_keys()`, `occurrences()`, `get_all(key)`, `get_unique(key)`, `is_empty()`, length, truthiness, membership, and item lookup. They are focused views and do not implement the full Python `Mapping` interface.
 
@@ -160,7 +163,7 @@ Reads and formats a BibTeX file. When `output` is set, writes the formatted resu
 
 ### `TidyResult` and `TidyWarning`
 
-`TidyResult.bibtex` is formatted source. `count` is the input entry count, including entries merged from output. `warnings` is a list of `TidyWarning` records.
+`TidyResult.bibtex` is formatted source. `count` is the input entry count, including entries merged from output. `warnings` is a list of `TidyWarning` records. `renames` is a source-order list of `TidyRename` dictionaries with `entry_id`, `old_key`, and `new_key`. Use it to update citation keys outside the bibliography.
 
 A warning exposes `code`, optional duplicate `rule`, and `message`. Codes are `missing_key` and `duplicate_entry`.
 
@@ -175,6 +178,16 @@ Reads a bibliography path and renders one citation. `citation` accepts a key str
 ### `full_bibliography(source, *, style="apa", locale="en-US")`
 
 Reads a bibliography path and renders every normalized entry.
+
+## Typed records
+
+Import dictionary and tree types from `refkit.types`:
+
+```python
+from refkit.types import Diagnostic, ProjectionRow, RenderedTree, TidyRename
+```
+
+These runtime `TypedDict` definitions describe records returned by RefKit. They can be inspected by type and schema tools. [Data Shapes](/reference/data-shapes) defines their keys, values, and nullability.
 
 ## Runtime metadata
 

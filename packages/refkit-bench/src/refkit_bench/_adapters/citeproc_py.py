@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 from refkit_bench._adapters.common import (
-    MissingBenchmarkOperation,
     OperationOutcome,
     PackageAdapter,
     PreparedOperation,
@@ -159,12 +158,6 @@ class CiteprocPyAdapter(PackageAdapter):
     def prepare_render_path_bibliography(
         self, workload: Workload, directory: Path
     ) -> PreparedOperation:
-        if workload.family == "real_bibliography_subset":
-            raise MissingBenchmarkOperation(
-                "citeproc-py BibTeX source expands this real bibliography subset into "
-                "non-entry bibliography rows"
-            )
-
         def operation() -> OperationOutcome:
             from citeproc import CitationStylesStyle
             from citeproc.source.bibtex import BibTeX

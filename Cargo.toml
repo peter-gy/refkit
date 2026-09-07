@@ -22,3 +22,6 @@ serde_json = "1.0.150"
 lto = "thin"
 codegen-units = 1
 strip = true
+
+[patch.crates-io]
+citationberg = {git = "https://github.com/typst/citationberg", rev = "06a591e2f237d25e1dfdedac3f3d1494c496c52d"}

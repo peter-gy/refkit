@@ -1,8 +1,7 @@
-use crate::{
-    RawEntryId, RawSyntaxBlock, RawSyntaxDocument, RawSyntaxEntry, RawSyntaxField, RawValueMode,
+use crate::raw::{
+    RawSyntaxBlock, RawSyntaxDocument, RawSyntaxEntry, RawSyntaxField, RawValueMode,
     normalize_raw_at_command,
 };
-use std::collections::HashMap;
 
 use super::{TidyOptions, duplicates::DuplicatePlan, options::DEFAULT_FIELD_SORT};
 
@@ -13,11 +12,10 @@ pub(crate) fn render_document(
     doc: &RawSyntaxDocument,
     options: &TidyOptions,
     duplicate_plan: &DuplicatePlan,
-    key_plan: &HashMap<RawEntryId, String>,
 ) -> String {
     let mut output = String::new();
     if let Some(sort) = options.sort.as_deref() {
-        sort::render_sorted_document(&mut output, doc, options, duplicate_plan, key_plan, sort);
+        sort::render_sorted_document(&mut output, doc, options, duplicate_plan, sort);
         ensure_final_newline(&mut output);
         return output;
     }
@@ -26,7 +24,6 @@ pub(crate) fn render_document(
         doc,
         options,
         duplicate_plan,
-        key_plan,
     };
     let mut state = LinearRenderState::default();
 
@@ -42,7 +39,6 @@ struct RenderContext<'a> {
     doc: &'a RawSyntaxDocument,
     options: &'a TidyOptions,
     duplicate_plan: &'a DuplicatePlan,
-    key_plan: &'a HashMap<RawEntryId, String>,
 }
 
 #[derive(Default)]
@@ -68,7 +64,7 @@ fn render_block(
                 state.suppress_next_whitespace = true;
                 return;
             }
-            if let Some(entry) = context.doc.entries.iter().find(|entry| entry.id == *id) {
+            if let Some(entry) = context.doc.entries.get(id.index()) {
                 state.suppress_next_whitespace = false;
                 state.pending_whitespace.clear();
                 separate_block(
@@ -77,12 +73,7 @@ fn render_block(
                     state.previous_was_comment,
                     context.options,
                 );
-                render_entry(
-                    output,
-                    context.duplicate_plan.entry(entry),
-                    context.options,
-                    context.key_plan,
-                );
+                render_entry(output, entry, context.options);
                 state.wrote_block = true;
                 state.previous_was_comment = false;
                 state.previous_comment_ended_line = false;
@@ -229,12 +220,7 @@ fn separate_block(
     }
 }
 
-fn render_entry(
-    output: &mut String,
-    entry: &RawSyntaxEntry,
-    options: &TidyOptions,
-    key_plan: &HashMap<RawEntryId, String>,
-) {
+fn render_entry(output: &mut String, entry: &RawSyntaxEntry, options: &TidyOptions) {
     let entry_kind = if options.lowercase {
         entry.kind.to_ascii_lowercase()
     } else {
@@ -249,7 +235,7 @@ fn render_entry(
     output.push('@');
     output.push_str(&entry_kind);
     output.push('{');
-    let key = key_plan.get(&entry.id).unwrap_or(&entry.key);
+    let key = &entry.key;
     output.push_str(key);
     let fields = renderable_fields(entry, options);
     if !fields.is_empty() {
@@ -284,6 +270,16 @@ fn renderable_fields<'a>(
     entry: &'a RawSyntaxEntry,
     options: &TidyOptions,
 ) -> Vec<&'a RawSyntaxField> {
+    sort_fields(
+        field_indices(entry, options)
+            .into_iter()
+            .map(|index| &entry.fields[index])
+            .collect(),
+        options,
+    )
+}
+
+pub(super) fn field_indices(entry: &RawSyntaxEntry, options: &TidyOptions) -> Vec<usize> {
     let omit = options
         .omit
         .iter()
@@ -292,7 +288,7 @@ fn renderable_fields<'a>(
     let mut seen = std::collections::BTreeSet::new();
     let mut fields = Vec::new();
 
-    for field in &entry.fields {
+    for (index, field) in entry.fields.iter().enumerate() {
         let field_key = field.name.to_ascii_lowercase();
         if omit.contains(&field_key) {
             continue;
@@ -303,10 +299,10 @@ fn renderable_fields<'a>(
         if options.remove_empty_fields && field.value.trim().is_empty() {
             continue;
         }
-        fields.push(field);
+        fields.push(index);
     }
 
-    sort_fields(fields, options)
+    fields
 }
 
 fn sort_fields<'a>(

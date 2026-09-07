@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.metadata as metadata_module
-import inspect
 import subprocess
 import sys
 from pathlib import Path
@@ -47,40 +46,6 @@ def test_import_registers_expression_namespace_in_fresh_process() -> None:
     subprocess.run([sys.executable, "-c", program], check=True)
 
 
-def test_polars_refkit_namespace_supports_direct_construction() -> None:
-    import polars_refkit as prk
-
-    namespace = prk.RefkitExprNamespace(pl.col("bibtex"))
-
-    assert isinstance(namespace.entry_count(), pl.Expr)
-
-
-def test_polars_refkit_tidy_runtime_signatures_list_public_keywords() -> None:
-    import polars_refkit as prk
-
-    namespace = cast(Any, pl.col("bibtex")).refkit
-    namespace_signature = inspect.signature(namespace.tidy_bibtex)
-    namespace_type_signature = inspect.signature(prk.RefkitExprNamespace.tidy_bibtex)
-    top_level_signature = inspect.signature(prk.tidy_bibtex)
-
-    assert list(top_level_signature.parameters)[:4] == [
-        "bibtex_col",
-        "omit",
-        "curly",
-        "numeric",
-    ]
-    assert list(namespace_type_signature.parameters)[:4] == [
-        "self",
-        "omit",
-        "curly",
-        "numeric",
-    ]
-    assert list(namespace_signature.parameters)[:3] == ["omit", "curly", "numeric"]
-    assert top_level_signature.parameters["space"].default == 2
-    assert top_level_signature.parameters["escape"].default is True
-    assert top_level_signature.parameters["sort_fields"].default is None
-
-
 def test_polars_refkit_expressions_parse_and_render_bibtex_rows() -> None:
     import polars_refkit as prk
 
@@ -88,7 +53,7 @@ def test_polars_refkit_expressions_parse_and_render_bibtex_rows() -> None:
 
     result = frame.select(
         citation=prk.cite("bibtex", "key", style="apa"),
-        bibliography=prk.full_bibliography_html("bibtex", style="apa"),
+        bibliography=prk.full_bibliography("bibtex", style="apa", output="html"),
         count=prk.entry_count("bibtex"),
         keys=prk.keys("bibtex"),
     ).to_dicts()
@@ -119,14 +84,14 @@ def test_polars_refkit_top_level_expressions_have_stable_default_names() -> None
         prk.entry_count("bibtex"),
         prk.keys("bibtex"),
         prk.cite("bibtex", "key"),
-        prk.cite_html("bibtex", "key"),
+        prk.cite("bibtex", "key", output="html").alias("html"),
     )
 
     assert set(result.columns) == {
         "entry_count",
         "keys",
         "cite",
-        "cite_html",
+        "html",
     }
     assert result["entry_count"].item() == 1
     assert result["keys"].to_list()[0] == ["doe2024"]
@@ -140,10 +105,10 @@ def test_bibliography_expressions_render_all_entries_in_row() -> None:
     namespace = cast(Any, pl.col("bibtex")).refkit
 
     row = frame.select(
-        html=prk.full_bibliography_html("bibtex"),
-        text=prk.full_bibliography_text("bibtex"),
-        rendered=prk.full_bibliography_rendered("bibtex"),
-        namespace_html=namespace.full_bibliography_html(),
+        html=prk.full_bibliography("bibtex", output="html"),
+        text=prk.full_bibliography("bibtex", output="text"),
+        rendered=prk.full_bibliography("bibtex", output="rendered"),
+        namespace_html=namespace.full_bibliography(output="html"),
     ).to_dicts()[0]
 
     assert "Reference Work" in row["html"]
@@ -155,80 +120,31 @@ def test_bibliography_expressions_render_all_entries_in_row() -> None:
     assert row["namespace_html"] == row["html"]
 
 
-def test_polars_refkit_namespace_matches_function_api() -> None:
+def test_namespace_parse_operations_match_function_api() -> None:
     import polars_refkit as prk
 
-    frame = pl.DataFrame({"bibtex": [BIBTEX], "key": ["doe2024"]})
-    namespace = cast(Any, pl.col("bibtex")).refkit
-
-    result = frame.select(
-        top_citation=prk.cite("bibtex", "key", style="apa"),
-        ns_citation=namespace.cite("key", style="apa"),
-        top_citation_html=prk.cite_html("bibtex", "key", style="apa"),
-        ns_citation_html=namespace.cite_html("key", style="apa"),
-        top_citation_rendered=prk.cite_rendered("bibtex", "key", style="apa"),
-        ns_citation_rendered=namespace.cite_rendered("key", style="apa"),
-        top_bibliography_html=prk.full_bibliography_html("bibtex", style="apa"),
-        ns_bibliography_html=namespace.full_bibliography_html(style="apa"),
-        top_bibliography_text=prk.full_bibliography_text("bibtex", style="apa"),
-        ns_bibliography_text=namespace.full_bibliography_text(style="apa"),
-        top_bibliography_rendered=prk.full_bibliography_rendered("bibtex", style="apa"),
-        ns_bibliography_rendered=namespace.full_bibliography_rendered(style="apa"),
-        top_entry_count=prk.entry_count("bibtex"),
-        ns_entry_count=namespace.entry_count(),
-        top_can_parse=prk.can_parse("bibtex"),
-        ns_can_parse=namespace.can_parse(),
-        top_has_diagnostics=prk.has_diagnostics("bibtex"),
-        ns_has_diagnostics=namespace.has_diagnostics(),
-        top_keys=prk.keys("bibtex"),
-        ns_keys=namespace.keys(),
-        top_entries=prk.entries("bibtex"),
-        ns_entries=namespace.entries(),
-        top_title_entries=prk.entries("bibtex", fields=("key", "title")),
-        ns_title_entries=namespace.entries(fields=("key", "title")),
-        top_parse_report=prk.parse_report("bibtex"),
-        ns_parse_report=namespace.parse_report(),
-    ).to_dicts()
-
-    row = result[0]
-    assert row["top_citation"] == row["ns_citation"]
-    assert row["top_citation_html"] == row["ns_citation_html"]
-    assert row["top_citation_rendered"] == row["ns_citation_rendered"]
-    assert row["top_bibliography_html"] == row["ns_bibliography_html"]
-    assert row["top_bibliography_text"] == row["ns_bibliography_text"]
-    assert row["top_bibliography_rendered"] == row["ns_bibliography_rendered"]
-    assert row["top_entry_count"] == row["ns_entry_count"] == 1
-    assert row["top_can_parse"] is row["ns_can_parse"] is True
-    assert row["top_has_diagnostics"] is row["ns_has_diagnostics"] is False
-    assert row["top_keys"] == row["ns_keys"] == ["doe2024"]
-    assert row["top_entries"] == row["ns_entries"]
-    assert row["top_title_entries"] == row["ns_title_entries"]
-    assert row["top_parse_report"] == row["ns_parse_report"]
-    assert "Doe" in row["top_citation"]
-    assert "Reference Work" in row["top_bibliography_html"]
-    assert row["top_entries"][0]["key"] == "doe2024"
-    assert row["top_title_entries"] == [{"key": "doe2024", "title": "Reference Work"}]
-    assert row["top_parse_report"]["entry_count"] == 1
-
-
-def test_polars_refkit_namespace_methods_have_stable_default_names() -> None:
-    import polars_refkit  # noqa: F401
-
-    frame = pl.DataFrame({"bibtex": [BIBTEX], "key": ["doe2024"]})
-    namespace = cast(Any, pl.col("bibtex")).refkit
-
-    result = frame.select(
-        namespace.keys(),
-        namespace.entry_count(),
-        namespace.cite("key", style="apa"),
-        namespace.diagnostics(),
+    frame = pl.DataFrame({"bibtex": [BIBTEX, "@broken{missing", None]})
+    namespace = prk.RefkitExprNamespace(pl.col("bibtex"))
+    functions = frame.select(
+        keys=prk.keys("bibtex"),
+        entries=prk.entries("bibtex", fields=("key", "title")),
+        report=prk.parse_report("bibtex"),
+        can_parse=prk.can_parse("bibtex"),
+        has_diagnostics=prk.has_diagnostics("bibtex"),
+        diagnostics=prk.diagnostics("bibtex"),
     )
-
-    assert set(result.columns) == {"keys", "entry_count", "cite", "diagnostics"}
-    assert result["keys"].to_list()[0] == ["doe2024"]
-    assert result["entry_count"].item() == 1
-    assert "Doe" in result["cite"].item()
-    assert result["diagnostics"].to_list()[0] == []
+    methods = frame.select(
+        keys=namespace.keys(),
+        entries=namespace.entries(fields=("key", "title")),
+        report=namespace.parse_report(),
+        can_parse=namespace.can_parse(),
+        has_diagnostics=namespace.has_diagnostics(),
+        diagnostics=namespace.diagnostics(),
+    )
+    assert methods.to_dicts() == functions.to_dicts()
+    assert methods["can_parse"].to_list() == [True, False, None]
+    assert methods["has_diagnostics"].to_list() == [False, True, None]
+    assert methods["diagnostics"][1][0]["action"] == "rejected"
 
 
 def test_polars_refkit_tidy_formats_rows_and_reports_warnings() -> None:
@@ -242,8 +158,8 @@ def test_polars_refkit_tidy_formats_rows_and_reports_warnings() -> None:
     frame = pl.DataFrame({"bibtex": [source]})
 
     row = frame.select(
-        formatted=prk.tidy_bibtex("bibtex", sort_fields=True),
-        report=prk.tidy_bibtex_report("bibtex", sort_fields=True),
+        formatted=prk.tidy_bibtex("bibtex", options={"sort_fields": True}),
+        report=prk.tidy_bibtex_report("bibtex", options={"sort_fields": True}),
     ).to_dicts()[0]
 
     assert row["formatted"] == row["report"]["bibtex"]
@@ -279,10 +195,10 @@ def test_polars_refkit_tidy_namespace_matches_function_api() -> None:
     namespace = cast(Any, pl.col("bibtex")).refkit
 
     row = frame.select(
-        top_tidy=prk.tidy_bibtex("bibtex", sort_fields=True, wrap=88),
-        ns_tidy=namespace.tidy_bibtex(sort_fields=True, wrap=88),
-        top_report=prk.tidy_bibtex_report("bibtex", sort_fields=True, wrap=88),
-        ns_report=namespace.tidy_bibtex_report(sort_fields=True, wrap=88),
+        top_tidy=prk.tidy_bibtex("bibtex", options={"sort_fields": True, "wrap": 88}),
+        ns_tidy=namespace.tidy_bibtex(options={"sort_fields": True, "wrap": 88}),
+        top_report=prk.tidy_bibtex_report("bibtex", options={"sort_fields": True, "wrap": 88}),
+        ns_report=namespace.tidy_bibtex_report(options={"sort_fields": True, "wrap": 88}),
     ).to_dicts()[0]
 
     assert row["top_tidy"] == row["ns_tidy"]
@@ -341,35 +257,38 @@ def test_polars_refkit_tidy_invalid_rows_become_nulls_with_report_error() -> Non
 def test_polars_refkit_tidy_rejects_invalid_static_options() -> None:
     import polars_refkit as prk
 
+    with pytest.raises(TypeError, match="options must be a dictionary"):
+        prk.tidy_bibtex("bibtex", options=cast(Any, []))
+
     with pytest.raises(TypeError, match="space must be an integer"):
-        prk.tidy_bibtex("bibtex", space=cast(Any, True))
+        prk.tidy_bibtex("bibtex", options={"space": cast(Any, True)})
 
     with pytest.raises(ValueError, match="space must be non-negative"):
-        prk.tidy_bibtex("bibtex", space=-1)
+        prk.tidy_bibtex("bibtex", options={"space": -1})
 
     with pytest.raises(TypeError, match="sort_fields must be an iterable"):
-        prk.tidy_bibtex("bibtex", sort_fields=cast(Any, "title"))
+        prk.tidy_bibtex("bibtex", options={"sort_fields": cast(Any, "title")})
 
     with pytest.raises(TypeError, match="omit must be an iterable"):
-        prk.tidy_bibtex("bibtex", omit=cast(Any, 1))
+        prk.tidy_bibtex("bibtex", options={"omit": cast(Any, 1)})
 
     with pytest.raises(TypeError, match="omit must be an iterable"):
-        prk.tidy_bibtex("bibtex", omit=cast(Any, ["title", 1]))
+        prk.tidy_bibtex("bibtex", options={"omit": cast(Any, ["title", 1])})
 
     with pytest.raises(TypeError, match="escape must be a bool"):
-        prk.tidy_bibtex("bibtex", escape=cast(Any, None))
+        prk.tidy_bibtex("bibtex", options={"escape": cast(Any, None)})
 
     with pytest.raises(TypeError, match="merge must be a string"):
-        prk.tidy_bibtex("bibtex", merge=cast(Any, 1))
+        prk.tidy_bibtex("bibtex", options={"merge": cast(Any, 1)})
 
     with pytest.raises(ValueError, match="unknown tidy option"):
-        cast(Any, prk)._tidy_kwargs(unknown=True)
+        prk.tidy_bibtex("bibtex", options=cast(Any, {"unknown": True}))
 
     with pytest.raises(ValueError, match="unknown duplicate rule"):
-        prk.tidy_bibtex("bibtex", duplicates=cast(Any, ["bogus"]))
+        prk.tidy_bibtex("bibtex", options={"duplicates": cast(Any, ["bogus"])})
 
     with pytest.raises(ValueError, match="unknown merge strategy"):
-        prk.tidy_bibtex("bibtex", merge=cast(Any, "bogus"))
+        prk.tidy_bibtex("bibtex", options={"merge": cast(Any, "bogus")})
 
 
 def test_polars_refkit_tidy_accepts_representative_static_options() -> None:
@@ -392,19 +311,25 @@ def test_polars_refkit_tidy_accepts_representative_static_options() -> None:
     row = (
         pl.DataFrame({"bibtex": [source]})
         .select(
-            spaced=prk.tidy_bibtex("bibtex", space=4, align=None),
-            wrapped=prk.tidy_bibtex("bibtex", wrap=True),
-            custom_key=prk.tidy_bibtex("bibtex", generate_keys="[auth:lower][year]", max_authors=1),
-            default_key=prk.tidy_bibtex("bibtex", generate_keys=True),
-            omitted=prk.tidy_bibtex("bibtex", omit=None, remove_empty_fields=True),
-            unwrapped_title=prk.tidy_bibtex("bibtex", remove_braces=None, sort=False),
-            enclosed_title=prk.tidy_bibtex("bibtex", enclosing_braces=["title"]),
+            spaced=prk.tidy_bibtex("bibtex", options={"space": 4, "align": None}),
+            wrapped=prk.tidy_bibtex("bibtex", options={"wrap": True}),
+            custom_key=prk.tidy_bibtex(
+                "bibtex", options={"generate_keys": "[auth:lower][year]", "max_authors": 1}
+            ),
+            default_key=prk.tidy_bibtex("bibtex", options={"generate_keys": True}),
+            omitted=prk.tidy_bibtex("bibtex", options={"omit": None, "remove_empty_fields": True}),
+            unwrapped_title=prk.tidy_bibtex(
+                "bibtex", options={"remove_braces": None, "sort": False}
+            ),
+            enclosed_title=prk.tidy_bibtex("bibtex", options={"enclosing_braces": ["title"]}),
             no_merge=prk.tidy_bibtex_report(
                 "bibtex",
-                duplicates=None,
-                merge=None,
-                generate_keys=None,
-                max_authors=None,
+                options={
+                    "duplicates": None,
+                    "merge": None,
+                    "generate_keys": None,
+                    "max_authors": None,
+                },
             ),
         )
         .to_dicts()[0]
@@ -445,30 +370,28 @@ def test_polars_refkit_tidy_accepts_representative_static_options() -> None:
 
 def test_polars_refkit_tidy_duplicates_none_keeps_core_merge_defaults() -> None:
     import polars_refkit as prk
-    import refkit as rk
 
     source = """
 @article{first, title={Same}, doi={10.1/example}, year={2024}}
 @article{second, title={Same}, doi={10.1/example}, year={2025}}
 """
-    options = rk.TidyOptions(duplicates=None, merge="first")
-    expected = rk.tidy_bibtex(source, options=options)
 
     row = (
         pl.DataFrame({"bibtex": [source]})
         .select(
-            formatted=prk.tidy_bibtex("bibtex", duplicates=None, merge="first"),
-            report=prk.tidy_bibtex_report("bibtex", duplicates=None, merge="first"),
-            explicit=prk.tidy_bibtex_report("bibtex", duplicates=["doi"], merge="first"),
+            formatted=prk.tidy_bibtex("bibtex", options={"duplicates": None, "merge": "first"}),
+            report=prk.tidy_bibtex_report("bibtex", options={"duplicates": None, "merge": "first"}),
+            explicit=prk.tidy_bibtex_report(
+                "bibtex", options={"duplicates": ["doi"], "merge": "first"}
+            ),
         )
         .to_dicts()[0]
     )
 
-    assert row["formatted"] == expected.bibtex
-    assert row["report"]["bibtex"] == expected.bibtex
-    assert [warning["rule"] for warning in row["report"]["warnings"]] == [
-        warning.rule for warning in expected.warnings
-    ]
+    assert row["formatted"] == row["report"]["bibtex"]
+    keys = pl.select(prk.keys(pl.lit(row["formatted"]))).item().to_list()
+    assert keys == ["first"]
+    assert [warning["rule"] for warning in row["report"]["warnings"]] == ["doi"]
     assert [warning["rule"] for warning in row["explicit"]["warnings"]] == ["doi"]
 
 
@@ -480,7 +403,7 @@ def test_polars_refkit_diagnostics_return_list_column() -> None:
     result = frame.select(diagnostics=prk.diagnostics("bibtex")).to_dicts()
 
     assert result[0]["diagnostics"] == []
-    assert "parse error" in result[1]["diagnostics"][0]
+    assert "parse error" in result[1]["diagnostics"][0]["message"]
 
 
 def test_polars_refkit_accepts_literal_expressions() -> None:
@@ -499,26 +422,6 @@ def test_polars_refkit_accepts_literal_expressions() -> None:
     assert "Doe" in row["citation"]
 
 
-def test_polars_refkit_render_variants_return_text_html_and_structs() -> None:
-    import polars_refkit as prk
-
-    frame = pl.DataFrame({"bibtex": [BIBTEX], "key": ["doe2024"]})
-
-    row = frame.select(
-        citation_html=prk.cite_html("bibtex", "key", style="apa"),
-        citation_struct=prk.cite_rendered("bibtex", "key", style="apa"),
-        full_bibliography_text=prk.full_bibliography_text("bibtex", style="apa"),
-        bibliography_struct=prk.full_bibliography_rendered("bibtex", style="apa"),
-    ).to_dicts()[0]
-
-    assert "Doe" in row["citation_html"]
-    assert row["citation_struct"]["text"]
-    assert row["citation_struct"]["html"]
-    assert "Reference Work" in row["full_bibliography_text"]
-    assert row["bibliography_struct"]["text"]
-    assert row["bibliography_struct"]["html"]
-
-
 def test_polars_refkit_cite_each_returns_ordered_list_outputs() -> None:
     import polars_refkit as prk
 
@@ -527,8 +430,8 @@ def test_polars_refkit_cite_each_returns_ordered_list_outputs() -> None:
 
     row = frame.select(
         citations=prk.cite_each("bibtex", "keys", style="apa"),
-        citation_html=prk.cite_each_html("bibtex", "keys", style="apa"),
-        rendered=prk.cite_each_rendered("bibtex", "keys", style="apa"),
+        citation_html=prk.cite_each("bibtex", "keys", style="apa", output="html"),
+        rendered=prk.cite_each("bibtex", "keys", style="apa", output="rendered"),
     ).to_dicts()[0]
 
     assert row["citations"] == ["(Doe, 2024)", "(Roe, 2022)"]
@@ -546,11 +449,11 @@ def test_polars_refkit_cite_group_renders_one_citation_from_key_list() -> None:
 
     row = frame.select(
         grouped=prk.cite_group("bibtex", "keys", style="apa"),
-        grouped_html=prk.cite_group_html("bibtex", "keys", style="apa"),
-        grouped_rendered=prk.cite_group_rendered("bibtex", "keys", style="apa"),
+        grouped_html=prk.cite_group("bibtex", "keys", style="apa", output="html"),
+        grouped_rendered=prk.cite_group("bibtex", "keys", style="apa", output="rendered"),
         namespace_grouped=namespace.cite_group("keys", style="apa"),
-        namespace_grouped_html=namespace.cite_group_html("keys", style="apa"),
-        namespace_grouped_rendered=namespace.cite_group_rendered("keys", style="apa"),
+        namespace_grouped_html=namespace.cite_group("keys", style="apa", output="html"),
+        namespace_grouped_rendered=namespace.cite_group("keys", style="apa", output="rendered"),
     ).to_dicts()[0]
 
     assert isinstance(row["grouped"], str)
@@ -572,8 +475,8 @@ def test_polars_refkit_cite_each_namespace_and_broadcast() -> None:
 
     rows = frame.select(
         citations=namespace.cite_each("keys", style="apa"),
-        citation_html=namespace.cite_each_html("keys", style="apa"),
-        rendered=namespace.cite_each_rendered("keys", style="apa"),
+        citation_html=namespace.cite_each("keys", style="apa", output="html"),
+        rendered=namespace.cite_each("keys", style="apa", output="rendered"),
     ).to_dicts()
 
     assert "Doe" in rows[0]["citations"][0]
@@ -634,7 +537,7 @@ def test_polars_refkit_entries_and_parse_report_are_polars_native() -> None:
     assert rows[1]["report"]["ok"] is False
     assert rows[1]["report"]["entry_count"] is None
     assert rows[1]["report"]["keys"] is None
-    assert "parse error" in rows[1]["report"]["diagnostics"][0]
+    assert "parse error" in rows[1]["report"]["diagnostics"][0]["message"]
 
 
 def test_biblatex_input_normalizes_through_the_polars_adapter() -> None:
@@ -688,7 +591,7 @@ def test_polars_refkit_recovery_modes_choose_strict_null_or_report_recovery() ->
     assert report_row["has_diagnostics"] is True
     assert report_row["report"]["ok"] is True
     assert report_row["report"]["keys"] == ["valid"]
-    assert "ignored malformed BibTeX block" in report_row["report"]["diagnostics"][0]
+    assert "ignored malformed BibTeX block" in report_row["report"]["diagnostics"][0]["message"]
     assert "Doe" in report_row["citation"]
 
 
@@ -718,11 +621,11 @@ def test_polars_refkit_invalid_bibtex_rows_become_nulls() -> None:
         count=prk.entry_count("bibtex"),
         keys=prk.keys("bibtex"),
         citation=prk.cite("bibtex", "key"),
-        citation_struct=prk.cite_rendered("bibtex", "key"),
-        citation_struct_is_null=prk.cite_rendered("bibtex", "key").is_null(),
-        bibliography=prk.full_bibliography_html("bibtex"),
-        bibliography_struct=prk.full_bibliography_rendered("bibtex"),
-        bibliography_struct_is_null=prk.full_bibliography_rendered("bibtex").is_null(),
+        citation_struct=prk.cite("bibtex", "key", output="rendered"),
+        citation_struct_is_null=prk.cite("bibtex", "key", output="rendered").is_null(),
+        bibliography=prk.full_bibliography("bibtex", output="html"),
+        bibliography_struct=prk.full_bibliography("bibtex", output="rendered"),
+        bibliography_struct_is_null=prk.full_bibliography("bibtex", output="rendered").is_null(),
     ).to_dicts()
 
     valid, invalid = result
@@ -747,8 +650,8 @@ def test_polars_refkit_missing_key_becomes_null_citation() -> None:
         pl.DataFrame({"bibtex": [BIBTEX], "key": ["missing"]})
         .select(
             citation=prk.cite("bibtex", "key"),
-            citation_struct=prk.cite_rendered("bibtex", "key"),
-            citation_struct_is_null=prk.cite_rendered("bibtex", "key").is_null(),
+            citation_struct=prk.cite("bibtex", "key", output="rendered"),
+            citation_struct_is_null=prk.cite("bibtex", "key", output="rendered").is_null(),
         )
         .to_dicts()[0]
     )
@@ -790,3 +693,141 @@ def test_polars_refkit_batch_rows_are_independent() -> None:
 
     assert "Doe" in result[0]
     assert "Roe" in result[1]
+
+
+@pytest.mark.parametrize("operation", ["cite_each", "cite_group", "render_report"])
+@pytest.mark.parametrize("empty", [False, True])
+def test_citation_lists_reject_non_string_dtypes(operation: str, empty: bool) -> None:
+    import polars_refkit as prk
+
+    frame = pl.DataFrame({"bibtex": [BIBTEX], "keys": [[1, 2]]})
+    if empty:
+        frame = frame.clear()
+    with pytest.raises(pl.exceptions.ComputeError, match=r"List\[String\]"):
+        frame.lazy().select(getattr(prk, operation)("bibtex", "keys")).collect()
+
+
+def test_empty_citation_lists_preserve_output_schema() -> None:
+    import polars_refkit as prk
+
+    frame = pl.DataFrame(schema={"bibtex": pl.String, "keys": pl.List(pl.String)})
+    result = (
+        frame.lazy()
+        .select(
+            each=prk.cite_each("bibtex", "keys", output="rendered"),
+            group=prk.cite_group("bibtex", "keys"),
+            report=prk.render_report("bibtex", "keys"),
+        )
+        .collect()
+    )
+    assert result.schema["each"] == pl.List(pl.Struct({"text": pl.String, "html": pl.String}))
+    assert result.schema["group"] == pl.String
+    assert (
+        cast(pl.Struct, result.schema["report"]).to_schema()["citations"] == result.schema["each"]
+    )
+    assert result.height == 0
+
+
+def test_render_reports_distinguish_row_failures_and_missing_inputs() -> None:
+    import polars_refkit as prk
+
+    frame = pl.DataFrame(
+        {
+            "bibtex": [BIBTEX, "@broken{missing", BIBTEX, None, BIBTEX],
+            "keys": [["doe2024"], ["doe2024"], ["missing"], ["doe2024"], []],
+        }
+    )
+    rows = frame.select(prk.render_report("bibtex", "keys", grouped=True)).to_series().to_list()
+    assert rows[0]["ok"] is True
+    assert rows[0]["citations"] == [{"text": "(Doe, 2024)", "html": "(Doe, 2024)"}]
+    assert rows[1]["error_code"] == "parse_error"
+    assert rows[1]["diagnostics"][0]["action"] == "rejected"
+    assert rows[2]["error_code"] == "missing_key"
+    assert rows[3] is None
+    assert rows[4]["error_code"] == "render_error"
+
+
+def test_parse_reports_preserve_structured_diagnostics_and_null_validity() -> None:
+    import polars_refkit as prk
+
+    source = BIBTEX + "\n@article{bad, title={Broken}, year={nonsense}}"
+    rows = (
+        pl.DataFrame({"bibtex": [source, None]})
+        .select(
+            report=prk.parse_report("bibtex", recovery="report"),
+            diagnostics=prk.diagnostics("bibtex", recovery="report"),
+        )
+        .to_dicts()
+    )
+    assert rows[0]["report"]["diagnostics"] == rows[0]["diagnostics"]
+    diagnostic = rows[0]["diagnostics"][0]
+    assert diagnostic["entry"] == "bad"
+    assert diagnostic["severity"] == "warning"
+    assert diagnostic["span"]["start"] >= len(BIBTEX)
+    assert diagnostic["span"]["end"] <= len(source)
+    assert rows[1] == {"report": None, "diagnostics": None}
+
+
+def test_tidy_reports_return_source_occurrence_renames() -> None:
+    import polars_refkit as prk
+
+    options: prk.TidyOptions = {"generate_keys": "[auth:lower][year]"}
+    source = BIBTEX.replace("doe2024", "old")
+    report = (
+        pl.DataFrame({"bibtex": [source]})
+        .select(prk.tidy_bibtex_report("bibtex", options=options))
+        .item()
+    )
+    assert report["renames"] == [{"entry_id": 0, "old_key": "old", "new_key": "doe2024"}]
+    assert "@article{doe2024," in report["bibtex"]
+
+
+def test_grouped_numeric_citations_share_document_numbering() -> None:
+    import polars_refkit as prk
+
+    source = f"{BIBTEX}\n{SECOND_BIBTEX}"
+    frame = pl.DataFrame({"keys": [["roe2022", "doe2024"], ["doe2024"]]})
+    values = (
+        frame.select(prk.cite_group(pl.lit(source), "keys", style="ieee")).to_series().to_list()
+    )
+    assert values == ["[1], [2]", "[1]"]
+
+
+def test_invalid_literal_source_broadcasts_nulls_and_reports() -> None:
+    import polars_refkit as prk
+
+    frame = pl.DataFrame({"keys": [["a"], ["b"], ["c"]]})
+    result = frame.select(
+        value=prk.cite_group(pl.lit("@broken{missing"), "keys"),
+        report=prk.render_report(pl.lit("@broken{missing"), "keys"),
+    )
+    assert result["value"].to_list() == [None, None, None]
+    assert [row["error_code"] for row in result["report"].to_list()] == ["parse_error"] * 3
+
+
+def test_output_choice_is_validated_when_building_expression() -> None:
+    import polars_refkit as prk
+
+    with pytest.raises(ValueError, match="output must be"):
+        prk.cite("bibtex", "key", output=cast(Any, "xml"))
+
+
+def test_empty_key_list_is_an_empty_sequence_and_invalid_group() -> None:
+    import polars_refkit as prk
+
+    frame = pl.DataFrame(
+        {"bibtex": [BIBTEX], "keys": [[]]},
+        schema={
+            "bibtex": pl.String,
+            "keys": pl.List(pl.String),
+        },
+    )
+    row = frame.select(
+        each=prk.cite_each("bibtex", "keys", output="rendered"),
+        group=prk.cite_group("bibtex", "keys"),
+        report=prk.render_report("bibtex", "keys"),
+    ).to_dicts()[0]
+    assert row["each"] == []
+    assert row["group"] is None
+    assert row["report"]["ok"] is True
+    assert row["report"]["citations"] == []

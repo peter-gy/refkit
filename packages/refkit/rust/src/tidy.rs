@@ -1,6 +1,6 @@
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyBool, PyDict, PyModule};
+use pyo3::types::{PyAny, PyBool, PyDict, PyList, PyModule};
 
 use crate::errors::{TidyError as PyTidyError, TidySyntaxError};
 use crate::repr::{option_quoted, quoted};
@@ -170,10 +170,24 @@ pub struct TidyResult {
     warnings: Vec<TidyWarning>,
     #[pyo3(get)]
     count: usize,
+    renames: Vec<refkit_core::TidyRename>,
 }
 
 #[pymethods]
 impl TidyResult {
+    #[getter]
+    fn renames(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let values = PyList::empty(py);
+        for rename in &self.renames {
+            let value = PyDict::new(py);
+            value.set_item("entry_id", rename.entry_id.index())?;
+            value.set_item("old_key", &rename.old_key)?;
+            value.set_item("new_key", &rename.new_key)?;
+            values.append(value)?;
+        }
+        Ok(values.into_any().unbind())
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "TidyResult({} entries, {} warnings)",
@@ -216,6 +230,7 @@ impl TidyResult {
                 .map(TidyWarning::from_core)
                 .collect(),
             count: result.count,
+            renames: result.renames,
         }
     }
 }
@@ -263,9 +278,9 @@ pub(crate) fn tidy_error_to_py(py: Python<'_>, err: CoreTidyError) -> PyErr {
             let _ = value.setattr("message", message);
             pyerr
         }
-        CoreTidyError::Template(message) | CoreTidyError::Name(message) => {
-            PyTidyError::new_err(message)
-        }
+        CoreTidyError::Template(message)
+        | CoreTidyError::Name(message)
+        | CoreTidyError::Reference(message) => PyTidyError::new_err(message),
     }
 }
 
@@ -273,7 +288,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<TidyOptions>()?;
     module.add_class::<TidyWarning>()?;
     module.add_class::<TidyResult>()?;
-    module.add("_tidy_option_names", TIDY_OPTION_NAMES.to_vec())?;
     module.add_function(wrap_pyfunction!(tidy_bibtex_py, module)?)?;
     Ok(())
 }

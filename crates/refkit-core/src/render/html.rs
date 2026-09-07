@@ -140,7 +140,7 @@ fn push_html_wrapper(output: &mut String, suffix: &mut String, start: &str, end:
     suffix.insert_str(0, end);
 }
 
-fn write_html_escaped(output: &mut String, value: &str) {
+pub(crate) fn write_html_escaped(output: &mut String, value: &str) {
     for ch in value.chars() {
         match ch {
             '&' => output.push_str("&amp;"),

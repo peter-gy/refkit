@@ -27,6 +27,35 @@ class PolarsRefkitAdapter(PackageAdapter):
     name = "polars-refkit"
     distribution = "polars-refkit"
 
+    def prepare_failed_scalar_broadcast(
+        self,
+        workload: Workload,
+        directory: Path,
+    ) -> PreparedOperation:
+        import polars as pl
+
+        import polars_refkit as prk
+
+        frame = pl.DataFrame({"key": workload.keys})
+        malformed = workload.source_text("failed_bibtex")
+
+        def operation() -> OperationOutcome:
+            values = frame.select(prk.cite(pl.lit(malformed), "key")).to_series().to_list()
+            return OperationOutcome(values, len(values))
+
+        def check(outcome: OperationOutcome) -> None:
+            if outcome.value != [None] * len(workload.keys):
+                raise AssertionError("expected a null citation for every failed input row")
+
+        return _prepared(
+            operation,
+            check,
+            source_format="failed_bibtex",
+            setup_included=True,
+            citation_count=len(workload.keys),
+            execution_mode="eager",
+        )
+
     def prepare_parse_bibtex(self, workload: Workload, directory: Path) -> PreparedOperation:
         return self._prepare_parse_bibtex(workload, lazy=False)
 
@@ -96,17 +125,16 @@ class PolarsRefkitAdapter(PackageAdapter):
         return self._prepare_project_fields(workload, lazy=True)
 
     def _prepare_parse_bibtex(self, workload: Workload, *, lazy: bool) -> PreparedOperation:
-        import polars_refkit as prk
-
         def operation() -> OperationOutcome:
             source = workload.bibtex_path.read_text(encoding="utf-8")
             frame = _frame({"bibtex": [source]}, lazy=lazy)
-            count = _select(frame, lazy=lazy, count=prk.entry_count("bibtex")).item()
-            return OperationOutcome(count, int(count or 0))
+            result = _entries_frame(frame, "bibtex", fields=("key", "title", "doi"), lazy=lazy)
+            rows = [row for row in result.to_dicts() if row["key"] is not None]
+            return OperationOutcome(rows, len(rows))
 
         return _prepared(
             operation,
-            _count_is(len(workload.records)),
+            _projection_contains(workload.records, required_fields=("key", "title", "doi")),
             setup_included=True,
             execution_mode=_execution_mode(lazy),
         )
@@ -142,7 +170,7 @@ class PolarsRefkitAdapter(PackageAdapter):
             result = _select(
                 frame,
                 lazy=lazy,
-                bibliography=prk.full_bibliography_text("bibtex"),
+                bibliography=prk.full_bibliography("bibtex", output="text"),
             )
             bibliography = result["bibliography"].item()
             return OperationOutcome(bibliography, len(workload.records))

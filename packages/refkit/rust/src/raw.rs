@@ -5,10 +5,9 @@ use std::rc::Rc;
 
 use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyModule;
-use serde_json::{Value, json};
+use pyo3::types::{PyDict, PyList, PyModule};
 
-use crate::conversion::json_to_py;
+use crate::conversion::diagnostics_to_py;
 use crate::errors::RefkitError;
 use crate::filesystem::{read_bibtex, write_bibtex};
 use crate::repr::quoted;
@@ -23,17 +22,22 @@ type SharedDocument = Rc<RefCell<RawDocument>>;
 #[pyclass(module = "refkit", unsendable)]
 pub struct BibDocument {
     doc: SharedDocument,
+    diagnostics: Vec<refkit_core::Diagnostic>,
 }
 
 #[pymethods]
 impl BibDocument {
     #[staticmethod]
     fn read(py: Python<'_>, path: PathBuf) -> PyResult<Self> {
-        let parsed: Result<RawDocument, String> =
-            py.detach(move || read_bibtex(&path).map(|source| RawDocument::parse(&source)));
-        let data = parsed.map_err(RefkitError::new_err)?;
+        let (data, diagnostic) = py
+            .detach(move || {
+                read_bibtex(&path)
+                    .map(|(source, diagnostic)| (RawDocument::parse(&source), diagnostic))
+            })
+            .map_err(RefkitError::new_err)?;
         Ok(Self {
             doc: Rc::new(RefCell::new(data)),
+            diagnostics: diagnostic.into_iter().collect(),
         })
     }
 
@@ -42,7 +46,13 @@ impl BibDocument {
         let data = py.detach(move || RawDocument::parse(&source));
         Self {
             doc: Rc::new(RefCell::new(data)),
+            diagnostics: Vec::new(),
         }
+    }
+
+    #[getter]
+    fn diagnostics(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        diagnostics_to_py(py, &self.diagnostics)
     }
 
     #[getter]
@@ -70,19 +80,13 @@ impl BibDocument {
     #[getter]
     fn failed_blocks(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let blocks = self.doc.borrow().failed_blocks();
-        let blocks = blocks.iter().map(raw_block_to_json).collect::<Vec<_>>();
-        let payload =
-            serde_json::to_string(&blocks).map_err(|err| RefkitError::new_err(err.to_string()))?;
-        json_to_py(py, &payload)
+        raw_blocks_to_py(py, &blocks)
     }
 
     #[getter]
     fn blocks(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let blocks = self.doc.borrow().blocks();
-        let blocks = blocks.iter().map(raw_block_to_json).collect::<Vec<_>>();
-        let payload =
-            serde_json::to_string(&blocks).map_err(|err| RefkitError::new_err(err.to_string()))?;
-        json_to_py(py, &payload)
+        raw_blocks_to_py(py, &blocks)
     }
 
     fn write(&self, py: Python<'_>, path: PathBuf) -> PyResult<()> {
@@ -322,8 +326,8 @@ impl BibFieldMap {
     }
 
     fn is_empty(&self) -> PyResult<bool> {
-        self.with_fields(|doc| doc.field_keys(self.entry_id))
-            .map(|fields| fields.is_empty())
+        self.with_fields(|doc| doc.field_count(self.entry_id))
+            .map(|count| count == 0)
     }
 
     fn get_unique(&self, key: &str) -> PyResult<Option<BibField>> {
@@ -338,13 +342,12 @@ impl BibFieldMap {
     }
 
     fn __len__(&self) -> PyResult<usize> {
-        self.with_fields(|doc| doc.field_keys(self.entry_id))
-            .map(|fields| fields.len())
+        self.with_fields(|doc| doc.field_count(self.entry_id))
     }
 
     fn __bool__(&self) -> PyResult<bool> {
-        self.with_fields(|doc| doc.field_keys(self.entry_id))
-            .map(|fields| !fields.is_empty())
+        self.with_fields(|doc| doc.field_count(self.entry_id))
+            .map(|count| count != 0)
     }
 
     fn __contains__(&self, key: &str) -> PyResult<bool> {
@@ -463,28 +466,50 @@ fn raw_edit_error_to_py(err: RawEditError, field_key: &str) -> PyErr {
     }
 }
 
-fn raw_block_to_json(block: &RawBlockInfo) -> Value {
-    match block {
-        RawBlockInfo::Whitespace { span } => {
-            json!({"kind": "whitespace", "span": [span.start, span.end]})
-        }
-        RawBlockInfo::Comment { raw, span } => {
-            json!({"kind": "comment", "raw": raw, "span": [span.start, span.end]})
-        }
-        RawBlockInfo::Preamble { value, span } => {
-            json!({"kind": "preamble", "value": value, "span": [span.start, span.end]})
-        }
-        RawBlockInfo::StringDef { key, value, span } => {
-            json!({"kind": "string", "key": key, "value": value, "span": [span.start, span.end]})
-        }
-        RawBlockInfo::Entry { id, key, span } => {
-            json!({"kind": "entry", "id": id.index(), "key": key, "span": [span.start, span.end]})
-        }
-        RawBlockInfo::Failed { raw, error, span } => {
-            json!({"kind": "failed", "raw": raw, "error": error, "span": [span.start, span.end]})
-        }
-        RawBlockInfo::Other { raw, span } => {
-            json!({"kind": "other", "raw": raw, "span": [span.start, span.end]})
-        }
+fn raw_blocks_to_py(py: Python<'_>, blocks: &[RawBlockInfo]) -> PyResult<Py<PyAny>> {
+    let values = PyList::empty(py);
+    for block in blocks {
+        let value = PyDict::new(py);
+        let (kind, span) = match block {
+            RawBlockInfo::Whitespace { span } => ("whitespace", span),
+            RawBlockInfo::Comment { raw, span } => {
+                value.set_item("raw", raw)?;
+                ("comment", span)
+            }
+            RawBlockInfo::Preamble {
+                value: preamble,
+                span,
+            } => {
+                value.set_item("value", preamble)?;
+                ("preamble", span)
+            }
+            RawBlockInfo::StringDef {
+                key,
+                value: definition,
+                span,
+            } => {
+                value.set_item("key", key)?;
+                value.set_item("value", definition)?;
+                ("string", span)
+            }
+            RawBlockInfo::Entry { id, key, span } => {
+                value.set_item("id", id.index())?;
+                value.set_item("key", key)?;
+                ("entry", span)
+            }
+            RawBlockInfo::Failed { raw, error, span } => {
+                value.set_item("raw", raw)?;
+                value.set_item("error", error)?;
+                ("failed", span)
+            }
+            RawBlockInfo::Other { raw, span } => {
+                value.set_item("raw", raw)?;
+                ("other", span)
+            }
+        };
+        value.set_item("kind", kind)?;
+        value.set_item("span", (span.start, span.end))?;
+        values.append(value)?;
     }
+    Ok(values.into_any().unbind())
 }

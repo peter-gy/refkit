@@ -18,7 +18,13 @@ members = [
     "polars-refkit",
     "refkit",
     "refkit-bench",
+    "refkit-tests",
     "refkit-workspace",
+]
+build-constraints = [
+    { name = "agent-plugins", specifier = "==0.2.0" },
+    { name = "hatchling", specifier = "==1.32.0" },
+    { name = "maturin", specifier = "==1.15.0" },
 ]
 
 [[package]]
@@ -1146,11 +1152,15 @@ name = "polars-refkit"
 version = "0.0.5"
 source = { editable = "packages/polars-refkit" }
 dependencies = [
+    { name = "agent-plugins" },
     { name = "polars" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "polars", specifier = ">=1.29" }]
+requires-dist = [
+    { name = "agent-plugins", specifier = "==0.2.0" },
+    { name = "polars", specifier = ">=1.29" },
+]
 
 [[package]]
 name = "polars-runtime-32"
@@ -1659,6 +1669,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "refkit-tests"
+version = "0.0.1"
+source = { editable = "packages/refkit-tests" }
+dependencies = [
+    { name = "agent-plugins" },
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "agent-plugins", specifier = "==0.2.0" },
+    { name = "pytest", specifier = "==9.1.1" },
+]
+
+[[package]]
 name = "refkit-workspace"
 version = "0.0.5"
 source = { virtual = "." }
@@ -1669,6 +1694,7 @@ dependencies = [
 
 [package.dev-dependencies]
 build = [
+    { name = "agent-plugins" },
     { name = "twine" },
 ]
 dev = [
@@ -1680,8 +1706,12 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pyyaml" },
+    { name = "refkit-tests" },
     { name = "ruff" },
     { name = "ty" },
+]
+lint = [
+    { name = "ruff" },
 ]
 pyodide-build = [
     { name = "pyodide-build", marker = "python_full_version >= '3.12'" },
@@ -1694,7 +1724,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-build = [{ name = "twine", specifier = "==7.0.0" }]
+build = [
+    { name = "agent-plugins", specifier = "==0.2.0" },
+    { name = "twine", specifier = "==7.0.0" },
+]
 dev = [
     { name = "hatchling", specifier = ">=1.32.0" },
     { name = "hypothesis", specifier = ">=6.167.1" },
@@ -1704,9 +1737,11 @@ dev = [
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "refkit-tests", editable = "packages/refkit-tests" },
     { name = "ruff", specifier = ">=0.16.5" },
     { name = "ty", specifier = ">=0.0.78" },
 ]
+lint = [{ name = "ruff", specifier = "==0.16.5" }]
 pyodide-build = [{ name = "pyodide-build", marker = "python_full_version >= '3.12'", specifier = "==0.35.1" }]
 
 [[package]]

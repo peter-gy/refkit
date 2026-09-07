@@ -8,8 +8,10 @@
 - When the core lacks an operation, add a typed core capability and call it. Keep bibliography semantics out of PyO3 code and Python helpers.
 - Release the GIL around parsing, rendering, formatting, and filesystem work that stays independent of Python objects.
 - Keep unsendable raw document state on the GIL-bound path.
+- Keep public dictionary and tree contracts in `refkit.types`. Native conversion, stubs, and consumer annotation tests must use the same field names and finite vocabularies.
 - Update `_native.pyi`, package exports, public docs, and boundary tests with every public change.
 - Keep `refkit.agent` lazy and limited to dynamic help plus packaged-resource access over the public Python API.
+- Keep each packaged task example independently executable. Validate installed resources with `python -m refkit_tests.agent_examples` through editable and built-wheel boundaries.
 
 Rebuild with `make refkit-develop` from the repository root so the editable native module and Agent Plugin marker come from the same backend. Run `make python-lint typecheck test rust` after the rebuild.
 

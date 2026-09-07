@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use crate::{RawEntryId, RawSyntaxDocument, RawSyntaxEntry};
+use crate::raw::{RawEntryId, RawSyntaxDocument, RawSyntaxEntry};
 
 use super::{DuplicateRule, MergeStrategy, TidyOptions, TidyWarning};
 
@@ -17,11 +17,13 @@ impl DuplicatePlan {
         self.skip_entries.contains(&id)
     }
 
-    pub fn entry<'a>(&'a self, entry: &'a RawSyntaxEntry) -> &'a RawSyntaxEntry {
-        self.merged_entries.get(&entry.id).unwrap_or(entry)
+    pub fn apply(&mut self, doc: &mut RawSyntaxDocument) {
+        for (id, entry) in self.merged_entries.drain() {
+            doc.entries[id.index()] = entry;
+        }
     }
 
-    fn retained_id(&self, id: RawEntryId) -> RawEntryId {
+    pub fn retained_id(&self, id: RawEntryId) -> RawEntryId {
         let mut current = id;
         while let Some(next) = self.merge_targets.get(&current).copied() {
             if next == current {
@@ -60,26 +62,37 @@ pub(crate) fn duplicate_plan(doc: &RawSyntaxDocument, options: &TidyOptions) -> 
                 DuplicateRule::Citation => duplicate_citation(entry, &mut citations),
             };
             if let Some(existing) = duplicate {
-                let retained_id = plan.retained_id(existing.id);
-                let retained_existing = entry_by_id(&doc.entries, retained_id).unwrap_or(existing);
-                let existing_for_message = plan.entry(retained_existing);
-                let merge_target = existing_for_message.clone();
                 plan.warnings.push(TidyWarning::DuplicateEntry {
                     rule: check.rule,
-                    message: duplicate_message(
-                        check.rule,
-                        check.do_merge,
-                        entry,
-                        existing_for_message,
-                    ),
+                    message: duplicate_message(check.rule, check.do_merge, entry, existing),
                 });
-                if check.do_merge
-                    && let Some(strategy) = options.merge
-                {
-                    plan.skip_entries.insert(entry.id);
-                    plan.merge_targets.insert(entry.id, merge_target.id);
-                    merge_entry(strategy, &mut plan.merged_entries, &merge_target, entry);
+                if check.do_merge && options.merge.is_some() {
+                    let left = plan.retained_id(existing.id);
+                    let right = plan.retained_id(entry.id);
+                    if left != right {
+                        let (target, source) = if left.index() < right.index() {
+                            (left, right)
+                        } else {
+                            (right, left)
+                        };
+                        plan.merge_targets.insert(source, target);
+                    }
                 }
+            }
+        }
+    }
+
+    if let Some(strategy) = options.merge {
+        for entry in &doc.entries {
+            let target_id = plan.retained_id(entry.id);
+            if entry.id != target_id {
+                plan.skip_entries.insert(entry.id);
+                merge_entry(
+                    strategy,
+                    &mut plan.merged_entries,
+                    &doc.entries[target_id.index()],
+                    entry,
+                );
             }
         }
     }
@@ -127,10 +140,6 @@ fn duplicate_rules(options: &TidyOptions) -> Option<Vec<DuplicateCheckRule>> {
     Some(rules)
 }
 
-fn entry_by_id(entries: &[RawSyntaxEntry], id: RawEntryId) -> Option<&RawSyntaxEntry> {
-    entries.iter().find(|entry| entry.id == id)
-}
-
 fn merge_entry(
     strategy: MergeStrategy,
     merged_entries: &mut HashMap<RawEntryId, RawSyntaxEntry>,
@@ -143,8 +152,9 @@ fn merge_entry(
     match strategy {
         MergeStrategy::First => {}
         MergeStrategy::Last => {
-            target.key.clone_from(&duplicate.key);
-            target.fields.clone_from(&duplicate.fields);
+            let id = target.id;
+            target.clone_from(duplicate);
+            target.id = id;
         }
         MergeStrategy::Combine | MergeStrategy::Overwrite => {
             for field in &duplicate.fields {

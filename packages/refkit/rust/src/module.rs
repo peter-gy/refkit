@@ -4,7 +4,7 @@ use pyo3::types::PyModule;
 use crate::citation::{Citation, CitationGroup, Cite};
 use crate::document::{Document, RenderedDocument};
 use crate::entry::Entry;
-use crate::errors::{MissingReferenceError, RefkitError, TidyError, TidySyntaxError};
+use crate::errors::{MissingReferenceError, ParseError, RefkitError, TidyError, TidySyntaxError};
 use crate::filesystem::write_bibtex_py;
 use crate::library::Library;
 use crate::raw;
@@ -18,6 +18,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("build_info", build_info())?;
     m.add("build_mode", build_mode())?;
     m.add("RefkitError", py.get_type::<RefkitError>())?;
+    m.add("ParseError", py.get_type::<ParseError>())?;
     m.add(
         "MissingReferenceError",
         py.get_type::<MissingReferenceError>(),
