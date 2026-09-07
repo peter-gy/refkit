@@ -12,6 +12,7 @@ GitHub Actions builds and tests source, CPython distributions, and PyEmscripten 
 - `workflows/docs.yml` validates the root and `/refkit/` documentation builds. `workflows/ci.yml` deploys the validated Pages artifact on main.
 - Attach each adapter's Agent Plugin to direct Maturin wheel output before normalization, archive validation, artifact upload, or installed-runtime tests.
 - Record source revision, tool versions, build constraints, and archive hashes with each artifact. Verify the complete package artifact set before publication.
+- Validate the complete archive set on Linux before each artifact workflow succeeds. Keep text checkout bytes at LF through `.gitattributes` so packaged resources match across operating systems.
 - Run shared installed probes from the installed `refkit-tests` wheel on CPython, Pyodide, and rebuilt sdists. Agent recipe checks read the installed skill resources. `test-support.yml` builds shared support once per run, and candidate probes execute outside the checkout.
 - Treat tags and publish jobs as external state changes that require explicit authorization.
 
