@@ -1,0 +1,33 @@
+Cargo.toml
+  s_9fddfede21feba::t_55e03279a07668 9,17
+packages/polars-refkit/pyproject.toml
+  s_9fddfede21feba::t_55e03279a07668 3
+packages/refkit/pyproject.toml
+  s_9fddfede21feba::t_55e03279a07668 3
+pyproject.toml
+  s_9fddfede21feba::t_55e03279a07668 3
+packages/polars-refkit/rust/Cargo.toml
+  s_9fddfede21feba::t_55e03279a07668 3
+Cargo.lock
+  ai_agent 458,471
+packages/polars-refkit/rust/Cargo.lock
+  ai_agent 1402,1691
+uv.lock
+  ai_agent 1152,1637,1688
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0785b51ddd150101d8dbc77928e0a1b6de16883d",
+  "prompts": {},
+  "sessions": {
+    "s_9fddfede21feba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07d16-eb2f-7103-95c3-d5cca6784a83",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
