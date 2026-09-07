@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from inspect import Parameter, Signature
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, Literal, TypeAlias, TypedDict, cast
 
 DuplicateRule: TypeAlias = Literal["doi", "key", "abstract", "citation"]
 MergeStrategy: TypeAlias = Literal["first", "last", "combine", "overwrite"]
 
-TIDY_UNSET = object()
 
 _TIDY_BOOL_OPTIONS = {
     "curly",
@@ -35,42 +33,45 @@ _TIDY_DEFAULTABLE_STRING_LIST_OPTIONS = {
 _TIDY_DEFAULTABLE_USIZE_OPTIONS = {"align", "wrap"}
 _VALID_DUPLICATE_RULES = {"doi", "key", "abstract", "citation"}
 _VALID_MERGE_STRATEGIES = {"first", "last", "combine", "overwrite"}
-_TIDY_OPTION_DEFAULTS = {
-    "omit": None,
-    "curly": False,
-    "numeric": False,
-    "months": False,
-    "space": 2,
-    "tab": False,
-    "align": 14,
-    "blank_lines": False,
-    "sort": None,
-    "duplicates": None,
-    "merge": None,
-    "strip_enclosing_braces": False,
-    "drop_all_caps": False,
-    "escape": True,
-    "sort_fields": None,
-    "strip_comments": False,
-    "trailing_commas": False,
-    "encode_urls": False,
-    "tidy_comments": True,
-    "remove_empty_fields": False,
-    "remove_duplicate_fields": True,
-    "generate_keys": None,
-    "max_authors": None,
-    "lowercase": True,
-    "enclosing_braces": None,
-    "remove_braces": None,
-    "wrap": None,
-}
 
 
-def tidy_kwargs(**options: Any) -> dict[str, Any]:
+class TidyOptions(TypedDict, total=False):
+    """Serializable formatter options. Omitted fields use core defaults."""
+
+    omit: list[str] | None
+    curly: bool
+    numeric: bool
+    months: bool
+    space: int
+    tab: bool
+    align: bool | int | None
+    blank_lines: bool
+    sort: bool | list[str] | None
+    duplicates: list[DuplicateRule] | None
+    merge: MergeStrategy | None
+    strip_enclosing_braces: bool
+    drop_all_caps: bool
+    escape: bool
+    sort_fields: bool | list[str] | None
+    strip_comments: bool
+    trailing_commas: bool
+    encode_urls: bool
+    tidy_comments: bool
+    remove_empty_fields: bool
+    remove_duplicate_fields: bool
+    generate_keys: bool | str | None
+    max_authors: int | None
+    lowercase: bool
+    enclosing_braces: bool | list[str] | None
+    remove_braces: bool | list[str] | None
+    wrap: bool | int | None
+
+
+def tidy_kwargs(options: TidyOptions | None) -> dict[str, Any]:
+    if options is not None and not isinstance(options, dict):
+        raise TypeError("options must be a dictionary")
     kwargs: dict[str, Any] = {}
-    for name, value in options.items():
-        if value is TIDY_UNSET:
-            continue
+    for name, value in (options or {}).items():
         if name in _TIDY_BOOL_OPTIONS:
             kwargs[name] = _bool_option(name, value)
         elif name == "space":
@@ -98,15 +99,6 @@ def tidy_kwargs(**options: Any) -> dict[str, Any]:
         else:
             raise ValueError(f"unknown tidy option {name!r}")
     return kwargs
-
-
-def tidy_signature(first_parameter: str) -> Signature:
-    parameters = [Parameter(first_parameter, Parameter.POSITIONAL_OR_KEYWORD)]
-    parameters.extend(
-        Parameter(name, Parameter.KEYWORD_ONLY, default=default)
-        for name, default in _TIDY_OPTION_DEFAULTS.items()
-    )
-    return Signature(parameters)
 
 
 def _bool_option(name: str, value: Any) -> bool:

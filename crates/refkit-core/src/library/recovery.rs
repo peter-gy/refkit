@@ -1,256 +1,273 @@
-use std::collections::HashSet;
 use std::ops::Range;
 
-use biblatex::{
-    Bibliography as BiblatexBibliography, ChunksExt, Entry as BiblatexEntry,
-    TypeError as BiblatexTypeError,
-};
+use biblatex::{Bibliography, ChunksExt, Entry, RawBibliography};
 use hayagriva::{Entry as HayEntry, Library as HayLibrary};
 
-use crate::quoted;
-use crate::raw::{
-    remove_block_containing_span, sanitize_biblatex_for_library,
-    sanitize_biblatex_for_library_literals,
-};
+use super::guard::validate_raw;
+use super::parse::parse_error;
+use super::source::RecoverySource;
+use super::{Diagnostic, DiagnosticAction, ParseFailure, ParsedLibrary, RecoveryPolicy};
+use crate::raw::{RawBlockInfo, RawDocument, sanitize_biblatex_for_library};
 
-use super::ParsedLibrary;
+const MAX_RECOVERY_PASSES: usize = 128;
 
-pub(super) fn recover_biblatex_library(
+pub(super) fn parse_biblatex(
     source: &str,
-    diagnostics: bool,
-) -> Result<ParsedLibrary, String> {
-    let (sanitized, mut recovery_diagnostics) =
-        sanitize_biblatex_for_library(source, false, diagnostics);
-    let mut bibliography =
-        recover_biblatex_syntax(&sanitized, &mut recovery_diagnostics, diagnostics)
-            .map_err(|err| format_recovery_failure(&err))?;
-    sanitize_biblatex_typed_fields(&mut bibliography, &mut recovery_diagnostics, diagnostics);
-    let inner =
-        convert_biblatex_with_recovery(&bibliography, &mut recovery_diagnostics, diagnostics)
-            .map_err(|err| format_recovery_failure(&err))?;
-
-    Ok(ParsedLibrary {
-        inner,
-        diagnostics: if diagnostics {
-            recovery_diagnostics
-        } else {
-            Vec::new()
-        },
-    })
-}
-
-fn format_recovery_failure(recovery_error: &str) -> String {
-    format!("non-strict recovery failed:\n{recovery_error}")
-}
-
-fn sanitize_biblatex_typed_fields(
-    bibliography: &mut BiblatexBibliography,
-    diagnostics: &mut Vec<String>,
-    collect_diagnostics: bool,
-) {
-    for entry in bibliography.iter_mut() {
-        remove_field_if(entry, diagnostics, collect_diagnostics, "month", |value| {
-            is_valid_month_field(value)
-        });
-        remove_field_if(entry, diagnostics, collect_diagnostics, "year", |value| {
-            is_valid_year_field(value)
-        });
-        remove_field_if(entry, diagnostics, collect_diagnostics, "day", |value| {
-            is_valid_day_field(value)
-        });
-        for field in ["endyear", "endmonth", "endday"] {
-            remove_field_if(entry, diagnostics, collect_diagnostics, field, |value| {
-                field.ends_with("year") && is_valid_year_field(value)
-                    || field.ends_with("month") && is_valid_month_field(value)
-                    || field.ends_with("day") && is_valid_day_field(value)
-            });
+    policy: RecoveryPolicy,
+) -> Result<ParsedLibrary, ParseFailure> {
+    let mut source = RecoverySource::new(source.to_string());
+    let mut diagnostics = Vec::new();
+    for _ in 0..MAX_RECOVERY_PASSES {
+        let raw = match RawBibliography::parse(&source.text) {
+            Ok(raw) => raw,
+            Err(error) => {
+                let mut diagnostic = parse_error(&error);
+                if policy == RecoveryPolicy::Report {
+                    let (filtered, mut found) = sanitize_biblatex_for_library(&source.text);
+                    if filtered != source.text {
+                        for diagnostic in &mut found {
+                            map_diagnostic(&source, diagnostic);
+                        }
+                        diagnostics.extend(found);
+                        source.text = filtered;
+                        continue;
+                    }
+                    if drop_block(&mut source, &mut diagnostic) {
+                        diagnostics.push(diagnostic);
+                        continue;
+                    }
+                }
+                return Err(failure(&source, diagnostics, diagnostic));
+            }
+        };
+        if let Err(mut diagnostic) = validate_raw(&raw) {
+            if policy == RecoveryPolicy::Report && diagnostic.code != "resource_limit" {
+                let span = diagnostic
+                    .span
+                    .clone()
+                    .expect("dependency errors carry spans");
+                let clear_reference = diagnostic.code == "cyclic_reference";
+                map_diagnostic(&source, &mut diagnostic);
+                diagnostics.push(diagnostic.recovered(DiagnosticAction::Literalized));
+                if clear_reference {
+                    source.replace(span, "{}");
+                } else {
+                    source.literalize(span);
+                }
+                continue;
+            }
+            return Err(failure(&source, diagnostics, diagnostic));
+        }
+        match Bibliography::from_raw(raw) {
+            Ok(mut bibliography) => {
+                if bibliography.is_empty() && !source.text.trim().is_empty() {
+                    let (_, mut found) = sanitize_biblatex_for_library(&source.text);
+                    for diagnostic in &mut found {
+                        map_diagnostic(&source, diagnostic);
+                    }
+                    diagnostics.extend(found);
+                }
+                let inner = convert(&mut bibliography, &source, policy, &mut diagnostics)?;
+                return Ok(ParsedLibrary { inner, diagnostics });
+            }
+            Err(error) => {
+                let mut diagnostic = parse_error(&error);
+                if policy == RecoveryPolicy::Report {
+                    if matches!(error.kind, biblatex::ParseErrorKind::UnknownAbbreviation(_)) {
+                        identify_field(&source.text, &mut diagnostic);
+                        map_diagnostic(&source, &mut diagnostic);
+                        diagnostics.push(diagnostic.recovered(DiagnosticAction::Literalized));
+                        source.literalize(error.span);
+                        continue;
+                    }
+                    let (filtered, mut found) = sanitize_biblatex_for_library(&source.text);
+                    if filtered != source.text {
+                        for diagnostic in &mut found {
+                            map_diagnostic(&source, diagnostic);
+                        }
+                        diagnostics.extend(found);
+                        source.text = filtered;
+                        continue;
+                    }
+                    if drop_block(&mut source, &mut diagnostic) {
+                        diagnostics.push(diagnostic);
+                        continue;
+                    }
+                }
+                return Err(failure(&source, diagnostics, diagnostic));
+            }
         }
     }
+    diagnostics.push(Diagnostic::error(
+        "resource_limit",
+        None,
+        "BibTeX recovery exceeded 128 changes".to_string(),
+    ));
+    Err(ParseFailure { diagnostics })
 }
 
-fn remove_field_if(
-    entry: &mut BiblatexEntry,
-    diagnostics: &mut Vec<String>,
-    collect_diagnostics: bool,
-    field: &str,
-    is_valid: impl FnOnce(&str) -> bool,
-) {
-    let Some(value) = entry
-        .fields
-        .get(field)
-        .map(|chunks| chunks.format_verbatim())
-    else {
+fn failure(
+    source: &RecoverySource,
+    mut diagnostics: Vec<Diagnostic>,
+    mut diagnostic: Diagnostic,
+) -> ParseFailure {
+    identify_field(&source.text, &mut diagnostic);
+    map_diagnostic(source, &mut diagnostic);
+    diagnostics.push(diagnostic);
+    ParseFailure { diagnostics }
+}
+
+fn map_diagnostic(source: &RecoverySource, diagnostic: &mut Diagnostic) {
+    diagnostic.span = diagnostic
+        .span
+        .take()
+        .map(|span| source.original_span(span));
+}
+
+fn identify_field(source: &str, diagnostic: &mut Diagnostic) {
+    let Some(span) = diagnostic.span.as_ref() else {
         return;
     };
-    if is_valid(value.trim()) {
+    let Ok(raw) = RawBibliography::parse(source) else {
         return;
-    }
-    entry.fields.remove(field);
-    if collect_diagnostics {
-        diagnostics.push(format!(
-            "ignored BibTeX field {} in entry {} because value {} is not valid for normalization",
-            quoted(field),
-            quoted(&entry.key),
-            quoted(value.trim())
-        ));
-    }
-}
-
-fn recover_biblatex_syntax(
-    source: &str,
-    diagnostics: &mut Vec<String>,
-    collect_diagnostics: bool,
-) -> Result<BiblatexBibliography, String> {
-    const MAX_SYNTAX_RECOVERY_PASSES: usize = 16;
-    let mut candidate = source.to_string();
-    match BiblatexBibliography::parse(&candidate) {
-        Ok(bibliography) => return Ok(bibliography),
-        Err(first_err) => {
-            let (validated, validation_diagnostics) =
-                sanitize_biblatex_for_library(&candidate, true, collect_diagnostics);
-            if validated != candidate {
-                diagnostics.extend(validation_diagnostics);
-                candidate = validated;
-                if let Ok(bibliography) = BiblatexBibliography::parse(&candidate) {
-                    return Ok(bibliography);
-                }
-            } else if collect_diagnostics {
-                diagnostics.push(format!(
-                    "syntax recovery could not pre-filter BibTeX entries after parse error: {first_err}"
-                ));
-            }
-
-            let (literal, literal_diagnostics) =
-                sanitize_biblatex_for_library_literals(&candidate, collect_diagnostics);
-            if literal != candidate {
-                diagnostics.extend(literal_diagnostics);
-                candidate = literal;
-                if let Ok(bibliography) = BiblatexBibliography::parse(&candidate) {
-                    return Ok(bibliography);
-                }
+    };
+    for entry in raw.entries {
+        for field in entry.v.fields {
+            if contains(&field.value.span, span) {
+                diagnostic.entry = Some(entry.v.key.v.to_string());
+                diagnostic.field = Some(field.key.v.to_ascii_lowercase());
+                return;
             }
         }
     }
-
-    for _ in 0..MAX_SYNTAX_RECOVERY_PASSES {
-        match BiblatexBibliography::parse(&candidate) {
-            Ok(bibliography) => return Ok(bibliography),
-            Err(err) => {
-                let Some((next, diagnostic)) =
-                    remove_block_containing_span(&candidate, err.span.clone())
-                else {
-                    return Err(format!("biblatex parse error: {err}"));
-                };
-                if collect_diagnostics {
-                    diagnostics.push(format!(
-                        "ignored BibTeX block during syntax recovery because {err}: {diagnostic}"
-                    ));
-                }
-                if next.len() >= candidate.len() {
-                    return Err(format!("biblatex parse error did not make progress: {err}"));
-                }
-                candidate = next;
-            }
-        }
-    }
-
-    Err(format!(
-        "biblatex syntax recovery exceeded {MAX_SYNTAX_RECOVERY_PASSES} passes"
-    ))
 }
 
-fn convert_biblatex_with_recovery(
-    bibliography: &BiblatexBibliography,
-    diagnostics: &mut Vec<String>,
-    collect_diagnostics: bool,
-) -> Result<HayLibrary, String> {
-    if let Ok(inner) = hayagriva::io::from_biblatex(bibliography) {
-        return Ok(inner);
-    }
-
-    let mut converted = Vec::with_capacity(bibliography.len());
-    for entry in bibliography.iter() {
-        if let Some(entry) =
-            convert_biblatex_entry_with_recovery(entry, diagnostics, collect_diagnostics)?
-        {
-            converted.push(entry);
-        }
-    }
-    Ok(converted.into_iter().collect())
+fn drop_block(source: &mut RecoverySource, diagnostic: &mut Diagnostic) -> bool {
+    let Some(span) = diagnostic.span.clone() else {
+        return false;
+    };
+    let document = RawDocument::parse(&source.text);
+    let block = document.blocks().into_iter().find_map(|block| {
+        let (block_span, key) = match block {
+            RawBlockInfo::Entry { span, key, .. } => (span, Some(key)),
+            RawBlockInfo::Failed { span, .. }
+            | RawBlockInfo::StringDef { span, .. }
+            | RawBlockInfo::Preamble { span, .. } => (span, None),
+            _ => return None,
+        };
+        (contains(&block_span, &span)
+            || (span.start >= source.text.len() && block_span.end == source.text.len()))
+        .then_some((block_span, key))
+    });
+    let Some((span, key)) = block else {
+        return false;
+    };
+    diagnostic.span = Some(source.original_span(span.clone()));
+    diagnostic.entry = key;
+    diagnostic.action = DiagnosticAction::DroppedBlock;
+    diagnostic.severity = super::DiagnosticSeverity::Warning;
+    source.replace(span, "");
+    true
 }
 
-fn convert_biblatex_entry_with_recovery(
-    source_entry: &BiblatexEntry,
-    diagnostics: &mut Vec<String>,
-    collect_diagnostics: bool,
-) -> Result<Option<HayEntry>, String> {
-    const MAX_FIELD_RECOVERY_PASSES: usize = 64;
-    let mut entry = source_entry.clone();
-    let mut removed_fields = HashSet::new();
-
-    for _ in 0..MAX_FIELD_RECOVERY_PASSES {
-        match HayEntry::try_from(&entry) {
-            Ok(entry) => return Ok(Some(entry)),
-            Err(err) => {
-                let Some(field) = field_for_type_error(&entry, &err, &removed_fields) else {
-                    if collect_diagnostics {
-                        diagnostics.push(format!(
-                            "ignored BibTeX entry {} because type recovery failed: {err}",
-                            quoted(&entry.key)
-                        ));
+fn convert(
+    bibliography: &mut Bibliography,
+    source: &RecoverySource,
+    policy: RecoveryPolicy,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Result<HayLibrary, ParseFailure> {
+    let mut entries = Vec::with_capacity(bibliography.len());
+    for entry in bibliography.iter_mut() {
+        if policy == RecoveryPolicy::Report {
+            for field in ["year", "month", "day", "endyear", "endmonth", "endday"] {
+                if let Some(chunks) = entry.fields.get(field) {
+                    let value = chunks.format_verbatim();
+                    let valid = if field.ends_with("year") {
+                        is_valid_year_field(value.trim())
+                    } else if field.ends_with("month") {
+                        is_valid_month_field(value.trim())
+                    } else {
+                        is_valid_day_field(value.trim())
+                    };
+                    if !valid {
+                        let span = chunks
+                            .first()
+                            .map(|first| first.span.start)
+                            .zip(chunks.last().map(|last| last.span.end))
+                            .map(|(start, end)| start..end);
+                        diagnostics.push(field_diagnostic(source, entry, field, span, "invalid_field", format!("ignored BibTeX field {field:?} in entry {:?} because value {value:?} is not valid for normalization", entry.key)).recovered(DiagnosticAction::DroppedField));
+                        entry.fields.remove(field);
                     }
-                    return Ok(None);
-                };
-                if collect_diagnostics {
-                    diagnostics.push(format!(
-                        "ignored BibTeX field {} in entry {} because type conversion failed: {err}",
-                        quoted(&field),
-                        quoted(&entry.key)
-                    ));
                 }
-                entry.fields.remove(&field);
-                removed_fields.insert(field);
+            }
+        }
+        loop {
+            match HayEntry::try_from(&*entry) {
+                Ok(converted) => {
+                    entries.push(converted);
+                    break;
+                }
+                Err(error) => {
+                    let field = entry
+                        .fields
+                        .iter()
+                        .find(|(_, chunks)| {
+                            chunks
+                                .iter()
+                                .any(|chunk| contains(&chunk.span, &error.span))
+                        })
+                        .map(|(name, _)| name.clone());
+                    let mut diagnostic = field_diagnostic(
+                        source,
+                        entry,
+                        field.as_deref().unwrap_or(""),
+                        Some(error.span.clone()),
+                        "invalid_field",
+                        format!("biblatex type error: {error}"),
+                    );
+                    if policy == RecoveryPolicy::Error {
+                        diagnostics.push(diagnostic);
+                        break;
+                    }
+                    if let Some(field) = field {
+                        diagnostic = diagnostic.recovered(DiagnosticAction::DroppedField);
+                        entry.fields.remove(&field);
+                        diagnostics.push(diagnostic);
+                    } else {
+                        diagnostics.push(diagnostic.recovered(DiagnosticAction::DroppedBlock));
+                        break;
+                    }
+                }
             }
         }
     }
-
-    Err(format!(
-        "biblatex type recovery exceeded {MAX_FIELD_RECOVERY_PASSES} passes for entry {}",
-        quoted(&source_entry.key)
-    ))
-}
-
-fn field_for_type_error(
-    entry: &BiblatexEntry,
-    err: &BiblatexTypeError,
-    removed_fields: &HashSet<String>,
-) -> Option<String> {
-    field_containing_span(entry, err.span.clone(), removed_fields).or_else(|| {
-        TYPED_RECOVERY_FIELDS
-            .iter()
-            .find(|field| entry.fields.contains_key(**field) && !removed_fields.contains(**field))
-            .map(|field| (*field).to_string())
-    })
-}
-
-fn field_containing_span(
-    entry: &BiblatexEntry,
-    span: Range<usize>,
-    removed_fields: &HashSet<String>,
-) -> Option<String> {
-    entry
-        .fields
+    if diagnostics
         .iter()
-        .filter(|(field, _)| !removed_fields.contains(*field))
-        .find_map(|(field, chunks)| {
-            chunks
-                .iter()
-                .any(|chunk| range_contains(&chunk.span, &span))
-                .then(|| field.clone())
-        })
+        .any(|diagnostic| diagnostic.severity == super::DiagnosticSeverity::Error)
+    {
+        return Err(ParseFailure {
+            diagnostics: std::mem::take(diagnostics),
+        });
+    }
+    Ok(entries.into_iter().collect())
 }
 
-fn range_contains(container: &Range<usize>, inner: &Range<usize>) -> bool {
+fn field_diagnostic(
+    source: &RecoverySource,
+    entry: &Entry,
+    field: &str,
+    span: Option<Range<usize>>,
+    code: &'static str,
+    message: String,
+) -> Diagnostic {
+    let mut diagnostic =
+        Diagnostic::error(code, span.map(|span| source.original_span(span)), message);
+    diagnostic.entry = Some(entry.key.clone());
+    diagnostic.field = (!field.is_empty()).then(|| field.to_string());
+    diagnostic
+}
+
+fn contains(container: &Range<usize>, inner: &Range<usize>) -> bool {
     container.start <= inner.start && inner.end <= container.end
 }
 
@@ -294,31 +311,3 @@ fn is_valid_month_field(value: &str) -> bool {
 fn is_valid_day_field(value: &str) -> bool {
     value.parse::<u8>().is_ok_and(|day| (1..=31).contains(&day))
 }
-
-const TYPED_RECOVERY_FIELDS: &[&str] = &[
-    "date",
-    "year",
-    "month",
-    "day",
-    "endyear",
-    "endmonth",
-    "endday",
-    "origdate",
-    "urldate",
-    "eventdate",
-    "edition",
-    "volume",
-    "volumes",
-    "number",
-    "issue",
-    "pages",
-    "pagetotal",
-    "pagination",
-    "language",
-    "langid",
-    "gender",
-    "editortype",
-    "editoratype",
-    "editorbtype",
-    "editorctype",
-];

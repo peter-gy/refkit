@@ -44,7 +44,7 @@ Native release builds use locked Cargo resolution and path remapping. Remapping 
 
 Maturin is the Rust-backed Python package builder used by both distributions. It emits a software bill of materials (SBOM), an inventory of components inside the wheel. `scripts.normalize_wheel` replaces local references with stable package references, removes generated timestamps and serial numbers, and refreshes the affected wheel `RECORD` hashes. The distribution contract then rejects generated Python bytecode, developer documentation, local SBOM references, and embedded builder paths.
 
-The `refkit` PEP 517 backend composes Maturin with `agent-plugins`. A regular wheel carries `plugin.json` and the exact `skills/refkit` tree beside the Python package. A source distribution stages the same files under `.agent-plugin` so a wheel rebuilt from that archive uses the captured release resources. An editable install stores a marker for the authored plugin root.
+Both package-local PEP 517 backends compose Maturin with `agent-plugins`. Each wheel carries its plugin manifest and exact package-specific skill tree. A source distribution stages the same files under `.agent-plugin` so a wheel rebuilt from that archive uses the captured release resources. An editable install stores a marker for the authored plugin root.
 
 GitHub's native and PyEmscripten jobs call Maturin directly for cross-platform wheel production. `agent-plugins attach-wheel` adds the configured plugin to each prebuilt wheel before SBOM normalization and archive validation.
 
@@ -71,12 +71,20 @@ Maturin receives the Python version, `wasm32-unknown-emscripten` target, PyEmscr
 
 ## Installed-Artifact Tests
 
-Release-test workflows consume built artifacts through clean environments:
+Package artifact workflows consume built artifacts through clean environments:
 
-- `release-tests-refkit.yml` installs and exercises `refkit` wheels on CPython and Pyodide.
-- `release-tests-polars-refkit.yml` installs compatible Polars versions and exercises the plugin on CPython and Pyodide.
+- `artifacts-refkit.yml` builds and exercises `refkit` wheels and sdists on CPython and Pyodide.
+- `artifacts-polars-refkit.yml` builds the plugin and tests compatible Polars versions on CPython and Pyodide.
 
-The Pyodide lane creates a virtual environment from the pinned xbuild environment, installs locked runtime packages and local wheels, runs smoke programs, and executes the focused runtime tests under `.github/pyodide`. The runtime lock includes `agent-plugins` so the local RefKit wheel can resolve its Agent Skill without package-index access.
+`test-support.yml` builds the internal `refkit-tests` wheel once per CI or tag run. Both package artifact workflows install it alongside candidate distributions. Shared probes and runtime tests live in `packages/refkit-tests/src/refkit_tests`. They run outside the checkout through `python -m refkit_tests.smoke_refkit` or `python -m refkit_tests.smoke_polars_refkit`, followed by their package-specific runtime tests.
+
+The Pyodide lane creates a virtual environment from the pinned xbuild environment, installs locked runtime packages, the support wheel, and local candidate wheels, then executes the same probes and focused runtime tests. The runtime lock includes `agent-plugins` so the local RefKit wheel can resolve its Agent Skill without package-index access.
+
+## Artifact provenance
+
+Each build records a manifest with the source revision, exact build constraints, tool versions, archive filenames, and SHA-256 hashes. Publication verifies the merged package artifact set before uploading it. Package build compatibility bounds remain separate from the pinned release environment.
+
+Native wheel jobs cover Linux, macOS, and Windows in both PR and release runs. Wheels rebuilt from sdists execute the same installed behavior probes as direct wheels.
 
 ## Publish Dependencies
 
@@ -87,7 +95,7 @@ The Pyodide lane creates a virtual environment from the pinned xbuild environmen
 3. Publish each validated distribution.
 4. Join both publish jobs at the release-complete check, then update release notes.
 
-Build jobs import each sdist, test each wheel, and upload the artifacts. Reusable release-test workflows install and validate the exact wheels. Publish jobs download the merged wheel and sdist sets, validate every archive, and use OpenID Connect (OIDC) trusted publishing so the workflow exchanges its GitHub identity for a short-lived package-index credential.
+Build jobs import each sdist, test each wheel, and upload the artifacts. The same package artifact workflows run for pull requests and publication. Installed probes in `refkit_tests` exercise parsing, rendering, raw or column operations, reports, and the packaged agent examples. Publish jobs download the merged wheel and sdist sets, validate every archive, and use OpenID Connect (OIDC) trusted publishing so the workflow exchanges its GitHub identity for a short-lived package-index credential.
 
 ## Release Completion
 

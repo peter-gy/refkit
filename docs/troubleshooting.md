@@ -46,7 +46,11 @@ Check parsing first:
 frame.select(pl.col("bibtex").refkit.parse_report(recovery="report"))
 ```
 
-A successful parse with a null render result usually indicates a missing key, null key input, or render failure. The current Polars interface has no render-report expression. Reproduce that row with the Python `refkit` API when the exact render error is required.
+A successful parse with a null render result usually indicates a missing key, null key input, or render failure. Use `render_report` with a list of keys to distinguish parsing, missing-key, and rendering failures:
+
+```python
+frame.select(pl.col("bibtex").refkit.render_report(pl.concat_list("key")))
+```
 
 ## A Polars query raises `ColumnNotFoundError`
 
@@ -80,7 +84,7 @@ python -m pip install --force-reinstall refkit
 
 ## Pip starts a source build
 
-Pip builds from the source distribution when no compatible wheel is available. Install a Rust toolchain and a working Python build environment, or choose a platform and Python version covered by the release wheels.
+Pip builds from the source distribution when no compatible wheel is available. Install a Rust toolchain, Git, and a working Python build environment, or choose a platform and Python version covered by the release wheels. Source builds fetch the pinned Hayagriva and Citationberg Git revisions from GitHub unless they are cached.
 
 ## Pyodide cannot find a compatible wheel
 

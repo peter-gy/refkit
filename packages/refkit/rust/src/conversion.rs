@@ -120,3 +120,25 @@ pub(crate) fn json_to_py(py: Python<'_>, value: &str) -> PyResult<Py<PyAny>> {
     let json = PyModule::import(py, "json")?;
     Ok(json.call_method1("loads", (value,))?.unbind())
 }
+
+pub(crate) fn diagnostics_to_py(
+    py: Python<'_>,
+    diagnostics: &[refkit_core::Diagnostic],
+) -> PyResult<Py<PyAny>> {
+    let values = PyList::empty(py);
+    for diagnostic in diagnostics {
+        let value = PyDict::new(py);
+        value.set_item("code", diagnostic.code)?;
+        value.set_item("severity", diagnostic.severity.as_str())?;
+        value.set_item("action", diagnostic.action.as_str())?;
+        value.set_item(
+            "span",
+            diagnostic.span.as_ref().map(|span| (span.start, span.end)),
+        )?;
+        value.set_item("entry", &diagnostic.entry)?;
+        value.set_item("field", &diagnostic.field)?;
+        value.set_item("message", &diagnostic.message)?;
+        values.append(value)?;
+    }
+    Ok(values.into_any().unbind())
+}

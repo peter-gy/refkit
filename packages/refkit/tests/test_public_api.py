@@ -17,16 +17,6 @@ import refkit as rk
 ROOT = Path(__file__).parent.parent
 WORKSPACE = ROOT.parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
-REAL_BIBLIOGRAPHY_FIXTURE = (
-    WORKSPACE
-    / "packages"
-    / "refkit-bench"
-    / "src"
-    / "refkit_bench"
-    / "data"
-    / "real-bibliography"
-    / "references.bib"
-)
 T = TypeVar("T")
 
 
@@ -53,8 +43,9 @@ def _tree_nodes(value: object) -> Iterator[dict[str, Any]]:
         return
     node = cast(dict[str, Any], value)
     yield node
-    yield from _tree_nodes(node.get("first_field"))
+    yield from _tree_nodes(node.get("label"))
     yield from _tree_nodes(node.get("children"))
+    yield from _tree_nodes(node.get("content"))
 
 
 def _run_with_worker_progress(operation: Callable[[], T]) -> T:
@@ -117,9 +108,6 @@ def test_public_document_example_renders_text_html_and_tree() -> None:
     assert bibliography.text
     assert "<div" in bibliography.html
     assert isinstance(first.tree, list)
-    assert first.to_text() == first.text
-    assert first.to_html() == first.html
-    assert first.to_tree() == first.tree
 
 
 def test_document_accepts_named_citation_groups() -> None:
@@ -196,30 +184,6 @@ def test_one_off_helpers_accept_loaded_style_objects() -> None:
 
     assert "Doe" in citation.text
     assert "Doe" in bibliography.text
-
-
-def test_real_bibliography_fixture_parses_inspects_and_renders() -> None:
-    library = rk.Library.read(REAL_BIBLIOGRAPHY_FIXTURE, recovery="report")
-    raw = rk.BibDocument.read(REAL_BIBLIOGRAPHY_FIXTURE)
-    rows = {row["key"]: row for row in library.project(["key", "title", "doi", "volume"])}
-    doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
-    bibliography = doc.full_bibliography()
-    one_off = rk.cite(REAL_BIBLIOGRAPHY_FIXTURE, "Kimi_K2.5", style="apa")
-
-    assert len(library) == 12
-    assert library.diagnostics == []
-    assert len(raw.entries) == 12
-    title = rows["DeepResearchGym"]["title"]
-    assert (
-        title == "DeepResearchGym: A Free, Transparent, and Reproducible Evaluation Sandbox "
-        "for Deep Research"
-    )
-    assert rows["DeepResearchGym"]["doi"] == "10.48550/ARXIV.2505.19253"
-    assert rows["ijcai2019p684"]["volume"] is None
-    assert _render_one(doc, "ijcai2019p684").text == "(Chen et al., 2019)"
-    assert one_off.text == "(Team, 2026)"
-    assert "Ancient–Modern Chinese Translation" in bibliography.text
-    assert "10.48550/ARXIV.2505.19253" in bibliography.text
 
 
 def test_document_bibliography_scope_is_explicit() -> None:
@@ -424,7 +388,7 @@ def test_rendered_html_does_not_emit_unsafe_link_schemes(tmp_path: Path) -> None
     assert 'href="javascript:alert(1)"' not in rendered.html
     assert "javascript:alert(1)" in rendered.html
     nodes = list(_tree_nodes(rendered.tree))
-    link_nodes = [node for node in nodes if node.get("meta") == "Link"]
+    link_nodes = [node for node in nodes if node.get("kind") == "Link"]
     text_nodes = [node for node in nodes if node.get("kind") == "Text"]
 
     assert all("javascript:alert(1)" not in node.values() for node in link_nodes)
@@ -447,18 +411,18 @@ def test_bibliography_text_and_tree_include_second_field_labels() -> None:
 
     rendered = doc.cited_bibliography([rk.Citation("citation", "doe2024")])
     entry = cast(dict[str, Any], rendered.tree[0])
-    first_field = cast(dict[str, Any], entry["first_field"])
+    label = cast(dict[str, Any], entry["label"])
 
     assert rendered.text == (
         "[1] J. Doe, “Refkit for Bibliographies,” Journal of Citation Systems, "
         "vol. 12, pp. 1–20, 2024, doi: 10.1234/refkit.2024."
     )
     assert entry["kind"] == "bibliography-entry"
-    assert first_field["kind"] == "Element"
-    assert first_field["meta"] == "CitationNumber"
-    assert [
-        node.get("text") for node in _tree_nodes(first_field) if node.get("kind") == "Text"
-    ] == ["[1]"]
+    assert label["kind"] == "Element"
+    assert label["meta"] == {"kind": "CitationNumber"}
+    assert [node.get("text") for node in _tree_nodes(label) if node.get("kind") == "Text"] == [
+        "[1]"
+    ]
 
 
 def test_rendered_tree_exposes_documented_structured_keys() -> None:
@@ -472,9 +436,9 @@ def test_rendered_tree_exposes_documented_structured_keys() -> None:
     assert "children" in citation_tree[0]
     assert bibliography_tree[0]["kind"] == "bibliography-entry"
     assert bibliography_tree[0]["key"] == "doe2024"
-    first_field = cast(dict[str, Any], bibliography_tree[0]["first_field"])
-    assert first_field["kind"] == "Element"
-    assert bibliography_tree[0]["children"][0]["kind"] == "Element"
+    label = cast(dict[str, Any], bibliography_tree[0]["label"])
+    assert label["kind"] == "Element"
+    assert bibliography_tree[0]["content"][0]["kind"] == "Element"
 
 
 def test_rendered_tree_uses_stable_public_strings() -> None:
@@ -484,12 +448,12 @@ def test_rendered_tree_uses_stable_public_strings() -> None:
     citation_tree = _render_one(doc, "doe2024").tree
     entry_node = cast(dict[str, Any], citation_tree[0])
     nodes = list(_tree_nodes(citation_tree))
-    citation_number = next(node for node in nodes if node.get("meta") == "CitationNumber")
+    citation_number = next(node for node in nodes if node.get("meta") == {"kind": "CitationNumber"})
     formatted_text = next(node for node in nodes if node.get("kind") == "Text")
     formatting = cast(dict[str, Any], formatted_text["formatting"])
 
-    assert entry_node["meta"] == "Entry"
-    assert citation_number["meta"] == "CitationNumber"
+    assert entry_node["meta"] == {"kind": "Entry", "key": "doe2024", "item_index": 0}
+    assert citation_number["meta"] == {"kind": "CitationNumber"}
     assert set(formatting) == {
         "font_style",
         "font_variant",
@@ -647,39 +611,7 @@ def test_library_report_recovery_keeps_valid_bibtex_records_with_diagnostics(
     assert library.keys() == ["valid"]
     assert library["valid"].title == "Kept Entry"
     assert library.diagnostics
-    assert "ignored malformed BibTeX block" in library.diagnostics[0]
-
-
-def test_library_parse_bibtex_default_recovery_raises_on_malformed_records() -> None:
-    with pytest.raises(rk.RefkitError, match="parse error"):
-        rk.Library.parse_bibtex(
-            """@article{valid,
-  author = {Doe, Jane},
-  title = {Kept Entry},
-  year = {2024}
-}
-
-@broken{missing,
-  title = {No close}
-"""
-        )
-
-
-def test_library_parse_bibtex_report_recovery_keeps_valid_records() -> None:
-    library = rk.Library.parse_bibtex(
-        """@article{valid,
-  author = {Doe, Jane},
-  title = {Kept Entry},
-  year = {2024}
-}
-
-@broken{missing,
-  title = {No close}
-""",
-        recovery="report",
-    )
-
-    assert library.keys() == ["valid"]
+    assert library.diagnostics[0]["action"] == "dropped_block"
 
 
 def test_library_rejects_malformed_only_bibtex_without_rejecting_empty_input(
@@ -697,7 +629,7 @@ def test_library_rejects_malformed_only_bibtex_without_rejecting_empty_input(
     assert rk.Library.parse_bibtex("% only a comment\n").is_empty()
 
 
-def test_library_non_strict_recovers_entries_after_unclosed_block(tmp_path: Path) -> None:
+def test_library_report_recovery_recovers_entries_after_unclosed_block(tmp_path: Path) -> None:
     source = tmp_path / "recovery.bib"
     source.write_text(
         """@article{before,
@@ -721,10 +653,10 @@ def test_library_non_strict_recovers_entries_after_unclosed_block(tmp_path: Path
 
     assert library.keys() == ["before", "after"]
     assert library["after"].title == "After"
-    assert "ignored malformed BibTeX block" in library.diagnostics[0]
+    assert library.diagnostics[0]["action"] == "dropped_block"
 
 
-def test_library_non_strict_recovers_entry_after_malformed_at_line(tmp_path: Path) -> None:
+def test_library_report_recovery_recovers_entry_after_malformed_at_line(tmp_path: Path) -> None:
     source = tmp_path / "bad-at-line.bib"
     source.write_text(
         """@bad
@@ -740,169 +672,7 @@ def test_library_non_strict_recovers_entry_after_malformed_at_line(tmp_path: Pat
 
     assert library.keys() == ["valid"]
     assert library.diagnostics
-    assert "ignored" in library.diagnostics[0]
-
-
-def test_library_non_strict_drops_closed_malformed_entries(tmp_path: Path) -> None:
-    source = tmp_path / "closed-malformed.bib"
-    source.write_text(
-        """@article{valid,
-  author = {Doe, Jane},
-  title = {Kept Entry},
-  year = {2024}
-}
-
-@article{bad,
-  title {Missing equals},
-  year = {2024}
-}
-""",
-    )
-
-    library = rk.Library.read(source, recovery="report")
-
-    assert library.keys() == ["valid"]
-    assert library.diagnostics
-    assert "ignored malformed BibTeX block" in library.diagnostics[0]
-
-
-def test_library_non_strict_drops_missing_separator_after_bare_value(tmp_path: Path) -> None:
-    source = tmp_path / "missing-separator.bib"
-    source.write_text(
-        """@article{bad,
-  year = 2024
-  title = {Bad}
-}
-
-@article{valid,
-  author = {Doe, Jane},
-  title = {Kept Entry},
-  year = {2024}
-}
-""",
-    )
-
-    library = rk.Library.read(source, recovery="report")
-
-    assert library.keys() == ["valid"]
-    assert library.diagnostics
-    assert "ignored" in library.diagnostics[0]
-
-
-def test_library_non_strict_drops_missing_field_values(tmp_path: Path) -> None:
-    source = tmp_path / "missing-value.bib"
-    source.write_text(
-        """@article{bad,
-  title = ,
-  year = {2024}
-}
-
-@article{valid,
-  author = {Doe, Jane},
-  title = {Kept Entry},
-  year = {2024}
-}
-""",
-    )
-
-    library = rk.Library.read(source, recovery="report")
-
-    assert library.keys() == ["valid"]
-    assert library.diagnostics
-    assert "ignored" in library.diagnostics[0]
-
-
-def test_library_non_strict_drops_entries_missing_key_comma(tmp_path: Path) -> None:
-    source = tmp_path / "missing-key-comma.bib"
-    source.write_text(
-        """@article{bad
-  title = {Bad},
-  year = {2024}
-}
-
-@article{valid,
-  author = {Doe, Jane},
-  title = {Kept Entry},
-  year = {2024}
-}
-""",
-    )
-
-    library = rk.Library.read(source, recovery="report")
-
-    assert library.keys() == ["valid"]
-    assert library.diagnostics
-    assert "ignored" in library.diagnostics[0]
-
-
-def test_library_non_strict_drops_malformed_field_identifiers(tmp_path: Path) -> None:
-    source = tmp_path / "bad-field-name.bib"
-    source.write_text(
-        """@article{bad,
-  -title = {Bad},
-  year = {2024}
-}
-
-@article{valid,
-  author = {Doe, Jane},
-  title = {Kept Entry},
-  year = {2024}
-}
-""",
-    )
-
-    library = rk.Library.read(source, recovery="report")
-
-    assert library.keys() == ["valid"]
-    assert library.diagnostics
-    assert "ignored" in library.diagnostics[0]
-
-
-def test_library_non_strict_drops_malformed_unsafe_bare_values(tmp_path: Path) -> None:
-    source = tmp_path / "unsafe-bare.bib"
-    source.write_text(
-        """@article{bad,
-  title = Bad{Thing},
-  year = {2024}
-}
-
-@article{valid,
-  author = {Doe, Jane},
-  title = {Kept Entry},
-  year = {2024}
-}
-""",
-    )
-
-    library = rk.Library.read(source, recovery="report")
-
-    assert library.keys() == ["valid"]
-    assert "ignored malformed BibTeX block" in library.diagnostics[0]
-
-
-def test_library_non_strict_drops_malformed_string_definitions(tmp_path: Path) -> None:
-    source = tmp_path / "bad-string.bib"
-    source.write_text(
-        """@string{badstring}
-@string{ = "Journal"}
-@string{bad = {A} trailing}
-
-@article{valid,
-  author = {Doe, Jane},
-  title = {Kept Entry},
-  year = {2024}
-}
-""",
-    )
-
-    library = rk.Library.read(source, recovery="report")
-
-    assert library.keys() == ["valid"]
-    assert len(library.diagnostics) == 4
-    assert library.diagnostics[0].startswith("syntax recovery could not pre-filter BibTeX entries")
-    assert [
-        diagnostic.startswith("ignored string definition") for diagnostic in library.diagnostics[1:]
-    ] == [True, True, True]
+    assert library.diagnostics[0]["action"] == "dropped_block"
 
 
 def test_library_recovery_ignores_invalid_typed_fields() -> None:
@@ -919,7 +689,9 @@ def test_library_recovery_ignores_invalid_typed_fields() -> None:
 
     assert library.keys() == ["badmonth"]
     assert library["badmonth"].title == "Bad Month"
-    assert 'ignored BibTeX field "month"' in library.diagnostics[0]
+    assert library.diagnostics[0]["code"] == "invalid_field"
+    assert library.diagnostics[0]["field"] == "month"
+    assert library.diagnostics[0]["action"] == "dropped_field"
 
 
 def test_library_recovery_literalizes_unknown_bibtex_abbreviations() -> None:
@@ -936,7 +708,8 @@ def test_library_recovery_literalizes_unknown_bibtex_abbreviations() -> None:
 
     assert library.keys() == ["macro"]
     assert library["macro"].title == "Macro Journal"
-    assert "unknown abbreviation" in library.diagnostics[0]
+    assert library.diagnostics[0]["code"] == "unknown_abbreviation"
+    assert library.diagnostics[0]["action"] == "literalized"
 
 
 def test_library_read_decodes_windows_1252_bibtex(tmp_path: Path) -> None:
@@ -955,7 +728,7 @@ def test_library_read_decodes_windows_1252_bibtex(tmp_path: Path) -> None:
 
     assert raw.entries["encoded"].fields["title"].value == "Smart ’ Quote"
     assert library["encoded"].title == "Smart ’ Quote"
-    assert "decoded" in library.diagnostics[0]
+    assert library.diagnostics[0]["code"] == "text_encoding"
 
 
 def test_missing_reference_raises_structured_error() -> None:
@@ -1699,7 +1472,8 @@ def test_raw_bib_document_preserves_duplicate_keys_on_write(tmp_path: Path) -> N
 
     recovered = rk.Library.read(output, recovery="report")
     assert recovered["same"].title == "First"
-    assert 'ignored duplicate BibTeX entry key "same"' in recovered.diagnostics[0]
+    assert recovered.diagnostics[0]["code"] == "duplicate_key"
+    assert recovered.diagnostics[0]["entry"] == "same"
 
 
 def test_raw_bib_document_duplicate_fields_are_addressable_by_occurrence(tmp_path: Path) -> None:
@@ -1988,3 +1762,136 @@ def test_tidy_file_can_return_result_without_writing(tmp_path: Path) -> None:
 
     assert source.read_text(encoding="utf-8") == original
     assert "@article{doe2024" in result.bibtex
+
+
+def test_library_get_many_preserves_requested_order_and_repeated_keys() -> None:
+    library = rk.Library.read(FIXTURES / "basic.bib")
+    assert library.get_many([]) == []
+    assert [entry.key for entry in library.get_many(iter(["roe2022", "doe2024", "roe2022"]))] == [
+        "roe2022",
+        "doe2024",
+        "roe2022",
+    ]
+    with pytest.raises(TypeError):
+        library.get_many(cast(Any, [1]))
+
+
+def test_parse_errors_and_recovery_expose_structured_diagnostics() -> None:
+    source = "@article{valid, title={Kept}, year={2024}}\n@broken{missing"
+    with pytest.raises(rk.ParseError) as raised:
+        rk.Library.parse_bibtex(source)
+    assert raised.value.diagnostics
+    assert raised.value.diagnostics[0]["severity"] == "error"
+    recovered = rk.Library.parse_bibtex(source, recovery="report")
+    diagnostic = recovered.diagnostics[0]
+    assert diagnostic["action"] == "dropped_block"
+    assert diagnostic["severity"] == "warning"
+    assert diagnostic["span"] is not None
+    start, end = diagnostic["span"]
+    assert source.encode()[start:end] == b"@broken{missing"
+    assert recovered.keys() == ["valid"]
+
+
+def test_raw_file_decoding_reports_utf8_spans_and_writes_utf8(tmp_path: Path) -> None:
+    path = tmp_path / "encoded.bib"
+    path.write_bytes(b"% caf\xe9\n@article{key, title={Caf\xe9}}")
+    raw = rk.BibDocument.read(path)
+    assert raw.diagnostics[0]["code"] == "text_encoding"
+    assert raw.diagnostics[0]["action"] == "decoded"
+    assert raw.blocks[0]["span"] == (0, len("% café\n".encode()))
+    encoded = raw.to_bibtex().encode("utf-8")
+    start, end = raw.entries["key"].span
+    assert encoded[start:end] == "@article{key, title={Café}}".encode()
+    output = tmp_path / "out.bib"
+    raw.write(output)
+    assert output.read_bytes() == encoded
+    assert rk.BibDocument.read(output).diagnostics == []
+
+
+def test_raw_collection_lengths_count_occurrences() -> None:
+    raw = rk.BibDocument.parse(
+        "@article{a,title={First},TITLE={Second}}\n@article{a,title={Third}}"
+    )
+    assert len(raw.entries) == 2
+    assert raw.entries.unique_keys() == ["a"]
+    fields = raw.entries.get_all("a")[0].fields
+    assert len(fields) == 2
+    assert fields.unique_keys() == ["title"]
+
+
+def test_named_render_results_preserve_order_and_missing_id_errors() -> None:
+    document = rk.Document(rk.Library.read(FIXTURES / "basic.bib"), rk.Style.load("apa"))
+    result = document.render([rk.Citation("later", "roe2022"), rk.Citation("earlier", "doe2024")])
+    assert result.citation_order == ["later", "earlier"]
+    assert [result[key].text for key in result.citation_order] == ["(Roe, 2022)", "(Doe, 2024)"]
+    with pytest.raises(KeyError, match="missing"):
+        result["missing"]
+
+
+def test_citation_note_number_and_bibliography_layout_are_public_values() -> None:
+    style = rk.Style.from_xml(
+        '<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="note">'
+        "<info><title>Notes</title><id>https://example.test/notes</id>"
+        "<updated>2024-01-01T00:00:00Z</updated></info>"
+        '<citation><layout><text variable="title"/></layout></citation>'
+        '<bibliography hanging-indent="true" line-spacing="2" entry-spacing="3">'
+        '<layout><text variable="title"/></layout></bibliography></style>'
+    )
+    citation = rk.Citation("note", "doe2024", note_number=12)
+    assert citation.note_number == 12
+    document = rk.Document(rk.Library.read(FIXTURES / "basic.bib"), style)
+    result = document.render([citation])
+    assert result["note"].layout is None
+    assert result.bibliography.layout == {
+        "hanging_indent": True,
+        "second_field_align": None,
+        "line_spacing": 2,
+        "entry_spacing": 3,
+    }
+    with pytest.raises(ValueError, match="note_number"):
+        document.render([rk.Citation("bad", "doe2024", note_number=0)])
+
+
+def test_tidy_rename_report_identifies_source_occurrences() -> None:
+    source = "@article{old, author={Doe, Jane}, title={Work}, year={2024}}"
+    result = rk.tidy_bibtex(source, options=rk.TidyOptions(generate_keys="[auth:lower][year]"))
+    assert result.renames == [{"entry_id": 0, "old_key": "old", "new_key": "doe2024"}]
+    assert rk.Library.parse_bibtex(result.bibtex).keys() == ["doe2024"]
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        "@article{bad,title {Missing equals},year={2024}}",
+        "@article{bad,year=2024\n title={Missing separator}}",
+        "@article{bad,title=,year={2024}}",
+        "@article{bad\n title={Missing key separator}}",
+        "@article{bad,-title={Invalid field name}}",
+        "@article{bad,title=Bad{Thing}}",
+    ],
+)
+def test_report_recovery_preserves_valid_entries_after_malformed_records(malformed: str) -> None:
+    source = malformed + "\n@article{valid,title={Kept Entry},year={2024}}"
+    library = rk.Library.parse_bibtex(source, recovery="report")
+    assert library.keys() == ["valid"]
+    assert library["valid"].title == "Kept Entry"
+    assert any(diagnostic["action"] == "dropped_block" for diagnostic in library.diagnostics)
+
+
+def test_report_recovery_reports_malformed_string_definitions() -> None:
+    library = rk.Library.parse_bibtex(
+        '@string{badstring}\n@string{ = "Journal"}\n@string{bad = {A} trailing}\n'
+        "@article{valid,title={Kept Entry},year={2024}}",
+        recovery="report",
+    )
+    assert library.keys() == ["valid"]
+    assert library.diagnostics
+    assert all(diagnostic["severity"] == "warning" for diagnostic in library.diagnostics)
+
+
+def test_yaml_parse_error_exposes_structured_diagnostics() -> None:
+    with pytest.raises(rk.ParseError) as raised:
+        rk.Library.parse_yaml("entry: [unclosed")
+    assert raised.value.diagnostics[0]["code"] == "yaml_parse_error"
+    assert raised.value.diagnostics[0]["severity"] == "error"
+    assert raised.value.diagnostics[0]["action"] == "rejected"

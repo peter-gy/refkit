@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import importlib
+import json
 import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
+from functools import cached_property
+from hashlib import sha256
+from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 from typing import Any, cast
 
@@ -51,6 +56,52 @@ class PackageAdapter:
 
     def version(self) -> str | None:
         return None
+
+    @cached_property
+    def artifact_metadata(self) -> dict[str, str]:
+        result = {
+            "artifact_path": "unknown",
+            "artifact_sha256": "unknown",
+            "artifact_source_url": "unknown",
+            "artifact_source_revision": "unknown",
+            "distribution_record_sha256": "unknown",
+            "build_mode": "unknown",
+        }
+        try:
+            installed = distribution(self.distribution)
+        except PackageNotFoundError:
+            return result
+        record = installed.read_text("RECORD")
+        if record is not None:
+            result["distribution_record_sha256"] = sha256(record.encode()).hexdigest()
+        direct_url = installed.read_text("direct_url.json")
+        if direct_url is not None:
+            source = json.loads(direct_url)
+            result["artifact_source_url"] = source.get("url", "unknown")
+            result["artifact_source_revision"] = source.get("vcs_info", {}).get(
+                "commit_id", "unknown"
+            )
+        module_name = {
+            "refkit": "refkit._native",
+            "polars-refkit": "polars_refkit._internal",
+            "citeproc-py": "citeproc",
+        }.get(self.distribution, self.distribution.replace("-", "_"))
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            return result
+        module_path = getattr(module, "__file__", None)
+        if module_path is not None:
+            path = Path(module_path)
+            result["artifact_path"] = str(path.resolve())
+            result["artifact_sha256"] = sha256(path.read_bytes()).hexdigest()
+        if self.distribution in {"refkit", "polars-refkit"}:
+            build_mode = getattr(module, "build_mode", "unknown")
+            if build_mode in {"debug", "release"}:
+                result["build_mode"] = build_mode
+        else:
+            result["build_mode"] = "python"
+        return result
 
 
 def _prepared(
@@ -189,30 +240,40 @@ def _citation_output_matches(records: tuple[Any, ...]) -> Callable[[OperationOut
 
 
 def _bibliography_output_matches(records: tuple[Any, ...]) -> Callable[[OperationOutcome], None]:
+    def tokens(text: str) -> tuple[str, ...]:
+        return tuple(re.findall(r"\w+", text.replace("https://doi.org/", "")))
+
+    expected = []
+    for record in records:
+        authors = []
+        for family, given in record.authors or ((record.family, record.given),):
+            initials = " ".join(part[0] for part in re.split(r"[-\s]+", given) if part)
+            authors.append(f"{family} {initials}")
+        expected.append(
+            tokens(
+                " ".join(
+                    [
+                        *authors,
+                        str(record.year),
+                        record.title,
+                        record.container,
+                        "" if record.volume is None else str(record.volume),
+                        record.page_range,
+                        record.doi or "",
+                    ]
+                )
+            )
+        )
+
     def check(outcome: OperationOutcome) -> None:
         rows = _non_empty_lines(str(outcome.value))
         if len(rows) != len(records):
             raise AssertionError(f"expected {len(records)} bibliography rows, got {len(rows)}")
-        normalized_rows = [row.replace("\u2013", "-") for row in rows]
-        for record in records:
-            page_range = getattr(record, "page_range", "")
-            expected_values = list(
-                record.bibliography_terms
-                or (
-                    record.family,
-                    str(record.year),
-                    record.title,
-                    getattr(record, "container", ""),
-                    str(record.volume) if record.volume is not None else "",
-                    page_range,
-                    record.doi or "",
-                )
+        actual = [tokens(row) for row in rows]
+        if sorted(actual) != sorted(expected):
+            raise AssertionError(
+                "expected complete bibliography fields and ordered author initials"
             )
-            expected_values = [value.replace("\u2013", "-") for value in expected_values if value]
-            if not any(all(value in row for value in expected_values) for row in normalized_rows):
-                raise AssertionError(
-                    f"expected bibliography to contain row terms for {record.key!r}"
-                )
 
     return check
 
@@ -229,21 +290,66 @@ def _detail_contains(needle: str) -> Callable[[OperationOutcome], None]:
     return check
 
 
-def _raw_roundtrip_check(
-    keys: list[str],
-    preservation_terms: tuple[str, ...] = (),
+def _raw_roundtrip_check(workload: Workload) -> Callable[[OperationOutcome], None]:
+    import bibtexparser
+
+    original = bibtexparser.parse_string(workload.raw_bibtex)
+    expected = [
+        (entry.key, entry.entry_type, [(field.key, field.value) for field in entry.fields])
+        for entry in original.entries
+    ]
+    key, entry_type, fields = expected[0]
+    expected[0] = (
+        key,
+        entry_type,
+        [(name, "Edited Benchmark Title" if name == "title" else value) for name, value in fields],
+    )
+
+    def check(outcome: OperationOutcome) -> None:
+        text = Path(str(outcome.value)).read_text(encoding="utf-8")
+        written = bibtexparser.parse_string(text)
+        actual = [
+            (entry.key, entry.entry_type, [(field.key, field.value) for field in entry.fields])
+            for entry in written.entries
+        ]
+        if written.failed_blocks or actual != expected:
+            raise AssertionError(
+                "expected the first title edit and all other entry fields preserved"
+            )
+        if any(term not in text for term in workload.raw_preservation_terms):
+            raise AssertionError("expected the raw document blocks to survive writeback")
+
+    return check
+
+
+def _parsed_records_match(
+    records: tuple[Any, ...],
+    extract: Callable[[Any], Iterable[Mapping[str, Any]]],
 ) -> Callable[[OperationOutcome], None]:
     def check(outcome: OperationOutcome) -> None:
-        path = Path(str(outcome.value))
-        text = path.read_text(encoding="utf-8")
-        expected = [
-            "Edited Benchmark Title",
-            *keys,
-            *preservation_terms,
-        ]
-        missing = [value for value in expected if value not in text]
-        if missing:
-            raise AssertionError(f"expected written file to contain {missing[0]!r}")
+        rows = list(extract(outcome.value))
+        _entries_match(records)(OperationOutcome(rows, len(rows)))
+        for row, record in zip(rows, records, strict=True):
+            expected = {
+                "author": " and ".join(
+                    f"{family}, {given}" if given else family
+                    for family, given in record.authors or ((record.family, record.given),)
+                ),
+                "doi": record.doi,
+                "volume": None if record.volume is None else str(record.volume),
+                "year": str(record.year),
+                "pages": record.page_range.replace("--", "-"),
+                "container": record.container,
+                "authors": [
+                    list(author) for author in (record.authors or ((record.family, record.given),))
+                ],
+                "type": "inproceedings" if record.item_type == "paper-conference" else "article",
+            }
+            for name, value in expected.items():
+                if name in row and row[name] != value:
+                    raise AssertionError(
+                        f"expected {name} for {record.key!r}: {value!r}, got {row[name]!r}"
+                    )
 
     return check
 

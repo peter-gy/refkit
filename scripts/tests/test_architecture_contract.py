@@ -1,15 +1,16 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from scripts.architecture_contract import (
     ROOT,
     _core_source_errors,
-    _dependency_errors,
-    _dependency_names,
+    _engine_dependency_errors,
     _refkit_dependency_errors,
-    _released_dependency_errors,
     check_contract,
 )
 
@@ -26,25 +27,43 @@ def test_refkit_runtime_dependency_contract_rejects_additional_packages() -> Non
     ]
 
 
-def test_dependency_names_include_target_specific_dependencies() -> None:
-    manifest = {
-        "dependencies": {"serde": {}},
-        "target": {"cfg(unix)": {"dependencies": {"pyo3": {}}}},
-    }
+@pytest.fixture
+def contract_root(tmp_path: Path) -> Path:
+    for source in [
+        ROOT / "Cargo.toml",
+        ROOT / "Cargo.lock",
+        *ROOT.glob("crates/*/Cargo.toml"),
+        *ROOT.glob("packages/*/pyproject.toml"),
+        *ROOT.glob("packages/*/rust/Cargo.toml"),
+        ROOT / "packages/polars-refkit/rust/Cargo.lock",
+    ]:
+        destination = tmp_path / source.relative_to(ROOT)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+    return tmp_path
 
-    assert _dependency_names(manifest) == {"pyo3", "serde"}
 
+@pytest.mark.parametrize(
+    "section", ["dependencies", "build-dependencies", "target.'cfg(unix)'.dependencies"]
+)
+def test_architecture_rejects_unclassified_dependency_tables(
+    contract_root: Path, section: str
+) -> None:
+    tmp_path = contract_root
+    manifest = tmp_path / "crates/refkit-core/Cargo.toml"
+    source = manifest.read_text()
+    addition = 'host = { package = "pyo3", version = "0.29.0" }\n'
+    if section == "dependencies":
+        source = source.replace("[dependencies]\n", "[dependencies]\n" + addition)
+    else:
+        source += f"\n[{section}]\n{addition}"
+    manifest.write_text(source)
 
-def test_dependency_contract_reports_unclassified_packages() -> None:
-    errors = _dependency_errors(
-        Path("crates/refkit-core/Cargo.toml"),
-        {"dependencies": {"serde": {}, "vendor-sdk": {}}},
-        {"dependencies": {"serde"}},
-    )
+    errors = check_contract(tmp_path)
 
-    assert errors == [
-        "crates/refkit-core/Cargo.toml contains unclassified dependencies: vendor-sdk"
-    ]
+    assert len(errors) == 1
+    assert "unclassified" in errors[0]
+    assert "pyo3" in errors[0]
 
 
 def test_portable_core_cannot_reach_host_boundaries(tmp_path: Path) -> None:
@@ -67,25 +86,25 @@ def test_portable_core_detects_grouped_host_imports(tmp_path: Path) -> None:
     ]
 
 
-def test_released_dependencies_are_exact_and_consistent_across_locks() -> None:
+def test_engine_dependencies_are_exact_and_consistent_across_locks() -> None:
     core = _core_dependencies("=0.12.0", "=0.10.1")
     locks = {
         Path("Cargo.lock"): _lock_packages("0.12.0", "0.10.1"),
         Path("adapter/Cargo.lock"): _lock_packages("0.12.0", "0.10.1"),
     }
 
-    assert _released_dependency_errors(core, locks) == []
+    assert _engine_dependency_errors(core, locks) == []
 
 
-def test_released_dependencies_require_exact_manifest_versions() -> None:
+def test_engine_dependencies_require_exact_manifest_versions() -> None:
     core = _core_dependencies("0.12.0", "=0.10.1")
 
-    errors = _released_dependency_errors(core, {})
+    errors = _engine_dependency_errors(core, {})
 
     assert errors == ["portable core must pin biblatex to one exact release with =<version>"]
 
 
-def test_released_dependencies_reject_lock_drift_and_non_registry_sources() -> None:
+def test_engine_dependencies_reject_lock_drift_and_unapproved_sources() -> None:
     core = _core_dependencies("=0.12.0", "=0.10.1")
     locks = {
         Path("Cargo.lock"): {
@@ -105,11 +124,11 @@ def test_released_dependencies_reject_lock_drift_and_non_registry_sources() -> N
         Path("adapter/Cargo.lock"): {"package": []},
     }
 
-    errors = _released_dependency_errors(core, locks)
+    errors = _engine_dependency_errors(core, locks)
 
     assert errors == [
         "Cargo.lock must resolve biblatex 0.12.0",
-        "Cargo.lock must resolve hayagriva from a registry release",
+        "Cargo.lock must resolve hayagriva from git+https://github.com/typst/hayagriva?rev=e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e#e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e",
         "adapter/Cargo.lock must resolve exactly one biblatex package",
         "adapter/Cargo.lock must resolve exactly one hayagriva package",
     ]
@@ -119,7 +138,11 @@ def _core_dependencies(biblatex: str, hayagriva: str) -> dict[str, Any]:
     return {
         "dependencies": {
             "biblatex": {"version": biblatex},
-            "hayagriva": {"version": hayagriva},
+            "hayagriva": {
+                "version": hayagriva,
+                "git": "https://github.com/typst/hayagriva",
+                "rev": "e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e",
+            },
         }
     }
 
@@ -129,6 +152,70 @@ def _lock_packages(biblatex: str, hayagriva: str) -> dict[str, Any]:
     return {
         "package": [
             {"name": "biblatex", "version": biblatex, "source": source},
-            {"name": "hayagriva", "version": hayagriva, "source": source},
+            {
+                "name": "hayagriva",
+                "version": hayagriva,
+                "source": "git+https://github.com/typst/hayagriva?rev=e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e#e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e",
+            },
         ]
     }
+
+
+@pytest.mark.parametrize("manifest", ["Cargo.toml", "packages/polars-refkit/rust/Cargo.toml"])
+def test_architecture_requires_audited_xml_patch_in_each_workspace(
+    contract_root: Path, manifest: str
+) -> None:
+    path = contract_root / manifest
+    path.write_text(path.read_text().replace("06a591e2f237d25e1dfdedac3f3d1494c496c52d", "0" * 40))
+
+    errors = check_contract(contract_root)
+
+    assert any(error.startswith(f"{manifest} must patch citationberg") for error in errors)
+
+
+@pytest.mark.parametrize("lockfile", ["Cargo.lock", "packages/polars-refkit/rust/Cargo.lock"])
+def test_architecture_requires_safe_xml_resolution_in_each_lock(
+    contract_root: Path, lockfile: str
+) -> None:
+    path = contract_root / lockfile
+    path.write_text(
+        path.read_text().replace(
+            'name = "quick-xml"\nversion = "0.41.0"', 'name = "quick-xml"\nversion = "0.38.4"'
+        )
+    )
+
+    assert f"{lockfile} must resolve quick-xml >=0.41.0 from crates.io" in check_contract(
+        contract_root
+    )
+
+
+@pytest.mark.parametrize("change", ["source", "version", "duplicate"])
+def test_architecture_requires_one_audited_citationberg(contract_root: Path, change: str) -> None:
+    path = contract_root / "Cargo.lock"
+    source = path.read_text()
+    if change == "source":
+        source = source.replace(
+            "git+https://github.com/typst/citationberg?rev=06a591e2f237d25e1dfdedac3f3d1494c496c52d#06a591e2f237d25e1dfdedac3f3d1494c496c52d",
+            "registry+https://github.com/rust-lang/crates.io-index",
+        )
+    elif change == "version":
+        source = source.replace(
+            'name = "citationberg"\nversion = "0.7.0"', 'name = "citationberg"\nversion = "0.8.0"'
+        )
+    else:
+        source += '\n[[package]]\nname = "citationberg"\nversion = "0.7.0"\nsource = "registry+https://github.com/rust-lang/crates.io-index"\n'
+    path.write_text(source)
+
+    assert any(
+        "Cargo.lock must resolve one citationberg" in error
+        for error in check_contract(contract_root)
+    )
+
+
+def test_architecture_requires_the_core_xml_parser_pin(contract_root: Path) -> None:
+    path = contract_root / "crates/refkit-core/Cargo.toml"
+    path.write_text(path.read_text().replace('quick-xml = "=0.41.0"', 'quick-xml = "0.41.0"'))
+
+    assert "portable core must pin quick-xml =0.41.0 from crates.io" in check_contract(
+        contract_root
+    )

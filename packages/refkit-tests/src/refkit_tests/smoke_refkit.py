@@ -5,9 +5,12 @@ from importlib.metadata import distribution
 
 import refkit as rk
 import refkit.agent as refkit_agent
+from refkit_tests.agent_examples import run_examples
 
 
 def main() -> None:
+    run_examples("refkit")
+
     assert rk.build_info
 
     capabilities = [
@@ -25,7 +28,10 @@ def main() -> None:
         "SKILL.md",
         "agents/openai.yaml",
         "references/contracts.md",
-        "references/workflows.md",
+        "references/inspect.md",
+        "references/render.md",
+        "references/edit.md",
+        "references/tidy.md",
     }
     assert all(path.is_file() for path in resources.values())
 

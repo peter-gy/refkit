@@ -1,4 +1,4 @@
-use crate::{RawSyntaxField, RawValueAtom, RawValueMode};
+use crate::raw::{RawSyntaxField, RawValueAtom, RawValueMode};
 
 use super::{render_field_name, separator};
 use crate::tidy::{
@@ -8,6 +8,17 @@ use crate::tidy::{
 };
 
 pub(super) fn render_value(field: &RawSyntaxField, options: &TidyOptions) -> String {
+    if field.value_mode == RawValueMode::Bare
+        && !field
+            .value
+            .chars()
+            .all(|character| character.is_ascii_digit())
+    {
+        return field.value.clone();
+    }
+    if field.name.eq_ignore_ascii_case("crossref") || field.name.eq_ignore_ascii_case("xdata") {
+        return render_expression_atoms(&field.value_atoms);
+    }
     if field.value_mode == RawValueMode::Expression {
         return render_expression_atoms(&field.value_atoms);
     }

@@ -1,100 +1,105 @@
 ---
-description: Inspect RefKit projection rows, render trees, raw block records, and Polars report structs.
+description: Inspect typed diagnostics, projections, rendered trees, bibliography layout, raw blocks, and Polars reports.
 ---
 
 # Data Shapes
 
-RefKit owns stable projection, render, raw-block, warning, and report shapes at its host boundaries.
+Python dictionary contracts are importable from `refkit.types`. Polars expresses the same data as scalar, list, and struct columns, with the differences named beside each shape.
+
+## Diagnostics
+
+`Library.diagnostics`, `BibDocument.diagnostics`, and `ParseError.diagnostics` return `list[Diagnostic]`:
+
+| Field | Python type | Meaning |
+| --- | --- | --- |
+| `code` | `str` | Machine-readable diagnostic category. |
+| `severity` | `"error"` or `"warning"` | Severity of this diagnostic, independent of the overall operation result. |
+| `action` | `str` | `rejected`, `dropped_block`, `dropped_field`, `literalized`, or `decoded`. |
+| `span` | `tuple[int, int]` or `None` | Half-open UTF-8 byte offsets into the original decoded source, when available. |
+| `entry` | `str` or `None` | Affected citation key, when known. |
+| `field` | `str` or `None` | Affected field, when known. |
+| `message` | `str` | Human-readable explanation. |
+
+A failed parse can contain warning diagnostics for recovery actions, such as dropped blocks, when no entries survive. Use the exception or report status to determine whether the operation succeeded.
+
+Polars diagnostics use the same fields. `span` is a nullable `Struct[start: UInt64, end: UInt64]`. Recovery can change input length internally, but reported spans refer to the input supplied by the caller.
 
 ## Projection rows
 
 `Library.project` and Polars `entries` accept these fields:
 
-| Field | Type | Meaning |
+| Field | Value | Meaning |
 | --- | --- | --- |
 | `key` | string | Citation key. |
 | `entry_type` | string | Normalized entry type. |
-| `type` | string | Alias of `entry_type` under the requested output name. |
+| `type` | string | Entry type under this requested field name. |
 | `title` | string or null | Normalized title. |
 | `date` | string or null | Normalized date. |
 | `doi` | string or null | Digital object identifier. |
 | `volume` | string or null | Own volume or first parent volume. |
 
-The default projection is `key`, `title`, `doi`, and `volume`.
+The default projection is `key`, `title`, `doi`, and `volume`. Python returns `list[ProjectionRow]`. Each row contains the requested fields.
 
-## Render tree
+## Rendered nodes
 
-`Rendered.tree` returns a list of discriminated dictionaries. The `kind` value is case-sensitive.
+`Rendered.tree` returns a fresh `RenderedTree` list. Each node has a case-sensitive `kind`:
 
-### `Text`
+| Kind | Fields |
+| --- | --- |
+| `Text` | `text: str`, `formatting: RenderedFormatting` |
+| `Element` | `display: str \| None`, `meta: RenderedMeta \| None`, `children: list[RenderedNode]` |
+| `Markup` | `value: str` |
+| `Link` | `text: str`, `url: str`, `formatting: RenderedFormatting` |
+| `Transparent` | `cite_idx: int`, `formatting: RenderedFormatting` |
+| `bibliography-entry` | `key: str`, `label: RenderedNode \| None`, `content: list[RenderedNode]` |
 
-```text
-{kind: "Text", text: string, formatting: Formatting}
-```
+A bibliography label and content are separate. Render the label once, followed by content. `Transparent` retains citation-index metadata and produces no visible text. Treat `Markup.value` as text when creating HTML. RefKit's HTML renderer escapes it.
 
-### `Element`
+### Formatting and display
 
-```text
-{
-  kind: "Element",
-  display: string | null,
-  meta: string | null,
-  children: RenderNode[]
-}
-```
+`RenderedFormatting` has five required fields:
 
-`meta` names a renderer category such as `Entry`, `Name`, `Names`, `Text`, or `CitationNumber` when the renderer supplies one.
+| Field | Values |
+| --- | --- |
+| `font_style` | `Normal`, `Italic` |
+| `font_variant` | `Normal`, `SmallCaps` |
+| `font_weight` | `Normal`, `Bold`, `Light` |
+| `text_decoration` | `None`, `Underline` |
+| `vertical_align` | `None`, `Baseline`, `Sup`, `Sub` |
 
-### `Markup`
+`Element.display` is `Block`, `LeftMargin`, `RightInline`, `Indent`, or null. These describe layout roles rather than literal CSS values. A custom renderer chooses its corresponding elements and styles.
 
-```text
-{kind: "Markup", value: string}
-```
+### Source metadata
 
-### `Link`
+`Element.meta` is null or a tagged dictionary:
 
-```text
-{kind: "Link", text: string, url: string, formatting: Formatting}
-```
+| `kind` | Additional fields |
+| --- | --- |
+| `Entry` | `key: str`, `item_index: int` |
+| `Names` | `roles: list[str]` |
+| `Name` | `role: str`, `index: int` |
+| `Date`, `Text`, `Number`, `Label`, `CitationNumber`, `CitationLabel` | None. |
 
-### `Transparent`
+The entry key identifies the bibliography record. Item and name indexes retain their positions in the rendered citation and name list.
 
-```text
-{kind: "Transparent", cite_idx: integer, format: string}
-```
+### Bibliography layout
 
-### `Formatting`
-
-```text
-{
-  font_style: string,
-  font_variant: string,
-  font_weight: string,
-  text_decoration: string,
-  vertical_align: string
-}
-```
-
-### Bibliography entries
-
-Bibliography trees wrap each visible item:
+`Rendered.layout` is null for citation output. A bibliography returns `BibliographyLayout`:
 
 ```text
 {
-  kind: "bibliography-entry",
-  key: string,
-  first_field: RenderNode | null,
-  children: RenderNode[]
+  hanging_indent: bool,
+  second_field_align: "Margin" | "Flush" | null,
+  line_spacing: int,
+  entry_spacing: int
 }
 ```
 
-`first_field` carries a label such as a numeric bibliography marker when the style emits one.
+Apply these values to the bibliography as a whole. `line_spacing` describes spacing within entries and `entry_spacing` describes spacing between entries. [Render Structured Output](/guides/render-output) shows a complete tree consumer.
 
-The current `children` list starts with the same node stored in `first_field`. A consumer that renders `children` should not render `first_field` a second time.
+## Raw blocks and spans
 
-## Raw block records
-
-`BibDocument.blocks` returns source-order records. Every record contains `kind` and `span`.
+`BibDocument.blocks` returns source-order `RawBlock` records. Every record contains `kind` and `span`:
 
 | Kind | Additional fields |
 | --- | --- |
@@ -106,22 +111,50 @@ The current `children` list starts with the same node stored in `first_field`. A
 | `failed` | `raw`, `error`. |
 | `other` | `raw`. |
 
-Block spans are two-item lists. `BibEntry.span` and `BibField.span` are two-item tuples. Every span is a half-open UTF-8 byte-offset pair.
+Python byte spans are two-item tuples, including raw blocks, entries, fields, and diagnostic locations. They index UTF-8 bytes in the original decoded source and retain those positions after edits. `BibDocument.write` encodes the current text as UTF-8. For a file decoded from Windows-1252, these offsets differ from the original file-byte offsets.
 
-## Polars parse report
+## Tidy renames
+
+`TidyResult.renames` contains source-order `TidyRename` dictionaries:
+
+```text
+{entry_id: int, old_key: str, new_key: str}
+```
+
+`entry_id` identifies a source occurrence. A merged entry can map to its retained entry's final key. Use occurrence identity when duplicate source keys make a key-only map ambiguous. RefKit updates bibliography `crossref` and `xdata` references. Use the rename records to update citations in other files.
+
+## Polars reports
+
+Each report expression returns null for a null source row.
+
+### Parse report
 
 ```text
 Struct[
   ok: Boolean,
   entry_count: UInt32,
   keys: List[String],
-  diagnostics: List[String]
+  diagnostics: List[Diagnostic]
 ]
 ```
 
-A parser failure returns `ok=False`, null `entry_count`, null `keys`, and diagnostic strings. A successful report returns `ok=True` and can still contain diagnostics under report recovery.
+A failed parse returns `ok=False`, null `entry_count` and `keys`, and diagnostics. Report recovery can return `ok=True` with diagnostics.
 
-## Polars tidy report
+### Render report
+
+```text
+Struct[
+  ok: Boolean,
+  citations: List[Struct[text: String, html: String]],
+  diagnostics: List[Diagnostic],
+  error_code: String,
+  error: String
+]
+```
+
+Successful output has null error fields. Failures use `parse_error`, `missing_key`, or `render_error` and an explanatory message. Null key-list input also produces a null report.
+
+### Tidy report
 
 ```text
 Struct[
@@ -129,18 +162,9 @@ Struct[
   bibtex: String,
   count: UInt32,
   warnings: List[Struct[code: String, rule: String, message: String]],
+  renames: List[Struct[entry_id: UInt64, old_key: String, new_key: String]],
   error: String
 ]
 ```
 
-A formatting failure returns `ok=False`, null formatted fields, and an error string. A successful report returns `ok=True`, formatted source, the input entry count, and zero or more warnings.
-
-## Polars rendered value
-
-Rendered expressions return:
-
-```text
-Struct[text: String, html: String]
-```
-
-Polars rendered values carry text and HTML together. The Python `Rendered` object also exposes the render tree.
+Successful output has formatted source, input entry count, warnings, rename records, and a null error. Failure has `ok=False` and an error message.

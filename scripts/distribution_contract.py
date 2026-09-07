@@ -14,13 +14,26 @@ from pathlib import Path, PurePosixPath
 
 GENERATED_SUFFIXES = (".pyc", ".pyo")
 INTERNAL_DOCUMENTATION_DIRECTORY = "development_docs"
-REFKIT_AGENT_PLUGIN_FILES = (
-    "plugin.json",
-    "skills/refkit/SKILL.md",
-    "skills/refkit/agents/openai.yaml",
-    "skills/refkit/references/contracts.md",
-    "skills/refkit/references/workflows.md",
-)
+AGENT_PLUGIN_FILES = {
+    "refkit": (
+        "plugin.json",
+        "skills/refkit/SKILL.md",
+        "skills/refkit/agents/openai.yaml",
+        "skills/refkit/references/contracts.md",
+        "skills/refkit/references/inspect.md",
+        "skills/refkit/references/render.md",
+        "skills/refkit/references/edit.md",
+        "skills/refkit/references/tidy.md",
+    ),
+    "polars_refkit": (
+        "plugin.json",
+        "skills/polars-refkit/SKILL.md",
+        "skills/polars-refkit/agents/openai.yaml",
+        "skills/polars-refkit/references/inspect.md",
+        "skills/polars-refkit/references/render.md",
+        "skills/polars-refkit/references/tidy.md",
+    ),
+}
 ROOT = Path(__file__).resolve().parents[1]
 SBOM_LOCAL_REFERENCE_MARKERS = (b"path+file://", b"download_url=file://")
 KNOWN_CI_BUILD_PATHS = (
@@ -135,17 +148,30 @@ def content_violations(path: Path) -> list[str]:
 
 
 def agent_plugin_violations(path: Path) -> list[str]:
-    """Return RefKit Agent Plugin archive contract violations."""
+    """Return adapter Agent Plugin archive contract violations."""
 
-    if not path.name.startswith("refkit-"):
+    package = next((name for name in AGENT_PLUGIN_FILES if path.name.startswith(f"{name}-")), None)
+    if package is None:
         return []
     contents = dict(_member_contents(path))
     if path.suffix == ".whl":
-        return _wheel_agent_plugin_violations(contents)
-    return _sdist_agent_plugin_violations(contents)
+        return _wheel_agent_plugin_violations(contents, package)
+    return _sdist_agent_plugin_violations(contents, package)
 
 
-def _wheel_agent_plugin_violations(contents: dict[str, bytes]) -> list[str]:
+def _plugin_source_violations(
+    contents: dict[str, bytes], package: str, plugin_root: str
+) -> list[str]:
+    source_root = ROOT if package == "refkit" else ROOT / "packages/polars-refkit/agent-plugin"
+    errors = []
+    for relative in AGENT_PLUGIN_FILES[package]:
+        member = f"{plugin_root}/{relative}"
+        if member in contents and contents[member] != (source_root / relative).read_bytes():
+            errors.append(f"{member}: Agent Plugin resource differs from release source")
+    return errors
+
+
+def _wheel_agent_plugin_violations(contents: dict[str, bytes], package: str) -> list[str]:
     violations = []
     dist_info_candidates = [
         name.removesuffix("/WHEEL") for name in contents if name.endswith(".dist-info/WHEEL")
@@ -155,8 +181,9 @@ def _wheel_agent_plugin_violations(contents: dict[str, bytes]) -> list[str]:
 
     dist_info = dist_info_candidates[0]
     plugin_root = f"{dist_info.removesuffix('.dist-info')}.agent-plugin"
-    expected_payload = {f"{plugin_root}/{relative}" for relative in REFKIT_AGENT_PLUGIN_FILES}
+    expected_payload = {f"{plugin_root}/{relative}" for relative in AGENT_PLUGIN_FILES[package]}
     actual_payload = {name for name in contents if name.startswith(f"{plugin_root}/")}
+    violations.extend(_plugin_source_violations(contents, package, plugin_root))
     if actual_payload != expected_payload:
         violations.append(
             "wheel Agent Plugin payload mismatch: "
@@ -174,15 +201,20 @@ def _wheel_agent_plugin_violations(contents: dict[str, bytes]) -> list[str]:
         except (UnicodeDecodeError, json.JSONDecodeError):
             violations.append(f"wheel contains invalid {marker_path}")
         else:
-            expected_marker = {
-                "root": plugin_root,
-                "files": list(REFKIT_AGENT_PLUGIN_FILES),
-            }
-            if marker_value != expected_marker:
+            files = marker_value.get("files") if isinstance(marker_value, dict) else None
+            if (
+                not isinstance(marker_value, dict)
+                or set(marker_value) != {"root", "files"}
+                or marker_value["root"] != plugin_root
+                or not isinstance(files, list)
+                or not all(isinstance(name, str) for name in files)
+                or len(files) != len(set(files))
+                or set(files) != set(AGENT_PLUGIN_FILES[package])
+            ):
                 violations.append(f"wheel contains unexpected {marker_path}")
 
-    if "refkit/agent.py" not in contents:
-        violations.append("wheel is missing refkit/agent.py")
+    if f"{package}/agent.py" not in contents:
+        violations.append(f"wheel is missing {package}/agent.py")
 
     entry_points_path = f"{dist_info}/entry_points.txt"
     entry_points = contents.get(entry_points_path)
@@ -192,11 +224,11 @@ def _wheel_agent_plugin_violations(contents: dict[str, bytes]) -> list[str]:
         parser = configparser.ConfigParser()
         try:
             parser.read_string(entry_points.decode())
-            capability = parser.get("marimo.agent.capability", "refkit")
+            capability = parser.get("marimo.agent.capability", package)
         except (UnicodeDecodeError, configparser.Error, KeyError):
             capability = None
-        if capability != "refkit.agent":
-            violations.append("wheel must register refkit = refkit.agent")
+        if capability != f"{package}.agent":
+            violations.append(f"wheel must register {package} = {package}.agent")
 
     metadata_path = f"{dist_info}/METADATA"
     metadata = contents.get(metadata_path, b"").decode(errors="replace")
@@ -205,22 +237,24 @@ def _wheel_agent_plugin_violations(contents: dict[str, bytes]) -> list[str]:
     return violations
 
 
-def _sdist_agent_plugin_violations(contents: dict[str, bytes]) -> list[str]:
+def _sdist_agent_plugin_violations(contents: dict[str, bytes], package: str) -> list[str]:
     roots = {PurePosixPath(name).parts[0] for name in contents if PurePosixPath(name).parts}
     if len(roots) != 1:
         return ["sdist must contain exactly one archive root"]
     root = roots.pop()
     plugin_root = f"{root}/.agent-plugin"
-    expected_payload = {f"{plugin_root}/{relative}" for relative in REFKIT_AGENT_PLUGIN_FILES}
+    expected_payload = {f"{plugin_root}/{relative}" for relative in AGENT_PLUGIN_FILES[package]}
     actual_payload = {name for name in contents if name.startswith(f"{plugin_root}/")}
     violations = []
+    violations.extend(_plugin_source_violations(contents, package, plugin_root))
     if actual_payload != expected_payload:
         violations.append(
             "sdist Agent Plugin payload mismatch: "
             f"missing={sorted(expected_payload - actual_payload)}, "
             f"extra={sorted(actual_payload - expected_payload)}"
         )
-    for relative in ("build_backend.py", "src/refkit/agent.py"):
+    agent_module = "src/refkit/agent.py" if package == "refkit" else "polars_refkit/agent.py"
+    for relative in ("build_backend.py", agent_module):
         member = f"{root}/{relative}"
         if member not in contents:
             violations.append(f"sdist is missing {member}")

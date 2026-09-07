@@ -1,15 +1,7 @@
 use std::fmt;
-use std::str::FromStr;
 use std::sync::Arc;
 
-use hayagriva::citationberg::taxonomy::Locator as CslLocator;
-use hayagriva::citationberg::{IndependentStyle, LocaleCode};
-use hayagriva::{
-    BibliographyDriver, BibliographyRequest, CitationItem, CitationRequest, Entry as HayEntry,
-    LocatorPayload, Rendered as HayRendered, SpecificLocator,
-};
-
-use crate::render::bundled_locales;
+use crate::render::{full_bibliography_requests, process_citations};
 use crate::render_tree::{rendered_record_from_bibliography, rendered_record_from_citation};
 use crate::{Library, PreparedStyle, RenderedRecord};
 
@@ -30,18 +22,36 @@ impl Cite {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct CitationRequest {
+    pub items: Vec<Cite>,
+    pub note_number: Option<usize>,
+}
+
+impl CitationRequest {
+    pub fn new(items: Vec<Cite>, note_number: Option<usize>) -> Self {
+        Self { items, note_number }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DocumentError {
     MissingReference(String),
     UnknownLocatorLabel(String),
+    EmptyCitation,
+    InvalidNoteNumber,
     Render(String),
 }
 
 impl fmt::Display for DocumentError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingReference(key) => write!(f, "missing reference {key}"),
-            Self::UnknownLocatorLabel(label) => write!(f, "unknown locator label {label}"),
+            Self::MissingReference(key) => write!(f, "missing reference {}", crate::quoted(key)),
+            Self::UnknownLocatorLabel(label) => {
+                write!(f, "unknown locator label {}", crate::quoted(label))
+            }
+            Self::EmptyCitation => f.write_str("citation requires at least one item"),
+            Self::InvalidNoteNumber => f.write_str("note number must be between 1 and 4294967295"),
             Self::Render(message) => f.write_str(message),
         }
     }
@@ -75,12 +85,26 @@ impl Document {
         self.library.len()
     }
 
-    pub fn render(&self, citations: Vec<Vec<Cite>>) -> Result<RenderedDocument, DocumentError> {
-        let rendered = self.render_with_citations(&citations, false, self.style.inner.as_ref())?;
+    pub fn render(
+        &self,
+        requests: Vec<CitationRequest>,
+    ) -> Result<RenderedDocument, DocumentError> {
+        let rendered = process_citations(
+            &self.library,
+            &self.style,
+            self.locale.as_deref(),
+            &requests,
+        )?;
         let citations = rendered
             .citations
             .iter()
-            .map(rendered_record_from_citation)
+            .zip(&requests)
+            .map(|(citation, request)| {
+                rendered_record_from_citation(
+                    citation,
+                    request.items.iter().map(|item| item.key.clone()).collect(),
+                )
+            })
             .collect::<Result<Vec<_>, _>>()
             .map_err(DocumentError::Render)?;
         let bibliography = rendered_record_from_bibliography(rendered.bibliography)
@@ -93,77 +117,20 @@ impl Document {
 
     pub fn cited_bibliography(
         &self,
-        citations: Vec<Vec<Cite>>,
+        requests: Vec<CitationRequest>,
     ) -> Result<RenderedRecord, DocumentError> {
-        let rendered = self.render_with_citations(&citations, false, self.style.inner.as_ref())?;
+        let rendered = process_citations(
+            &self.library,
+            &self.style,
+            self.locale.as_deref(),
+            &requests,
+        )?;
         rendered_record_from_bibliography(rendered.bibliography).map_err(DocumentError::Render)
     }
 
     pub fn full_bibliography(&self) -> Result<RenderedRecord, DocumentError> {
-        let rendered = self.render_with_citations(&[], true, self.style.inner.as_ref())?;
-        rendered_record_from_bibliography(rendered.bibliography).map_err(DocumentError::Render)
+        self.cited_bibliography(full_bibliography_requests(&self.library))
     }
-
-    fn render_with_citations(
-        &self,
-        citations: &[Vec<Cite>],
-        all: bool,
-        style: &IndependentStyle,
-    ) -> Result<HayRendered, DocumentError> {
-        let locales = bundled_locales();
-        let locale = self.locale.as_ref().map(|code| LocaleCode(code.clone()));
-        let mut driver = BibliographyDriver::new();
-
-        for group in citations {
-            let mut items = Vec::with_capacity(group.len());
-            for cite in group {
-                let entry = self
-                    .library
-                    .inner()
-                    .get(&cite.key)
-                    .ok_or_else(|| DocumentError::MissingReference(cite.key.clone()))?;
-                items.push(citation_item(entry, cite)?);
-            }
-
-            driver.citation(CitationRequest::new(
-                items,
-                style,
-                locale.clone(),
-                locales,
-                None,
-            ));
-        }
-
-        if all {
-            for entry in self.library.inner().iter() {
-                driver.citation(CitationRequest::new(
-                    vec![CitationItem::with_entry(entry)],
-                    style,
-                    locale.clone(),
-                    locales,
-                    None,
-                ));
-            }
-        }
-
-        Ok(driver.finish(BibliographyRequest::new(style, locale, locales)))
-    }
-}
-
-fn citation_item<'a>(
-    entry: &'a HayEntry,
-    cite: &'a Cite,
-) -> Result<CitationItem<'a, HayEntry>, DocumentError> {
-    let locator = match cite.locator.as_deref() {
-        Some(value) => {
-            let label = cite.label.as_deref().unwrap_or("page");
-            let locator = CslLocator::from_str(label)
-                .map_err(|_| DocumentError::UnknownLocatorLabel(label.to_string()))?;
-            Some(SpecificLocator(locator, LocatorPayload::Str(value)))
-        }
-        None => None,
-    };
-    Ok(CitationItem::with_locator(entry, locator))
 }
 
 #[cfg(test)]
@@ -180,7 +147,7 @@ mod tests {
         );
 
         let err = document
-            .render(vec![vec![test_cite("valid")], vec![test_cite("missing")]])
+            .render(vec![test_request("valid"), test_request("missing")])
             .unwrap_err();
 
         assert_eq!(err, DocumentError::MissingReference("missing".to_string()));
@@ -194,11 +161,14 @@ mod tests {
         );
 
         let err = document
-            .render(vec![vec![Cite::new(
-                "valid".to_string(),
-                Some("12".to_string()),
-                Some("nonsense".to_string()),
-            )]])
+            .render(vec![CitationRequest {
+                items: vec![Cite::new(
+                    "valid".to_string(),
+                    Some("12".to_string()),
+                    Some("nonsense".to_string()),
+                )],
+                note_number: None,
+            }])
             .unwrap_err();
 
         assert_eq!(
@@ -217,9 +187,9 @@ mod tests {
             ),
         );
 
-        let rendered = document.render(vec![vec![test_cite("b")]]).unwrap();
+        let rendered = document.render(vec![test_request("b")]).unwrap();
         let cited = document
-            .cited_bibliography(vec![vec![test_cite("b")]])
+            .cited_bibliography(vec![test_request("b")])
             .unwrap();
         let full = document.full_bibliography().unwrap();
 
@@ -236,7 +206,7 @@ mod tests {
         Document::new(library, style, Some("en-US".to_string()))
     }
 
-    fn test_cite(key: &str) -> Cite {
-        Cite::new(key.to_string(), None, None)
+    fn test_request(key: &str) -> CitationRequest {
+        CitationRequest::new(vec![Cite::new(key.to_string(), None, None)], None)
     }
 }

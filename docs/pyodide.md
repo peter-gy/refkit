@@ -6,7 +6,7 @@ description: Install RefKit PyEmscripten wheels in the tested Pyodide and Polars
 
 [Pyodide](https://pyodide.org/) runs Python and native Python packages compiled to WebAssembly in a browser or Node.js. RefKit publishes PyEmscripten wheels, the wheel format used by Python extensions compiled through Emscripten for this runtime.
 
-The current compatibility set is:
+Release tests execute the Pyodide command-line runtime with this compatibility set:
 
 | Component | Tested value |
 | --- | --- |
@@ -19,7 +19,7 @@ The xbuild environment pins the compiler, runtime application binary interface, 
 
 ## Load `refkit`
 
-Create a Pyodide instance with `loadPyodide`, then install through [micropip](https://micropip.pyodide.org/):
+Initialize a compatible runtime using the [Pyodide initialization guide](https://pyodide.org/en/stable/usage/quickstart.html). The examples assume its `pyodide` instance is ready. Install through [micropip](https://micropip.pyodide.org/):
 
 ```javascript
 await pyodide.loadPackage("micropip")

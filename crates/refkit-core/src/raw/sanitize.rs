@@ -1,292 +1,54 @@
-use std::collections::BTreeSet;
-use std::ops::Range;
+use std::collections::HashSet;
 
-use biblatex::RawBibliography;
+use super::{RawBlock, parse_raw_document};
+use crate::library::{Diagnostic, DiagnosticAction};
 
-use super::{RawBlock, RawEntryData, parse_raw_document};
-use crate::quoted;
-
-pub fn sanitize_biblatex_for_library(
-    source: &str,
-    validate_entries: bool,
-    collect_diagnostics: bool,
-) -> (String, Vec<String>) {
+pub(crate) fn sanitize_biblatex_for_library(source: &str) -> (String, Vec<Diagnostic>) {
     let data = parse_raw_document(source);
-    let mut output = String::with_capacity(source.len());
+    let mut output = source.as_bytes().to_vec();
     let mut diagnostics = Vec::new();
-    let mut seen_entries = BTreeSet::new();
-    for (index, block) in data.blocks.iter().enumerate() {
-        if block_starts_inside_percent_comment(source, &data.blocks, index) {
-            preserve_line_break_from_skipped_block(source, block, &mut output);
+    let mut keys = HashSet::new();
+    let mut comment_end = 0;
+    for block in &data.blocks {
+        let span = block.span().clone();
+        if let RawBlock::Comment { raw, .. } = block
+            && raw.starts_with('%')
+        {
+            comment_end = source[span.start..]
+                .find('\n')
+                .map_or(source.len(), |offset| span.start + offset + 1);
+        }
+        if span.start < comment_end {
             continue;
         }
-        match block {
-            RawBlock::Whitespace { raw, .. }
-            | RawBlock::Comment { raw, .. }
-            | RawBlock::Preamble { raw, .. }
-            | RawBlock::StringDef { raw, .. } => output.push_str(raw),
-            RawBlock::Entry { id, .. } => {
-                if let Some(entry) = data.entry_blocks.get(*id) {
-                    if !seen_entries.insert(entry.key.clone()) {
-                        push_diagnostic(
-                            &mut diagnostics,
-                            collect_diagnostics,
-                            format!(
-                                "ignored duplicate BibTeX entry key {} at {}..{}",
-                                quoted(&entry.key),
-                                entry.span.start,
-                                entry.span.end
-                            ),
-                        );
-                    } else if validate_entries {
-                        if let Err(err) = RawBibliography::parse(&entry.raw) {
-                            push_diagnostic(
-                                &mut diagnostics,
-                                collect_diagnostics,
-                                format!(
-                                    "ignored BibTeX entry {} at {}..{} because syntax validation failed: {}",
-                                    quoted(&entry.key),
-                                    entry.span.start,
-                                    entry.span.end,
-                                    err
-                                ),
-                            );
-                        } else {
-                            output.push_str(&entry.raw);
-                        }
-                    } else {
-                        output.push_str(&entry.raw);
-                    }
-                }
+        let (code, message, entry) = match block {
+            RawBlock::Entry { key, .. } if !keys.insert(key.clone()) => (
+                "duplicate_key",
+                format!("ignored duplicate BibTeX entry key {key:?}"),
+                Some(key.clone()),
+            ),
+            RawBlock::Failed { error, .. } => (
+                "malformed_block",
+                format!("ignored malformed BibTeX block: {error}"),
+                None,
+            ),
+            RawBlock::Other { raw, .. } if !raw.trim().is_empty() => {
+                ("raw_text", "ignored raw BibTeX text".to_string(), None)
             }
-            RawBlock::Failed { error, span, .. } => {
-                push_diagnostic(
-                    &mut diagnostics,
-                    collect_diagnostics,
-                    format!(
-                        "ignored malformed BibTeX block at {}..{}: {}",
-                        span.start, span.end, error
-                    ),
-                );
-            }
-            RawBlock::Other { raw, span } => {
-                if !raw.trim().is_empty() {
-                    push_diagnostic(
-                        &mut diagnostics,
-                        collect_diagnostics,
-                        format!("ignored raw BibTeX text at {}..{}", span.start, span.end),
-                    );
-                }
+            _ => continue,
+        };
+        for byte in &mut output[span.clone()] {
+            if *byte != b'\n' && *byte != b'\r' {
+                *byte = b' ';
             }
         }
+        let mut diagnostic =
+            Diagnostic::error(code, Some(span), message).recovered(DiagnosticAction::DroppedBlock);
+        diagnostic.entry = entry;
+        diagnostics.push(diagnostic);
     }
-    (output, diagnostics)
-}
-
-fn push_diagnostic(diagnostics: &mut Vec<String>, collect: bool, message: String) {
-    if collect {
-        diagnostics.push(message);
-    }
-}
-
-pub fn sanitize_biblatex_for_library_literals(
-    source: &str,
-    collect_diagnostics: bool,
-) -> (String, Vec<String>) {
-    let data = parse_raw_document(source);
-    let mut output = String::with_capacity(source.len());
-    let mut diagnostics = Vec::new();
-    let mut seen_entries = BTreeSet::new();
-
-    for (index, block) in data.blocks.iter().enumerate() {
-        if block_starts_inside_percent_comment(source, &data.blocks, index) {
-            preserve_line_break_from_skipped_block(source, block, &mut output);
-            continue;
-        }
-        match block {
-            RawBlock::Whitespace { raw, .. }
-            | RawBlock::Comment { raw, .. }
-            | RawBlock::Preamble { raw, .. } => output.push_str(raw),
-            RawBlock::StringDef { key, span, .. } => {
-                push_diagnostic(
-                    &mut diagnostics,
-                    collect_diagnostics,
-                    format!(
-                        "ignored string definition {} at {}..{} during literal recovery",
-                        quoted(key),
-                        span.start,
-                        span.end
-                    ),
-                );
-            }
-            RawBlock::Entry { id, .. } => {
-                if let Some(entry) = data.entry_blocks.get(*id) {
-                    if seen_entries.insert(entry.key.clone()) {
-                        render_literal_entry(entry, &mut output);
-                    } else {
-                        push_diagnostic(
-                            &mut diagnostics,
-                            collect_diagnostics,
-                            format!(
-                                "ignored duplicate BibTeX entry key {} at {}..{}",
-                                quoted(&entry.key),
-                                entry.span.start,
-                                entry.span.end
-                            ),
-                        );
-                    }
-                }
-            }
-            RawBlock::Failed { error, span, .. } => {
-                push_diagnostic(
-                    &mut diagnostics,
-                    collect_diagnostics,
-                    format!(
-                        "ignored malformed BibTeX block at {}..{}: {}",
-                        span.start, span.end, error
-                    ),
-                );
-            }
-            RawBlock::Other { raw, span } => {
-                if !raw.trim().is_empty() {
-                    push_diagnostic(
-                        &mut diagnostics,
-                        collect_diagnostics,
-                        format!("ignored raw BibTeX text at {}..{}", span.start, span.end),
-                    );
-                }
-            }
-        }
-    }
-
-    (output, diagnostics)
-}
-
-fn block_starts_inside_percent_comment(source: &str, blocks: &[RawBlock], index: usize) -> bool {
-    let Some(block) = blocks.get(index) else {
-        return false;
-    };
-    if matches!(block, RawBlock::Whitespace { .. }) && block_text(source, block).contains('\n') {
-        return false;
-    }
-    let block_start = block.span().start;
-    for block in blocks[..index].iter().rev() {
-        if block.span().end > block_start {
-            continue;
-        }
-        let raw = block_text(source, block);
-        match block {
-            RawBlock::Comment { raw: comment, .. }
-                if comment.trim_start().starts_with('%') && !raw.contains('\n') =>
-            {
-                return true;
-            }
-            _ => {
-                if raw.contains('\n') {
-                    return false;
-                }
-            }
-        }
-    }
-    false
-}
-
-fn block_text<'a>(source: &'a str, block: &RawBlock) -> &'a str {
-    source.get(block.span().clone()).unwrap_or_default()
-}
-
-fn preserve_line_break_from_skipped_block(source: &str, block: &RawBlock, output: &mut String) {
-    if block_text(source, block).contains('\n') && !output.ends_with('\n') {
-        output.push('\n');
-    }
-}
-
-fn render_literal_entry(entry: &RawEntryData, output: &mut String) {
-    output.push('@');
-    output.push_str(&entry.kind);
-    output.push('{');
-    output.push_str(&entry.key);
-    for field in &entry.field_blocks {
-        output.push_str(",\n  ");
-        output.push_str(&field.name);
-        output.push_str(" = {");
-        write_literal_field_value(&field.value, output);
-        output.push('}');
-    }
-    output.push_str("\n}\n");
-}
-
-fn write_literal_field_value(value: &str, output: &mut String) {
-    for ch in value.chars() {
-        if ch == '%' {
-            output.push('\\');
-        }
-        output.push(ch);
-    }
-}
-
-pub fn remove_block_containing_span(source: &str, span: Range<usize>) -> Option<(String, String)> {
-    let data = parse_raw_document(source);
-    let block = data
-        .blocks
-        .iter()
-        .filter(|block| {
-            !matches!(
-                block,
-                RawBlock::Whitespace { .. } | RawBlock::Comment { .. }
-            )
-        })
-        .find(|block| block_contains_span(block.span(), &span))
-        .or_else(|| {
-            data.blocks
-                .iter()
-                .rev()
-                .filter(|block| {
-                    !matches!(
-                        block,
-                        RawBlock::Whitespace { .. } | RawBlock::Comment { .. }
-                    )
-                })
-                .find(|block| block.span().end <= span.start || span.start >= source.len())
-        })?;
-    let block_span = block.span();
-    let mut output = String::with_capacity(source.len().saturating_sub(block_span.len()) + 1);
-    output.push_str(&source[..block_span.start]);
-    output.push('\n');
-    output.push_str(&source[block_span.end..]);
-    Some((
-        output,
-        format!("removed {}", describe_recovered_block(block)),
-    ))
-}
-
-fn block_contains_span(block: &Range<usize>, span: &Range<usize>) -> bool {
-    block.start <= span.start && span.end <= block.end
-}
-
-fn describe_recovered_block(block: &RawBlock) -> String {
-    match block {
-        RawBlock::Preamble { span, .. } => format!("preamble at {}..{}", span.start, span.end),
-        RawBlock::StringDef { key, span, .. } => {
-            format!(
-                "string definition {} at {}..{}",
-                quoted(key),
-                span.start,
-                span.end
-            )
-        }
-        RawBlock::Entry { key, span, .. } => {
-            format!("entry {} at {}..{}", quoted(key), span.start, span.end)
-        }
-        RawBlock::Failed { span, .. } => {
-            format!("malformed block at {}..{}", span.start, span.end)
-        }
-        RawBlock::Other { span, .. } => {
-            format!("raw block at {}..{}", span.start, span.end)
-        }
-        RawBlock::Whitespace { span, .. } => {
-            format!("whitespace at {}..{}", span.start, span.end)
-        }
-        RawBlock::Comment { span, .. } => format!("comment at {}..{}", span.start, span.end),
-    }
+    (
+        String::from_utf8(output).expect("masking complete UTF-8 spans preserves UTF-8"),
+        diagnostics,
+    )
 }

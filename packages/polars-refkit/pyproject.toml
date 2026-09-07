@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "polars>=1.29",
+    "agent-plugins==0.2.0",
 ]
 
 [project.urls]
@@ -30,12 +31,16 @@ Documentation = "https://peter-gy.github.io/refkit/guides/polars"
 Issues = "https://github.com/peter-gy/refkit/issues"
 Repository = "https://github.com/peter-gy/refkit"
 
+[project.entry-points."marimo.agent.capability"]
+polars_refkit = "polars_refkit.agent"
 [build-system]
 requires = [
     "maturin>=1.9,<2",
     "polars>=1.29",
+    "agent-plugins==0.2.0",
 ]
-build-backend = "maturin"
+build-backend = "build_backend"
+backend-path = ["."]
 
 [tool.maturin]
 manifest-path = "rust/Cargo.toml"
@@ -50,3 +55,10 @@ exclude = [
     "polars_refkit/**/*.pyc",
     "polars_refkit/**/*.pyo",
 ]
+
+[[tool.maturin.include]]
+path = "build_backend.py"
+format = "sdist"
+
+[tool.agent-plugins]
+root = "agent-plugin"

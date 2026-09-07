@@ -1,10 +1,14 @@
 use polars::prelude::*;
+use polars_core::chunked_array::builder::{AnonymousOwnedListBuilder, ListBuilderTrait};
 use pyo3_polars::derive::polars_expr;
-use refkit_core::parse_bibtex_report;
+use refkit_core::{Diagnostic, parse_bibtex_report};
 
 use super::ParseKwargs;
 use super::broadcast::parse_value_library_source;
-use super::dtypes::{boolean_output, keys_output, parse_report_output, uint32_output};
+use super::dtypes::{
+    boolean_output, diagnostic_struct_dtype, diagnostics_output, keys_output, parse_report_output,
+    uint32_output, with_struct_validity,
+};
 
 #[polars_expr(output_type_func=uint32_output)]
 fn entry_count(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
@@ -43,66 +47,129 @@ fn keys(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
     Ok(builder.finish().into_series())
 }
 
-#[polars_expr(output_type_func=keys_output)]
+#[polars_expr(output_type_func=diagnostics_output)]
 fn diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
     let bibtex = inputs[0].str()?;
-    let mut builder =
-        ListStringChunkedBuilder::new("diagnostics".into(), bibtex.len(), bibtex.len());
-
-    for value in bibtex.iter() {
-        let Some(source) = value else {
-            builder.append_null();
-            continue;
-        };
-        let report = parse_bibtex_report(source, kwargs.recovery.policy());
-        builder.append_values_iter(report.diagnostics.iter().map(String::as_str));
-    }
-
-    Ok(builder.finish().into_series())
+    let reports = bibtex
+        .iter()
+        .map(|source| source.map(|source| parse_bibtex_report(source, kwargs.recovery.policy())))
+        .collect::<Vec<_>>();
+    diagnostic_lists_to_series(
+        "diagnostics",
+        reports
+            .iter()
+            .map(|report| report.as_ref().map(|report| report.diagnostics.as_slice())),
+    )
 }
 
 #[polars_expr(output_type_func=parse_report_output)]
 fn parse_report(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
     let bibtex = inputs[0].str()?;
-    let mut ok = Vec::with_capacity(bibtex.len());
-    let mut entry_count = Vec::with_capacity(bibtex.len());
-    let mut keys = ListStringChunkedBuilder::new("keys".into(), bibtex.len(), bibtex.len() * 2);
-    let mut diagnostics =
-        ListStringChunkedBuilder::new("diagnostics".into(), bibtex.len(), bibtex.len());
-
-    for value in bibtex.iter() {
-        let Some(source) = value else {
-            ok.push(None);
-            entry_count.push(None);
-            keys.append_null();
-            diagnostics.append_null();
-            continue;
-        };
-        let report = parse_bibtex_report(source, kwargs.recovery.policy());
-        ok.push(Some(report.ok));
-        entry_count.push(
-            report
-                .entry_count
-                .and_then(|count| u32::try_from(count).ok()),
-        );
-        match report.keys {
-            Some(keys_value) => keys.append_values_iter(keys_value.iter().map(String::as_str)),
+    let reports = bibtex
+        .iter()
+        .map(|source| source.map(|source| parse_bibtex_report(source, kwargs.recovery.policy())))
+        .collect::<Vec<_>>();
+    let mut keys = ListStringChunkedBuilder::new("keys".into(), reports.len(), reports.len());
+    for report in &reports {
+        match report.as_ref().and_then(|report| report.keys.as_ref()) {
+            Some(values) => keys.append_values_iter(values.iter().map(String::as_str)),
             None => keys.append_null(),
         }
-        diagnostics.append_values_iter(report.diagnostics.iter().map(String::as_str));
     }
-
     let fields = [
-        BooleanChunked::from_iter_options("ok".into(), ok.into_iter()).into_series(),
-        UInt32Chunked::from_iter_options("entry_count".into(), entry_count.into_iter())
-            .into_series(),
+        BooleanChunked::from_iter_options(
+            "ok".into(),
+            reports.iter().map(|r| r.as_ref().map(|r| r.ok)),
+        )
+        .into_series(),
+        UInt32Chunked::from_iter_options(
+            "entry_count".into(),
+            reports.iter().map(|r| {
+                r.as_ref()
+                    .and_then(|r| r.entry_count.and_then(|n| u32::try_from(n).ok()))
+            }),
+        )
+        .into_series(),
         keys.finish().into_series(),
-        diagnostics.finish().into_series(),
+        diagnostic_lists_to_series(
+            "diagnostics",
+            reports
+                .iter()
+                .map(|r| r.as_ref().map(|r| r.diagnostics.as_slice())),
+        )?,
     ];
-    Ok(
-        StructChunked::from_series("parse_report".into(), bibtex.len(), fields.iter())?
+    let result = StructChunked::from_series("parse_report".into(), reports.len(), fields.iter())?;
+    with_struct_validity(result, reports.iter().map(Option::is_some))
+}
+
+pub(super) fn diagnostic_lists_to_series<'a>(
+    name: &str,
+    rows: impl Iterator<Item = Option<&'a [Diagnostic]>>,
+) -> PolarsResult<Series> {
+    let mut builder = AnonymousOwnedListBuilder::new(
+        name.into(),
+        rows.size_hint().0,
+        Some(diagnostic_struct_dtype()),
+    );
+    for row in rows {
+        let Some(diagnostics) = row else {
+            builder.append_null();
+            continue;
+        };
+        let span_fields = [
+            UInt64Chunked::from_iter_options(
+                "start".into(),
+                diagnostics
+                    .iter()
+                    .map(|d| d.span.as_ref().map(|s| s.start as u64)),
+            )
             .into_series(),
-    )
+            UInt64Chunked::from_iter_options(
+                "end".into(),
+                diagnostics
+                    .iter()
+                    .map(|d| d.span.as_ref().map(|s| s.end as u64)),
+            )
+            .into_series(),
+        ];
+        let spans =
+            StructChunked::from_series("span".into(), diagnostics.len(), span_fields.iter())?;
+        let fields = [
+            StringChunked::from_iter_values("code".into(), diagnostics.iter().map(|d| d.code))
+                .into_series(),
+            StringChunked::from_iter_values(
+                "severity".into(),
+                diagnostics.iter().map(|d| d.severity.as_str()),
+            )
+            .into_series(),
+            StringChunked::from_iter_values(
+                "action".into(),
+                diagnostics.iter().map(|d| d.action.as_str()),
+            )
+            .into_series(),
+            with_struct_validity(spans, diagnostics.iter().map(|d| d.span.is_some()))?,
+            StringChunked::from_iter_options(
+                "entry".into(),
+                diagnostics.iter().map(|d| d.entry.as_deref()),
+            )
+            .into_series(),
+            StringChunked::from_iter_options(
+                "field".into(),
+                diagnostics.iter().map(|d| d.field.as_deref()),
+            )
+            .into_series(),
+            StringChunked::from_iter_values(
+                "message".into(),
+                diagnostics.iter().map(|d| d.message.as_str()),
+            )
+            .into_series(),
+        ];
+        builder.append_series(
+            &StructChunked::from_series("diagnostic".into(), diagnostics.len(), fields.iter())?
+                .into_series(),
+        )?;
+    }
+    Ok(builder.finish().into_series())
 }
 
 #[polars_expr(output_type_func=boolean_output)]

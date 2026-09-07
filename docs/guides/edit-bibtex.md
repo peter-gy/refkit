@@ -14,9 +14,13 @@ import refkit as rk
 document = rk.BibDocument.read("references.bib")
 document.entries["doe2024"].fields["title"].value = "Corrected title"
 document.write("references.bib")
+assert (
+    rk.BibDocument.read("references.bib").entries["doe2024"].fields["title"].value
+    == "Corrected title"
+)
 ```
 
-The field handle updates the shared `BibDocument`. `write` serializes the current state to the selected path.
+The field handle updates the shared `BibDocument`. `write` serializes the current state to the selected path as UTF-8. A Windows-1252 input is decoded when read and records that choice in `document.diagnostics`. Its original file bytes and decoded-text offsets can differ.
 
 Use `to_bibtex()` to inspect the result before writing:
 
@@ -31,7 +35,7 @@ for block in document.blocks:
     print(block["kind"], block["span"])
 ```
 
-Block kinds are `whitespace`, `comment`, `preamble`, `string`, `entry`, `failed`, and `other`. Every span is a half-open pair of UTF-8 byte offsets into the original source.
+Block kinds are `whitespace`, `comment`, `preamble`, `string`, `entry`, `failed`, and `other`. Every span is a half-open pair of UTF-8 byte offsets into the decoded source text. Spans keep their original positions after edits.
 
 Use `comments`, `preamble`, `strings`, and `failed_blocks` for focused views. `blocks` remains the complete source-order view.
 

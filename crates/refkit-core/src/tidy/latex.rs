@@ -60,13 +60,28 @@ fn flatten_until(
 fn read_command(chars: &[char], index: &mut usize) -> String {
     let mut output = String::from("\\");
     *index += 1;
-    while *index < chars.len() {
-        let ch = chars[*index];
-        if ch == '{' || ch == '[' || ch == '}' || ch == ']' || ch.is_whitespace() {
-            break;
-        }
-        output.push(ch);
+    let symbol = chars.get(*index).copied().filter(|character| {
+        !character.is_alphabetic()
+            && !(*character == '\\'
+                && chars
+                    .get(*index + 1)
+                    .is_some_and(|next| next.is_alphabetic()))
+    });
+    if let Some(symbol) = symbol {
+        output.push(symbol);
         *index += 1;
+        if matches!(symbol, '{' | '}' | '[' | ']' | '\\') || symbol.is_whitespace() {
+            return output;
+        }
+    } else {
+        while *index < chars.len() {
+            let ch = chars[*index];
+            if ch == '{' || ch == '[' || ch == '}' || ch == ']' || ch.is_whitespace() {
+                break;
+            }
+            output.push(ch);
+            *index += 1;
+        }
     }
     loop {
         if *index >= chars.len() {
@@ -125,6 +140,7 @@ mod tests {
             flatten_unprotected_braces(r"Quantifying \textbf{Madness} in {Green {Leaf}} Ants"),
             r"Quantifying \textbf{Madness} in Green Leaf Ants",
         );
+        assert_eq!(flatten_unprotected_braces(r"\'{e} \^{AB}"), r"\'{e} \^{AB}");
     }
 
     #[test]

@@ -29,3 +29,6 @@ pyo3 = "0.25.1"
 pyo3-polars = { version = "=0.24.0", features = ["derive"] }
 refkit-core = { path = "../../../crates/refkit-core" }
 serde = { version = "1.0.228", features = ["derive"] }
+
+[patch.crates-io]
+citationberg = {git = "https://github.com/typst/citationberg", rev = "06a591e2f237d25e1dfdedac3f3d1494c496c52d"}

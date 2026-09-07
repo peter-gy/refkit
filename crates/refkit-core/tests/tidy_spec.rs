@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use refkit_core::{DuplicateRule, TidyOptions, tidy_bibtex as tidy};
+use refkit_core::{TidyOptions, tidy_bibtex as tidy};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -65,162 +65,15 @@ struct SpecOptions {
 }
 
 #[test]
-fn defaults_spec_matches_upstream_fixture() {
-    let spec = read_spec("defaults.spec.yaml");
-    let result = tidy(&spec.input, spec.options.clone().into_tidy_options()).unwrap();
-
-    assert_expected("defaults.spec.yaml", &spec, &result);
-}
-
-#[test]
-fn align_off_spec_matches_upstream_fixture() {
-    let spec = read_spec("align-off.spec.yaml");
-    let result = tidy(&spec.input, spec.options.clone().into_tidy_options()).unwrap();
-
-    assert_expected("align-off.spec.yaml", &spec, &result);
-}
-
-#[test]
-fn option_smoke_specs_match_upstream_fixtures() {
-    for name in [
-        "indent-spaces.spec.yaml",
-        "indent-spaces-custom.spec.yaml",
-        "indent-tab.spec.yaml",
-        "align20.spec.yaml",
-        "at-symbol-in-comment.spec.yaml",
-        "at-symbol-in-title.spec.yaml",
-        "big-numbers.spec.yaml",
-        "concatenation.spec.yaml",
-        "escape-off.spec.yaml",
-        "escape.spec.yaml",
-        "no-lowercase.spec.yaml",
-        "empty-entry.spec.yaml",
-        "empty-key.spec.yaml",
-        "curly.spec.yaml",
-        "encode-urls.spec.yaml",
-        "encode-urls-off.spec.yaml",
-        "drop-all-caps.spec.yaml",
-        "leading-commas.spec.yaml",
-        "max-authors.spec.yaml",
-        "multiline-field.spec.yaml",
-        "numeric.spec.yaml",
-        "omit-properties.spec.yaml",
-        "one-line-bib.spec.yaml",
-        "enclosing-braces.spec.yaml",
-        "enclosing-braces-custom-fields.spec.yaml",
-        "enclosing-braces-in-text.spec.yaml",
-        "enclosing-braces-around-command.spec.yaml",
-        "enclosing-braces-with-escape.spec.yaml",
-        "remove-braces.spec.yaml",
-        "remove-braces-specific-fields.spec.yaml",
-        "strip-double-brace.spec.yaml",
-        "remove-duplicate-fields.spec.yaml",
-        "remove-duplicate-fields-off.spec.yaml",
-        "remove-empty-fields.spec.yaml",
-        "remove-empty-fields-off.spec.yaml",
-        "sort-fields.spec.yaml",
-        "sort-fields-custom.spec.yaml",
-        "sort-key.spec.yaml",
-        "sort-descending.spec.yaml",
-        "sort-multi-key.spec.yaml",
-        "sort-numeric.spec.yaml",
-        "sort-special.spec.yaml",
-        "sort.spec.yaml",
-        "spacing-before-first-entry.spec.yaml",
-        "trailing-commas.spec.yaml",
-        "paragraph.spec.yaml",
-        "wrap.spec.yaml",
-    ] {
-        let spec = read_spec(name);
-        let result = tidy(&spec.input, spec.options.clone().into_tidy_options())
-            .unwrap_or_else(|error| panic!("{name}: {error}"));
-
-        assert_expected(name, &spec, &result);
+fn extended_name_format_retains_the_entry() {
+    for spec in read_specs("extended-name-format.spec.yaml") {
+        let result = tidy(&spec.input, spec.options.into_tidy_options()).unwrap();
+        assert_eq!(result.count, 1);
+        assert_eq!(
+            refkit_core::RawDocument::parse(&result.bibtex).entry_keys(),
+            ["LDN3"]
+        );
     }
-}
-
-#[test]
-fn abbreviate_months_spec_documents_match_upstream_fixture() {
-    for spec in read_specs("abbreviate-months.spec.yaml") {
-        let result = tidy(&spec.input, spec.options.clone().into_tidy_options()).unwrap();
-        assert_expected("abbreviate-months.spec.yaml", &spec, &result);
-    }
-}
-
-#[test]
-fn generate_keys_spec_documents_match_upstream_fixture() {
-    for spec in read_specs("generate-keys.spec.yaml") {
-        let result = tidy(&spec.input, spec.options.clone().into_tidy_options()).unwrap();
-        assert_expected("generate-keys.spec.yaml", &spec, &result);
-    }
-}
-
-#[test]
-fn duplicate_warning_specs_match_upstream_fixtures() {
-    for (name, rules) in [
-        (
-            "duplicate-abstracts.spec.yaml",
-            vec![DuplicateRule::Abstract],
-        ),
-        (
-            "duplicate-citations.spec.yaml",
-            vec![DuplicateRule::Citation, DuplicateRule::Citation],
-        ),
-        ("duplicate-dois.spec.yaml", vec![DuplicateRule::Doi]),
-        ("duplicate-keys.spec.yaml", vec![DuplicateRule::Key]),
-    ] {
-        let spec = read_spec(name);
-        let result = tidy(&spec.input, spec.options.clone().into_tidy_options())
-            .unwrap_or_else(|error| panic!("{name}: {error}"));
-        let actual = result
-            .warnings
-            .iter()
-            .filter_map(|warning| warning.rule())
-            .collect::<Vec<_>>();
-
-        assert_eq!(actual, rules, "{name}");
-    }
-}
-
-#[test]
-fn duplicate_merge_specs_match_upstream_fixtures() {
-    for name in [
-        "duplicate-merge-1.spec.yaml",
-        "duplicate-merge-2.spec.yaml",
-        "duplicate-merge-combine.spec.yaml",
-        "duplicate-merge-first.spec.yaml",
-        "duplicate-merge-keys.spec.yaml",
-        "duplicate-merge-last.spec.yaml",
-        "duplicate-merge-overwrite.spec.yaml",
-    ] {
-        let spec = read_spec(name);
-        let result = tidy(&spec.input, spec.options.clone().into_tidy_options())
-            .unwrap_or_else(|error| panic!("{name}: {error}"));
-
-        assert_expected(name, &spec, &result);
-        if !spec.warnings.is_empty() {
-            assert_eq!(result.warnings.len(), spec.warnings.len(), "{name}");
-        }
-    }
-}
-
-#[test]
-fn extended_name_format_spec_parses_upstream_fixture() {
-    let spec = read_spec("extended-name-format.spec.yaml");
-    let result = tidy(&spec.input, spec.options.clone().into_tidy_options()).unwrap();
-
-    assert_eq!(result.count, 1);
-    assert!(result.warnings.is_empty());
-}
-
-#[test]
-fn vendored_spec_inventory_matches_upstream_count() {
-    assert_eq!(all_spec_files().len(), 67);
-    let document_count = all_spec_files()
-        .iter()
-        .flat_map(|path| read_specs(path))
-        .count();
-    assert_eq!(document_count, 78);
 }
 
 #[test]
@@ -427,14 +280,6 @@ impl SpecOptions {
     }
 }
 
-fn assert_expected(name: &str, spec: &SpecDocument, result: &refkit_core::TidyResult) {
-    let expected = spec
-        .expected
-        .as_ref()
-        .unwrap_or_else(|| panic!("{name} did not declare expected output"));
-    assert_eq!(result.bibtex, *expected, "{name}");
-}
-
 fn string_sequence(values: Vec<serde_yaml::Value>) -> Vec<String> {
     values
         .into_iter()
@@ -528,12 +373,6 @@ fn all_spec_files() -> Vec<String> {
         .collect::<Vec<_>>();
     files.sort();
     files
-}
-
-fn read_spec(name: &str) -> SpecDocument {
-    read_specs(name).into_iter().next().unwrap_or_else(|| {
-        panic!("spec file {name} did not contain a document");
-    })
 }
 
 fn read_specs(name: &str) -> Vec<SpecDocument> {

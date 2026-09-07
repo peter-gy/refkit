@@ -28,10 +28,12 @@
       "items": [
         { "text": "Parse bibliographies", "link": "/guides/parse-bibliographies" },
         { "text": "Render citations", "link": "/guides/render-citations" },
+        { "text": "Render structured output", "link": "/guides/render-output" },
         { "text": "Edit raw BibTeX", "link": "/guides/edit-bibtex" },
         { "text": "Format BibTeX", "link": "/guides/format-bibtex" },
         { "text": "Process Polars columns", "link": "/guides/polars" },
-        { "text": "Run in Pyodide", "link": "/pyodide" }
+        { "text": "Run in Pyodide", "link": "/pyodide" },
+        { "text": "Troubleshooting", "link": "/troubleshooting" }
       ]
     },
     {
@@ -45,13 +47,6 @@
         { "text": "Rust core", "link": "/reference/rust" },
         { "text": "Agent integration", "link": "/reference/agent-docs" },
         { "text": "Errors and diagnostics", "link": "/reference/errors" }
-      ]
-    },
-    {
-      "text": "Change and recover",
-      "items": [
-        { "text": "Migration guide", "link": "/migration" },
-        { "text": "Troubleshooting", "link": "/troubleshooting" }
       ]
     }
   ],

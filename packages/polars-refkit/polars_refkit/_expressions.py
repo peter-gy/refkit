@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
 
 import polars as pl
 
 from ._plugin import (
     ColumnExpr,
+    OutputFormat,
     RecoveryMode,
     _bibliography_expr,
     _cite_expr,
@@ -14,10 +14,12 @@ from ._plugin import (
     _diagnostics_expr,
     _entries_expr,
     _parse_expr,
+    _register,
+    _render_function,
+    _render_kwargs,
     _tidy_expr,
 )
-from ._tidy_options import TIDY_UNSET as _TIDY_UNSET
-from ._tidy_options import tidy_kwargs as _tidy_kwargs
+from ._tidy_options import TidyOptions, tidy_kwargs
 
 
 def cite(
@@ -27,63 +29,21 @@ def cite(
     style: str = "apa",
     locale: str = "en-US",
     recovery: RecoveryMode = "error",
+    output: OutputFormat = "text",
 ) -> pl.Expr:
-    """Render one citation as plain text from each BibTeX row and key row.
+    """Render one key per row. Row failures return null.
 
-    String inputs name columns. Use `pl.lit(...)` for literal BibTeX or keys.
-    Row-local parse failures, missing keys, and render failures return null.
+    Strings name columns. Use `pl.lit(...)` for literals. Text and HTML produce
+    strings, rendered produces {text, html} structs.
     """
-
     return _cite_expr(
-        "cite",
+        _render_function("cite", output),
         bibtex_col,
         key_col,
         style=style,
         locale=locale,
         recovery=recovery,
         output_name="cite",
-    )
-
-
-def cite_html(
-    bibtex_col: ColumnExpr,
-    key_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr:
-    """Render one citation as HTML from each BibTeX row and key row."""
-
-    return _cite_expr(
-        "cite_html",
-        bibtex_col,
-        key_col,
-        style=style,
-        locale=locale,
-        recovery=recovery,
-        output_name="cite_html",
-    )
-
-
-def cite_rendered(
-    bibtex_col: ColumnExpr,
-    key_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr:
-    """Render one citation as a `{text, html}` struct."""
-
-    return _cite_expr(
-        "cite_rendered",
-        bibtex_col,
-        key_col,
-        style=style,
-        locale=locale,
-        recovery=recovery,
-        output_name="cite_rendered",
     )
 
 
@@ -94,59 +54,21 @@ def cite_each(
     style: str = "apa",
     locale: str = "en-US",
     recovery: RecoveryMode = "error",
+    output: OutputFormat = "text",
 ) -> pl.Expr:
-    """Render each key in a `List[String]` column as a separate citation."""
+    """Render an ordered key list with shared citation state within each row.
 
+    Strings name columns. Use `pl.lit(...)` for literals. Text and HTML produce
+    List[String], rendered produces List[Struct{text, html}]. Empty lists stay empty.
+    """
     return _cite_list_expr(
-        "cite_each",
+        _render_function("cite_each", output),
         bibtex_col,
         keys_col,
         style=style,
         locale=locale,
         recovery=recovery,
         output_name="cite_each",
-    )
-
-
-def cite_each_html(
-    bibtex_col: ColumnExpr,
-    keys_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr:
-    """Render each key in a `List[String]` column as separate citation HTML."""
-
-    return _cite_list_expr(
-        "cite_each_html",
-        bibtex_col,
-        keys_col,
-        style=style,
-        locale=locale,
-        recovery=recovery,
-        output_name="cite_each_html",
-    )
-
-
-def cite_each_rendered(
-    bibtex_col: ColumnExpr,
-    keys_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr:
-    """Render each key in a `List[String]` column as `{text, html}` structs."""
-
-    return _cite_list_expr(
-        "cite_each_rendered",
-        bibtex_col,
-        keys_col,
-        style=style,
-        locale=locale,
-        recovery=recovery,
-        output_name="cite_each_rendered",
     )
 
 
@@ -157,11 +79,15 @@ def cite_group(
     style: str = "apa",
     locale: str = "en-US",
     recovery: RecoveryMode = "error",
+    output: OutputFormat = "text",
 ) -> pl.Expr:
-    """Render a `List[String]` key column as one grouped citation."""
+    """Render a nonempty key list as one grouped citation per row.
 
+    Strings name columns. Use `pl.lit(...)` for literals. Text and HTML produce
+    strings, rendered produces {text, html} structs.
+    """
     return _cite_list_expr(
-        "cite_group",
+        _render_function("cite_group", output),
         bibtex_col,
         keys_col,
         style=style,
@@ -171,102 +97,48 @@ def cite_group(
     )
 
 
-def cite_group_html(
+def full_bibliography(
+    bibtex_col: ColumnExpr,
+    *,
+    style: str = "apa",
+    locale: str = "en-US",
+    recovery: RecoveryMode = "error",
+    output: OutputFormat = "text",
+) -> pl.Expr:
+    """Render every entry in each BibTeX row.
+
+    Strings name columns. Use `pl.lit(...)` for literals. Text and HTML produce
+    strings, rendered produces {text, html} structs.
+    """
+    return _bibliography_expr(
+        _render_function("full_bibliography", output),
+        bibtex_col,
+        style=style,
+        locale=locale,
+        recovery=recovery,
+        output_name="full_bibliography",
+    )
+
+
+def render_report(
     bibtex_col: ColumnExpr,
     keys_col: ColumnExpr,
     *,
+    grouped: bool = False,
     style: str = "apa",
     locale: str = "en-US",
     recovery: RecoveryMode = "error",
 ) -> pl.Expr:
-    """Render a `List[String]` key column as one grouped citation in HTML."""
+    """Render a key list and report citations, parse diagnostics and row errors.
 
-    return _cite_list_expr(
-        "cite_group_html",
-        bibtex_col,
-        keys_col,
-        style=style,
-        locale=locale,
-        recovery=recovery,
-        output_name="cite_group_html",
-    )
-
-
-def cite_group_rendered(
-    bibtex_col: ColumnExpr,
-    keys_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr:
-    """Render a grouped citation as a `{text, html}` struct."""
-
-    return _cite_list_expr(
-        "cite_group_rendered",
-        bibtex_col,
-        keys_col,
-        style=style,
-        locale=locale,
-        recovery=recovery,
-        output_name="cite_group_rendered",
-    )
-
-
-def full_bibliography_html(
-    bibtex_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr:
-    """Render every entry in each BibTeX row as an HTML bibliography."""
-
-    return _bibliography_expr(
-        "full_bibliography_html",
-        bibtex_col,
-        style=style,
-        locale=locale,
-        recovery=recovery,
-        output_name="full_bibliography_html",
-    )
-
-
-def full_bibliography_text(
-    bibtex_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr:
-    """Render every entry in each BibTeX row as a plain-text bibliography."""
-
-    return _bibliography_expr(
-        "full_bibliography_text",
-        bibtex_col,
-        style=style,
-        locale=locale,
-        recovery=recovery,
-        output_name="full_bibliography_text",
-    )
-
-
-def full_bibliography_rendered(
-    bibtex_col: ColumnExpr,
-    *,
-    style: str = "apa",
-    locale: str = "en-US",
-    recovery: RecoveryMode = "error",
-) -> pl.Expr:
-    """Render every entry in each BibTeX row as a `{text, html}` struct."""
-
-    return _bibliography_expr(
-        "full_bibliography_rendered",
-        bibtex_col,
-        style=style,
-        locale=locale,
-        recovery=recovery,
-        output_name="full_bibliography_rendered",
+    grouped=True submits one citation containing the list. Otherwise each key
+    becomes one citation in an ordered sequence. Missing inputs return null.
+    """
+    return _register(
+        "render_report",
+        [bibtex_col, keys_col],
+        kwargs={**_render_kwargs(style, locale, recovery), "grouped": grouped},
+        output_name="render_report",
     )
 
 
@@ -330,139 +202,26 @@ def parse_report(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") ->
     return _parse_expr("parse_report", bibtex_col, recovery=recovery, output_name="parse_report")
 
 
-def tidy_bibtex(
-    bibtex_col: ColumnExpr,
-    *,
-    omit: Any = _TIDY_UNSET,
-    curly: Any = _TIDY_UNSET,
-    numeric: Any = _TIDY_UNSET,
-    months: Any = _TIDY_UNSET,
-    space: Any = _TIDY_UNSET,
-    tab: Any = _TIDY_UNSET,
-    align: Any = _TIDY_UNSET,
-    blank_lines: Any = _TIDY_UNSET,
-    sort: Any = _TIDY_UNSET,
-    duplicates: Any = _TIDY_UNSET,
-    merge: Any = _TIDY_UNSET,
-    strip_enclosing_braces: Any = _TIDY_UNSET,
-    drop_all_caps: Any = _TIDY_UNSET,
-    escape: Any = _TIDY_UNSET,
-    sort_fields: Any = _TIDY_UNSET,
-    strip_comments: Any = _TIDY_UNSET,
-    trailing_commas: Any = _TIDY_UNSET,
-    encode_urls: Any = _TIDY_UNSET,
-    tidy_comments: Any = _TIDY_UNSET,
-    remove_empty_fields: Any = _TIDY_UNSET,
-    remove_duplicate_fields: Any = _TIDY_UNSET,
-    generate_keys: Any = _TIDY_UNSET,
-    max_authors: Any = _TIDY_UNSET,
-    lowercase: Any = _TIDY_UNSET,
-    enclosing_braces: Any = _TIDY_UNSET,
-    remove_braces: Any = _TIDY_UNSET,
-    wrap: Any = _TIDY_UNSET,
-) -> pl.Expr:
-    """Format each BibTeX row and return the formatted source."""
+def tidy_bibtex(bibtex_col: ColumnExpr, *, options: TidyOptions | None = None) -> pl.Expr:
+    """Format each BibTeX row and return the formatted source.
 
+    Omitted options use core defaults. Optional rules accept True for their
+    standard setting and False or None to disable them.
+    """
     return _tidy_expr(
-        "tidy_bibtex",
-        bibtex_col,
-        kwargs=_tidy_kwargs(
-            omit=omit,
-            curly=curly,
-            numeric=numeric,
-            months=months,
-            space=space,
-            tab=tab,
-            align=align,
-            blank_lines=blank_lines,
-            sort=sort,
-            duplicates=duplicates,
-            merge=merge,
-            strip_enclosing_braces=strip_enclosing_braces,
-            drop_all_caps=drop_all_caps,
-            escape=escape,
-            sort_fields=sort_fields,
-            strip_comments=strip_comments,
-            trailing_commas=trailing_commas,
-            encode_urls=encode_urls,
-            tidy_comments=tidy_comments,
-            remove_empty_fields=remove_empty_fields,
-            remove_duplicate_fields=remove_duplicate_fields,
-            generate_keys=generate_keys,
-            max_authors=max_authors,
-            lowercase=lowercase,
-            enclosing_braces=enclosing_braces,
-            remove_braces=remove_braces,
-            wrap=wrap,
-        ),
-        output_name="tidy_bibtex",
+        "tidy_bibtex", bibtex_col, kwargs=tidy_kwargs(options), output_name="tidy_bibtex"
     )
 
 
-def tidy_bibtex_report(
-    bibtex_col: ColumnExpr,
-    *,
-    omit: Any = _TIDY_UNSET,
-    curly: Any = _TIDY_UNSET,
-    numeric: Any = _TIDY_UNSET,
-    months: Any = _TIDY_UNSET,
-    space: Any = _TIDY_UNSET,
-    tab: Any = _TIDY_UNSET,
-    align: Any = _TIDY_UNSET,
-    blank_lines: Any = _TIDY_UNSET,
-    sort: Any = _TIDY_UNSET,
-    duplicates: Any = _TIDY_UNSET,
-    merge: Any = _TIDY_UNSET,
-    strip_enclosing_braces: Any = _TIDY_UNSET,
-    drop_all_caps: Any = _TIDY_UNSET,
-    escape: Any = _TIDY_UNSET,
-    sort_fields: Any = _TIDY_UNSET,
-    strip_comments: Any = _TIDY_UNSET,
-    trailing_commas: Any = _TIDY_UNSET,
-    encode_urls: Any = _TIDY_UNSET,
-    tidy_comments: Any = _TIDY_UNSET,
-    remove_empty_fields: Any = _TIDY_UNSET,
-    remove_duplicate_fields: Any = _TIDY_UNSET,
-    generate_keys: Any = _TIDY_UNSET,
-    max_authors: Any = _TIDY_UNSET,
-    lowercase: Any = _TIDY_UNSET,
-    enclosing_braces: Any = _TIDY_UNSET,
-    remove_braces: Any = _TIDY_UNSET,
-    wrap: Any = _TIDY_UNSET,
-) -> pl.Expr:
-    """Return `{ok, bibtex, count, warnings, error}` for each BibTeX row."""
+def tidy_bibtex_report(bibtex_col: ColumnExpr, *, options: TidyOptions | None = None) -> pl.Expr:
+    """Return {ok, bibtex, count, warnings, renames, error} per row.
 
+    Omitted options use core defaults. Optional rules accept True for their
+    standard setting and False or None to disable them.
+    """
     return _tidy_expr(
         "tidy_bibtex_report",
         bibtex_col,
-        kwargs=_tidy_kwargs(
-            omit=omit,
-            curly=curly,
-            numeric=numeric,
-            months=months,
-            space=space,
-            tab=tab,
-            align=align,
-            blank_lines=blank_lines,
-            sort=sort,
-            duplicates=duplicates,
-            merge=merge,
-            strip_enclosing_braces=strip_enclosing_braces,
-            drop_all_caps=drop_all_caps,
-            escape=escape,
-            sort_fields=sort_fields,
-            strip_comments=strip_comments,
-            trailing_commas=trailing_commas,
-            encode_urls=encode_urls,
-            tidy_comments=tidy_comments,
-            remove_empty_fields=remove_empty_fields,
-            remove_duplicate_fields=remove_duplicate_fields,
-            generate_keys=generate_keys,
-            max_authors=max_authors,
-            lowercase=lowercase,
-            enclosing_braces=enclosing_braces,
-            remove_braces=remove_braces,
-            wrap=wrap,
-        ),
+        kwargs=tidy_kwargs(options),
         output_name="tidy_bibtex_report",
     )

@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 
 use super::{
     RawBlock, RawDocumentData, RawEntryData, RawFieldData, RawValueAtom, RawValueMode,
-    is_safe_bare_value, is_valid_entry_key, is_valid_field_name_char, is_valid_identifier,
+    is_valid_entry_key, is_valid_field_name_char, is_valid_identifier,
 };
 use crate::quoted;
 
@@ -644,7 +644,7 @@ fn parse_value_atom(body: &str, start: usize, body_offset: usize) -> Result<Pars
         return Err("field value is missing".to_string());
     }
     let value = body[start..cursor].trim().to_string();
-    if !is_safe_bare_value(&value) {
+    if !is_valid_identifier(&value) && !value.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(format!("bare field value {} is invalid", quoted(&value)));
     }
     Ok((

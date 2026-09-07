@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "polars-refkit",
+  "description": "Inspect bibliography columns, render citations, and format BibTeX through Polars expressions.",
+  "license": "Apache-2.0"
+}

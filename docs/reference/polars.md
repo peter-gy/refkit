@@ -1,120 +1,102 @@
 ---
-description: Look up all 21 polars-refkit expressions, dtypes, defaults, broadcasting rules, and failure boundaries.
+description: Look up bibliography expressions, output formats, dtypes, broadcasting, and row reports.
 ---
 
 # Polars Expressions
 
-`polars-refkit` exports 21 expression builders. Importing `polars_refkit` also registers each builder under `pl.Expr.refkit`.
+Importing `polars_refkit` registers the `pl.Expr.refkit` namespace. Every expression also has a top-level builder with the bibliography column as its first argument.
 
-## Shared arguments
+## Shared inputs and options
 
-`bibtex_col`, `key_col`, and `keys_col` accept a column name string or `pl.Expr`. A plain string names a column. Use `pl.lit(...)` for literal values.
+`bibtex_col`, `key_col`, and `keys_col` accept a column name or `pl.Expr`. Use `pl.lit(...)` for literal bibliography text or keys.
 
-Rendering expressions share:
+Parsing accepts `recovery="error"` or `recovery="report"`. Rendering also accepts `style="apa"` and `locale="en-US"`. `style` selects a bundled style case-insensitively. `locale` is forwarded to the renderer, and an empty string selects no explicit locale.
 
-```python
-style = "apa"
-locale = "en-US"
-recovery = "error"
-```
-
-`style` names a bundled style and is loaded case-insensitively. An unknown style aborts the query with `ComputeError`. The Polars interface accepts bundled style names rather than `Style` objects, paths, or CSL XML.
-
-`locale` is forwarded to the renderer. Use a known bundled locale code. An empty string selects no explicit locale. Raw locale strings are not validated before rendering.
+Rendering accepts `output="text"`, `"html"`, or `"rendered"`. The output choice is validated when constructing the expression and determines its dtype. A rendered value is `Struct[text: String, html: String]`.
 
 ## Parse and inspect
 
-| Expression | Output dtype | Default output name | Failure result |
-| --- | --- | --- | --- |
-| `entry_count(bibtex_col)` | `UInt32` | `entry_count` | Null. |
-| `can_parse(bibtex_col)` | `Boolean` | `can_parse` | `False`. |
-| `has_diagnostics(bibtex_col)` | `Boolean` | `has_diagnostics` | Reflects parser messages. |
-| `keys(bibtex_col)` | `List[String]` | `keys` | Null. |
-| `entries(bibtex_col, fields=None)` | `List[Struct]` | `entries` | Null. |
-| `diagnostics(bibtex_col)` | `List[String]` | `diagnostics` | Parser messages. |
-| `parse_report(bibtex_col)` | report struct | `parse_report` | Structured status. |
-
-Every operation accepts `recovery="error"` or `recovery="report"`.
-
-`entries` defaults to `key`, `title`, `doi`, and `volume`. Supported fields are `key`, `entry_type`, `type`, `title`, `date`, `doi`, and `volume`. Unknown or repeated fields abort the query. An empty field list returns one empty struct per normalized entry.
-
-`parse_report` returns `ok`, `entry_count`, `keys`, and `diagnostics`. For a null source, the current result is a non-null struct whose four fields are null. Other report-like expressions use an outer null for null source input.
-
-## Render a Citation
-
-```python
-cite(bibtex_col, key_col, *, style="apa", locale="en-US", recovery="error")
-cite_html(bibtex_col, key_col, *, style="apa", locale="en-US", recovery="error")
-cite_rendered(bibtex_col, key_col, *, style="apa", locale="en-US", recovery="error")
-```
-
-| Expression | Output dtype | Default output name |
+| Expression | Output dtype | Parse failure |
 | --- | --- | --- |
-| `cite` | `String` | `cite` |
-| `cite_html` | `String` | `cite_html` |
-| `cite_rendered` | `Struct[text: String, html: String]` | `cite_rendered` |
+| `entry_count(bibtex_col, *, recovery="error")` | `UInt32` | Null. |
+| `can_parse(bibtex_col, *, recovery="error")` | `Boolean` | `False`. |
+| `has_diagnostics(bibtex_col, *, recovery="error")` | `Boolean` | Reflects diagnostic presence. |
+| `keys(bibtex_col, *, recovery="error")` | `List[String]` | Null. |
+| `entries(bibtex_col, *, fields=None, recovery="error")` | `List[Struct]` | Null. |
+| `diagnostics(bibtex_col, *, recovery="error")` | `List[Diagnostic]` | Structured diagnostic records. |
+| `parse_report(bibtex_col, *, recovery="error")` | Parse report struct | `ok=False` with diagnostics. |
 
-## Render each key
+`entries` defaults to `key`, `title`, `doi`, and `volume`. Supported fields are `key`, `entry_type`, `type`, `title`, `date`, `doi`, and `volume`. An empty field list returns one empty struct per entry. Unknown or repeated fields abort the query.
 
-```python
-cite_each(bibtex_col, keys_col, *, style="apa", locale="en-US", recovery="error")
-cite_each_html(bibtex_col, keys_col, *, style="apa", locale="en-US", recovery="error")
-cite_each_rendered(bibtex_col, keys_col, *, style="apa", locale="en-US", recovery="error")
-```
+`parse_report` performs one parse for `ok`, `entry_count`, `keys`, and `diagnostics`. Null source produces a null report. [Data Shapes](/reference/data-shapes) defines report and diagnostic fields.
 
-`keys_col` has dtype `List[String]`. The result contains one separate citation per key in order. Output dtypes are `List[String]`, `List[String]`, and `List[Struct[text: String, html: String]]`.
-
-An empty key list returns an empty list.
-
-## Render a Citation Group
+## Render citations
 
 ```python
-cite_group(bibtex_col, keys_col, *, style="apa", locale="en-US", recovery="error")
-cite_group_html(bibtex_col, keys_col, *, style="apa", locale="en-US", recovery="error")
-cite_group_rendered(bibtex_col, keys_col, *, style="apa", locale="en-US", recovery="error")
+cite(bibtex_col, key_col, *, style="apa", locale="en-US", recovery="error", output="text")
+cite_each(bibtex_col, keys_col, *, style="apa", locale="en-US", recovery="error", output="text")
+cite_group(bibtex_col, keys_col, *, style="apa", locale="en-US", recovery="error", output="text")
 ```
 
-The ordered keys render as one citation group. Output dtypes are `String`, `String`, and `Struct[text: String, html: String]`.
+| Operation | Key dtype | Result per row |
+| --- | --- | --- |
+| `cite` | `String` | One citation. |
+| `cite_each` | `List[String]` | A list of citations in input order, sharing citation state within the row. |
+| `cite_group` | `List[String]` | One citation containing the ordered group. |
 
-An empty key list returns an empty string or `{text: "", html: ""}`.
+Text and HTML outputs are strings. `cite_each` returns a list of the selected output type. An empty `cite_each` key list returns `[]`. A group must contain at least one key. An empty `cite_group` produces null, and its grouped render report records a `render_error`.
 
-## Render the full bibliography
+## Render every entry
 
 ```python
-full_bibliography_text(bibtex_col, *, style="apa", locale="en-US", recovery="error")
-full_bibliography_html(bibtex_col, *, style="apa", locale="en-US", recovery="error")
-full_bibliography_rendered(bibtex_col, *, style="apa", locale="en-US", recovery="error")
+full_bibliography(bibtex_col, *, style="apa", locale="en-US", recovery="error", output="text")
 ```
 
-Each operation renders every normalized entry in its bibliography source row. Polars rows have no cited-bibliography state.
+Renders the complete normalized library in each source row. Each row owns independent citation state.
+
+## Inspect a render failure
+
+```python
+render_report(bibtex_col, keys_col, *, grouped=False, style="apa", locale="en-US", recovery="error")
+```
+
+Accepts a `List[String]` key column and returns `ok`, `citations`, `diagnostics`, `error_code`, and `error`. `grouped=False` renders one ordered citation per key. `grouped=True` renders one grouped citation. Each citation contains text and HTML.
+
+`error_code` is `parse_error`, `missing_key`, or `render_error` on failure. Successful reports have null error fields. Null source or key-list input produces a null report.
 
 ## Format BibTeX
 
-`tidy_bibtex(bibtex_col, **options)` returns a string column. `tidy_bibtex_report(bibtex_col, **options)` returns `ok`, `bibtex`, `count`, `warnings`, and `error`.
+```python
+tidy_bibtex(bibtex_col, *, options=None)
+tidy_bibtex_report(bibtex_col, *, options=None)
+```
 
-Both builders accept the options in [Tidy Options](/reference/tidy-options). Omitted keyword arguments use the core defaults.
+Pass a dictionary typed as `polars_refkit.TidyOptions`:
 
-## Broadcasting
+```python
+import polars_refkit as prk
 
-Two-input citation families accept:
+options: prk.TidyOptions = {"sort_fields": True, "wrap": 88}
+formatted = pl.col("bibtex").refkit.tidy_bibtex(options=options)
+```
 
-- Equal input lengths.
-- One bibliography source and many key values.
-- Many bibliography sources and one key value.
+Omitted keys use the core defaults in [Tidy Options](/reference/tidy-options). Optional rules accept their explicit value or the documented boolean shorthand. `None` and `False` disable optional rules.
 
-Other length combinations raise `ComputeError`. A singleton valid source is parsed once inside the expression. Separate expressions keep separate parse work.
+`tidy_bibtex` returns a string. `tidy_bibtex_report` returns `ok`, `bibtex`, `count`, `warnings`, `renames`, and `error`. Null input produces null output.
 
-## Failure boundaries
+## Broadcasting and failures
 
-Row-local nulls cover null input, parse failure, missing citation keys, null key-list items, and render failure for value expressions. Parser diagnostics explain parse failures. Render failures have no report expression.
+Two-input expressions accept equal input lengths or a length-one input on either side. A singleton source is parsed once within that expression, including failed parses. Other lengths raise `ComputeError`. Separate expressions parse independently.
 
-Query-wide failures include invalid input dtype, unsupported projection fields, repeated projection fields, unknown styles, and non-broadcastable lengths. Static recovery and tidy option validation can raise before a query runs.
+Value expressions return null for row-local null input, parse failure, missing citation keys, null key-list items, or render failure. Reports preserve the corresponding detail.
 
-Every builder supplies a default output name. Alias repeated operations with the same name:
+Invalid input dtypes, unknown styles, unsupported or repeated projection fields, and incompatible lengths abort the query. Invalid recovery, output, and tidy options raise during expression construction.
+
+Each expression's default output name is its operation name. Alias repeated operations:
 
 ```python
 frame.select(
-    pl.col("bibtex").refkit.cite("primary_key").alias("primary"),
-    pl.col("bibtex").refkit.cite("secondary_key").alias("secondary"),
+    primary=pl.col("bibtex").refkit.cite("key"),
+    html=pl.col("bibtex").refkit.cite("key", output="html"),
 )
 ```

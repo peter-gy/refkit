@@ -81,7 +81,7 @@ library = rk.Library.read("references.bib", recovery="report")
 
 if library.diagnostics:
     for diagnostic in library.diagnostics:
-        print(diagnostic)
+        print(diagnostic["code"], diagnostic["message"])
 ```
 
 Use report recovery when the application can show or store diagnostics beside recovered entries. Keep the default error recovery policy when later work requires an exact parse.

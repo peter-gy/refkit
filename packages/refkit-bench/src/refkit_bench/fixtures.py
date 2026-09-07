@@ -10,17 +10,16 @@ SIZES: dict[str, int] = {
     "medium": 48,
     "large": 192,
 }
-LARGEST_SIZE = "large"
+SCALING_SIZES = {"1k": 1_000, "5k": 5_000, "10k": 10_000}
 WORKLOAD_NAMES = (*SIZES, "real")
 WORKLOAD_FAMILY = "synthetic_scale"
 WORKLOAD_SOURCE_LICENSE = "Apache-2.0"
 REAL_WORKLOAD_FAMILY = "real_bibliography_subset"
-REAL_WORKLOAD_SOURCE_LICENSE = "mixed-source-licenses"
+REAL_WORKLOAD_SOURCE_LICENSE = "CC0-1.0"
 
+FAILED_BIBTEX = "@article{unfinished, title = {Missing closing braces"
 JOURNAL = "Journal of Citation Benchmarks"
-REAL_BIBLIOGRAPHY_PATH = (
-    Path(__file__).resolve().parent / "data" / "real-bibliography" / "references.bib"
-)
+REAL_RECORDS_PATH = Path(__file__).resolve().parent / "data" / "real-bibliography" / "records.json"
 
 
 @dataclass(frozen=True)
@@ -40,7 +39,6 @@ class Record:
     item_type: str = "article-journal"
     authors: tuple[tuple[str, str], ...] = ()
     citation_text: str = ""
-    bibliography_terms: tuple[str, ...] = ()
 
     @property
     def page_range(self) -> str:
@@ -84,6 +82,8 @@ class Workload:
         return len(self.records)
 
     def source_text(self, source_format: str) -> str:
+        if source_format == "failed_bibtex":
+            return FAILED_BIBTEX
         if source_format == "bibtex":
             return self.bibtex
         if source_format == "raw_bibtex":
@@ -113,6 +113,8 @@ class Workload:
         return ""
 
     def source_license(self, source_format: str) -> str:
+        if source_format == "failed_bibtex":
+            return WORKLOAD_SOURCE_LICENSE
         if not self.source_text(source_format):
             return ""
         return self.source_license_name
@@ -129,15 +131,11 @@ class Workload:
 
 def records_for_size(size: str) -> tuple[Record, ...]:
     try:
-        count = SIZES[size]
+        count = {**SIZES, **SCALING_SIZES}[size]
     except KeyError as exc:
         raise ValueError(f"unknown workload size: {size}") from exc
 
-    return largest_records()[:count]
-
-
-def largest_records() -> tuple[Record, ...]:
-    return tuple(_record(index) for index in range(1, SIZES[LARGEST_SIZE] + 1))
+    return tuple(_record(index) for index in range(1, count + 1))
 
 
 def materialize_workload(size: str, directory: Path) -> Workload:
@@ -180,10 +178,10 @@ def materialize_workload(size: str, directory: Path) -> Workload:
 
 
 def materialize_real_workload(directory: Path) -> Workload:
-    bibtex = real_bibtex()
-    raw_bibtex = bibtex
-    dirty_bibtex = bibtex
     records = real_records()
+    bibtex = bibtex_for_records(records)
+    raw_bibtex = "% Curated bibliography metadata\n" + bibtex
+    dirty_bibtex = bibtex
     duplicate_bibtex = duplicate_bibtex_for_records(records)
     bibtex_path = directory / "real.bib"
     raw_bibtex_path = directory / "real-raw.bib"
@@ -207,7 +205,7 @@ def materialize_real_workload(directory: Path) -> Workload:
         duplicate_bibtex_path=duplicate_bibtex_path,
         family_name=REAL_WORKLOAD_FAMILY,
         source_license_name=REAL_WORKLOAD_SOURCE_LICENSE,
-        raw_preservation_terms=("Real BibTeX subset",),
+        raw_preservation_terms=("Curated bibliography metadata",),
         duplicate_entry_key=records[0].key,
         duplicate_field_key=records[1].key,
     )
@@ -302,223 +300,23 @@ def csl_json_for_records(records: tuple[Record, ...]) -> list[dict[str, object]]
     return items
 
 
-def real_bibtex() -> str:
-    return real_bibliography_path().read_text(encoding="utf-8")
-
-
-def real_bibliography_path() -> Path:
-    if REAL_BIBLIOGRAPHY_PATH.exists():
-        return REAL_BIBLIOGRAPHY_PATH
-    raise FileNotFoundError("real bibliography fixture is missing")
-
-
 def real_records() -> tuple[Record, ...]:
-    return (
-        _real_record(
-            "ijcai2019p684",
-            "Chen",
-            "Huimin",
-            "Sentiment-Controllable Chinese Poetry Generation",
-            2019,
-            "10.24963/ijcai.2019/684",
-            volume=None,
-            pages="4925-4931",
-            container=(
-                "Proceedings of the Twenty-Eighth International Joint Conference on "
-                "Artificial Intelligence, IJCAI-19"
-            ),
-            item_type="paper-conference",
-            authors=(
-                ("Chen", "Huimin"),
-                ("Yi", "Xiaoyuan"),
-                ("Sun", "Maosong"),
-                ("Li", "Wenhao"),
-                ("Yang", "Cheng"),
-                ("Guo", "Zhipeng"),
-            ),
-            citation_text="(Chen et al., 2019)",
-        ),
-        _real_record(
-            "10.1145/3325887",
-            "Liu",
-            "Dayiheng",
-            "Ancient–Modern Chinese Translation with a New Large Training Dataset",
-            2019,
-            "10.1145/3325887",
-            volume="19",
-            container="ACM Trans. Asian Low-Resour. Lang. Inf. Process.",
-            authors=(
-                ("Liu", "Dayiheng"),
-                ("Yang", "Kexin"),
-                ("Qu", "Qian"),
-                ("Lv", "Jiancheng"),
-            ),
-            citation_text="(Liu et al., 2019)",
-        ),
-        _real_record(
-            "Kimi_K2.5",
-            "Team",
-            "Kimi",
-            "Kimi K2.5: Visual Agentic Intelligence",
-            2026,
-            "10.48550/ARXIV.2602.02276",
-            volume="abs/2602.02276",
-            raw_title="Kimi {K2.5:} Visual Agentic Intelligence",
-            authors=(("Team", "Kimi"),),
-            citation_text="(Team, 2026)",
-        ),
-        _real_record(
-            "DeepSeek-V3.2",
-            "DeepSeek-AI",
-            "",
-            "DeepSeek-V3.2: Pushing the Frontier of Open Large Language Models",
-            2025,
-            "10.48550/ARXIV.2512.02556",
-            volume="abs/2512.02556",
-            authors=(("DeepSeek-AI", ""),),
-            citation_text="(DeepSeek-AI, 2025)",
-        ),
-        _real_record(
-            "DeepResearchGym",
-            "Coelho",
-            "João",
-            (
-                "DeepResearchGym: A Free, Transparent, and Reproducible Evaluation "
-                "Sandbox for Deep Research"
-            ),
-            2025,
-            "10.48550/ARXIV.2505.19253",
-            volume="abs/2505.19253",
-            raw_title=(
-                "DeepResearchGym: {A} Free, Transparent, and Reproducible "
-                "Evaluation Sandbox for Deep Research"
-            ),
-            authors=(("Coelho", "João"), ("Ning", "Jingjie"), ("Chang", "Michael")),
-            citation_text="(Coelho et al., 2025)",
-        ),
-        _real_record(
-            "BioAgent_Bench",
-            "Fa",
-            "Dionizije",
-            "BioAgent Bench: An AI Agent Evaluation Suite for Bioinformatics",
-            2026,
-            "10.48550/ARXIV.2601.21800",
-            volume="abs/2601.21800",
-            raw_title="BioAgent Bench: An {AI} Agent Evaluation Suite for Bioinformatics",
-            authors=(("Fa", "Dionizije"), ("Culjak", "Marko"), ("Pando", "Bruno")),
-            citation_text="(Fa et al., 2026)",
-        ),
-        _real_record(
-            "AutoEnv",
-            "Zhang",
-            "Jiayi",
-            "AutoEnv: Automated Environments for Measuring Cross-Environment Agent Learning",
-            2025,
-            "10.48550/ARXIV.2511.19304",
-            volume="abs/2511.19304",
-            authors=(("Zhang", "Jiayi"), ("Peng", "Yiran"), ("Kong", "Fanqi")),
-            citation_text="(Zhang et al., 2025)",
-        ),
-        _real_record(
-            "AgentSynth",
-            "Xie",
-            "Jingxu",
-            "AgentSynth: Scalable Task Generation for Generalist Computer-Use Agents",
-            2025,
-            "10.48550/ARXIV.2506.14205",
-            volume="abs/2506.14205",
-            authors=(("Xie", "Jingxu"), ("Xu", "Dylan"), ("Zhao", "Xuandong")),
-            citation_text="(Xie et al., 2025)",
-        ),
-        _real_record(
-            "AutoForge",
-            "Cai",
-            "Shihao",
-            "AutoForge: Automated Environment Synthesis for Agentic Reinforcement Learning",
-            2025,
-            "10.48550/ARXIV.2512.22857",
-            volume="abs/2512.22857",
-            authors=(("Cai", "Shihao"), ("Fang", "Runnan"), ("Wu", "Jialong")),
-            citation_text="(Cai et al., 2025)",
-        ),
-        _real_record(
-            "EnvScaler",
-            "Song",
-            "Xiaoshuai",
-            (
-                "EnvScaler: Scaling Tool-Interactive Environments for LLM Agent "
-                "via Programmatic Synthesis"
-            ),
-            2026,
-            "10.48550/ARXIV.2601.05808",
-            volume="abs/2601.05808",
-            raw_title=(
-                "EnvScaler: Scaling Tool-Interactive Environments for {LLM} "
-                "Agent via Programmatic Synthesis"
-            ),
-            authors=(("Song", "Xiaoshuai"), ("Chang", "Haofei"), ("Feng", "Xiaodong")),
-            citation_text="(Song et al., 2026)",
-        ),
-        _real_record(
-            "TaskCraft",
-            "Shi",
-            "Dingfeng",
-            "TaskCraft: Automated Generation of Agentic Tasks",
-            2025,
-            "10.48550/ARXIV.2506.10055",
-            volume="abs/2506.10055",
-            authors=(("Shi", "Dingfeng"), ("Cao", "Jingyi"), ("Chen", "Qianben")),
-            citation_text="(Shi et al., 2025)",
-        ),
-        _real_record(
-            "Agent2World",
-            "Hu",
-            "Mengkang",
-            (
-                "Agent2World: Learning to Generate Symbolic World Models via "
-                "Adaptive Multi-Agent Feedback"
-            ),
-            2025,
-            "10.48550/ARXIV.2512.22336",
-            volume="abs/2512.22336",
-            authors=(("Hu", "Mengkang"), ("Xia", "Bowei"), ("Wu", "Yuran")),
-            citation_text="(Hu et al., 2025)",
-        ),
-    )
-
-
-def _real_record(
-    key: str,
-    family: str,
-    given: str,
-    title: str,
-    year: int,
-    doi: str,
-    *,
-    volume: str | None,
-    raw_title: str = "",
-    pages: str = "",
-    container: str = "Corr",
-    item_type: str = "article-journal",
-    authors: tuple[tuple[str, str], ...],
-    citation_text: str,
-) -> Record:
-    return Record(
-        key=key,
-        family=family,
-        given=given,
-        title=title,
-        year=year,
-        volume=volume,
-        page_start=None,
-        page_end=None,
-        doi=doi,
-        raw_title=raw_title,
-        container=container,
-        pages=pages,
-        item_type=item_type,
-        authors=authors,
-        citation_text=citation_text,
+    path = REAL_RECORDS_PATH
+    records = json.loads(path.read_text(encoding="utf-8"))
+    return tuple(
+        Record(
+            family=record["authors"][0][0],
+            given=record["authors"][0][1],
+            page_start=None,
+            page_end=None,
+            authors=tuple(tuple(author) for author in record["authors"]),
+            **{
+                key: value
+                for key, value in record.items()
+                if key not in {"source_url", "source_status", "authors"}
+            },
+        )
+        for record in records
     )
 
 
@@ -537,11 +335,17 @@ def _record(index: int) -> Record:
 
 
 def _bibtex_entry(record: Record) -> str:
+    authors = " and ".join(
+        f"{family}, {given}" if given else family
+        for family, given in (record.authors or ((record.family, record.given),))
+    )
+    entry_type = "inproceedings" if record.item_type == "paper-conference" else "article"
+    container_field = "booktitle" if record.item_type == "paper-conference" else "journal"
     lines = [
-        f"@article{{{record.key},\n"
-        f"  author = {{{record.family}, {record.given}}},\n"
-        f"  title = {{{record.title}}},\n"
-        f"  journal = {{{record.container}}},\n"
+        f"@{entry_type}{{{record.key},\n"
+        f"  author = {{{authors}}},\n"
+        f"  title = {{{record.raw_title or record.title}}},\n"
+        f"  {container_field} = {{{record.container}}},\n"
         f"  year = {{{record.year}}},\n"
     ]
     if record.volume is not None:

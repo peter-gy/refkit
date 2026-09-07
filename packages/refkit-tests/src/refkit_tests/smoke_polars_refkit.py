@@ -6,6 +6,7 @@ from typing import Any, cast
 import polars as pl
 
 import polars_refkit
+from refkit_tests.agent_examples import run_examples
 
 BIBTEX = """
 @article{doe2024,
@@ -18,6 +19,8 @@ BIBTEX = """
 
 
 def main() -> None:
+    run_examples("polars-refkit")
+
     assert polars_refkit.__version__
 
     frame = pl.DataFrame(
@@ -31,10 +34,10 @@ def main() -> None:
     row = frame.select(
         count=namespace.entry_count(),
         citation=namespace.cite("key", style="apa"),
-        rendered=namespace.cite_rendered("key", style="apa"),
+        rendered=namespace.cite("key", style="apa", output="rendered"),
         each=namespace.cite_each("keys", style="apa"),
-        tidy=namespace.tidy_bibtex(sort_fields=True),
-        tidy_report=namespace.tidy_bibtex_report(sort_fields=True),
+        tidy=namespace.tidy_bibtex(options={"sort_fields": True}),
+        tidy_report=namespace.tidy_bibtex_report(options={"sort_fields": True}),
     ).to_dicts()[0]
 
     assert row["count"] == 1

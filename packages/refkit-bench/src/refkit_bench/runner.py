@@ -19,7 +19,7 @@ from refkit_bench.adapters import (
     PackageAdapter,
     adapters,
 )
-from refkit_bench.fixtures import WORKLOAD_NAMES, materialize_workload
+from refkit_bench.fixtures import SCALING_SIZES, WORKLOAD_NAMES, materialize_workload
 
 RESULT_FIELDS = [
     "lane",
@@ -58,7 +58,13 @@ RESULT_FIELDS = [
     "os",
     "cpu",
     "refkit_version",
-    "refkit_commit",
+    "runner_commit",
+    "asserted_build_mode",
+    "artifact_path",
+    "artifact_sha256",
+    "artifact_source_url",
+    "artifact_source_revision",
+    "distribution_record_sha256",
     "build_mode",
 ]
 
@@ -71,8 +77,8 @@ class Metadata(TypedDict):
     python: str
     os: str
     cpu: str
-    refkit_commit: str
-    build_mode: str
+    runner_commit: str
+    asserted_build_mode: str
     packages: dict[str, str]
 
 
@@ -114,6 +120,33 @@ def participants(adapter_operation: str, *packages: str) -> tuple[LaneParticipan
 
 
 LANES: dict[str, LaneSpec] = {
+    "scaling.sparse-lookup": LaneSpec(
+        "scaling.sparse-lookup",
+        "scaling",
+        "entry_inspection",
+        "sparse_lookup",
+        "lookup",
+        participants("sparse_lookup", REFKIT),
+        "Fetch three separated entries from a prepared library.",
+    ),
+    "scaling.tidy": LaneSpec(
+        "scaling.tidy",
+        "scaling",
+        "raw_bibtex_document",
+        "tidy_generate_keys",
+        "tidy",
+        participants("tidy_generate_keys", REFKIT),
+        "Format a bibliography and generate keys for every entry.",
+    ),
+    "scaling.failed-broadcast": LaneSpec(
+        "scaling.failed-broadcast",
+        "scaling",
+        "citation_rendering",
+        "failed_scalar_broadcast",
+        "render",
+        participants("failed_scalar_broadcast", POLARS_REFKIT),
+        "Broadcast one malformed bibliography across many citation rows.",
+    ),
     "input.bibtex-text": LaneSpec(
         "input.bibtex-text",
         "input.normalized",
@@ -467,8 +500,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--input",
         action="append",
-        choices=[*WORKLOAD_NAMES, "all"],
-        help="Input workload to run.",
+        choices=[*WORKLOAD_NAMES, *SCALING_SIZES, "all"],
+        help="all selects tiny, medium, large, and real. Request scaling inputs explicitly.",
     )
     parser.add_argument("--rounds", type=positive_int, default=5, help="Measured rounds per lane.")
     parser.add_argument(
@@ -480,7 +513,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--build-mode",
         choices=["auto", "debug", "release", "unknown"],
         default="auto",
-        help="Recorded native build mode. auto inspects the local refkit extension.",
+        help="Assert the native build mode. Observed artifact modes are recorded separately.",
     )
     return parser.parse_args(argv)
 
@@ -717,8 +750,9 @@ def base_row(
         "os": metadata["os"],
         "cpu": metadata["cpu"],
         "refkit_version": metadata["packages"].get("refkit", "unknown"),
-        "refkit_commit": metadata["refkit_commit"],
-        "build_mode": metadata["build_mode"],
+        "runner_commit": metadata["runner_commit"],
+        "asserted_build_mode": metadata["asserted_build_mode"],
+        **adapter.artifact_metadata,
     }
 
 
@@ -761,8 +795,8 @@ def machine_metadata(build_mode: str = "auto") -> Metadata:
         "python": platform.python_version(),
         "os": platform.platform(),
         "cpu": platform.processor() or platform.machine() or "unknown",
-        "refkit_commit": refkit_commit(),
-        "build_mode": detect_build_mode() if build_mode == "auto" else build_mode,
+        "runner_commit": runner_commit(),
+        "asserted_build_mode": "" if build_mode == "auto" else build_mode,
         "packages": {
             "refkit": package_version("refkit"),
             "polars-refkit": package_version("polars-refkit"),
@@ -781,10 +815,23 @@ def package_version(distribution: str) -> str:
         return "not-installed"
 
 
-def refkit_commit() -> str:
+def runner_commit() -> str:
     try:
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(Path(__file__).resolve().parent),
+                "ls-files",
+                "--error-unmatch",
+                str(Path(__file__).resolve()),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         completed = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
+            ["git", "-C", str(Path(__file__).resolve().parent), "rev-parse", "HEAD"],
             check=True,
             capture_output=True,
             text=True,
@@ -792,15 +839,6 @@ def refkit_commit() -> str:
     except Exception:
         return "unknown"
     return completed.stdout.strip() or "unknown"
-
-
-def detect_build_mode() -> str:
-    try:
-        import refkit as rk
-    except Exception:  # pragma: no cover
-        return "unknown"
-    build_mode = getattr(rk, "build_mode", "")
-    return build_mode if build_mode in {"debug", "release"} else "unknown"
 
 
 def print_lane_list() -> None:

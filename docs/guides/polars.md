@@ -12,16 +12,14 @@ description: Parse, inspect, render, format, broadcast, and diagnose bibliograph
 python -m pip install polars-refkit
 ```
 
-```python
-import polars as pl
-import polars_refkit
-```
-
 Importing `polars_refkit` registers `pl.Expr.refkit`. The same operations are also exported as top-level functions from `polars_refkit`.
 
 ## Parse and inspect rows
 
 ```python
+import polars as pl
+import polars_refkit
+
 frame = pl.DataFrame(
     {
         "bibtex": ["@article{doe2024, title={Fast Citations}, year={2024}}"],
@@ -34,6 +32,8 @@ result = frame.select(
     keys=pl.col("bibtex").refkit.keys(),
     entries=pl.col("bibtex").refkit.entries(fields=["key", "entry_type", "title"]),
 )
+assert result["count"].to_list() == [1]
+assert result["keys"].to_list() == [["doe2024"]]
 ```
 
 A plain string argument names a column. Use `pl.lit(...)` for literal bibliography source or citation keys.
@@ -43,8 +43,8 @@ A plain string argument names a column. Use `pl.lit(...)` for literal bibliograp
 ```python
 result = frame.select(
     citation=pl.col("bibtex").refkit.cite("key"),
-    citation_html=pl.col("bibtex").refkit.cite_html("key"),
-    rendered=pl.col("bibtex").refkit.cite_rendered("key"),
+    citation_html=pl.col("bibtex").refkit.cite("key", output="html"),
+    rendered=pl.col("bibtex").refkit.cite("key", output="rendered"),
 )
 ```
 
@@ -52,18 +52,19 @@ Choose the citation shape from the key input:
 
 | Operation | Key value | Result per row |
 | --- | --- | --- |
-| `cite*` | `String` | One citation. |
-| `cite_each*` | `List[String]` | One separate citation per key, in order. |
-| `cite_group*` | `List[String]` | One grouped citation containing the ordered keys. |
+| `cite` | `String` | One citation. |
+| `cite_each` | `List[String]` | One separate citation per key, in order. |
+| `cite_group` | `List[String]` | One grouped citation containing the ordered keys. |
 
-The `*` families provide text, HTML, and `{text, html}` rendered variants. `full_bibliography_*` renders every normalized entry in the row.
+Choose `output="text"`, `"html"`, or `"rendered"` for strings or `{text, html}` structs. `full_bibliography` renders every normalized entry in the row.
 
 ## Broadcast a Singleton Input
 
 Citation operations accept equal-length inputs or a length-one input on either side. A singleton valid bibliography source is parsed once within that expression and reused for every key row.
 
 ```python
-result = pl.DataFrame({"key": ["doe2024", "roe2022"]}).select(pl.lit(source).refkit.cite("key"))
+source = "@article{doe2024, author={Doe, Jane}, year={2024}}"
+result = pl.DataFrame({"key": ["doe2024", "doe2024"]}).select(pl.lit(source).refkit.cite("key"))
 ```
 
 Other unequal lengths raise a Polars `ComputeError` when the query executes.
@@ -84,16 +85,28 @@ result = frame.select(
 
 Static option errors are raised while the expression is constructed. Invalid input dtypes, unknown styles, unsupported projection fields, duplicate output names, and broadcasting failures raise when an eager query runs or a lazy plan collects.
 
+## Inspect render failures
+
+Use a key-list column and keep the report beside the source row:
+
+```python
+result = frame.select(
+    report=pl.col("bibtex").refkit.render_report(pl.concat_list("key")),
+)
+```
+
+The report contains rendered citations, structured parser diagnostics, and an error code that distinguishes parse, missing-key, and render failures. Pass `grouped=True` to render the key list as one citation.
+
 ## Format rows
 
 ```python
 result = frame.select(
-    bibtex=pl.col("bibtex").refkit.tidy_bibtex(sort_fields=True, wrap=88),
-    report=pl.col("bibtex").refkit.tidy_bibtex_report(sort_fields=True),
+    bibtex=pl.col("bibtex").refkit.tidy_bibtex(options={"sort_fields": True, "wrap": 88}),
+    report=pl.col("bibtex").refkit.tidy_bibtex_report(options={"sort_fields": True}),
 )
 ```
 
-The report contains `ok`, `bibtex`, `count`, `warnings`, and `error`. Read [Polars Expressions](/reference/polars) for exact dtypes, nullability, defaults, and empty-list behavior.
+The report contains `ok`, `bibtex`, `count`, `warnings`, `renames`, and `error`. Read [Polars Expressions](/reference/polars) for exact dtypes, nullability, defaults, and empty-list behavior.
 
 ## Use lazy plans
 

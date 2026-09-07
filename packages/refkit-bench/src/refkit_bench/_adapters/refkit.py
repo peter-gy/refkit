@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from time import perf_counter_ns
-from typing import Any
+from typing import Any, cast
 
 from refkit_bench._adapters.common import (
     OperationOutcome,
@@ -17,6 +17,7 @@ from refkit_bench._adapters.common import (
     _entries_match,
     _keys_are,
     _lookup_keys,
+    _parsed_records_match,
     _prepared,
     _projection_contains,
     _raw_blocks_cover,
@@ -30,6 +31,47 @@ class RefkitAdapter(PackageAdapter):
     name = "refkit"
     distribution = "refkit"
 
+    def prepare_sparse_lookup(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        library = rk.Library.parse_bibtex(workload.bibtex)
+        records = tuple(workload.records[index] for index in (0, len(workload.records) // 2, -1))
+        keys = [record.key for record in records]
+
+        def operation() -> OperationOutcome:
+            rows = library.get_many(keys)
+            return OperationOutcome(rows, len(rows))
+
+        return _prepared(operation, _entries_match(records))
+
+    def prepare_tidy_generate_keys(self, workload: Workload, directory: Path) -> PreparedOperation:
+        import refkit as rk
+
+        options = rk.TidyOptions(generate_keys=True)
+
+        def operation() -> OperationOutcome:
+            result = rk.tidy_bibtex(workload.bibtex, options=options)
+            return OperationOutcome(result, len(workload.records))
+
+        def check(outcome: OperationOutcome) -> None:
+            import bibtexparser
+
+            result = cast(Any, outcome.value)
+            parsed = bibtexparser.parse_string(result.bibtex)
+            entries = parsed.entries
+            if parsed.failed_blocks or len(entries) != len(workload.records):
+                raise AssertionError("expected every formatted entry to parse")
+            rename_pairs = {(rename["old_key"], rename["new_key"]) for rename in result.renames}
+            expected_pairs = set(zip(workload.keys, [entry.key for entry in entries], strict=True))
+            if rename_pairs != expected_pairs:
+                raise AssertionError("expected the rename report to identify every generated key")
+            for entry, record in zip(entries, workload.records, strict=True):
+                title = entry.fields_dict["title"].value
+                if title.replace("{", "").replace("}", "") != record.title:
+                    raise AssertionError("expected formatting to preserve each entry title")
+
+        return _prepared(operation, check, setup_included=True)
+
     def prepare_parse_bibtex(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
 
@@ -37,7 +79,9 @@ class RefkitAdapter(PackageAdapter):
             library = rk.Library.read(workload.bibtex_path)
             return OperationOutcome(library, len(library))
 
-        return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
+        return _prepared(
+            operation, _parsed_records_match(workload.records, _parsed_rows), setup_included=True
+        )
 
     def prepare_parse_bibtex_text(self, workload: Workload, directory: Path) -> PreparedOperation:
         import refkit as rk
@@ -46,7 +90,9 @@ class RefkitAdapter(PackageAdapter):
             library = rk.Library.parse_bibtex(workload.bibtex)
             return OperationOutcome(library, len(library))
 
-        return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
+        return _prepared(
+            operation, _parsed_records_match(workload.records, _parsed_rows), setup_included=True
+        )
 
     def prepare_recover_dirty_bibtex(
         self, workload: Workload, directory: Path
@@ -76,7 +122,7 @@ class RefkitAdapter(PackageAdapter):
 
         def operation() -> OperationOutcome:
             library = rk.Library.read(workload.dirty_bibtex_path, recovery="report")
-            diagnostics = [{"message": message} for message in library.diagnostics]
+            diagnostics = library.diagnostics
             return OperationOutcome(
                 diagnostics,
                 len(diagnostics),
@@ -99,7 +145,7 @@ class RefkitAdapter(PackageAdapter):
 
         return _prepared(
             operation,
-            _count_is(len(workload.records)),
+            _parsed_records_match(workload.records, _raw_rows),
             source_format="raw_bibtex",
             setup_included=True,
         )
@@ -176,7 +222,7 @@ class RefkitAdapter(PackageAdapter):
 
         return _prepared(
             operation,
-            _raw_roundtrip_check(workload.keys, workload.raw_preservation_terms),
+            _raw_roundtrip_check(workload),
             source_format="raw_bibtex",
         )
 
@@ -195,7 +241,7 @@ class RefkitAdapter(PackageAdapter):
 
         return _prepared(
             operation,
-            _raw_roundtrip_check(workload.keys, workload.raw_preservation_terms),
+            _raw_roundtrip_check(workload),
             source_format="raw_bibtex",
             setup_included=True,
         )
@@ -470,3 +516,20 @@ class RefkitAdapter(PackageAdapter):
                 required_fields=("key", "title", "doi"),
             ),
         )
+
+
+def _parsed_rows(library: Any) -> list[dict[str, Any]]:
+    return [
+        {"key": entry.key, "title": entry.title, "doi": entry.doi} for entry in library.values()
+    ]
+
+
+def _raw_rows(document: Any) -> list[dict[str, Any]]:
+    return [
+        {
+            "key": entry.key,
+            "type": entry.kind,
+            **{name: entry.fields[name].value for name in ("title", "author", "year")},
+        }
+        for entry in document.entries.occurrences()
+    ]

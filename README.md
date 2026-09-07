@@ -3,71 +3,57 @@
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="docs/public/brand/refkit-lockup-horizontal-dark-transparent.svg">
       <source media="(prefers-color-scheme: light)" srcset="docs/public/brand/refkit-lockup-horizontal-light-transparent.svg">
-      <img alt="RefKit" src="docs/public/brand/refkit-lockup-horizontal-light-transparent.svg" width="420">
+      <img alt="RefKit" src="docs/public/brand/refkit-lockup-horizontal-light-transparent.svg" width="280">
     </picture>
   </a>
 </p>
 
 <p align="center">
-  Parse, cite, tidy, and edit bibliography data from Python and Polars.
+  Parse, cite, and edit bibliography data from Python and Polars.
 </p>
 
 <p align="center">
-  <a href="https://peter-gy.github.io/refkit/"><strong>Documentation</strong></a> ·
-  <a href="packages/refkit/README.md"><strong>Python API</strong></a> ·
-  <a href="packages/polars-refkit/README.md"><strong>Polars expressions</strong></a> ·
-  <a href="development_docs/README.md"><strong>Development</strong></a>
+  <a href="https://peter-gy.github.io/refkit/">Documentation</a> ·
+  <a href="https://peter-gy.github.io/refkit/get-started">Quickstart</a> ·
+  <a href="https://peter-gy.github.io/refkit/reference/agent-docs">For agents</a> ·
+  <a href="development_docs/README.md">Development</a>
 </p>
 
-<p align="center">
-  <a href="https://pypi.org/project/refkit/"><img alt="refkit on PyPI" src="https://img.shields.io/pypi/v/refkit.svg"></a>
-  <a href="https://pypi.org/project/polars-refkit/"><img alt="polars-refkit on PyPI" src="https://img.shields.io/pypi/v/polars-refkit.svg"></a>
-  <a href="https://github.com/peter-gy/refkit/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/peter-gy/refkit/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <a href="https://pypi.org/project/refkit/"><img alt="Supported Python versions" src="https://img.shields.io/pypi/pyversions/refkit.svg"></a>
-  <a href="LICENSE"><img alt="Apache-2.0 license" src="https://img.shields.io/pypi/l/refkit.svg"></a>
-</p>
-
-> [!NOTE]
-> RefKit is alpha software. Public APIs may change before 1.0.
-
-RefKit turns [BibTeX](https://ctan.org/pkg/bibtex),
+RefKit reads [BibTeX](https://ctan.org/pkg/bibtex),
 [BibLaTeX](https://ctan.org/pkg/biblatex), and
-[Hayagriva](https://github.com/typst/hayagriva) YAML into normalized
-bibliography records. It renders citations and bibliographies with
-[Citation Style Language](https://citationstyles.org/) styles, produces plain
-text, HTML, or structured trees, and preserves raw BibTeX for targeted edits.
-The `polars-refkit` package exposes the same parsing, rendering, inspection,
-and formatting capabilities as expressions for [Polars](https://pola.rs/)
-eager and lazy queries.
+[Hayagriva YAML](https://github.com/typst/hayagriva), then turns your references
+into citations, bibliographies, and inspectable records. Its raw BibTeX model
+supports targeted field edits.
+
+- **Render citations and bibliographies** with bundled or custom [Citation Style Language](https://citationstyles.org/) styles. Get text, HTML, or a structured tree.
+- **Inspect and repair bibliography data.** Select entries, project fields, review parsing diagnostics, and edit existing BibTeX fields while preserving surrounding source text.
+- **Format and deduplicate BibTeX.** Configure layout, generate citation keys, and review warnings before accepting changes.
+- **Work inside [Polars](https://pola.rs/) queries.** Apply bibliography operations to columns through `pl.Expr.refkit` in eager or lazy dataframes.
 
 ## Render a citation
 
-Add `refkit` to a Python 3.11 through 3.14 environment:
+Install in Python 3.11 through 3.14:
 
 ```bash
 python -m pip install refkit
 ```
 
-Parse a bibliography, load the APA style, and render one citation:
-
 ```python
 import refkit as rk
 
-library = rk.Library.parse_bibtex(
-    """
+library = rk.Library.parse_bibtex("""
 @article{doe2024,
   author = {Doe, Jane},
   title = {Fast Citations},
   journal = {Journal of Citation Tests},
   year = {2024}
 }
-"""
-)
+""")
 document = rk.Document(library, rk.Style.load("apa"), locale="en-US")
-rendered = document.render([rk.Citation("intro", "doe2024")])
+result = document.render([rk.Citation("intro", "doe2024")])
 
-print(rendered["intro"].text)
-print(rendered.bibliography.text)
+print(result["intro"].text)
+print(result.bibliography.text)
 ```
 
 ```text
@@ -75,78 +61,36 @@ print(rendered.bibliography.text)
 Doe, J. (2024). Fast Citations. Journal of Citation Tests.
 ```
 
-`Library` owns normalized entries and parser diagnostics. `Document` combines
-a library, style, and locale for one ordered render call. Each `Rendered` value
-exposes text, HTML, and a structured render tree.
+Pass related citations in one ordered render call so numbering and
+disambiguation share the same context. Continue with the
+[Python quickstart](https://peter-gy.github.io/refkit/get-started) or install
+`polars-refkit` for the [Polars guide](https://peter-gy.github.io/refkit/guides/polars).
 
-## Choose a bibliography model
+## Use with agents
 
-| Model | Preserves | Use it for |
-| --- | --- | --- |
-| `Library` | Normalized entries and diagnostics | Lookup, projection, citation rendering, and full bibliographies. |
-| `BibDocument` | Source-order blocks, duplicate occurrences, and byte spans | Raw BibTeX inspection, targeted field edits, and source-preserving writes. |
-
-`TidyOptions` configures canonical BibTeX formatting and duplicate handling
-for `tidy_bibtex()` and `BibDocument.tidy()`.
-
-## Work with bibliography data
-
-| Task | Interface | Start here |
-| --- | --- | --- |
-| Parse, render, inspect, and edit from Python | `refkit` | [Python quickstart](https://peter-gy.github.io/refkit/get-started) |
-| Apply bibliography operations to eager or lazy dataframes | `polars-refkit` and `pl.Expr.refkit` | [Polars guide](https://peter-gy.github.io/refkit/guides/polars) |
-| Run the Python interfaces in a browser-hosted Python runtime | WebAssembly wheels for [Pyodide](https://pyodide.org/) | [Pyodide guide](https://peter-gy.github.io/refkit/pyodide) |
-| Give a code-mode agent a version-matched RefKit workflow | `refkit.agent` and its packaged [Agent Skill](https://agentskills.io/specification) | [Agent integration](https://peter-gy.github.io/refkit/reference/agent-docs) |
-
-A plain string passed to a Polars expression names a column. Wrap literal
-bibliography source or citation keys with `pl.lit(...)`.
-
-## Use with code-mode agents
-
-The `refkit` wheel contains the Python library, an
-[Agent Plugin](https://agent-plugins.org/), and a version-matched
-[Agent Skill](https://agentskills.io/specification). Installing `refkit` places
-the library and agent resources in the same Python environment. A code-mode
-agent that can execute Python can inspect the dynamic module documentation:
+The `refkit` package includes an [Agent Plugin](https://agent-plugins.org/)
+with version-matched task guidance. An agent that can execute Python can
+discover the installed workflow:
 
 ```python
-import refkit.agent as refkit_agent
+import refkit.agent
 
-help(refkit_agent)
+help(refkit.agent)
 ```
 
-For programmatic access, `instructions()` returns the packaged skill as Markdown
-and `resources()` returns its known files by skill-relative name:
+[Agent integration](https://peter-gy.github.io/refkit/reference/agent-docs)
+covers discovery and packaged resources.
 
-```python
-instructions = refkit_agent.instructions()
-resources = refkit_agent.resources()
-workflow = resources["references/workflows.md"].read_text()
-```
+## Explore
 
-The agent workflow uses the same `Library`, `Document`, `BibDocument`, and tidy
-APIs as other Python callers. Any code-mode environment that can execute Python
-can use these imports directly. [Marimo](https://marimo.io/), for example,
-discovers `refkit.agent` automatically through the capability entry point
-installed with the wheel.
+[Parse and recover](https://peter-gy.github.io/refkit/guides/parse-bibliographies) ·
+[Edit BibTeX](https://peter-gy.github.io/refkit/guides/edit-bibtex) ·
+[Format BibTeX](https://peter-gy.github.io/refkit/guides/format-bibtex) ·
+[Python reference](https://peter-gy.github.io/refkit/reference/python) ·
+[Pyodide](https://peter-gy.github.io/refkit/pyodide)
 
-## Documentation
+RefKit is alpha software. Public APIs may change before 1.0.
 
-- [Get started](https://peter-gy.github.io/refkit/get-started) reaches a complete render result.
-- [How RefKit works](https://peter-gy.github.io/refkit/concepts/how-refkit-works) defines the state owners and transitions.
-- [Guides](https://peter-gy.github.io/refkit/guides/parse-bibliographies) cover Python, Polars, raw BibTeX editing, and custom Citation Style Language files.
-- [Reference](https://peter-gy.github.io/refkit/reference/python) records the Python, Polars, Rust, data-shape, tidy, error, and agent contracts.
-- [Performance](https://peter-gy.github.io/refkit/performance) publishes reproducible benchmark evidence.
-- [Troubleshooting](https://peter-gy.github.io/refkit/troubleshooting) maps common failures to recovery steps.
-
-## Development
-
-The [development documentation](development_docs/README.md) covers setup,
-architecture, testing, documentation delivery, packaging, releases, and
-benchmarks. Report defects through
-[GitHub Issues](https://github.com/peter-gy/refkit/issues).
-
-## License
-
-RefKit is licensed under the [Apache License 2.0](LICENSE). [NOTICE](NOTICE)
-records upstream citation and bibliography components.
+[Development](development_docs/README.md) ·
+[Report an issue](https://github.com/peter-gy/refkit/issues) ·
+[Apache-2.0 license](LICENSE) · [Upstream notices](NOTICE)

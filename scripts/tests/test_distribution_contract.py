@@ -26,7 +26,10 @@ _AGENT_PLUGIN_FILES = (
     "skills/refkit/SKILL.md",
     "skills/refkit/agents/openai.yaml",
     "skills/refkit/references/contracts.md",
-    "skills/refkit/references/workflows.md",
+    "skills/refkit/references/inspect.md",
+    "skills/refkit/references/render.md",
+    "skills/refkit/references/edit.md",
+    "skills/refkit/references/tidy.md",
 )
 
 
@@ -39,7 +42,17 @@ def _wheel(path: Path, members: list[str]) -> None:
 def _sdist(path: Path, members: list[str]) -> None:
     with tarfile.open(path, "w:gz") as archive:
         for member in members:
-            content = b"content"
+            relative = member.partition("/.agent-plugin/")[2]
+            source_root = (
+                ROOT / "packages/polars-refkit/agent-plugin"
+                if member.startswith("polars_refkit-")
+                else ROOT
+            )
+            content = (
+                (source_root / relative).read_bytes()
+                if relative and (source_root / relative).is_file()
+                else b"content"
+            )
             info = tarfile.TarInfo(member)
             info.size = len(content)
             archive.addfile(info, io.BytesIO(content))
@@ -59,7 +72,7 @@ def _refkit_wheel(path: Path, plugin_files: tuple[str, ...] = _AGENT_PLUGIN_FILE
         )
         archive.writestr("refkit/agent.py", "")
         for relative in plugin_files:
-            archive.writestr(f"{_PLUGIN_ROOT}/{relative}", "content")
+            archive.writestr(f"{_PLUGIN_ROOT}/{relative}", (ROOT / relative).read_bytes())
 
 
 def _rewrite_wheel(
@@ -201,7 +214,7 @@ def test_refkit_wheel_rejects_incomplete_agent_plugin_payload(tmp_path: Path) ->
 
     assert agent_plugin_violations(wheel) == [
         "wheel Agent Plugin payload mismatch: "
-        "missing=['refkit-1.0.0.agent-plugin/skills/refkit/references/workflows.md'], "
+        "missing=['refkit-1.0.0.agent-plugin/skills/refkit/references/tidy.md'], "
         "extra=[]"
     ]
 
@@ -343,11 +356,106 @@ def test_refkit_sdist_requires_one_archive_root(tmp_path: Path) -> None:
 
 def test_refkit_sdist_validates_exact_agent_plugin_payload(tmp_path: Path) -> None:
     sdist = tmp_path / "refkit-1.0.0.tar.gz"
-    missing = "refkit-1.0.0/.agent-plugin/skills/refkit/references/workflows.md"
+    missing = "refkit-1.0.0/.agent-plugin/skills/refkit/references/tidy.md"
     extra = "refkit-1.0.0/.agent-plugin/skills/refkit/unexpected.txt"
     members = [member for member in _refkit_sdist_members() if member != missing]
     _sdist(sdist, [*members, extra])
 
     assert agent_plugin_violations(sdist) == [
         f"sdist Agent Plugin payload mismatch: missing=['{missing}'], extra=['{extra}']"
+    ]
+
+
+@pytest.mark.parametrize("archive_format", ["wheel", "sdist"])
+def test_polars_distribution_carries_its_agent_skill(tmp_path: Path, archive_format: str) -> None:
+    files = [
+        "plugin.json",
+        "skills/polars-refkit/SKILL.md",
+        "skills/polars-refkit/agents/openai.yaml",
+        "skills/polars-refkit/references/inspect.md",
+        "skills/polars-refkit/references/render.md",
+        "skills/polars-refkit/references/tidy.md",
+    ]
+    if archive_format == "wheel":
+        path = tmp_path / "polars_refkit-1.0.0-py3-none-any.whl"
+        dist_info = "polars_refkit-1.0.0.dist-info"
+        plugin_root = "polars_refkit-1.0.0.agent-plugin"
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr(f"{dist_info}/WHEEL", "Wheel-Version: 1.0\n")
+            archive.writestr(f"{dist_info}/METADATA", "Requires-Dist: agent-plugins==0.2.0\n")
+            archive.writestr(
+                f"{dist_info}/entry_points.txt",
+                "[marimo.agent.capability]\npolars_refkit = polars_refkit.agent\n",
+            )
+            archive.writestr(
+                f"{dist_info}/agent_plugins.json", json.dumps({"root": plugin_root, "files": files})
+            )
+            archive.writestr("polars_refkit/agent.py", "")
+            for name in files:
+                archive.writestr(
+                    f"{plugin_root}/{name}",
+                    (ROOT / "packages/polars-refkit/agent-plugin" / name).read_bytes(),
+                )
+    else:
+        path = tmp_path / "polars_refkit-1.0.0.tar.gz"
+        _sdist(
+            path,
+            [
+                "polars_refkit-1.0.0/build_backend.py",
+                "polars_refkit-1.0.0/polars_refkit/agent.py",
+                *(f"polars_refkit-1.0.0/.agent-plugin/{name}" for name in files),
+            ],
+        )
+
+    assert agent_plugin_violations(path) == []
+
+
+def test_agent_payload_must_match_release_sources(tmp_path: Path) -> None:
+    wheel = tmp_path / "refkit-1.0.0-py3-none-any.whl"
+    _refkit_wheel(wheel)
+    member = f"{_PLUGIN_ROOT}/skills/refkit/references/render.md"
+    _rewrite_wheel(wheel, add={member: "outdated resource"})
+
+    assert agent_plugin_violations(wheel) == [
+        f"{member}: Agent Plugin resource differs from release source"
+    ]
+
+
+def test_agent_marker_accepts_resource_order_from_the_builder(tmp_path: Path) -> None:
+    wheel = tmp_path / "refkit-1.0.0-py3-none-any.whl"
+    _refkit_wheel(wheel)
+    files = [
+        "skills/refkit/references/tidy.md",
+        "skills/refkit/references/render.md",
+        "skills/refkit/references/inspect.md",
+        "skills/refkit/references/edit.md",
+        "skills/refkit/references/contracts.md",
+        "skills/refkit/agents/openai.yaml",
+        "skills/refkit/SKILL.md",
+        "plugin.json",
+    ]
+    _rewrite_wheel(
+        wheel,
+        add={
+            f"{_DIST_INFO}/agent_plugins.json": json.dumps({"root": _PLUGIN_ROOT, "files": files})
+        },
+    )
+
+    assert agent_plugin_violations(wheel) == []
+
+
+def test_agent_marker_rejects_duplicate_resources(tmp_path: Path) -> None:
+    wheel = tmp_path / "refkit-1.0.0-py3-none-any.whl"
+    _refkit_wheel(wheel)
+    _rewrite_wheel(
+        wheel,
+        add={
+            f"{_DIST_INFO}/agent_plugins.json": json.dumps(
+                {"root": _PLUGIN_ROOT, "files": [*_AGENT_PLUGIN_FILES, "plugin.json"]}
+            )
+        },
+    )
+
+    assert agent_plugin_violations(wheel) == [
+        f"wheel contains unexpected {_DIST_INFO}/agent_plugins.json"
     ]

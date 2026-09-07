@@ -10,6 +10,7 @@ from polars.plugins import register_plugin_function
 PLUGIN_PATH = Path(__file__).parent
 RecoveryMode: TypeAlias = Literal["error", "report"]
 ColumnExpr: TypeAlias = str | pl.Expr
+OutputFormat: TypeAlias = Literal["text", "html", "rendered"]
 
 
 def _cite_expr(
@@ -126,7 +127,6 @@ def _render_kwargs(style: str, locale: str, recovery: RecoveryMode) -> dict[str,
         "style": style,
         "locale": locale,
         "recovery": _validate_recovery(recovery),
-        "all": True,
     }
 
 
@@ -158,3 +158,11 @@ def _parse_into_expr(expr: ColumnExpr) -> pl.Expr:
     if isinstance(expr, str):
         return pl.col(expr)
     return pl.lit(expr)
+
+
+def _render_function(operation: str, output: OutputFormat) -> str:
+    if output not in ("text", "html", "rendered"):
+        raise ValueError("output must be 'text', 'html', or 'rendered'")
+    if operation == "full_bibliography":
+        return f"{operation}_{output}"
+    return operation if output == "text" else f"{operation}_{output}"

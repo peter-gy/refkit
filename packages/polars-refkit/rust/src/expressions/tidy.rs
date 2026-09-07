@@ -1,14 +1,16 @@
 use polars::prelude::*;
 use polars_core::chunked_array::builder::{AnonymousOwnedListBuilder, ListBuilderTrait};
 use pyo3_polars::derive::polars_expr;
-use pyo3_polars::export::polars_arrow::array::IntoBoxedArray;
-use pyo3_polars::export::polars_arrow::bitmap::Bitmap;
 use refkit_core::{
-    DuplicateRule, MergeStrategy, TidyOptions, TidyWarning, tidy_bibtex as core_tidy_bibtex,
+    DuplicateRule, MergeStrategy, TidyOptions, TidyRename, TidyWarning,
+    tidy_bibtex as core_tidy_bibtex,
 };
 
 use super::broadcast::compute_error;
-use super::dtypes::{string_output, tidy_report_output, tidy_warning_struct_dtype};
+use super::dtypes::{
+    string_output, tidy_rename_struct_dtype, tidy_report_output, tidy_warning_struct_dtype,
+    with_struct_validity,
+};
 use super::{DefaultableString, DefaultableStringList, DefaultableUsize, TidyKwargs};
 
 #[derive(Debug, Clone)]
@@ -17,6 +19,7 @@ struct TidyReportRow {
     bibtex: Option<String>,
     count: Option<u32>,
     warnings: Option<Vec<TidyWarning>>,
+    renames: Option<Vec<TidyRename>>,
     error: Option<String>,
 }
 
@@ -204,6 +207,7 @@ fn tidy_source_report(source: &str, options: TidyOptions) -> TidyReportRow {
             bibtex: Some(result.bibtex),
             count: u32::try_from(result.count).ok(),
             warnings: Some(result.warnings),
+            renames: Some(result.renames),
             error: None,
         },
         Err(err) => TidyReportRow {
@@ -211,6 +215,7 @@ fn tidy_source_report(source: &str, options: TidyOptions) -> TidyReportRow {
             bibtex: None,
             count: None,
             warnings: None,
+            renames: None,
             error: Some(err.to_string()),
         },
     }
@@ -249,30 +254,10 @@ fn tidy_reports_to_struct_series(
             .map(|report| report.as_ref().and_then(|row| row.error.as_deref())),
     )
     .into_series();
-    let fields = [ok, bibtex, count, warnings, error];
+    let renames = rename_lists_to_series(reports)?;
+    let fields = [ok, bibtex, count, warnings, renames, error];
     let chunked = StructChunked::from_series(name.into(), reports.len(), fields.iter())?;
-    if reports.iter().all(Option::is_some) {
-        return Ok(chunked.into_series());
-    }
-
-    let validity = Bitmap::from_iter(reports.iter().map(Option::is_some));
-    let chunks = chunked
-        .downcast_iter()
-        .map(|array| {
-            array
-                .clone()
-                .with_validity(Some(validity.clone()))
-                .into_boxed()
-        })
-        .collect::<Vec<_>>();
-    Ok(unsafe {
-        StructChunked::from_chunks_and_dtype(
-            chunked.name().clone(),
-            chunks,
-            chunked.dtype().clone(),
-        )
-    }
-    .into_series())
+    with_struct_validity(chunked, reports.iter().map(Option::is_some))
 }
 
 fn warning_lists_to_series(reports: &[Option<TidyReportRow>]) -> PolarsResult<Series> {
@@ -313,4 +298,40 @@ fn warnings_to_struct_series(warnings: &[TidyWarning]) -> PolarsResult<Series> {
     let fields = [code, rule, message];
     StructChunked::from_series("warning".into(), warnings.len(), fields.iter())
         .map(|warnings| warnings.into_series())
+}
+
+fn rename_lists_to_series(reports: &[Option<TidyReportRow>]) -> PolarsResult<Series> {
+    let mut builder = AnonymousOwnedListBuilder::new(
+        "renames".into(),
+        reports.len(),
+        Some(tidy_rename_struct_dtype()),
+    );
+    for report in reports {
+        let Some(renames) = report.as_ref().and_then(|r| r.renames.as_ref()) else {
+            builder.append_null();
+            continue;
+        };
+        let fields = [
+            UInt64Chunked::from_iter_values(
+                "entry_id".into(),
+                renames.iter().map(|r| r.entry_id.index() as u64),
+            )
+            .into_series(),
+            StringChunked::from_iter_values(
+                "old_key".into(),
+                renames.iter().map(|r| r.old_key.as_str()),
+            )
+            .into_series(),
+            StringChunked::from_iter_values(
+                "new_key".into(),
+                renames.iter().map(|r| r.new_key.as_str()),
+            )
+            .into_series(),
+        ];
+        builder.append_series(
+            &StructChunked::from_series("rename".into(), renames.len(), fields.iter())?
+                .into_series(),
+        )?;
+    }
+    Ok(builder.finish().into_series())
 }

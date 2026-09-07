@@ -9,8 +9,10 @@ Scripts under this directory validate source, generated state, wheels, sdists, a
 - Add focused tests for every new accepted state and failure mode.
 - Wire a durable source check into a Make target and the reusable source-check workflow.
 
-The architecture contract rejects unclassified Rust dependencies, host I/O in the portable core, direct engine dependencies in adapters, unclassified `refkit` runtime dependencies, and workspace changes that alter composition ownership.
+The architecture contract classifies top-level, target-specific, build, and renamed Rust dependencies. It rejects unclassified Rust dependencies, host I/O in the portable core, direct engine dependencies in adapters, unclassified `refkit` runtime dependencies, and workspace changes that alter composition ownership.
 
-Direct Maturin builds call `agent-plugins attach-wheel` before archive normalization. The distribution contract owns the exact RefKit plugin, skill, entry-point, backend, and dependency artifact shape.
+Direct Maturin builds call `agent-plugins attach-wheel` before archive normalization. The distribution contract owns each adapter's plugin, skill, entry-point, backend, and dependency artifact shape and compares skill bytes with release sources. `artifact_manifest.py` records build provenance and verifies the complete package artifact set before publication.
+
+The core uses released BibLaTeX and audited Hayagriva and Citationberg revisions declared by the architecture contract. Keep canonical repositories, full commit revisions, manifest versions, both Citationberg workspace patches, and both Cargo locks aligned. The core pins quick-xml 0.41.0, and every resolved quick-xml version must meet that floor.
 
 Run `make python-lint typecheck test`. See [repository contracts](../development_docs/repository-contracts.md) for ownership across scripts.

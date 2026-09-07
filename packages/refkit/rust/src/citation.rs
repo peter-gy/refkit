@@ -4,7 +4,7 @@ use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use refkit_core::Cite as CoreCite;
+use refkit_core::{CitationRequest, Cite as CoreCite};
 
 use crate::repr::{option_quoted, quoted};
 
@@ -84,16 +84,22 @@ impl CitationGroup {
 pub struct Citation {
     #[pyo3(get)]
     id: String,
+    #[pyo3(get)]
+    note_number: Option<usize>,
     group: Vec<Cite>,
 }
 
 #[pymethods]
 impl Citation {
     #[new]
-    #[pyo3(signature = (id, citation))]
-    fn new(id: String, citation: &Bound<'_, PyAny>) -> PyResult<Self> {
+    #[pyo3(signature = (id, citation, *, note_number = None))]
+    fn new(id: String, citation: &Bound<'_, PyAny>, note_number: Option<usize>) -> PyResult<Self> {
         let group = parse_citation_arg(citation)?;
-        Ok(Self { id, group })
+        Ok(Self {
+            id,
+            note_number,
+            group,
+        })
     }
 
     #[getter]
@@ -123,8 +129,11 @@ impl Citation {
         &self.id
     }
 
-    pub(crate) fn into_core_group(self) -> Vec<CoreCite> {
-        self.group.into_iter().map(|cite| cite.to_core()).collect()
+    pub(crate) fn into_core_request(self) -> CitationRequest {
+        CitationRequest {
+            items: self.group.into_iter().map(|cite| cite.to_core()).collect(),
+            note_number: self.note_number,
+        }
     }
 }
 

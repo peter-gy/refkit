@@ -40,7 +40,8 @@ pub(super) struct RenderKwargs {
     pub(super) style: String,
     pub(super) locale: String,
     pub(super) recovery: RecoveryArg,
-    pub(super) all: bool,
+    #[serde(default)]
+    pub(super) grouped: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]

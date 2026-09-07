@@ -12,12 +12,12 @@ Use the crate from a matching RefKit source or Git revision with Rust 1.88 or ne
 
 | Capability | Main exports |
 | --- | --- |
-| Normalized parsing | `Library`, `RecoveryPolicy`, `ParseReport`, `EntryRecord`, `EntryField`, `parse_bibtex_report` |
-| Raw BibTeX | `RawDocument`, raw syntax records, occurrence IDs, value modes, and edit errors |
-| Rendering | `Document`, `Cite`, `RenderedDocument`, `RenderedOutput`, render functions, and render errors |
+| Normalized parsing | `Library`, `RecoveryPolicy`, `Diagnostic`, `ParseFailure`, `ParseReport`, `EntryRecord`, `EntryField`, `parse_bibtex_report` |
+| Raw BibTeX | `RawDocument`, occurrence IDs, inspection records, and edit errors |
+| Rendering | `Document`, `Cite`, `CitationRequest`, `RenderedDocument`, `RenderedOutput`, render functions, and render errors |
 | Styles | `PreparedStyle`, `load_prepared_style`, `prepare_style_from_xml`, and `StyleError` |
-| Render tree | `RenderedRecord`, `RenderedNode`, and `RenderedFormatting` |
-| Formatting | `TidyOptions`, `TidyResult`, `TidyWarning`, duplicate rules, merge strategies, and `tidy_bibtex` |
+| Render tree | `RenderedRecord`, `RenderedNode`, `RenderedFormatting`, and `BibliographyLayout` |
+| Formatting | `TidyOptions`, `TidyResult`, `TidyWarning`, `TidyRename`, duplicate rules, merge strategies, and `tidy_bibtex` |
 | Decoding | `DecodedText`, `TextEncoding`, and `decode_bibliography` |
 
 ## Adapter boundary

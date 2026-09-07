@@ -1,11 +1,11 @@
 use std::sync::{Arc, OnceLock};
 
 use pyo3::prelude::*;
-use pyo3::types::PyAny;
+use pyo3::types::{PyAny, PyDict};
 use serde_json::{Value, json};
 
 use crate::conversion::json_to_py;
-use refkit_core::{RenderedFormatting, RenderedNode, RenderedRecord};
+use refkit_core::{RenderedFormatting, RenderedMeta, RenderedNode, RenderedRecord};
 
 use crate::repr::quoted;
 
@@ -18,6 +18,25 @@ pub struct Rendered {
 
 #[pymethods]
 impl Rendered {
+    #[getter]
+    fn layout(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
+        let Some(layout) = &self.record.layout else {
+            return Ok(None);
+        };
+        let value = PyDict::new(py);
+        value.set_item("hanging_indent", layout.hanging_indent)?;
+        value.set_item(
+            "second_field_align",
+            layout
+                .second_field_align
+                .as_ref()
+                .map(|value| value.as_str()),
+        )?;
+        value.set_item("line_spacing", layout.line_spacing)?;
+        value.set_item("entry_spacing", layout.entry_spacing)?;
+        Ok(Some(value.into_any().unbind()))
+    }
+
     #[getter]
     fn text(&self) -> String {
         self.record.text.clone()
@@ -32,18 +51,6 @@ impl Rendered {
     fn tree(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let payload = self.tree_json(py);
         json_to_py(py, &payload)
-    }
-
-    fn to_text(&self) -> String {
-        self.record.text.clone()
-    }
-
-    fn to_html(&self) -> String {
-        self.record.html.clone()
-    }
-
-    fn to_tree(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.tree(py)
     }
 
     fn __repr__(&self) -> String {
@@ -70,7 +77,7 @@ impl Rendered {
 
         let record = Arc::clone(&self.record);
         let payload = py.detach(move || {
-            serde_json::to_string(&rendered_nodes_to_json(&record.tree_nodes()))
+            serde_json::to_string(&rendered_nodes_to_json(record.tree_nodes()))
                 .expect("rendered tree should serialize to Python JSON payload")
         });
         self.tree_json.get_or_init(|| payload).clone()
@@ -104,8 +111,8 @@ fn rendered_node_to_json(node: &RenderedNode) -> Value {
             children,
         } => json!({
             "kind": "Element",
-            "display": display,
-            "meta": meta,
+            "display": display.as_ref().map(|display| display.as_str()),
+            "meta": meta.as_ref().map(meta_to_json),
             "children": rendered_nodes_to_json(children),
         }),
         RenderedNode::Markup { value } => json!({
@@ -122,30 +129,49 @@ fn rendered_node_to_json(node: &RenderedNode) -> Value {
             "url": url,
             "formatting": formatting_to_json(formatting),
         }),
-        RenderedNode::Transparent { cite_idx, format } => json!({
+        RenderedNode::Transparent {
+            cite_idx,
+            formatting,
+        } => json!({
             "kind": "Transparent",
             "cite_idx": cite_idx,
-            "format": format,
+            "formatting": formatting_to_json(formatting),
         }),
         RenderedNode::BibliographyEntry {
             key,
-            first_field,
-            children,
+            label,
+            content,
         } => json!({
             "kind": "bibliography-entry",
             "key": key,
-            "first_field": first_field.as_deref().map(rendered_node_to_json),
-            "children": rendered_nodes_to_json(children),
+            "label": label.as_deref().map(rendered_node_to_json),
+            "content": rendered_nodes_to_json(content),
         }),
     }
 }
 
 fn formatting_to_json(formatting: &RenderedFormatting) -> Value {
     json!({
-        "font_style": formatting.font_style,
-        "font_variant": formatting.font_variant,
-        "font_weight": formatting.font_weight,
-        "text_decoration": formatting.text_decoration,
-        "vertical_align": formatting.vertical_align,
+        "font_style": formatting.font_style.as_str(),
+        "font_variant": formatting.font_variant.as_str(),
+        "font_weight": formatting.font_weight.as_str(),
+        "text_decoration": formatting.text_decoration.as_str(),
+        "vertical_align": formatting.vertical_align.as_str(),
     })
+}
+
+fn meta_to_json(meta: &RenderedMeta) -> Value {
+    match meta {
+        RenderedMeta::Entry { key, item_index } => {
+            json!({"kind": "Entry", "key": key, "item_index": item_index})
+        }
+        RenderedMeta::Names { roles } => json!({"kind": "Names", "roles": roles}),
+        RenderedMeta::Name { role, index } => json!({"kind": "Name", "role": role, "index": index}),
+        RenderedMeta::Date => json!({"kind": "Date"}),
+        RenderedMeta::Text => json!({"kind": "Text"}),
+        RenderedMeta::Number => json!({"kind": "Number"}),
+        RenderedMeta::Label => json!({"kind": "Label"}),
+        RenderedMeta::CitationNumber => json!({"kind": "CitationNumber"}),
+        RenderedMeta::CitationLabel => json!({"kind": "CitationLabel"}),
+    }
 }

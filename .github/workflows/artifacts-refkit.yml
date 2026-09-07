@@ -1,0 +1,279 @@
+name: refkit artifacts
+'on':
+  workflow_call: {}
+permissions:
+  contents: read
+env:
+  CARGO_BUILD_JOBS: '2'
+  SCCACHE_GHA_RW_MODE: ${{ startsWith(github.ref, 'refs/tags/') && 'READ_ONLY' || 'READ_WRITE' }}
+jobs:
+  build-cpython:
+    name: refkit / Build CPython wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      SCCACHE_GHA_ENABLED: 'true'
+      RUSTC_WRAPPER: sccache
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-15
+          - windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.11'
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+      - name: Configure reproducible Rust paths
+        uses: ./.github/actions/configure-rust-build
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
+        with:
+          version: v0.16.0
+      - name: Build wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b
+        with:
+          working-directory: packages/refkit
+          args: --locked --release --out dist --interpreter 3.11
+          maturin-version: v1.15.0
+          rust-toolchain: stable
+      - name: Package Agent Plugin
+        shell: bash
+        run: uv run --locked --only-group build agent-plugins attach-wheel packages/refkit/dist/*.whl --project packages/refkit
+      - name: Check metadata
+        run: |
+          python -m scripts.normalize_wheel packages/refkit/dist/*.whl
+          uv run --locked --only-group build twine check --strict packages/refkit/dist/*
+          python scripts/distribution_contract.py packages/refkit/dist/*
+
+          python scripts/artifact_manifest.py record packages/refkit/dist --package refkit --artifact "refkit_cpython_${{ runner.os }}" --rust-toolchain "stable"
+      - name: Upload wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: refkit_cpython_${{ runner.os }}
+          path: packages/refkit/dist/*
+          retention-days: 7
+          if-no-files-found: error
+  build-wasm:
+    name: refkit / Build PyEmscripten wheel (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SCCACHE_GHA_ENABLED: 'true'
+      RUSTC_WRAPPER: sccache
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: '3.14'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+      - name: Set up Pyodide
+        id: pyodide
+        uses: ./.github/actions/setup-pyodide
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
+        with:
+          version: v0.16.0
+      - name: Build wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b
+        env:
+          CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide.outputs.rustflags }}
+          MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide.outputs.pyodide-abi-version }}
+        with:
+          working-directory: packages/refkit
+          target: wasm32-unknown-emscripten
+          args: --locked --release --out dist --interpreter ${{ matrix.python-version }}
+          rust-toolchain: ${{ steps.pyodide.outputs.rust-toolchain }}
+          maturin-version: v1.15.0
+      - name: Package Agent Plugin
+        shell: bash
+        run: uv run --locked --only-group build agent-plugins attach-wheel packages/refkit/dist/*.whl --project packages/refkit
+      - name: Check metadata
+        run: |
+          python -m scripts.normalize_wheel packages/refkit/dist/*.whl
+          uv run --locked --only-group build twine check --strict packages/refkit/dist/*
+          python scripts/distribution_contract.py packages/refkit/dist/*
+
+          python scripts/artifact_manifest.py record packages/refkit/dist --package refkit --artifact "refkit_pyemscripten_${{ matrix.python-version }}" --rust-toolchain "${{ steps.pyodide.outputs.rust-toolchain }}"
+      - name: Upload wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: refkit_pyemscripten_${{ matrix.python-version }}
+          path: packages/refkit/dist/*
+          retention-days: 7
+          if-no-files-found: error
+  build-sdist:
+    name: refkit / Build sdist
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.14'
+          enable-cache: false
+      - name: Build sdist
+        run: uv build --package refkit --sdist --out-dir dist --no-create-gitignore
+      - name: Validate sdist
+        run: |
+          uv run --locked --only-group build twine check --strict dist/*.tar.gz
+          python scripts/distribution_contract.py dist/*.tar.gz
+          python scripts/artifact_manifest.py record dist --package refkit --artifact refkit_sdist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: refkit_sdist
+          path: dist/*
+          retention-days: 7
+          if-no-files-found: error
+  test-cpython:
+    name: refkit / Test CPython install (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact-os: Linux
+            python-version: '3.11'
+          - os: ubuntu-latest
+            artifact-os: Linux
+            python-version: '3.14'
+          - os: macos-15
+            artifact-os: macOS
+            python-version: '3.11'
+          - os: macos-15
+            artifact-os: macOS
+            python-version: '3.14'
+          - os: windows-latest
+            artifact-os: Windows
+            python-version: '3.11'
+          - os: windows-latest
+            artifact-os: Windows
+            python-version: '3.14'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+      - name: Download refkit wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: refkit_cpython_${{ matrix.artifact-os }}
+          path: dist
+      - name: Download verification support
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: refkit-tests
+          path: support
+      - name: Test installed package
+        shell: bash
+        run: |
+          workspace="$(pwd -P)"
+          wheels=("$workspace"/dist/refkit-*.whl)
+          support=("$workspace"/support/refkit_tests-*.whl)
+          cd "$RUNNER_TEMP"
+          uv run --no-project --python "${{ matrix.python-version }}" --with "${wheels[0]}" --with "${support[0]}" python -m refkit_tests.smoke_refkit
+          uv run --no-project --python "${{ matrix.python-version }}" --with "${wheels[0]}" --with "${support[0]}" python -m pytest -q --rootdir "$PWD" -o addopts= -p no:cacheprovider --pyargs refkit_tests.test_refkit_runtime
+    needs: build-cpython
+  test-pyemscripten:
+    name: refkit / Test PyEmscripten install
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.14'
+          enable-cache: false
+          cache-dependency-glob: uv.lock
+      - name: Download refkit wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: refkit_pyemscripten_3.14
+          path: dist
+      - name: Create Pyodide virtual environment
+        uses: ./.github/actions/create-pyodide-venv
+      - name: Download verification support
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: refkit-tests
+          path: support
+      - name: Test installed package
+        run: |
+          workspace="$(pwd -P)"
+          source .venv-pyodide/bin/activate
+          python -m pip install -r .github/pyodide/pylock.314.toml
+          python -m pip install --no-deps --no-index "$workspace"/support/refkit_tests-*.whl "$workspace"/dist/refkit-*.whl
+          cd "$RUNNER_TEMP"
+          python -m refkit_tests.smoke_refkit
+          python -m pytest -q --rootdir "$PWD" -o addopts= -p no:cacheprovider --pyargs refkit_tests.test_refkit_runtime
+        shell: bash
+    needs: build-wasm
+  test-sdist:
+    name: refkit / Test sdist
+    needs: build-sdist
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.14'
+          enable-cache: false
+      - name: Configure reproducible Rust paths
+        uses: ./.github/actions/configure-rust-build
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: refkit_sdist
+          path: dist
+      - name: Download verification support
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: refkit-tests
+          path: support
+      - name: Test installed sdist
+        shell: bash
+        run: |
+          workspace="$(pwd -P)"
+          sdists=("$workspace"/dist/refkit-*.tar.gz)
+          support=("$workspace"/support/refkit_tests-*.whl)
+          uv venv --python 3.11 "$RUNNER_TEMP/candidate"
+          uv pip install --python "$RUNNER_TEMP/candidate/bin/python" --build-constraint "$workspace/support/build-constraints.txt" "${sdists[0]}" "${support[0]}"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/candidate/bin/python" -m refkit_tests.smoke_refkit
+          "$RUNNER_TEMP/candidate/bin/python" -m pytest -q --rootdir "$PWD" -o addopts= -p no:cacheprovider --pyargs refkit_tests.test_refkit_runtime

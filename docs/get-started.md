@@ -14,7 +14,7 @@ Use [pip](https://pip.pypa.io/), Python's package installer:
 python -m pip install refkit
 ```
 
-The package installs a native extension. Pip selects a compatible wheel when one is available and builds from the source distribution on other platforms. A source build requires a Rust toolchain.
+The package installs a native extension. Pip selects a compatible wheel when one is available and builds from the source distribution on other platforms. A source build requires a Rust toolchain and Git. Cargo retrieves pinned source for the [Hayagriva bibliography engine](https://github.com/typst/hayagriva) and [Citationberg CSL model](https://github.com/typst/citationberg) from GitHub. The initial build needs network access unless both revisions are already cached.
 
 ## Render a citation
 

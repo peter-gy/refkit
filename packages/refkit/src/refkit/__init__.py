@@ -6,6 +6,7 @@ from importlib.metadata import version as _metadata_version
 from os import PathLike
 
 from . import _native as _core
+from . import types as types
 
 __version__ = _metadata_version("refkit")
 
@@ -35,6 +36,7 @@ Library = _core.Library
 Locale = _core.Locale
 MissingReferenceError = _core.MissingReferenceError
 RefkitError = _core.RefkitError
+ParseError = _core.ParseError
 Rendered = _core.Rendered
 RenderedDocument = _core.RenderedDocument
 Style = _core.Style
@@ -56,6 +58,7 @@ __all__ = [
     "Cite",
     "CitationGroup",
     "RefkitError",
+    "ParseError",
     "Document",
     "Entry",
     "Library",
@@ -76,6 +79,7 @@ __all__ = [
     "tidy_bibtex",
     "tidy_file",
     "__version__",
+    "types",
 ]
 
 

@@ -4,28 +4,28 @@ use std::sync::Arc;
 use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyAny, PyDict, PyDictMethods, PyList, PyListMethods};
+use pyo3::types::{PyAny, PyList, PyListMethods};
 
 use refkit_core::Library as CoreLibrary;
 
 use crate::conversion::{
-    parse_project_fields_arg, parse_projection_keys, parse_recovery_policy, project_rows_to_py,
+    diagnostics_to_py, parse_project_fields_arg, parse_projection_keys, parse_recovery_policy,
+    project_rows_to_py,
 };
 use crate::entry::Entry;
-use crate::errors::RefkitError;
+use crate::errors::{RefkitError, library_error_to_py};
 use crate::filesystem::{LibraryFormat, read_library};
 
 #[pyclass(module = "refkit", skip_from_py_object)]
 #[derive(Clone)]
 pub struct Library {
     pub(crate) inner: Arc<CoreLibrary>,
-    diagnostics: Arc<Vec<String>>,
+    diagnostics: Arc<Vec<refkit_core::Diagnostic>>,
     py_keys: Arc<PyOnceLock<Py<PyList>>>,
-    py_entries: Arc<PyOnceLock<Py<PyDict>>>,
 }
 
 impl Library {
-    fn from_core(inner: CoreLibrary, diagnostic: Option<String>) -> Self {
+    fn from_core(inner: CoreLibrary, diagnostic: Option<refkit_core::Diagnostic>) -> Self {
         let diagnostics = diagnostic
             .into_iter()
             .chain(inner.diagnostics().iter().cloned())
@@ -34,26 +34,11 @@ impl Library {
             inner: Arc::new(inner),
             diagnostics: Arc::new(diagnostics),
             py_keys: Arc::new(PyOnceLock::new()),
-            py_entries: Arc::new(PyOnceLock::new()),
         }
     }
 
     fn entry_for_key(&self, key: &str) -> Option<Entry> {
         self.inner.get_record(key).cloned().map(Entry::from_record)
-    }
-
-    fn py_entry_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let entries = self.py_entries.get_or_try_init(py, || {
-            let dict = PyDict::new(py);
-            for record in self.inner.records() {
-                dict.set_item(
-                    &record.key,
-                    Py::new(py, Entry::from_record(record.clone()))?,
-                )?;
-            }
-            Ok::<_, PyErr>(dict.unbind())
-        })?;
-        Ok(entries.bind(py).clone())
     }
 }
 
@@ -63,18 +48,16 @@ impl Library {
     #[pyo3(signature = (path, *, recovery = "error"))]
     fn read(py: Python<'_>, path: PathBuf, recovery: &str) -> PyResult<Self> {
         let recovery = parse_recovery_policy(recovery)?;
-        let parsed: Result<(CoreLibrary, Option<String>), String> = py.detach(move || {
-            let source = read_library(&path)?;
-            let library = match source.format {
+        let source = py
+            .detach(move || read_library(&path))
+            .map_err(RefkitError::new_err)?;
+        let library = py
+            .detach(|| match source.format {
                 LibraryFormat::Biblatex => CoreLibrary::parse_biblatex(&source.text, recovery),
                 LibraryFormat::HayagrivaYaml => CoreLibrary::parse_hayagriva_yaml(&source.text),
-            }
-            .map_err(|error| error.to_string())?;
-            Ok((library, source.diagnostic))
-        });
-        parsed
-            .map(|(library, diagnostic)| Self::from_core(library, diagnostic))
-            .map_err(RefkitError::new_err)
+            })
+            .map_err(|error| library_error_to_py(py, error))?;
+        Ok(Self::from_core(library, source.diagnostic))
     }
 
     #[staticmethod]
@@ -84,7 +67,7 @@ impl Library {
         let library = py.detach(move || CoreLibrary::parse_biblatex(&source, recovery));
         library
             .map(|library| Self::from_core(library, None))
-            .map_err(|error| RefkitError::new_err(error.to_string()))
+            .map_err(|error| library_error_to_py(py, error))
     }
 
     #[staticmethod]
@@ -92,12 +75,12 @@ impl Library {
         let library = py.detach(move || CoreLibrary::parse_hayagriva_yaml(&source));
         library
             .map(|library| Self::from_core(library, None))
-            .map_err(|error| RefkitError::new_err(error.to_string()))
+            .map_err(|error| library_error_to_py(py, error))
     }
 
     #[getter]
-    fn diagnostics(&self) -> Vec<String> {
-        self.diagnostics.as_ref().clone()
+    fn diagnostics(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        diagnostics_to_py(py, &self.diagnostics)
     }
 
     fn keys(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
@@ -113,17 +96,17 @@ impl Library {
                 "keys must be an iterable of entry keys",
             ));
         }
-        let entries = self.py_entry_dict(py)?;
         let rows = PyList::empty(py);
         let iter = keys
             .try_iter()
             .map_err(|_| PyTypeError::new_err("keys must be an iterable of entry keys"))?;
         for key in iter {
             let key = key?;
-            let Some(entry) = entries.get_item(&key)? else {
-                return Err(PyKeyError::new_err(key.str()?.to_string()));
-            };
-            rows.append(entry)?;
+            let key = key.extract::<&str>()?;
+            let entry = self
+                .entry_for_key(key)
+                .ok_or_else(|| PyKeyError::new_err(key.to_string()))?;
+            rows.append(Py::new(py, entry)?)?;
         }
         Ok(rows.into_any().unbind())
     }

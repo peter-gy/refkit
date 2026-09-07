@@ -7,10 +7,10 @@ from refkit_bench._adapters.common import (
     OperationOutcome,
     PackageAdapter,
     PreparedOperation,
-    _count_is,
     _entries_match,
     _keys_are,
     _lookup_keys,
+    _parsed_records_match,
     _prepared,
     _projection_contains,
 )
@@ -28,7 +28,9 @@ class PybtexAdapter(PackageAdapter):
             database = bibtex.Parser().parse_file(str(workload.bibtex_path))
             return OperationOutcome(database, len(database.entries))
 
-        return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
+        return _prepared(
+            operation, _parsed_records_match(workload.records, _parsed_rows), setup_included=True
+        )
 
     def prepare_parse_bibtex_text(self, workload: Workload, directory: Path) -> PreparedOperation:
         from pybtex.database.input import bibtex
@@ -37,7 +39,9 @@ class PybtexAdapter(PackageAdapter):
             database = bibtex.Parser().parse_string(workload.bibtex)
             return OperationOutcome(database, len(database.entries))
 
-        return _prepared(operation, _count_is(len(workload.records)), setup_included=True)
+        return _prepared(
+            operation, _parsed_records_match(workload.records, _parsed_rows), setup_included=True
+        )
 
     def prepare_materialize_entry_rows(
         self, workload: Workload, directory: Path
@@ -109,3 +113,23 @@ def _parse_bibtex_string(text: str) -> Any:
     from pybtex.database.input import bibtex
 
     return bibtex.Parser().parse_string(text)
+
+
+def _parsed_rows(database: Any) -> list[dict[str, Any]]:
+    return [
+        {
+            "key": key,
+            "type": entry.type,
+            "title": entry.fields.get("title"),
+            "year": entry.fields.get("year"),
+            "doi": entry.fields.get("doi"),
+            "volume": entry.fields.get("volume"),
+            "pages": entry.fields.get("pages", "").replace("--", "-"),
+            "container": entry.fields.get("journal", entry.fields.get("booktitle", "")),
+            "authors": [
+                [" ".join(person.last_names), " ".join(person.first_names + person.middle_names)]
+                for person in entry.persons.get("author", [])
+            ],
+        }
+        for key, entry in database.entries.items()
+    ]

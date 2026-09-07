@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -10,6 +11,7 @@ import tomllib
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).parents[1]
 REQUIREMENTS_PATH = ROOT / ".github" / "pyodide" / "requirements.in"
@@ -42,7 +44,31 @@ def _direct_requirements() -> dict[str, str]:
 
 def _packages(path: Path) -> dict[str, dict[str, Any]]:
     data = tomllib.loads(path.read_text())
-    return {package["name"]: package for package in data["packages"]}
+    if data.get("lock-version") != "1.0" or not isinstance(data.get("packages"), list):
+        raise ValueError("lock must declare lock-version 1.0 and a packages array")
+    packages = {}
+    for package in data["packages"]:
+        if not isinstance(package, dict):
+            raise ValueError("each package must be a table")
+        name = package.get("name")
+        if not isinstance(name, str) or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) is None:
+            raise ValueError("package name must be a normalized distribution name")
+        if name in packages:
+            raise ValueError(f"duplicate package: {name}")
+        if not isinstance(package.get("version"), str) or not package["version"]:
+            raise ValueError(f"{name} must declare a version")
+        wheels = package.get("wheels")
+        if not isinstance(wheels, list) or len(wheels) != 1 or not isinstance(wheels[0], dict):
+            raise ValueError(f"{name} must resolve to exactly one wheel")
+        wheel = wheels[0]
+        if not isinstance(wheel.get("name"), str) or not isinstance(wheel.get("url"), str):
+            raise ValueError(f"{name} wheel must declare a name and URL")
+        if not isinstance(wheel.get("hashes"), dict):
+            raise ValueError(f"{name} wheel must declare hashes")
+        if "sdist" in package:
+            raise ValueError(f"{name} must resolve to a wheel")
+        packages[name] = package
+    return packages
 
 
 def _cargo_versions(path: Path) -> dict[str, set[str]]:
@@ -55,7 +81,10 @@ def _cargo_versions(path: Path) -> dict[str, set[str]]:
 
 
 def validate_lock(path: Path) -> list[str]:
-    packages = _packages(path)
+    try:
+        packages = _packages(path)
+    except (OSError, ValueError, tomllib.TOMLDecodeError) as error:
+        return [str(error)]
     errors = []
     requirements = _direct_requirements()
     missing = requirements.keys() - packages.keys()
@@ -101,8 +130,29 @@ def validate_lock(path: Path) -> list[str]:
             if any(tag in name for tag in HOST_WHEEL_TAGS):
                 errors.append(f"host-platform wheel in Pyodide lock: {name}")
             digest = wheel.get("hashes", {}).get("sha256", "")
-            if len(digest) != 64:
-                errors.append(f"missing SHA-256 hash for {name}")
+            if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+                errors.append(f"invalid SHA-256 hash for {name}")
+            try:
+                url = urlsplit(wheel["url"])
+            except ValueError:
+                errors.append(f"invalid wheel URL for {name}")
+                continue
+            if url.scheme != "https" or url.netloc not in {
+                "files.pythonhosted.org",
+                "cdn.jsdelivr.net",
+            }:
+                errors.append(f"unsupported wheel source for {name}")
+            if url.query or url.fragment or not url.path.endswith(f"/{name}"):
+                errors.append(f"wheel URL must identify {name}")
+            if url.netloc == "cdn.jsdelivr.net" and not url.path.startswith(
+                f"/pyodide/v{XBUILDENV_VERSION}/full/"
+            ):
+                errors.append(f"{name} must come from Pyodide {XBUILDENV_VERSION}")
+            expected_prefix = f"{package['name'].replace('-', '_')}-{package['version']}-"
+            if not name.startswith(expected_prefix) or not name.endswith(
+                ("-py3-none-any.whl", f"-{POLARS_WHEEL_TAG}.whl")
+            ):
+                errors.append(f"incompatible wheel identity or runtime tag: {name}")
     return errors
 
 
@@ -177,7 +227,9 @@ def main() -> None:
         errors = validate_lock(LOCK_PATH)
         if errors:
             raise SystemExit("Invalid Pyodide lock:\n" + "\n".join(f"- {e}" for e in errors))
-        sys.stdout.write(f"Pyodide lock is current: {LOCK_PATH.relative_to(ROOT)}\n")
+        sys.stdout.write(
+            f"Pyodide lock matches the runtime contract: {LOCK_PATH.relative_to(ROOT)}\n"
+        )
         return
 
     with tempfile.TemporaryDirectory(prefix="refkit-pyodide-output-") as directory:

@@ -1,0 +1,35 @@
+name: Verification package
+'on':
+  workflow_call: {}
+permissions:
+  contents: read
+jobs:
+  build:
+    name: Build installed verification support
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.14'
+          enable-cache: false
+      - name: Build verification wheel
+        run: uv build --package refkit-tests --wheel --out-dir test-support --no-create-gitignore
+      - name: Capture source build constraints
+        run: |
+          python - <<'PYCODE'
+          import tomllib
+          from pathlib import Path
+
+          constraints = tomllib.loads(Path("pyproject.toml").read_text())["tool"]["uv"]["build-constraint-dependencies"]
+          Path("test-support/build-constraints.txt").write_text("\n".join(constraints) + "\n")
+          PYCODE
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: refkit-tests
+          path: test-support/*
+          retention-days: 7
+          if-no-files-found: error

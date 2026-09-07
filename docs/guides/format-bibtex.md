@@ -15,6 +15,8 @@ result = rk.tidy_bibtex("@ARTICLE {doe2024, pages={6-13}, year={2024},}\n")
 
 print(result.bibtex)
 print(result.count)
+assert result.count == 1
+assert "6--13" in result.bibtex
 ```
 
 Expected formatted source:
@@ -74,3 +76,13 @@ for warning in result.warnings:
 `missing_key` warns about an entry without a citation key. `duplicate_entry` includes the matching duplicate rule.
 
 Formatting a malformed block raises `TidySyntaxError`. Its `line`, `column`, `byte`, `character`, and `message` properties locate the parser failure.
+
+## Generate keys and update references
+
+```python
+result = rk.tidy_bibtex(source, options=rk.TidyOptions(generate_keys=True, sort=True))
+for rename in result.renames:
+    print(rename["entry_id"], rename["old_key"], rename["new_key"])
+```
+
+Key generation and merging share one plan. Final keys are unique, bibliography `crossref` and `xdata` fields point to those keys, and key sorting uses the final names. The rename report lets an application update citations in other files. Inspect the report before writing a bibliography used by an existing document.

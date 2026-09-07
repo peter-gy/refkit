@@ -34,7 +34,7 @@ The rendering nouns are:
 
 - `Cite`: one citation item with a key and optional locator.
 - `CitationGroup`: one or more items rendered as one citation cluster.
-- `Citation`: a group plus a unique result ID.
+- `Citation`: a group plus a unique result ID and optional document note number.
 - `Document`: a library, style, and locale prepared for rendering.
 - `RenderedDocument`: named citation outputs plus the cited bibliography.
 
@@ -56,11 +56,11 @@ The returned `citation_order` preserves the input IDs. Use `rendered[id]` or `re
 
 Every `Rendered` value exposes:
 
-- `text` or `to_text()` for plain text.
-- `html` or `to_html()` for escaped HTML.
-- `tree` or `to_tree()` for structured nodes and bibliography records.
+- `text` for plain text.
+- `html` for escaped HTML.
+- `tree` for structured nodes and bibliography records.
 
-The tree keeps formatting and link structure available to a host renderer. Read [Data Shapes](/reference/data-shapes) for the node contract.
+The tree keeps formatting, links, and source identity available to a host renderer. Bibliography outputs also provide `layout`, including hanging indent, label alignment, and line/entry spacing. Read [Data Shapes](/reference/data-shapes) for the node contract.
 
 ## Load styles and locales
 

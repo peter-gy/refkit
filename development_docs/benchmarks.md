@@ -9,7 +9,7 @@ Timing runs require release-mode native extensions:
 ```bash
 uv sync --locked --all-packages --group dev
 make refkit-develop-release
-(cd packages/polars-refkit && uv run maturin develop --release)
+make polars-refkit-develop-release
 ```
 
 Run `make benchmark-test` after changing lanes, fixtures, adapters, result fields, or output writers.
@@ -50,7 +50,7 @@ Result files belong in `packages/refkit-bench/results/` and remain local. Commit
 
 The runner defaults to all four inputs, five measured rounds, and two warmups. Repeated `--input` values are deduplicated. Repeated `--lane` values schedule repeated lane runs. Explicit lanes take precedence over `--group`.
 
-The nine groups contain 32 lanes:
+The runner groups comparable workflows:
 
 | Group | Lanes |
 | --- | --- |
@@ -80,7 +80,8 @@ Compare rows only when `lane`, `input_size`, `source_format`, `setup_included`, 
 | `setup_included`, `setup_seconds` | Placement and cost of setup work. |
 | `rounds`, `warmups`, `round`, `seconds` | Measurement configuration and result. |
 | `status`, `operation_count` | Correctness outcome and work completed. |
-| Runtime metadata | Python, operating system, CPU, RefKit version, commit, and build mode. |
+| Runtime metadata | Python, operating system, CPU, package versions, and runner revision. |
+| Artifact provenance | Native artifact path/hash, source URL/revision when installed metadata supplies them, distribution RECORD hash, and observed build mode. |
 
 `ok` means execution and the lane correctness check passed. `failed` records setup, execution, or correctness failure. `unsupported` means the adapter declared the workflow outside its public contract before timing.
 
@@ -101,11 +102,11 @@ Use `setup_seconds` before attributing time to a measured operation. A prepared 
 
 ## Inputs
 
-The runner generates deterministic `tiny`, `medium`, and `large` workloads. The `real` workload uses [`references.bib`](../packages/refkit-bench/src/refkit_bench/data/real-bibliography/references.bib) and its adjacent [provenance note](../packages/refkit-bench/src/refkit_bench/data/real-bibliography/README.md).
+The runner generates deterministic `tiny`, `medium`, and `large` workloads. The `real` workload uses [`records.json`](../packages/refkit-bench/src/refkit_bench/data/real-bibliography/records.json) and its adjacent [provenance note](../packages/refkit-bench/src/refkit_bench/data/real-bibliography/README.md).
 
-Generated workloads provide clean BibTeX, raw BibTeX with top-level blocks, malformed BibTeX, duplicate entries or fields, and CSL JSON for comparison renderers. The real workload uses the same clean bibliography for its clean, raw, and dirty source fields, so it provides syntax diversity rather than malformed-input recovery evidence. A lane selects the source form that matches its public workflow.
+Generated workloads provide clean BibTeX, raw BibTeX with top-level blocks, malformed BibTeX, duplicate entries or fields, and CSL JSON for comparison renderers. The real workload generates BibTeX and CSL JSON from the same curated records. Synthetic workloads supply raw syntax and malformed-input recovery cases. A lane selects the source form that matches its public workflow.
 
-Synthetic workloads contain 3, 48, and 192 entries for `tiny`, `medium`, and `large`. The tracked real workload contains 12 entries. Its provenance note and content hash preserve checkout-level reproducibility. A new real fixture needs reconstructable source identifiers, extraction date, hashes, item mapping, and license details.
+Synthetic workloads contain 3, 48, and 192 entries for `tiny`, `medium`, and `large`. The tracked real workload contains 12 entries. Its per-item catalogue sources and generated-input hashes preserve checkout-level reproducibility. A new real fixture needs reconstructable source identifiers, extraction date, hashes, item mapping, and license details.
 
 `style.load` ignores workload contents and currently runs once per selected input. Treat those rows as repeated measurements of the same style operation, not as input-scaling evidence.
 
@@ -125,7 +126,7 @@ The runner executes in one process with deterministic participant and input orde
 
 A setup failure emits one zero-second failure row. A measured failure stops later rounds for that participant. Cleanup failure prints a diagnostic to standard error and leaves completed rows unchanged. The process exits nonzero when any row has `failed` status. Runs containing `ok` and `unsupported` rows exit zero.
 
-`--build-mode release` records a caller-supplied label. Use `--build-mode auto` to read `refkit.build_mode`, run `make refkit-develop-release`, and build the Polars adapter with `maturin develop --release` before a timing claim.
+`--build-mode release` records `asserted_build_mode`. Each row separately records observed `build_mode` from the actual native adapter, or `python`/`unknown`. `runner_commit` identifies the benchmark checkout. Artifact source revision stays `unknown` unless installed metadata establishes it. Build both adapters with their `make *-develop-release` targets before a timing claim, and inspect artifact provenance rather than treating the assertion as proof.
 
 ## Measurement Limits
 
@@ -133,4 +134,17 @@ The runner preserves reproducible raw rounds. It does not aggregate results, cal
 
 Use the rows to inspect comparable workflows and prepare a dated analysis. A published performance claim should include environment, command, workload identity, raw result artifact, aggregation method, uncertainty, and known limitations.
 
-The current comparison adapters cover `bibtexparser`, `citeproc-py`, and Pybtex where their public workflows overlap a RefKit lane. The [feature matrix](feature-matrix.md) records the broader inspected capability context.
+The current comparison adapters cover `bibtexparser`, `citeproc-py`, and Pybtex where their public workflows overlap a RefKit lane. The [package boundary comparison](feature-matrix.md) records the inspected capability context.
+
+## Measure scaling
+
+Scaling inputs are explicit and stay outside the default input set:
+
+```bash
+uv run --locked --package refkit-bench python -m refkit_bench.runner \
+  --group scaling --input 1k --input 5k --input 10k \
+  --rounds 5 --warmups 2 \
+  --json packages/refkit-bench/results/scaling.json
+```
+
+These lanes measure sparse prepared entry lookup, key generation with rename validation, and malformed singleton-source broadcasting. Compare matching artifact build modes and workload identities before attributing a change to an implementation.

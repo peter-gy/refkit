@@ -2,7 +2,9 @@ use std::fs;
 use std::path::Path;
 
 use pyo3::prelude::*;
-use refkit_core::{TextEncoding, decode_bibliography};
+use refkit_core::{
+    Diagnostic, DiagnosticAction, DiagnosticSeverity, TextEncoding, decode_bibliography,
+};
 
 use crate::errors::RefkitError;
 use crate::repr::quoted;
@@ -16,7 +18,7 @@ pub(crate) enum LibraryFormat {
 pub(crate) struct LibrarySource {
     pub(crate) text: String,
     pub(crate) format: LibraryFormat,
-    pub(crate) diagnostic: Option<String>,
+    pub(crate) diagnostic: Option<Diagnostic>,
 }
 
 pub(crate) fn read_library(path: &Path) -> Result<LibrarySource, String> {
@@ -37,12 +39,7 @@ pub(crate) fn read_library(path: &Path) -> Result<LibrarySource, String> {
         }
         None => return Err("bibliography path has no extension".to_string()),
     };
-    let diagnostic = (decoded.encoding == TextEncoding::Windows1252).then(|| {
-        format!(
-            "decoded {} as Windows-1252-compatible text because it is not valid UTF-8",
-            path.display()
-        )
-    });
+    let diagnostic = decoding_diagnostic(path, decoded.encoding);
     Ok(LibrarySource {
         text: decoded.text,
         format,
@@ -50,8 +47,21 @@ pub(crate) fn read_library(path: &Path) -> Result<LibrarySource, String> {
     })
 }
 
-pub(crate) fn read_bibtex(path: &Path) -> Result<String, String> {
-    read_bibliography(path).map(|decoded| decoded.text)
+pub(crate) fn read_bibtex(path: &Path) -> Result<(String, Option<Diagnostic>), String> {
+    let decoded = read_bibliography(path)?;
+    Ok((decoded.text, decoding_diagnostic(path, decoded.encoding)))
+}
+
+fn decoding_diagnostic(path: &Path, encoding: TextEncoding) -> Option<Diagnostic> {
+    (encoding == TextEncoding::Windows1252).then(|| Diagnostic {
+        code: "text_encoding",
+        severity: DiagnosticSeverity::Warning,
+        action: DiagnosticAction::Decoded,
+        span: None,
+        entry: None,
+        field: None,
+        message: format!("decoded {} as Windows-1252-compatible text because it is not valid UTF-8. Spans refer to the decoded UTF-8 source and writes use UTF-8", path.display()),
+    })
 }
 
 pub(crate) fn read_style(path: &Path) -> Result<String, String> {

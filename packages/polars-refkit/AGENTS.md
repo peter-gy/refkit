@@ -9,7 +9,9 @@
 - Treat strings as column names. Use `pl.lit(...)` for literal citation keys or BibTeX input.
 - Map row parse and formatting failures to null value expressions. Expose details through report and diagnostics expressions.
 - Keep eager, lazy, broadcast, null, dtype, and installed-wheel behavior covered at the public expression boundary.
+- Keep formatter options in the JSON-serializable `TidyOptions` mapping. Resolve `output` to its fixed dtype when constructing the expression.
+- Package the adapter-owned Agent Plugin through `build_backend.py`. Keep `polars_refkit.agent` lazy and its task examples executable through the installed-resource runner.
 - Update namespace methods, top-level functions, runtime signatures, `.pyi` files, and Rust keyword records together.
 - Reuse core semantic inputs and expected results. Keep broadcasting, lazy execution, row failures, dtypes, and plugin loading in Polars boundary tests.
 
-Rebuild with `(cd packages/polars-refkit && uv run maturin develop)`. Run `make typecheck test rust` from the repository root.
+Rebuild with `make polars-refkit-develop` from the repository root so the native plugin and Agent Plugin marker come from the same backend. Run `make typecheck test rust` from the repository root.
