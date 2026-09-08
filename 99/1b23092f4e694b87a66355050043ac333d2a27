@@ -1,0 +1,196 @@
+packages/refkit-bench/src/refkit_bench/worker.py
+  s_9fddfede21feba::t_2b6fb4f9921b6e 97-98
+  s_9fddfede21feba::t_159f02af6e8d6b 6
+  s_9fddfede21feba::t_a80e1cee3a12d2 47,100-101
+  s_9fddfede21feba::t_d4e83c89c2b524 13,31,39,54,81-83,89,111-116,129,131
+  ai_agent 38,88,110,127
+  s_9fddfede21feba::t_87d8cf4a3d73ab 1-5,7-12,14-16,29-30,32-34,36-37,41,53,56,58-62,64-68,71,80,85-87,90,102-103,117-122,124,128,136-138,140
+  s_9fddfede21feba::t_244c3832648c4d 17-26,28,35,40,42-46,48-52,55,57,63,69-70,72-79,84,91-96,99,104-109,123,125-126,130,132-135,139
+  s_9fddfede21feba::t_74af9e68b1e415 27
+uv.lock
+  ai_agent 1426-1436,1668,1670,1677-1679,1681-1683
+packages/refkit-bench/src/refkit_bench/node_worker.mjs
+  s_9fddfede21feba::t_828e563228e5be 1-17,21-45
+  s_9fddfede21feba::t_74af9e68b1e415 18-20
+development_docs/testing.md
+  s_9fddfede21feba::t_4a1d9a1a4eff28 30
+  s_9fddfede21feba::t_900d326dc5adae 32
+packages/refkit-bench/README.md
+  s_9fddfede21feba::t_73ee88f09e15f5 3,5-18,22
+packages/refkit-bench/src/refkit_bench/provenance.py
+  s_9fddfede21feba::t_a97647fb1e0f0f 1-4,6,8-10,12-19,22-27,43,58-60,76,79-80,86,89-90,92-94,111,130
+  s_9fddfede21feba::t_b51323471eb4f3 7,30-33
+  s_9fddfede21feba::t_628bc6d165fd1c 11
+  s_9fddfede21feba::t_a80e1cee3a12d2 87-88,109
+  s_9fddfede21feba::t_244c3832648c4d 20-21,44,46-53,56-57,62-67,70-71,73,77-78,81-85,91,95-101,107-108,110,112-120,129
+  s_9fddfede21feba::t_12907ae7ea04a1 29,34-42,54-55,121-128
+  s_9fddfede21feba::t_159f02af6e8d6b 5,61,68-69,72,74-75,102-106
+  s_9fddfede21feba::t_74af9e68b1e415 45
+  s_9fddfede21feba::t_6280543dd4d8b0 28
+packages/refkit-bench/tests/test_formatting.py
+  s_9fddfede21feba::t_97f9d9a47a8534 1-6,9-11,13-42
+  s_9fddfede21feba::t_e6bf314f65a5e2 12
+  s_9fddfede21feba::t_6f3a535f4d5ebb 7,108,112-121,126,128
+  s_9fddfede21feba::t_a41017351c8856 43-105
+  s_9fddfede21feba::t_7306d68b9eadbe 8
+  s_9fddfede21feba::t_eb884d9352dfb3 106-107,109-111,122-123,125,127
+  s_9fddfede21feba::t_17d4410bc3dfdf 124
+packages/refkit-bench/tests/test_parsing.py
+  s_9fddfede21feba::t_7306d68b9eadbe 10-11
+packages/refkit-bench/src/refkit_bench/tabular.py
+  s_9fddfede21feba::t_ce3c2f657129ef 8
+  s_9fddfede21feba::t_244c3832648c4d 13,16-17,19-34,36-39,42,47,49,54,56,58,60-69,71-74
+  s_9fddfede21feba::t_a80e1cee3a12d2 14,43,45,55
+  s_9fddfede21feba::t_87d8cf4a3d73ab 1-7,9-12,15,18,35,40-41,44,46,48,50-53,57,59,70,75
+packages/refkit-bench/tests/test_reports.py
+  s_9fddfede21feba::t_04d9a887a2f517 157-158,160-167,169-179
+  s_9fddfede21feba::t_a460d0fe27a61e 1-5,7-10,13-14,16,66-69,75-76,117,119-121,128-130,147,149-151
+  s_9fddfede21feba::t_484e6a0def68f5 11-12,81-83,86-89,91,142,146,148
+  s_9fddfede21feba::t_513c6534b13b48 17-38,40-65,70-74,80,92-93,105-116,118,122-127,131-141,143-145,152-156
+  s_9fddfede21feba::t_628bc6d165fd1c 39
+  s_9fddfede21feba::t_026976421ded4d 77-79,84-85,90,94-104
+  s_9fddfede21feba::t_a80e1cee3a12d2 6,15
+  s_9fddfede21feba::t_096be45b894ee2 180-190
+packages/refkit-bench/src/refkit_bench/data/real-bibliography/README.md
+  s_9fddfede21feba::t_1bd00ffc852a51 9-15
+  s_9fddfede21feba::t_85ec89146f2559 3
+packages/refkit-bench/src/refkit_bench/runner.py
+  s_9fddfede21feba::t_f5ff938da580a1 350,353-354,356,358
+  s_9fddfede21feba::t_fa4736d7f1c864 19
+  s_9fddfede21feba::t_244c3832648c4d 23-25,32-34,40,42-44,47-48,55-56,61-64,66-69,71-73,77-79,81-92,94-103,105-122,126-128,135,152-156,160-161,163-167,172-179,182-183,185-194,196-197,200-208,213-216,219-245,247,249-250,252,255-256,264-265,267-270,272-275,281,283-284,286-289,293,297,312-313,315-316,318-319,321-330,332,337,340-342,344,346-349,359,364
+  s_9fddfede21feba::t_d4e83c89c2b524 139,149,151,198,343,351-352,355,357
+  s_9fddfede21feba::t_513c6534b13b48 258,260
+  s_9fddfede21feba::t_a80e1cee3a12d2 57,259
+  s_9fddfede21feba::t_72294715e487a8 74-76,93,104,132-134,140-148,150
+  s_9fddfede21feba::t_2b6fb4f9921b6e 49-52,209-212,217
+  s_9fddfede21feba::t_9ab9827a6f8d86 157,263,285,296,298,306,308-309
+  s_9fddfede21feba::t_7e6bbb4d1b80fd 290-292,299-305,307
+  s_9fddfede21feba::t_d4d563f4fe331d 5-6,12,14,16-17,22,26,29-30,35,38,65,70,80,125,129,136,162,168-171,181,184,199,218,246,248,251,253-254,261-262,266,276-280,282,294-295,317,320,331,333-336,345,360-363
+  s_9fddfede21feba::t_5ae1cfcd6010b5 339
+  s_9fddfede21feba::t_697ae9201ef309 10,18,137,158-159,257,271,338
+packages/refkit-bench/src/refkit_bench/fixtures.py
+  s_9fddfede21feba::t_244c3832648c4d 72-73
+  s_9fddfede21feba::t_299da2d53cee51 8,10,12,48-50,61-71,74-75
+.github/workflows/source-checks.yml
+  s_9fddfede21feba::t_2300e70611a771 32-41
+packages/refkit-bench/tests/test_measurement.py
+  s_9fddfede21feba::t_096be45b894ee2 368-379
+  s_9fddfede21feba::t_6af42b082b903b 172-173,177-179,187-195,199-201,212-221,233-238,258-267,281-282,286-316,319-325,329-331,333-335
+  s_9fddfede21feba::t_6f3a535f4d5ebb 411,420
+  s_9fddfede21feba::t_627409ce3daea3 422-440,442-468
+  s_9fddfede21feba::t_f131a2507ec0d5 317-318
+  s_9fddfede21feba::t_a460d0fe27a61e 3-5,8,10,12-14,17-19,21-23,25-27,30-32,35,40,42,59-61,64,81-84,112-114,123-125,131-133,161,164-166,168
+  s_9fddfede21feba::t_fc5f8eade56974 270-279,389-405
+  s_9fddfede21feba::t_9a8b495709471a 336-355,357-367
+  s_9fddfede21feba::t_3716fe59f00154 174-176,180-186,196-198,202-211,222-231,239-254,256-257,285,326-327
+  s_9fddfede21feba::t_eb884d9352dfb3 380-388,406-410,412-414,416-419,421
+  s_9fddfede21feba::t_fa3725a84ba54d 11,46,48-51,54-58,268-269,280,283-284,469-479
+  s_9fddfede21feba::t_513c6534b13b48 29,36-39,41,45,47,52-53,62-63,65-80,85-111,115-122,126-130,134-147,150-160,162-163,167,169-171
+.github/AGENTS.md
+  s_9fddfede21feba::t_4a1d9a1a4eff28 7
+packages/refkit-bench/src/refkit_bench/affinity.py
+  s_9fddfede21feba::t_32a2db910b7943 10-11,16,18,25,27,30-32,34,37,42,52-53,55-56,60-62
+  s_9fddfede21feba::t_082036d3d96e4e 1-9,12-15,17,19-24,26,28-29,33,35-36,38-41,43-51,54,57-59,63-66
+docs/performance.md
+  s_9fddfede21feba::t_73ee88f09e15f5 2,7,9,11,13,16-19,22,24,26,28-29,31,33-37,39,41,43,45
+development_docs/benchmarks.md
+  s_9fddfede21feba::t_ad87e2d7d38840 112,114
+  s_9fddfede21feba::t_73ee88f09e15f5 3,5,7-9,13-19,24,26,28,30-40,42-44,46,48,50-55,59,61,63,65,67,69,71-74,78,80-85,99,101,103-108,110,116,118,120-127,129,131,133,135,137,140-142,145-151
+  s_9fddfede21feba::t_c4fc2354d66e3c 41,57,76,87,89,91-95,97
+  s_9fddfede21feba::t_71cc477da043cd 22
+packages/refkit-bench/node/package-lock.json
+  ai_agent 1-25
+packages/refkit-bench/src/refkit_bench/parsing.py
+  s_9fddfede21feba::t_b1b2907a604076 3-15,19-20,28-54,58,60,62-71,77,80-87,93-97,102-113,117-146,149-174,178-202,208-231,237-239,245-261,263-275,279,285-287,295-301,304-330
+  s_9fddfede21feba::t_8ec74d96692544 21-27,55-57,61,88-91,98-101,114-116,175-176,203-206,262,277,283,288-293
+  s_9fddfede21feba::t_88cb23cd035ad4 72-76
+packages/refkit-bench/src/refkit_bench/formatting.py
+  s_9fddfede21feba::t_e6bf314f65a5e2 9,145-157,160
+  s_9fddfede21feba::t_2d5a2d7214d17d 6-7,103-109,111-113,116-119,122
+  s_9fddfede21feba::t_3716fe59f00154 35-36
+  s_9fddfede21feba::t_97f9d9a47a8534 139-142,166-169,171,201-203
+  s_9fddfede21feba::t_90674d38de9c61 240
+  s_9fddfede21feba::t_4a1d9a1a4eff28 37
+  s_9fddfede21feba::t_eb884d9352dfb3 110,114-115,120-121,123,241
+  s_9fddfede21feba::t_828e563228e5be 5,11-12,16,18,22,24-34,38-55,57-99,124,127-138,144,163-164,172-195,199-200,204-239,242-271
+packages/refkit-bench/tests/test_rendering.py
+  s_9fddfede21feba::t_55b1959893ec1c 11,19,58,76
+  s_9fddfede21feba::t_056553d4fc64bb 1-10,12-17,20-27,29-57,59-75,78-90
+  s_9fddfede21feba::t_8ec74d96692544 18,28,77
+packages/refkit-bench/src/refkit_bench/data/bibtex-tidy/cases.json
+  s_9fddfede21feba::t_e6bf314f65a5e2 20-285
+packages/refkit-bench/tests/test_tabular.py
+  s_9fddfede21feba::t_513c6534b13b48 3-21,23-26,29-39
+  s_9fddfede21feba::t_04d9a887a2f517 40-60,63-68
+packages/refkit-bench/src/refkit_bench/report.py
+  s_9fddfede21feba::t_513c6534b13b48 24,28-29,34-35,38,40-44
+  s_9fddfede21feba::t_628bc6d165fd1c 125
+  s_9fddfede21feba::t_aefa0c9be2f664 23,27,31-33,36-37,39
+  s_9fddfede21feba::t_74af9e68b1e415 153
+  s_9fddfede21feba::t_697ae9201ef309 5
+  s_9fddfede21feba::t_5ae1cfcd6010b5 180
+  s_9fddfede21feba::t_d4d563f4fe331d 3-4,7-13,25,30,45-50,74-78,95-97,102-103,108,116-120,148
+  s_9fddfede21feba::t_159f02af6e8d6b 51-52,66-67,71-73,158
+  s_9fddfede21feba::t_244c3832648c4d 14-22,26,53-61,63-65,68-69,79-88,90-94,98-101,104-107,109-115,121-124,126-143,147,149-152,154-157,159-177,179,185-186
+  s_9fddfede21feba::t_2b6fb4f9921b6e 144-145,181-184
+packages/refkit-bench/src/refkit_bench/rendering.py
+  s_9fddfede21feba::t_a6dec6e433281f 3-5,8-29,31-57,66-68,72-122,126-146,148,151-152
+  s_9fddfede21feba::t_b1b2907a604076 30,58-65
+  s_9fddfede21feba::t_a96df46cda1610 69-71
+packages/refkit-bench/src/refkit_bench/data/styles/author-date.csl
+  s_9fddfede21feba::t_5b5a93176e5de9 10
+  s_9fddfede21feba::t_6690bdc7bc1a3b 1-9,11-34
+docs/.vitepress/config.mts
+  s_9fddfede21feba::t_73ee88f09e15f5 106
+packages/refkit-bench/pyproject.toml
+  s_9fddfede21feba::t_c4fc2354d66e3c 47-49
+  s_9fddfede21feba::t_52a03c9735c407 13-21
+  s_9fddfede21feba::t_2300e70611a771 32,73
+  s_9fddfede21feba::t_627409ce3daea3 68
+Makefile
+  s_9fddfede21feba::t_c72721cd204db6 181
+  s_9fddfede21feba::t_96cf1a46dba9cf 60-61
+packages/refkit-bench/tests/test_affinity.py
+  s_9fddfede21feba::t_6bb16ec80ed21c 1-96,100-106,113-116,118-148,150-176
+  s_9fddfede21feba::t_b317243089fec3 97-99,107-112,117,149,177
+packages/refkit-bench/src/refkit_bench/model.py
+  s_9fddfede21feba::t_2889cc68d82ee2 1-4,6-28,31-32,34,37-38
+  s_9fddfede21feba::t_697ae9201ef309 5,29-30,33,35-36
+docs/scripts/verify-build.mjs
+  s_9fddfede21feba::t_73ee88f09e15f5 184
+packages/refkit-bench/tests/test_provenance.py
+  s_9fddfede21feba::t_f131a2507ec0d5 1-24
+  s_9fddfede21feba::t_6280543dd4d8b0 25-35
+  s_9fddfede21feba::t_b51323471eb4f3 36-44
+packages/refkit-bench/NOTICE
+  s_9fddfede21feba::t_73ee88f09e15f5 1
+  s_9fddfede21feba::t_97f9d9a47a8534 11-19
+packages/refkit-bench/src/refkit_bench/process.py
+  s_9fddfede21feba::t_159f02af6e8d6b 8,11-16,30,32-34
+  s_9fddfede21feba::t_244c3832648c4d 9-10,20-26,31
+  s_9fddfede21feba::t_87d8cf4a3d73ab 3-5,19,27-29,35
+packages/refkit-bench/AGENTS.md
+  s_9fddfede21feba::t_4a1d9a1a4eff28 3,7,10-11,13,15-17,19-20
+  s_9fddfede21feba::t_1bd00ffc852a51 18
+packages/refkit-bench/src/refkit_bench/cases.py
+  s_9fddfede21feba::t_244c3832648c4d 20-62,68-82,87-89,113,117,121,125-127,137-143,145,149-151,164-171
+  s_9fddfede21feba::t_2d5a2d7214d17d 8,63-67,108,110
+  s_9fddfede21feba::t_a97647fb1e0f0f 1-7,9-19,83-86,90-107,111-112,114-116,118-120,122-124,128-136,144,146-148,152-163,172-186
+  s_9fddfede21feba::t_eb884d9352dfb3 109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "991b23092f4e694b87a66355050043ac333d2a27",
+  "prompts": {},
+  "sessions": {
+    "s_9fddfede21feba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07d16-eb2f-7103-95c3-d5cca6784a83",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
