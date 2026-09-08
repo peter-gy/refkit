@@ -192,6 +192,9 @@ fn unwrap_text(value: &str) -> String {
 }
 
 fn wrap_braced_value(field: &RawSyntaxField, value: &str, options: &TidyOptions) -> String {
+    if options.wrap.is_none() && !value.contains("\n\n") {
+        return value.to_string();
+    }
     let indent = if options.tab {
         "\t".to_string()
     } else {

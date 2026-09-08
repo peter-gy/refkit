@@ -346,6 +346,11 @@ fn parse_entry_key(body: &str) -> Result<(String, usize), String> {
 
 fn find_at_block_end(source: &str, start: usize) -> Result<usize, (usize, String)> {
     let escape_aware = find_at_block_end_with_escape_mode(source, start, true);
+    if let Ok(end) = escape_aware
+        && !source[start..end].contains('\\')
+    {
+        return Ok(end);
+    }
     let permissive = find_at_block_end_with_escape_mode(source, start, false);
     match (escape_aware, permissive) {
         (Ok(escaped_end), Ok(permissive_end))
@@ -381,7 +386,6 @@ fn find_at_block_end_with_escape_mode(
     start: usize,
     escape_aware: bool,
 ) -> Result<usize, (usize, String)> {
-    let next_block = find_recovery_block_start(source, start);
     if is_line_style_comment(source, start) {
         return Err((
             take_line(source, start),
@@ -390,14 +394,12 @@ fn find_at_block_end_with_escape_mode(
     }
     let Some(open_rel) = source[start..].find(['{', '(']) else {
         return Err((
-            next_block.unwrap_or_else(|| take_line(source, start)),
+            find_recovery_block_start(source, start).unwrap_or_else(|| take_line(source, start)),
             "entry opener is missing".to_string(),
         ));
     };
     let open = start + open_rel;
-    if let Some(next) = next_block
-        && next < open
-    {
+    if let Some(next) = find_recovery_block_start(&source[..open], start) {
         return Err((next, "entry opener is missing".to_string()));
     }
     let opener = source[open..].chars().next().unwrap();
@@ -464,7 +466,7 @@ fn find_at_block_end_with_escape_mode(
     }
 
     Err((
-        next_block.unwrap_or(source.len()),
+        find_recovery_block_start(source, start).unwrap_or(source.len()),
         "entry ended before closing delimiter".to_string(),
     ))
 }
@@ -539,17 +541,17 @@ fn is_parseable_at_start(source: &str, start: usize) -> bool {
 }
 
 fn is_line_style_comment(source: &str, start: usize) -> bool {
+    if !source[start..]
+        .get(.."@comment".len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("@comment"))
+    {
+        return false;
+    }
     let line_start = source[..start].rfind('\n').map_or(0, |index| index + 1);
     if !source[line_start..start].chars().all(char::is_whitespace) {
         return false;
     }
     let line = &source[start..take_line(source, start)];
-    let Some(prefix) = line.get(.."@comment".len()) else {
-        return false;
-    };
-    if !prefix.eq_ignore_ascii_case("@comment") {
-        return false;
-    }
     let rest = line.get("@comment".len()..).unwrap_or_default();
     if !rest
         .chars()
@@ -568,12 +570,12 @@ pub(super) fn parse_value(
 ) -> Result<ParsedValue, String> {
     let first = parse_value_atom(body, start, body_offset)?;
     let mut cursor = first.1;
-    let mut atoms = first.4.clone();
     let mut expression_cursor = cursor;
     skip_field_space(body, &mut expression_cursor);
     if !body[expression_cursor..].starts_with('#') {
         return Ok(first);
     }
+    let mut atoms = first.4;
 
     while expression_cursor < body.len() && body[expression_cursor..].starts_with('#') {
         expression_cursor += 1;

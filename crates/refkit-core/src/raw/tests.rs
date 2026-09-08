@@ -556,3 +556,12 @@ fn raw_document_rejects_unsafe_field_edits() {
         "jcs # \" Extra\""
     );
 }
+
+#[test]
+fn adjacent_entries_preserve_unicode_values_and_source_writeback() {
+    let source = "@book{a,title={Été}}@book{b,title={研究}}@book{c,title={🙂}}";
+    let document = RawDocument::parse(source);
+    assert_eq!(document.entry_keys(), ["a", "b", "c"]);
+    assert_eq!(raw_field_value(&document, "b", "title"), "研究");
+    assert_eq!(document.render().unwrap(), source);
+}

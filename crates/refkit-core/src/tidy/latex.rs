@@ -61,8 +61,8 @@ fn read_command(chars: &[char], index: &mut usize) -> String {
     let mut output = String::from("\\");
     *index += 1;
     let symbol = chars.get(*index).copied().filter(|character| {
-        !character.is_alphabetic()
-            && !(*character == '\\'
+        !(character.is_alphabetic()
+            || *character == '\\'
                 && chars
                     .get(*index + 1)
                     .is_some_and(|next| next.is_alphabetic()))

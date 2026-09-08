@@ -435,13 +435,18 @@ impl RawDocument {
         self.data.blocks.iter().map(raw_block_info).collect()
     }
 
-    pub(crate) fn syntax(&self) -> RawSyntaxDocument {
+    #[cfg(test)]
+    fn syntax(&self) -> RawSyntaxDocument {
+        self.clone().into_syntax()
+    }
+
+    pub(crate) fn into_syntax(self) -> RawSyntaxDocument {
         RawSyntaxDocument {
-            blocks: self.data.blocks.iter().map(raw_syntax_block).collect(),
+            blocks: self.data.blocks.into_iter().map(raw_syntax_block).collect(),
             entries: self
                 .data
                 .entry_blocks
-                .iter()
+                .into_iter()
                 .enumerate()
                 .map(|(entry_id, entry)| raw_syntax_entry(RawEntryId(entry_id), entry))
                 .collect(),
@@ -541,70 +546,53 @@ fn raw_block_info(block: &RawBlock) -> RawBlockInfo {
     }
 }
 
-fn raw_syntax_block(block: &RawBlock) -> RawSyntaxBlock {
+fn raw_syntax_block(block: RawBlock) -> RawSyntaxBlock {
     match block {
-        RawBlock::Whitespace { raw, span } => RawSyntaxBlock::Whitespace {
-            raw: raw.clone(),
-            span: span.clone(),
-        },
-        RawBlock::Comment { raw, span } => RawSyntaxBlock::Comment {
-            raw: raw.clone(),
-            span: span.clone(),
-        },
-        RawBlock::Preamble { raw, value, span } => RawSyntaxBlock::Preamble {
-            raw: raw.clone(),
-            value: value.clone(),
-            span: span.clone(),
-        },
+        RawBlock::Whitespace { raw, span } => RawSyntaxBlock::Whitespace { raw, span },
+        RawBlock::Comment { raw, span } => RawSyntaxBlock::Comment { raw, span },
+        RawBlock::Preamble { raw, value, span } => RawSyntaxBlock::Preamble { raw, value, span },
         RawBlock::StringDef {
             raw,
             key,
             value,
             span,
         } => RawSyntaxBlock::StringDef {
-            raw: raw.clone(),
-            key: key.clone(),
-            value: value.clone(),
-            span: span.clone(),
+            raw,
+            key,
+            value,
+            span,
         },
         RawBlock::Entry { id, key, span } => RawSyntaxBlock::Entry {
-            id: RawEntryId(*id),
-            key: key.clone(),
-            span: span.clone(),
+            id: RawEntryId(id),
+            key,
+            span,
         },
-        RawBlock::Failed { raw, error, span } => RawSyntaxBlock::Failed {
-            raw: raw.clone(),
-            error: error.clone(),
-            span: span.clone(),
-        },
-        RawBlock::Other { raw, span } => RawSyntaxBlock::Other {
-            raw: raw.clone(),
-            span: span.clone(),
-        },
+        RawBlock::Failed { raw, error, span } => RawSyntaxBlock::Failed { raw, error, span },
+        RawBlock::Other { raw, span } => RawSyntaxBlock::Other { raw, span },
     }
 }
 
-fn raw_syntax_entry(id: RawEntryId, entry: &RawEntryData) -> RawSyntaxEntry {
+fn raw_syntax_entry(id: RawEntryId, entry: RawEntryData) -> RawSyntaxEntry {
     RawSyntaxEntry {
         id,
-        key: entry.key.clone(),
-        kind: entry.kind.clone(),
+        key: entry.key,
+        kind: entry.kind,
         fields: entry
             .field_blocks
-            .iter()
+            .into_iter()
             .enumerate()
             .map(|(field_id, field)| RawSyntaxField {
                 id: RawFieldId(field_id),
-                name: field.name.clone(),
-                value: field.value.clone(),
+                name: field.name,
+                value: field.value,
                 value_mode: field.value_mode,
-                value_atoms: field.value_atoms.clone(),
-                span: field.span.clone(),
-                patch_span: field.patch_span.clone(),
+                value_atoms: field.value_atoms,
+                span: field.span,
+                patch_span: field.patch_span,
             })
             .collect(),
-        span: entry.span.clone(),
-        raw: entry.raw.clone(),
+        span: entry.span,
+        raw: entry.raw,
     }
 }
 
