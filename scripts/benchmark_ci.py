@@ -42,11 +42,19 @@ def run(candidate: Path, baseline: Path, output: Path, platform: str) -> int:
         "MATURIN_PEP517_ARGS": "--profile release --locked",
         "CARGO_BUILD_JOBS": "2",
     }
+    target_root = Path(environment.get("CARGO_TARGET_DIR", str(output / "target"))).resolve()
     interpreters = {}
     try:
         for name, root in (("baseline", baseline), ("candidate", candidate)):
             venv = output / f"{name}-env"
-            env = {**environment, "UV_PROJECT_ENVIRONMENT": str(venv)}
+            target = str(target_root / name)
+            # Cargo's relative source paths and mtimes can alias across checkouts.
+            env = {
+                **environment,
+                "UV_PROJECT_ENVIRONMENT": str(venv),
+                "CARGO_TARGET_DIR": target,
+                "CARGO_BUILD_BUILD_DIR": target,
+            }
             # Both installations use the candidate harness and dependency lock.
             execute(
                 [

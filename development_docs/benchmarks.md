@@ -165,6 +165,8 @@ A docs-only commit skips measurement, reuses saved candidate timings when availa
 
 For a new measurement, the baseline is the previous `main` tip and the candidate is the new tip. A release tag uses its commit's first parent. A push containing several commits measures their combined effect. Each OS builds both revisions in release mode, then measures them sequentially on the same runner. The three OS jobs run in parallel, independently of distribution and documentation checks. Rust compilation and Python downloads are cached.
 
+Each revision uses separate Cargo target and intermediate build directories beneath the configured `CARGO_TARGET_DIR` root. [Cargo build state](https://doc.rust-lang.org/cargo/reference/build-cache.html) tracks relative source paths and modification times, so these directories belong to one revision. Dependency download caches remain shared.
+
 Both revisions use the candidate's benchmark harness and locked Python dependencies in separate environments. The comparison isolates RefKit's Python and native implementation changes under that dependency set. Changes to dependency versions need a separate experiment using each revision's dependencies.
 
 The CI selection is `--lane all --dataset real --package refkit --package polars-eager --package polars-lazy`. It covers 14 cases across parsing, inspection, editing, rendering, formatting, and eager/lazy Polars expressions. Each case uses five workers, five warmup batches, five measured batches, and a 50 ms calibration target. Case order uses seed 2026. Revision order alternates with the workflow run number.
@@ -177,6 +179,16 @@ The CI selection is `--lane all --dataset real --package refkit --package polars
 | Inconclusive | Interval overlaps a boundary or spans both directions. |
 
 The percent change is `(candidate / baseline - 1) × 100`. Negative values mean lower elapsed time. Same describes the 5% band. Hosted-runner noise, thermal drift, and background load still apply, so confirm close changes with repeated controlled runs. Timing regressions remain advisory. Measurement and conformance failures fail the workflow.
+
+### Compare a selected baseline
+
+Use the [GitHub CLI](https://cli.github.com/manual/gh_workflow_run) to measure main against a full baseline commit SHA:
+
+```bash
+gh workflow run benchmarks.yml --ref main -f baseline="$(git rev-parse HEAD^)"
+```
+
+The dispatched run uses the workflow and benchmark harness from main. Its report records the selected baseline and current candidate commits, and cached comparisons must match both input fingerprints.
 
 ### Artifacts, commit comments, and releases
 

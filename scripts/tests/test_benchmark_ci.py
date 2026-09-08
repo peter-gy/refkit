@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -162,3 +165,64 @@ def test_failed_build_retains_revision_provenance(tmp_path, monkeypatch):
     data = json.loads((output / "comparison.json").read_text())
     assert data["status"] == "failed"
     assert data["baseline_sha"] == BASE
+
+
+def test_runner_installs_each_compiled_revision_with_inherited_build_directories(
+    tmp_path, monkeypatch
+):
+    cargo = shutil.which("cargo") or ""
+    if not cargo:
+        pytest.skip("Cargo is required for the native build isolation check")
+    roots = {name: tmp_path / name for name in ("baseline", "candidate")}
+    for name, root in roots.items():
+        (root / "src").mkdir(parents=True)
+        (root / "Cargo.toml").write_text(
+            '[package]\nname = "revision_probe"\nversion = "0.1.0"\nedition = "2021"\n[workspace]\n'
+        )
+        source = root / "src/main.rs"
+        source.write_text(f'fn main() {{ println!("{name}"); }}\n')
+        # CI checks out both sources before either build writes its dependency timestamps.
+        os.utime(source, (1_600_000_000, 1_600_000_000))
+    shared = tmp_path / "shared-target"
+    monkeypatch.setenv("CARGO_TARGET_DIR", str(shared))
+    monkeypatch.setenv("CARGO_BUILD_BUILD_DIR", str(shared))
+    monkeypatch.setenv("GITHUB_RUN_NUMBER", "2")
+    binary_name = "revision_probe.exe" if os.name == "nt" else "revision_probe"
+    observed = []
+
+    def execute(command, *, env, capture=False):
+        if command[0] == "git":
+            return BASE if Path(command[2]).name == "baseline" else CANDIDATE
+        if command[:3] == ["uv", "pip", "install"]:
+            root = Path(command[-2]).parents[1]
+            subprocess.run(
+                [
+                    cargo,
+                    "build",
+                    "--offline",
+                    "--release",
+                    "--manifest-path",
+                    str(root / "Cargo.toml"),
+                ],
+                env=env,
+                check=True,
+                capture_output=True,
+                timeout=60,
+            )
+            installed = Path(command[command.index("--python") + 1]).parent / binary_name
+            installed.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(Path(env["CARGO_TARGET_DIR"]) / "release" / binary_name, installed)
+        elif "run" in command:
+            installed = Path(command[0]).parent / binary_name
+            observed.append(
+                subprocess.check_output([str(installed)], text=True, timeout=10).strip()
+            )
+        elif "compare" in command:
+            return json.dumps({"rows": [comparison()]})
+        return ""
+
+    monkeypatch.setattr(benchmark_ci, "execute", execute)
+    assert (
+        benchmark_ci.run(roots["candidate"], roots["baseline"], tmp_path / "results", "Linux") == 0
+    )
+    assert observed == ["baseline", "candidate"]

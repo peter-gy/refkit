@@ -15,7 +15,7 @@ def test_documentation_deployment_waits_for_required_checks() -> None:
 def test_benchmarks_measure_platforms_independently_and_preserve_successful_reruns() -> None:
     root = Path(__file__).resolve().parents[2]
     workflow = yaml.safe_load((root / ".github/workflows/benchmarks.yml").read_text())
-    assert set(workflow["on"]) == {"push", "workflow_call"}
+    assert set(workflow["on"]) == {"push", "workflow_call", "workflow_dispatch"}
     assert workflow["on"]["push"]["branches"] == ["main"]
     assert workflow["jobs"]["results"]["uses"] == "./.github/workflows/benchmark-results.yml"
     workflow = yaml.safe_load((root / ".github/workflows/benchmark-results.yml").read_text())
