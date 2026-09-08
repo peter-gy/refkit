@@ -1,0 +1,30 @@
+crates/refkit-core/tests/rendering.rs
+  s_96bf75568ee019::t_4d17532da80498 226-238
+crates/refkit-core/src/render_tree.rs
+  s_96bf75568ee019::t_f633caca1ccfe7 64,72
+crates/refkit-core/src/render/mod.rs
+  s_96bf75568ee019::t_a47a569fbfd8e1 28-31,33-35
+  s_96bf75568ee019::t_a7f0c406955c0f 32
+crates/refkit-core/src/render/html.rs
+  s_96bf75568ee019::t_3bf7d5edddcb18 144-156,158
+crates/refkit-core/src/document.rs
+  s_96bf75568ee019::t_f633caca1ccfe7 100-101,105
+crates/refkit-core/src/render/bibliography.rs
+  s_96bf75568ee019::t_3bf7d5edddcb18 59-60,63-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "fb7372f405b81e860eaac32f8b9b74b2b5bc3ac3",
+  "prompts": {},
+  "sessions": {
+    "s_96bf75568ee019": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0800b-12cc-7ad1-b056-89878fc7e13a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
