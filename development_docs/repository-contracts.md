@@ -63,6 +63,7 @@ Contract diagnostics should name the offending source or archive member and retu
 
 - root `Cargo.lock`
 - `packages/polars-refkit/rust/Cargo.lock`
+- `packages/refkit-js/rust/Cargo.lock`
 
 Update each lockfile whose workspace resolves the dependency. The Polars workspace keeps its plugin ABI family local.
 

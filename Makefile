@@ -1,3 +1,4 @@
+JS_REFKIT_RUST := packages/refkit-js/rust/Cargo.toml
 POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
 UV_RUN := uv run --locked --all-packages --group dev
 PYTHON := uv run --isolated --locked --only-group build python
@@ -14,6 +15,7 @@ format:
 	$(UV_LINT) ruff format .
 	cargo fmt --all
 	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all
+	cargo fmt --manifest-path $(JS_REFKIT_RUST) --all
 
 .PHONY: python-lint
 python-lint:
@@ -24,7 +26,9 @@ python-lint:
 rust-lint:
 	cargo fmt --all --check
 	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all --check
+	cargo fmt --manifest-path $(JS_REFKIT_RUST) --all --check
 	cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+	cargo clippy --locked --manifest-path $(JS_REFKIT_RUST) --all-targets --all-features -- -D warnings
 	cargo clippy --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features -- -D warnings
 
 .PHONY: lint
@@ -63,8 +67,10 @@ benchmark-test:
 .PHONY: rust
 rust:
 	cargo check --locked --workspace --all-targets --all-features
+	cargo check --locked --manifest-path $(JS_REFKIT_RUST) --all-targets --all-features
 	cargo check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 	cargo test --locked --workspace
+	cargo test --locked --manifest-path $(JS_REFKIT_RUST)
 	cargo test --locked --manifest-path $(POLARS_REFKIT_RUST)
 
 .PHONY: rust-floor
@@ -74,6 +80,7 @@ rust-floor:
 		rustup toolchain install $(RUST_FLOOR) --profile minimal; \
 	fi
 	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --workspace --all-targets --all-features
+	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --manifest-path $(JS_REFKIT_RUST) --all-targets --all-features
 	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 
 .PHONY: pyodide-lock pyodide-lock-check

@@ -95,6 +95,9 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
 
     rust_repositories = {
         "Rust workspace": cargo_workspace["workspace"]["package"].get("repository"),
+        "refkit-js Rust crate": _read_toml(root, "packages/refkit-js/rust/Cargo.toml")[
+            "package"
+        ].get("repository"),
         "polars-refkit Rust crate": _read_toml(root, "packages/polars-refkit/rust/Cargo.toml")[
             "package"
         ].get("repository"),
@@ -105,7 +108,6 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
 
     rust_workspace_members = {
         "refkit-core Rust crate": "crates/refkit-core/Cargo.toml",
-        "refkit-js Rust crate": "packages/refkit-js/rust/Cargo.toml",
         "refkit native Rust crate": "packages/refkit/rust/Cargo.toml",
     }
     for name, relative_path in rust_workspace_members.items():

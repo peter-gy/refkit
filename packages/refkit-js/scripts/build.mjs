@@ -5,13 +5,24 @@ import { resolve } from "node:path";
 import { fingerprint, packageRoot } from "./source.mjs";
 
 const root = resolve(packageRoot, "../..");
+const manifest = resolve(packageRoot, "rust/Cargo.toml");
 function run(command, args, options = {}) {
   execFileSync(command, args, { cwd: root, stdio: "inherit", ...options });
 }
 const metadata = JSON.parse(
   execFileSync(
     "rustup",
-    ["run", "stable", "cargo", "metadata", "--locked", "--format-version", "1"],
+    [
+      "run",
+      "stable",
+      "cargo",
+      "metadata",
+      "--manifest-path",
+      manifest,
+      "--locked",
+      "--format-version",
+      "1",
+    ],
     { cwd: root, encoding: "utf8" },
   ),
 );
@@ -42,6 +53,8 @@ run(
     "stable",
     "cargo",
     "build",
+    "--manifest-path",
+    manifest,
     "--locked",
     "-p",
     "refkit-js-native",

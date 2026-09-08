@@ -13,7 +13,7 @@ The architecture contract classifies top-level, target-specific, build, and rena
 
 Direct Maturin builds call `agent-plugins attach-wheel` before archive validation. The distribution contract owns each adapter's plugin, skill, entry-point, backend, and dependency artifact shape and compares skill bytes with release sources. `artifact_manifest.py` records build provenance and verifies the complete package artifact set before publication.
 
-The core uses released BibLaTeX and audited Hayagriva and Citationberg revisions declared by the architecture contract. Keep canonical repositories, full commit revisions, manifest versions, both Citationberg workspace patches, and both Cargo locks aligned. The core pins quick-xml 0.41.0, and every resolved quick-xml version must meet that floor.
+The core uses released BibLaTeX and audited Hayagriva and Citationberg revisions declared by the architecture contract. Keep canonical repositories, full commit revisions, manifest versions, Citationberg workspace patches, and Cargo locks aligned. The core pins quick-xml 0.41.0, and every resolved quick-xml version must meet that floor.
 
 Run `make python-lint typecheck test`. See [repository contracts](../development_docs/repository-contracts.md) for ownership across scripts.
 

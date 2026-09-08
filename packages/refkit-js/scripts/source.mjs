@@ -14,6 +14,7 @@ export async function fingerprint() {
     "packages/refkit-js/package-lock.json",
     "packages/refkit-js/tsconfig.json",
     "packages/refkit-js/rust/Cargo.toml",
+    "packages/refkit-js/rust/Cargo.lock",
   ];
   async function collect(directory) {
     for (const item of await readdir(resolve(root, directory), {

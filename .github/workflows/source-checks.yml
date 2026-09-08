@@ -87,6 +87,7 @@ jobs:
           workspaces: |
             . -> target
             packages/polars-refkit/rust -> target
+            packages/refkit-js/rust -> target
       - name: Lint
         run: make rust-lint
       - name: Test
@@ -111,6 +112,7 @@ jobs:
           workspaces: |
             . -> target
             packages/polars-refkit/rust -> target
+            packages/refkit-js/rust -> target
       - name: Check minimum Rust version
         run: make rust-floor
   release-notes:

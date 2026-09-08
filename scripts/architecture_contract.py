@@ -27,6 +27,7 @@ REFKIT_RUNTIME_DEPENDENCIES = ["agent-plugins==0.2.0"]
 CARGO_LOCKS = (
     Path("Cargo.lock"),
     Path("packages/polars-refkit/rust/Cargo.lock"),
+    Path("packages/refkit-js/rust/Cargo.lock"),
 )
 ALLOWED_DEPENDENCIES = {
     PORTABLE_CORE: {
@@ -248,15 +249,21 @@ def check_contract(root: Path) -> list[str]:
     locks = {relative_path: _load(root / relative_path) for relative_path in CARGO_LOCKS}
     errors.extend(_engine_dependency_errors(core, locks))
     errors.extend(
-        _xml_dependency_errors(core, {Path("Cargo.toml"): workspace, POLARS_ADAPTER: polars}, locks)
+        _xml_dependency_errors(
+            core,
+            {
+                Path("Cargo.toml"): workspace,
+                POLARS_ADAPTER: polars,
+                JS_ADAPTER: manifests[JS_ADAPTER],
+            },
+            locks,
+        )
     )
 
     members = set(workspace["workspace"]["members"])
-    expected_members = {"crates/refkit-core", "packages/refkit/rust", "packages/refkit-js/rust"}
+    expected_members = {"crates/refkit-core", "packages/refkit/rust"}
     if members != expected_members:
-        errors.append(
-            "root workspace must contain the portable core, Python adapter, and JavaScript adapter"
-        )
+        errors.append("root workspace must contain the portable core and Python adapter")
     if "packages/polars-refkit/rust" in members:
         errors.append("Polars adapter must remain in its package-local Cargo workspace")
 
@@ -273,8 +280,13 @@ def check_contract(root: Path) -> list[str]:
     if core_path != (root / PORTABLE_CORE.parent).resolve():
         errors.append("Polars adapter must depend on the shared portable core")
 
-    if manifests[JS_ADAPTER].get("dependencies", {}).get("refkit-core") != {"workspace": True}:
-        errors.append("JavaScript adapter must use the workspace portable core dependency")
+    javascript = manifests[JS_ADAPTER]
+    if "workspace" not in javascript:
+        errors.append("JavaScript adapter must declare its package-local workspace")
+    javascript_core = javascript.get("dependencies", {}).get("refkit-core", {})
+    javascript_core_path = (root / JS_ADAPTER.parent / javascript_core.get("path", "")).resolve()
+    if javascript_core_path != (root / PORTABLE_CORE.parent).resolve():
+        errors.append("JavaScript adapter must depend on the shared portable core")
 
     refkit = _load(root / REFKIT_PROJECT)
     errors.extend(_refkit_dependency_errors(refkit))

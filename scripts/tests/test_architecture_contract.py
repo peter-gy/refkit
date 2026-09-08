@@ -36,6 +36,7 @@ def contract_root(tmp_path: Path) -> Path:
         *ROOT.glob("packages/*/pyproject.toml"),
         *ROOT.glob("packages/*/rust/Cargo.toml"),
         ROOT / "packages/polars-refkit/rust/Cargo.lock",
+        ROOT / "packages/refkit-js/rust/Cargo.lock",
     ]:
         destination = tmp_path / source.relative_to(ROOT)
         destination.parent.mkdir(parents=True, exist_ok=True)

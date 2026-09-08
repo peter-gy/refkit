@@ -2,7 +2,6 @@
 members = [
     "crates/refkit-core",
     "packages/refkit/rust",
-    "packages/refkit-js/rust",
 ]
 resolver = "3"
 
