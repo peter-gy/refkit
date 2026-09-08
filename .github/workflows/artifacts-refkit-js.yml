@@ -113,7 +113,7 @@ jobs:
           tar -xzf artifacts/refkit-js-*.tgz -C packages/refkit-js/.browser-package
       - name: Install browsers
         working-directory: packages/refkit-js
-        run: npm exec playwright install --with-deps chromium firefox webkit
+        run: npm exec -- playwright install --with-deps chromium firefox webkit
       - name: Test installed browser package
         env:
           REFKIT_PACKAGE_ROOT: ${{ github.workspace }}/packages/refkit-js/.browser-package/package
