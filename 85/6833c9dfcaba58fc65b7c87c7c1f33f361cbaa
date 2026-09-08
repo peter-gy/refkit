@@ -1,0 +1,9 @@
+.github/workflows/artifacts-refkit-js.yml
+  ai_agent 116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "856833c9dfcaba58fc65b7c87c7c1f33f361cbaa",
+  "prompts": {}
+}
