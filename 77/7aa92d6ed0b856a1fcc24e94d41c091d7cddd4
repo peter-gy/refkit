@@ -1,0 +1,34 @@
+.github/AGENTS.md
+  ai_agent 7
+.github/workflows/source-checks.yml
+  s_fa6f93a1d86d66::t_8d439f241e09c3 28-30
+  s_fa6f93a1d86d66::t_2658d141e7c841 11-25
+packages/refkit-bench/AGENTS.md
+  s_fa6f93a1d86d66::t_46050f545c9c3b 19
+packages/refkit-bench/src/refkit_bench/runner.py
+  s_fa6f93a1d86d66::t_988ff6f5d5fe81 99-101
+  s_fa6f93a1d86d66::t_13a5624341a7b2 102-105
+  s_fa6f93a1d86d66::t_46050f545c9c3b 251-254
+development_docs/benchmarks.md
+  s_fa6f93a1d86d66::t_46050f545c9c3b 114
+scripts/benchmark_ci.py
+  s_fa6f93a1d86d66::t_46050f545c9c3b 59
+scripts/tests/test_benchmark_ci.py
+  s_fa6f93a1d86d66::t_46050f545c9c3b 128,136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "777aa92d6ed0b856a1fcc24e94d41c091d7cddd4",
+  "prompts": {},
+  "sessions": {
+    "s_fa6f93a1d86d66": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07f56-876d-72d1-991d-9f0c38c679c3",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
