@@ -8,8 +8,12 @@ import platform
 import re
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -126,6 +130,8 @@ def check(directory: Path, package: str, version: str, source: str) -> list[str]
                 }
                 if not any(tag in name for tag in tags.get(target, ())):
                     errors.append(f"{name}: does not match artifact target {target}")
+                if target.startswith("cpython_") and name.rsplit("-", 3)[1:3] != ["cp310", "abi3"]:
+                    errors.append(f"{name}: CPython wheels must use the Python 3.10 stable ABI")
                 files[name] = digest
         except (ValueError, KeyError, TypeError) as error:
             errors.append(f"{path.name}: invalid artifact manifest: {error}")

@@ -20,7 +20,7 @@ crate-type = ["cdylib"]
 
 [features]
 default = []
-extension-module = ["pyo3/extension-module", "pyo3/abi3-py311"]
+extension-module = ["pyo3/extension-module", "pyo3/abi3-py310"]
 
 [dependencies]
 polars = { version = "=0.51.0", default-features = false }

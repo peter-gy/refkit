@@ -1,7 +1,7 @@
 [project]
 name = "refkit-workspace"
 version = "0.1.0"
-requires-python = ">=3.11,<3.15"
+requires-python = ">=3.10,<3.15"
 license = "Apache-2.0"
 dependencies = [
     "polars-refkit",
@@ -30,6 +30,7 @@ members = [
 
 [tool.ty.environment]
 extra-paths = ["packages/refkit-tests/src"]
+python-version = "3.10"
 [dependency-groups]
 dev = [
     "hatchling>=1.32.0",
@@ -43,10 +44,12 @@ dev = [
     "ruff>=0.16.5",
     "ty>=0.0.78",
     "refkit-tests",
+    "tomli==2.3.1",
 ]
 build = [
     "twine==7.0.0",
     "agent-plugins==0.2.0",
+    "tomli==2.3.1; python_version < '3.11'",
 ]
 pyodide-build = [
     "pyodide-build==0.35.1; python_version >= '3.12'",
@@ -98,7 +101,7 @@ project-excludes = [
     "**/dist",
     "**/target",
 ]
-python-version = "3.11"
+python-version = "3.10"
 search-path = [
     "packages/refkit-bench/src",
     "packages/refkit/src",
@@ -108,7 +111,7 @@ search-path = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = [
@@ -136,3 +139,6 @@ known-first-party = [
 
 [tool.ruff.lint.per-file-ignores]
 "packages/refkit-bench/src/refkit_bench/runner.py" = ["T201"]
+"packages/refkit-bench/src/refkit_bench/affinity.py" = ["PERF203"]
+"scripts/artifact_manifest.py" = ["PERF203"]
+"scripts/normalize_wheel.py" = ["PERF203"]

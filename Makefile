@@ -1,6 +1,6 @@
 POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
 UV_RUN := uv run --locked --all-packages --group dev
-PYTHON := python3
+PYTHON := uv run --isolated --locked --only-group build python
 UV_LINT := uv run --isolated --locked --only-group lint
 PNPM_DOCS := pnpm --dir docs
 DOCS_PAGES_BASE_PATH := /refkit

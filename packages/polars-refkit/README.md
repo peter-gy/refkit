@@ -6,7 +6,7 @@ Parse, inspect, render, and format BibTeX columns inside [Polars](https://pola.r
 
 ## Render a citation column
 
-Install in Python 3.11 through 3.14 with Polars 1.29 or newer:
+Install in Python 3.10 through 3.14 with Polars 1.29 or newer:
 
 ```bash
 python -m pip install polars-refkit

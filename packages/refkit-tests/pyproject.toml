@@ -2,7 +2,7 @@
 name = "refkit-tests"
 version = "0.0.1"
 description = "Installed-artifact verification for RefKit adapters"
-requires-python = ">=3.11,<3.15"
+requires-python = ">=3.10,<3.15"
 license = "Apache-2.0"
 dependencies = ["agent-plugins==0.2.0", "pytest==9.1.1"]
 
