@@ -25,7 +25,14 @@ pub struct RenderedOutput {
 
 pub(crate) fn bundled_locales() -> &'static [CslLocale] {
     static LOCALES: OnceLock<Vec<CslLocale>> = OnceLock::new();
-    LOCALES.get_or_init(archive::locales).as_slice()
+    LOCALES
+        .get_or_init(|| {
+            let mut locales = archive::locales();
+            // The engine searches these resources for every term, including its en-US fallback.
+            locales.sort_by_key(|locale| locale.lang.as_ref().is_none_or(|lang| lang.0 != "en-US"));
+            locales
+        })
+        .as_slice()
 }
 
 pub fn is_bundled_locale(code: &str) -> bool {

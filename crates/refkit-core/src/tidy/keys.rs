@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
@@ -40,7 +41,7 @@ pub(crate) fn generated_keys<'a>(
     let mut groups: IndexMap<String, Vec<&RawSyntaxEntry>> = IndexMap::new();
     let mut reserved = HashSet::new();
     for entry in entries {
-        if let Some(key) = generate_key(&entry_values(entry), &template, None)? {
+        if let Some(key) = generate_key(entry, &template, None)? {
             groups.entry(key).or_default().push(entry);
         } else {
             reserved.insert(entry.key.clone());
@@ -54,11 +55,10 @@ pub(crate) fn generated_keys<'a>(
         let duplicate = entries.len() > 1 || retained.contains(&base);
         let mut suffix = 1;
         for entry in entries {
-            let values = entry_values(entry);
             let candidate = if duplicate {
                 let mut attempted = HashSet::new();
                 loop {
-                    let mut candidate = generate_key(&values, &template, Some(suffix))?
+                    let mut candidate = generate_key(entry, &template, Some(suffix))?
                         .unwrap_or_else(|| base.clone());
                     if !attempted.insert(candidate.clone()) {
                         candidate = format!("{base}{}", num_to_letter(suffix));
@@ -136,7 +136,7 @@ fn marker_parameter(marker: &str) -> (String, Option<usize>) {
 }
 
 fn generate_key(
-    values: &HashMap<String, String>,
+    values: &RawSyntaxEntry,
     template: &[TemplateToken],
     duplicate: Option<usize>,
 ) -> Result<Option<String>, String> {
@@ -171,13 +171,13 @@ fn generate_key(
 }
 
 fn marker_words(
-    values: &HashMap<String, String>,
+    values: &RawSyntaxEntry,
     marker: &str,
     parameter: Option<usize>,
     duplicate: Option<usize>,
 ) -> Result<Vec<String>, String> {
     match marker {
-        "auth" => Ok(parse_name_list(value(values, "author"))
+        "auth" => Ok(parse_name_list(&value(values, "author"))
             .into_iter()
             .filter(|name| !name.last.is_empty())
             .collect::<Vec<_>>()
@@ -185,7 +185,7 @@ fn marker_words(
             .map(|name| vec![name.last.clone()])
             .unwrap_or_default()),
         "authEtAl" => {
-            let authors = parse_name_list(value(values, "author"))
+            let authors = parse_name_list(&value(values, "author"))
                 .into_iter()
                 .filter(|name| !name.last.is_empty())
                 .collect::<Vec<_>>();
@@ -199,14 +199,14 @@ fn marker_words(
             }
             Ok(words)
         }
-        "authors" => Ok(parse_name_list(value(values, "author"))
+        "authors" => Ok(parse_name_list(&value(values, "author"))
             .into_iter()
             .filter(|name| !name.last.is_empty())
             .map(|name| name.last)
             .collect()),
         "authorsN" => {
             let limit = parameter.unwrap_or(0);
-            let authors = parse_name_list(value(values, "author"))
+            let authors = parse_name_list(&value(values, "author"))
                 .into_iter()
                 .filter(|name| !name.last.is_empty())
                 .collect::<Vec<_>>();
@@ -248,7 +248,7 @@ fn marker_words(
             duplicate.map(|value| value.to_string()).unwrap_or_default(),
         ]),
         marker if marker == marker.to_uppercase() => {
-            Ok(words(value(values, &marker.to_lowercase())))
+            Ok(words(&value(values, &marker.to_lowercase())))
         }
         _ => Err(format!("Invalid citation key token {marker}")),
     }
@@ -270,21 +270,13 @@ fn apply_modifier(words: Vec<String>, modifier: &str) -> Result<Vec<String>, Str
     }
 }
 
-fn entry_values(entry: &RawSyntaxEntry) -> HashMap<String, String> {
-    entry
-        .fields
-        .iter()
-        .map(|field| (field.name.to_lowercase(), rendered_field_value(field)))
-        .collect()
-}
-
-fn rendered_field_value(field: &RawSyntaxField) -> String {
+fn rendered_field_value(field: &RawSyntaxField) -> Cow<'_, str> {
     match field.value_mode {
-        RawValueMode::Expression => expression_text(&field.value_atoms),
+        RawValueMode::Expression => Cow::Owned(expression_text(&field.value_atoms)),
         RawValueMode::Bare
         | RawValueMode::Braced
         | RawValueMode::Missing
-        | RawValueMode::Quoted => field.value.clone(),
+        | RawValueMode::Quoted => Cow::Borrowed(&field.value),
     }
 }
 
@@ -371,7 +363,7 @@ fn is_prefix_token(token: &str) -> bool {
         .is_some_and(|ch| ch.is_ascii_lowercase())
 }
 
-fn title(values: &HashMap<String, String>) -> String {
+fn title(values: &RawSyntaxEntry) -> String {
     let title = value(values, "title");
     if title.is_empty() {
         value(values, "booktitle").to_string()
@@ -380,8 +372,14 @@ fn title(values: &HashMap<String, String>) -> String {
     }
 }
 
-fn value<'a>(values: &'a HashMap<String, String>, key: &str) -> &'a str {
-    values.get(key).map(String::as_str).unwrap_or("")
+fn value<'a>(entry: &'a RawSyntaxEntry, key: &str) -> Cow<'a, str> {
+    entry
+        .fields
+        .iter()
+        .rev()
+        .find(|field| field.name.to_lowercase() == key)
+        .map(rendered_field_value)
+        .unwrap_or(Cow::Borrowed(""))
 }
 
 fn non_function_words(value: &str) -> Vec<String> {

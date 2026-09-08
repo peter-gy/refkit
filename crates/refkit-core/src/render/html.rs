@@ -141,14 +141,19 @@ fn push_html_wrapper(output: &mut String, suffix: &mut String, start: &str, end:
 }
 
 pub(crate) fn write_html_escaped(output: &mut String, value: &str) {
-    for ch in value.chars() {
-        match ch {
-            '&' => output.push_str("&amp;"),
-            '<' => output.push_str("&lt;"),
-            '>' => output.push_str("&gt;"),
-            '"' => output.push_str("&quot;"),
-            '\'' => output.push_str("&#39;"),
-            _ => output.push(ch),
-        }
+    let mut start = 0;
+    for (index, byte) in value.bytes().enumerate() {
+        let escaped = match byte {
+            b'&' => "&amp;",
+            b'<' => "&lt;",
+            b'>' => "&gt;",
+            b'"' => "&quot;",
+            b'\'' => "&#39;",
+            _ => continue,
+        };
+        output.push_str(&value[start..index]);
+        output.push_str(escaped);
+        start = index + 1;
     }
+    output.push_str(&value[start..]);
 }

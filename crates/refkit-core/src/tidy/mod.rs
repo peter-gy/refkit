@@ -6,6 +6,7 @@ mod references;
 mod render;
 mod unicode;
 
+use std::borrow::Cow;
 use std::fmt;
 
 use crate::raw::{RawDocument, RawEntryId, RawSyntaxBlock};
@@ -103,7 +104,7 @@ pub fn tidy_bibtex(input: &str, options: TidyOptions) -> Result<TidyResult, Tidy
     })?;
     let input = normalize_newlines(input);
     let doc = RawDocument::parse(&input);
-    let mut syntax = doc.syntax();
+    let mut syntax = doc.into_syntax();
 
     if let Some((raw, error, byte)) = syntax.blocks.iter().find_map(first_failed_block) {
         return Err(syntax_error(&input, raw, error, byte));
@@ -222,8 +223,12 @@ fn line_column(input: &str, byte: usize) -> (usize, usize) {
     (line, column)
 }
 
-fn normalize_newlines(input: &str) -> String {
-    input.replace("\r\n", "\n").replace('\r', "\n")
+fn normalize_newlines(input: &str) -> Cow<'_, str> {
+    if input.contains('\r') {
+        Cow::Owned(input.replace("\r\n", "\n").replace('\r', "\n"))
+    } else {
+        Cow::Borrowed(input)
+    }
 }
 
 #[cfg(test)]

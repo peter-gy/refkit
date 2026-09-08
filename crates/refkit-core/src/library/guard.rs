@@ -165,23 +165,22 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
         .iter()
         .map(|pair| (pair.key.v, &pair.value.v))
         .collect();
-    let entry_index: HashMap<_, _> = raw
+    let has_references = raw
         .entries
         .iter()
-        .enumerate()
-        .map(|(index, entry)| (entry.v.key.v, index))
-        .collect();
-    let mut graph = vec![Vec::new(); raw.entries.len()];
+        .any(|entry| entry.v.fields.iter().any(|field| is_reference(field.key.v)));
     let mut weights = vec![1usize; raw.entries.len()];
     let mut bytes = 0usize;
     let mut expansion_steps = 0usize;
+    let mut value = String::new();
+    let mut ancestors = Vec::new();
     for (index, entry) in raw.entries.iter().enumerate() {
         for field in &entry.v.fields {
-            let mut value = String::new();
+            value.clear();
             expand(
                 &field.value.v,
                 &abbreviations,
-                &mut Vec::new(),
+                &mut ancestors,
                 &mut expansion_steps,
                 &mut value,
             )
@@ -200,15 +199,16 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
             weights[index] = weights[index].saturating_add(value.len());
         }
     }
-    if raw.entries.iter().all(|entry| {
-        entry
-            .v
-            .fields
-            .iter()
-            .all(|field| !is_reference(field.key.v))
-    }) {
+    if !has_references {
         return Ok(());
     }
+    let entry_index: HashMap<_, _> = raw
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| (entry.v.key.v, index))
+        .collect();
+    let mut graph = vec![Vec::new(); raw.entries.len()];
     let mut detached = raw.clone();
     for entry in &mut detached.entries {
         entry.v.fields.retain(|field| {
