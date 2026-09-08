@@ -1,0 +1,25 @@
+.github/workflows/benchmarks.yml
+  s_96bf75568ee019::t_8dab0195d74713 6-11,37,42-44
+scripts/benchmark_ci.py
+  s_96bf75568ee019::t_8dab0195d74713 45,50-57
+scripts/tests/test_workflow_contract.py
+  s_96bf75568ee019::t_3c801aca9efd9b 18
+scripts/tests/test_benchmark_ci.py
+  s_96bf75568ee019::t_3c801aca9efd9b 4-5,8,168-228
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "17c26a1fec62315ed30ec9d5df8910a5f875dae6",
+  "prompts": {},
+  "sessions": {
+    "s_96bf75568ee019": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0800b-12cc-7ad1-b056-89878fc7e13a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
