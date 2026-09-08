@@ -61,7 +61,7 @@ impl RenderedRecord {
 }
 
 pub(crate) fn rendered_record_from_citation(
-    citation: &RenderedCitation,
+    citation: RenderedCitation,
     keys: Vec<String>,
 ) -> Result<RenderedRecord, String> {
     Ok(RenderedRecord::new(
@@ -69,7 +69,7 @@ pub(crate) fn rendered_record_from_citation(
         elem_children_to_html(&citation.citation)?,
         None,
         RenderedTree::Citation {
-            children: citation.citation.clone(),
+            children: citation.citation,
             keys,
         },
     ))

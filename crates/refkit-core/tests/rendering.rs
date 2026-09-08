@@ -220,3 +220,45 @@ fn all_independent_author_year_groups_are_disambiguated() {
         "(Alpha, 2026a; Alpha, 2026b; Beta, 2026a; Beta, 2026b; Gamma, 2026a; Gamma, 2026b; Delta, 2026a; Delta, 2026b; Epsilon, 2026a; Epsilon, 2026b)"
     );
 }
+
+#[test]
+fn bibliography_text_preserves_label_only_and_content_only_entries() {
+    for (bibliography, expected) in [
+        (
+            r#"<bibliography second-field-align="flush"><layout><text variable="citation-number" prefix="[" suffix="]"/></layout></bibliography>"#,
+            "[1]\n[2]",
+        ),
+        (
+            r#"<bibliography><layout><text variable="title"/></layout></bibliography>"#,
+            "Alpha\nBeta",
+        ),
+    ] {
+        let style = style(
+            r#"<citation><layout><text variable="citation-number"/></layout></citation>"#,
+            bibliography,
+            "in-text",
+        );
+        assert_eq!(
+            Document::new(library(), style, None)
+                .full_bibliography()
+                .unwrap()
+                .text,
+            expected
+        );
+    }
+}
+
+#[test]
+fn citation_html_escapes_ascii_markup_between_unicode_text() {
+    let style = style(
+        r#"<citation><layout><text value="Été &amp; &lt;研究&gt; &quot;引用&quot; '🙂'"/></layout></citation>"#,
+        "",
+        "in-text",
+    );
+    let citation = render_library_citation(&library(), "a", &style, None).unwrap();
+    assert_eq!(citation.text, "Été & <研究> \"引用\" '🙂'");
+    assert_eq!(
+        citation.html,
+        "Été &amp; &lt;研究&gt; &quot;引用&quot; &#39;🙂&#39;"
+    );
+}

@@ -97,12 +97,12 @@ impl Document {
         )?;
         let citations = rendered
             .citations
-            .iter()
-            .zip(&requests)
+            .into_iter()
+            .zip(requests)
             .map(|(citation, request)| {
                 rendered_record_from_citation(
                     citation,
-                    request.items.iter().map(|item| item.key.clone()).collect(),
+                    request.items.into_iter().map(|item| item.key).collect(),
                 )
             })
             .collect::<Result<Vec<_>, _>>()

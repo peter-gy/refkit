@@ -3,7 +3,6 @@ use std::fmt::{self, Write as _};
 use hayagriva::{BibliographyItem, BufWriteFormat, RenderedBibliography};
 
 use super::html::{render_child_html, render_children_html, write_html_escaped};
-use super::text::elem_children_to_string;
 
 pub(crate) fn bibliography_to_text_html(
     bibliography: &RenderedBibliography,
@@ -57,11 +56,17 @@ fn write_bibliography_item_text(
             .map_err(|err| err.to_string())?;
     }
 
-    let content = elem_children_to_string(&item.content, BufWriteFormat::Plain)?;
-    if output.len() > item_start && !content.is_empty() {
+    let label_end = output.len();
+    if label_end > item_start {
         output.push(' ');
     }
-    output.push_str(&content);
+    let content_start = output.len();
+    item.content
+        .write_buf(output, BufWriteFormat::Plain)
+        .map_err(|err| err.to_string())?;
+    if output.len() == content_start {
+        output.truncate(label_end);
+    }
     Ok(())
 }
 
