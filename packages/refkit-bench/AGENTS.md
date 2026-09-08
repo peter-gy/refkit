@@ -14,8 +14,9 @@
 - Update result schemas, writers, tests, and the developer guide together.
 - Validate every selected case before timing and the final result after each timed batch. Failed cases stay visible in conformance reports and prevent a selected measurement run from succeeding.
 - Keep setup, validation, Node startup, and transport outside the declared clock. Each operation must handle its own mutable state consistently across repeated calls.
-- Verify measured worker contracts and artifacts against preflight. Fix Polars thread counts before importing the plugin in every worker.
+- Keep measurement workers in the preflight environment, including Python runtime flags. Verify measured worker contracts and artifacts against preflight. Fix Polars thread counts before importing the plugin in every worker.
 - Apply CPU affinity before participant setup and child startup. Verify effective process and Linux thread masks outside the timing boundary.
+- On Windows, enforce measurement deadlines through the parent case process. pyperf 2.10 uses a socket-only `select()` call for timed pipe reads.
 - Compare independent worker observations with matched case and host contracts. Keep smoke runs distinct from measurements and report per-case uncertainty.
 - Use the package-local coverage configuration for subprocess tests. Node dependencies belong under `node/` and are installed by `make benchmark-test`.
 

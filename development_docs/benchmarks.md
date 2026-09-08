@@ -102,7 +102,7 @@ The first command reports the participant difference with exit code 1. Smaller `
 
 1. Validate each selected case in its own subprocess and retain every outcome.
 2. Shuffle case order with a generated, recorded seed. `--seed` reproduces an order.
-3. Prepare each measurement worker independently and validate once before warmup.
+3. Prepare each measurement worker independently with the preflight environment and validate once before warmup.
 4. Time a calibrated batch of complete public operations.
 5. Validate the batch's final returned value after stopping the timer.
 6. Verify the worker's artifact fingerprint, case contract, and benchmark-source fingerprint against preflight before accepting samples.
@@ -111,7 +111,7 @@ Python's cyclic garbage collector stays enabled. The Node participant uses a per
 
 Cases run sequentially, with worker runs grouped by case. Run on an idle, plugged-in machine and record power or CPU tuning choices alongside the output. On systems with CPU affinity, workers inherit the caller's CPU selection by default. `--affinity 0,2-3` selects CPUs explicitly before libraries, threads, or formatter children start. The harness records the effective selection and verifies process and Linux thread masks after setup and each batch, outside the timer. Unsupported explicit selections fail during preflight.
 
-Timeouts terminate the benchmark process tree, including formatter children. Interrupted runs also clean up their workers.
+Timeouts terminate the benchmark process tree, including formatter children. On Windows, the parent process bounds each case at `(processes + 6) × timeout` seconds. On other platforms, pyperf also enforces the per-worker timeout. Interrupted runs also clean up their workers.
 
 ## Compare a change
 

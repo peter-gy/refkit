@@ -125,6 +125,7 @@ def test_runner_builds_two_revisions_and_compares_one_shared_harness(tmp_path, m
 
     monkeypatch.setattr(benchmark_ci, "execute", execute)
     monkeypatch.setenv("GITHUB_RUN_NUMBER", "2")
+    monkeypatch.setenv("UV_PYTHON", "3.14")
     output = tmp_path / "results"
     assert benchmark_ci.run(tmp_path / "head", tmp_path / "base", output, "Linux") == 0
     data = json.loads((output / "comparison.json").read_text())
@@ -132,6 +133,7 @@ def test_runner_builds_two_revisions_and_compares_one_shared_harness(tmp_path, m
     assert (data["baseline_sha"], data["candidate_sha"]) == (BASE, CANDIDATE)
     syncs = [cmd for cmd, _ in commands if cmd[:2] == ["uv", "sync"]]
     assert all(cmd[cmd.index("--project") + 1] == str(tmp_path / "head") for cmd in syncs)
+    assert all(cmd[cmd.index("--python") + 1] == "3.14" for cmd in syncs)
     installs = [cmd for cmd, _ in commands if cmd[:3] == ["uv", "pip", "install"]]
     assert installs[0][-2:] == [
         str(tmp_path / "base/packages/refkit"),

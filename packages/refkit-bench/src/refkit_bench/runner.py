@@ -96,7 +96,13 @@ def parse_args(argv: list[str] | None = None) -> tuple[argparse.ArgumentParser, 
         "--min-time", type=_seconds, default=0.1, help="Target seconds per calibrated batch."
     )
     run.add_argument(
-        "--timeout", type=_seconds, default=60, help="Maximum seconds for each measurement worker."
+        "--timeout",
+        type=_seconds,
+        default=60,
+        help=(
+            "Worker budget in seconds. Windows bounds each case at "
+            "(processes + 6) times this budget."
+        ),
     )
     run.add_argument(
         "--seed", type=int, help="Case-order shuffle seed. Generated and recorded when omitted."
@@ -228,6 +234,7 @@ def run_cases(cases: list[Case], args: argparse.Namespace) -> int:
                 "-m",
                 "refkit_bench.worker",
                 "measure",
+                "--copy-env",
                 "--case",
                 case.name,
                 "--output",
@@ -240,9 +247,11 @@ def run_cases(cases: list[Case], args: argparse.Namespace) -> int:
                 str(measurement["warmups"]),
                 "--min-time",
                 str(measurement["min_time"]),
-                "--timeout",
-                str(args.timeout),
             ]
+            # pyperf's timed pipe reader uses select(), which accepts sockets on Windows.
+            # The parent execute() call bounds and terminates the complete case process tree.
+            if sys.platform != "win32":
+                command.extend(["--timeout", str(args.timeout)])
             if args.smoke:
                 command.append("--smoke")
             if args.affinity:

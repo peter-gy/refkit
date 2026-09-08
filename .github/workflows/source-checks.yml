@@ -8,6 +8,26 @@ env:
   FORCE_COLOR: '1'
   RUST_BACKTRACE: '1'
 jobs:
+  windows-benchmark-process:
+    name: Windows benchmark process
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.14'
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install benchmark harness
+        run: uv sync --locked --package refkit-bench --no-default-groups --no-install-package refkit --no-install-package polars-refkit
+      - name: Check Windows worker transport and deadline
+        run: >-
+          uv run --no-sync --with pytest==9.1.1 python -m pytest -q -o addopts=
+          packages/refkit-bench/tests/test_measurement.py::test_workers_preserve_preflight_runtime_configuration
+          packages/refkit-bench/tests/test_measurement.py::test_process_output_and_timeout_are_bounded
   python:
     name: Python
     runs-on: ubuntu-latest
