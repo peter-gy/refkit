@@ -142,10 +142,55 @@ uv run --no-sync python -m pyperf stats packages/refkit-bench/results/candidate/
 uv run --no-sync python -m pyperf check packages/refkit-bench/results/candidate/timings.json
 ```
 
-Keep the full result directories and exact commands. Result files stay local under `packages/refkit-bench/results/`. Performance claims need a named case, implementation identities, machine, raw samples, uncertainty, and repeated-session evidence. Correctness checks run in CI, together with a short native/Node runner smoke test. Hardware timing thresholds belong in controlled measurement jobs.
+Keep the full result directories and exact commands. Result files stay local under `packages/refkit-bench/results/`. Performance claims need a named case, implementation identities, machine, raw samples, uncertainty, and repeated-session evidence. Correctness checks run in CI, together with a short native/Node runner smoke test. The Benchmarks workflow adds advisory performance comparisons on hosted runners.
 
 ## Extend the suite
 
 Add a lane when it answers a distinct consumer question. Define its input shape, unit of work, setup boundary, exact output requirements, and eligible participants before collecting timings. Add independently sourced expectations and the smallest test that rejects a plausible incorrect result. Register the case, then run `make benchmark-test` and the case's `check` command.
 
 Factories return `Prepared` operations. Keep package-specific conversion and setup in `parsing.py`, `rendering.py`, `formatting.py`, or `tabular.py`. Keep timing, process lifecycle, provenance, and result analysis in their respective modules. Runtime packages depend inward on the capability core and never import benchmark code.
+
+
+## Main branch and release benchmarks
+
+The `Benchmarks` [GitHub Actions](https://docs.github.com/en/actions) workflow finds or measures release-build performance on each push to `main`. The release workflow calls the same workflow. A lightweight planning job fingerprints the inputs, then a shared result workflow checks for matching evidence before starting Linux, Windows, and macOS runners.
+
+The input fingerprint covers tracked core and adapter sources, runtime resources, Cargo and Python manifests and locks, benchmark code and fixtures, build settings, and measurement workflow configuration. Git paths, modes, and blob identities make additions, moves, deletions, and content changes part of the identity. Documentation, instructions, and standalone tests sit outside that set. Version changes count because native adapters expose compiled package versions.
+
+Complete artifacts with the same fingerprint can be reused from trusted main or release runs. Concurrent requests for the same fingerprint [queue in GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency), so a release can reuse the main run that is already measuring its code. Distinct fingerprints can run concurrently. If matching evidence is unavailable, changed inputs and release requests collect fresh measurements. An unchanged main commit skips measurement and reports that saved timings are unavailable.
+
+A docs-only commit skips measurement, reuses saved candidate timings when available, and reports unchanged inputs relative to its parent. Reused reports keep their original measured commits, native artifact hashes, compiler, and runner environment. This is equality of recorded source, build, dependency, and benchmark inputs. It does not assert byte equality with a newly rebuilt release wheel. Changed main inputs reuse a comparison when both candidate and baseline fingerprints match. Other transitions receive fresh measurements on one runner. A release can reuse candidate evidence from a different transition, presented as absolute timings.
+
+### Measurement and comparison
+
+For a new measurement, the baseline is the previous `main` tip and the candidate is the new tip. A release tag uses its commit's first parent. A push containing several commits measures their combined effect. Each OS builds both revisions in release mode, then measures them sequentially on the same runner. The three OS jobs run in parallel, independently of distribution and documentation checks. Rust compilation and Python downloads are cached.
+
+Both revisions use the candidate's benchmark harness and locked Python dependencies in separate environments. The comparison isolates RefKit's Python and native implementation changes under that dependency set. Changes to dependency versions need a separate experiment using each revision's dependencies.
+
+The CI selection is `--lane all --dataset real --package refkit --package polars-eager --package polars-lazy`. It covers 14 cases across parsing, inspection, editing, rendering, formatting, and eager/lazy Polars expressions. Each case uses five workers, five warmup batches, five measured batches, and a 50 ms calibration target. Case order uses seed 2026. Revision order alternates with the workflow run number.
+
+| Result | 95% candidate/base interval |
+| --- | --- |
+| Faster | Entire interval below 0.95. |
+| Slower | Entire interval above 1.05. |
+| Same | Entire interval inside 0.95 to 1.05. |
+| Inconclusive | Interval overlaps a boundary or spans both directions. |
+
+The percent change is `(candidate / baseline - 1) × 100`. Negative values mean lower elapsed time. Same describes the 5% band. Hosted-runner noise, thermal drift, and background load still apply, so confirm close changes with repeated controlled runs. Timing regressions remain advisory. Measurement and conformance failures fail the workflow.
+
+### Artifacts, commit comments, and releases
+
+The `Consolidated results` job writes tables to the [job summary](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands#adding-a-job-summary) and uploads `benchmark-results-<fingerprint>` with:
+
+| File | Contents |
+| --- | --- |
+| `report.json` | Schema 1, input fingerprint, measured commits, current request and reuse status, the 5% comparison band, and per-platform comparisons. |
+| `summary.md` | The overview and tables shown in the job summary. Reused evidence shows saved candidate timings. |
+| `<OS>/comparison.json` | Revision identities, execution order, runner image, elapsed times, worker counts, ratios, and intervals. |
+| `<OS>/baseline/*.json`, `<OS>/candidate/*.json` | Validation manifests, artifact fingerprints, environment metadata, and raw pyperf samples. |
+
+The consolidated artifact is retained for 30 days. Per-platform transfer artifacts expire after one day. Failed-job reruns reuse successful platform artifacts while they remain available. Reuse validates coverage and raw timing hashes. Missing measurements appear as failed platforms.
+
+`Benchmark commit comment` updates one bot comment on the measured main commit with the tables and a workflow link. It runs trusted default-branch code with permission to write commit comments. Benchmark jobs have read access. The publisher reads the archive as data and checks the repository, requested commit, and latest run attempt before posting. Reruns update the comment on the same commit. GitHub requires the publisher workflow to be on the default branch before it can run.
+
+The release-complete check waits for benchmark evidence and both package publishers. After creating release notes, the release workflow attaches `benchmark-results.json`, `benchmark-results.md`, and `benchmark-results.zip`. The ZIP contains the full evidence directory. Packaging verifies that the fingerprint and requested commit match the release and that raw timing hashes cover all three platforms.
