@@ -1,0 +1,23 @@
+packages/refkit/rust/src/conversion.rs
+  s_96bf75568ee019::t_f633caca1ccfe7 95,98
+packages/refkit/rust/src/library.rs
+  s_96bf75568ee019::t_f633caca1ccfe7 150-157
+packages/refkit/rust/src/entry.rs
+  s_96bf75568ee019::t_f633caca1ccfe7 26-27,31-32,36-37,41-42,56-57,61-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "dde76e766ddb8cef24f3a5a5bc9b3429df63f57d",
+  "prompts": {},
+  "sessions": {
+    "s_96bf75568ee019": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0800b-12cc-7ad1-b056-89878fc7e13a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
