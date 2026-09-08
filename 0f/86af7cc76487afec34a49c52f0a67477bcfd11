@@ -1,0 +1,313 @@
+packages/refkit-js/AGENTS.md
+  s_8f673d26fec59b::t_cf776c899284d1 1-7,10-12
+  s_8f673d26fec59b::t_411937d8946961 9
+  s_8f673d26fec59b::t_61d002235f9aa9 8
+docs/concepts/citation-rendering.md
+  s_8f673d26fec59b::t_ea158cf107b41e 7,11-13,16,19,26-30,35-55,58,62-70,72,74,78,80-90,92,95-96,98,104,106
+  s_8f673d26fec59b::t_cd7352a7bf9b62 60
+  s_8f673d26fec59b::t_3d93ac6c3b0380 94,102
+packages/refkit-js/tests/server.mjs
+  s_8f673d26fec59b::t_b327a9d17af08e 1,3-34,40-52
+docs/index.md
+  s_8f673d26fec59b::t_1aededb641089d 4
+  s_8f673d26fec59b::t_1d8b80b1780934 7-8
+packages/refkit-tests/src/refkit_tests/check_examples.py
+  s_8f673d26fec59b::t_1d8b80b1780934 28-30
+development_docs/benchmarks.md
+  s_8f673d26fec59b::t_411937d8946961 67
+packages/refkit-js/tests/files.test.mjs
+  s_8f673d26fec59b::t_151deb2bd61220 14,16-22,27-30,34-47
+  s_8f673d26fec59b::t_b327a9d17af08e 1-6,13,15,48
+  s_8f673d26fec59b::t_a39c5f15b6199e 7-12,23-26,31-33
+packages/refkit-js/examples/node.mjs
+  s_8f673d26fec59b::t_3cd71c9d820cf1 13-15
+  s_8f673d26fec59b::t_6f6a8c8ffe477e 1-12
+docs/get-started.md
+  s_8f673d26fec59b::t_720777d9fd325f 2,7,9,11,13-15,19-29,33,35-37,49,56-57,59-69,71-72,75,77,79,81-83,85-87,89,91,93-95,98,100,102-109,111
+docs/reference/rust.md
+  s_8f673d26fec59b::t_1d8b80b1780934 7,9,32
+packages/refkit-js/tests/playwright.config.mjs
+  s_8f673d26fec59b::t_b327a9d17af08e 2-9,11-19
+  s_8f673d26fec59b::t_61d002235f9aa9 1,10
+packages/refkit-bench/README.md
+  s_8f673d26fec59b::t_411937d8946961 22
+docs/why-refkit.md
+  s_8f673d26fec59b::t_1d8b80b1780934 38
+packages/refkit-js/src/inputs.ts
+  s_8f673d26fec59b::t_10b12de533d0ea 29-30,38-44
+  s_8f673d26fec59b::t_5aba8be43864bf 31-36
+  s_8f673d26fec59b::t_c56073afb293e1 1,3-12,14,16-27,37,45-46
+packages/refkit-js/src/document.ts
+  s_8f673d26fec59b::t_827ab7a192e418 105-110
+  s_8f673d26fec59b::t_10b12de533d0ea 14-17,39-40,100,131,135
+  s_8f673d26fec59b::t_0c324f13810a8c 1-3,12,18,22-23,25,27-29,31-34,44-52,54-60,62-63,65-86,88-89,91-95,98-99,101-102,111-114,116-118,124-128,130,132-134,140-144,146-147,149-153,155-156,158-159
+  s_8f673d26fec59b::t_0605001da526d0 13,19-21,24,26,96-97,104,115,119,122,136-139
+packages/refkit-js/examples/browser.html
+  s_8f673d26fec59b::t_d433c855ca337d 70
+  s_8f673d26fec59b::t_9b33e18089d75d 8-41,48-49
+  s_8f673d26fec59b::t_3cd71c9d820cf1 68
+  s_8f673d26fec59b::t_6f6a8c8ffe477e 1-7,42-47,50-67,69,71-87
+AGENTS.md
+  s_8f673d26fec59b::t_0120ee94378208 3,11,22,46,56,65,78,89-90
+  s_8f673d26fec59b::t_411937d8946961 84
+  s_8f673d26fec59b::t_3d93ac6c3b0380 91-92
+packages/refkit-js/scripts/test-package.mjs
+  s_8f673d26fec59b::t_cf776c899284d1 15-16,22-23,34-35
+  s_8f673d26fec59b::t_8b85dfbd658036 19-20
+  s_8f673d26fec59b::t_b327a9d17af08e 1-7,10-13,17,21,24-27,29-33,36,44,47,49-54,60-70,73-85
+  s_8f673d26fec59b::t_605ba308846c31 59
+  s_8f673d26fec59b::t_f3fbdd2bf9ed6e 14,18,28,86-88
+development_docs/architecture.md
+  s_8f673d26fec59b::t_0120ee94378208 3,12,14,42,67,70,73,83-87,89-96,110,153
+  s_8f673d26fec59b::t_3cd71c9d820cf1 88,115
+  s_8f673d26fec59b::t_d433c855ca337d 25-32,35-37,68-69,71
+packages/refkit-js/tests/tsconfig.json
+  s_8f673d26fec59b::t_1408aa4d9dd44c 1-13
+docs/concepts/how-refkit-works.md
+  s_8f673d26fec59b::t_ea158cf107b41e 7,12,26,28,32,34,36,38,50,54,59-61
+docs/guides/render-output.md
+  s_8f673d26fec59b::t_a6063ef44cf6da 9-11,44-77,82-83,96
+scripts/AGENTS.md
+  s_8f673d26fec59b::t_411937d8946961 14
+docs/reference/javascript.md
+  s_8f673d26fec59b::t_242eb02c38187d 1-3,7,10-11,13,15-16,18,22,24-25,31-36,39-66,68,70-80,82-110,112-187,190-193,195-199,202-209,212-221,223-228,230
+  s_8f673d26fec59b::t_bd6d0b47a6cf62 17,19-20,26-29,69,188,200-201,233,235,240
+  s_8f673d26fec59b::t_d433c855ca337d 37-38
+  s_8f673d26fec59b::t_3cd71c9d820cf1 81,111,189,234,236-239
+  s_8f673d26fec59b::t_0120ee94378208 194
+  s_8f673d26fec59b::t_1d8b80b1780934 5,8-9,30,210-211,229,231-232
+  s_8f673d26fec59b::t_e8d5481f1d1e21 67,222,241-244
+docs/reference/tidy-options.md
+  s_8f673d26fec59b::t_a541cc367fe4e8 89
+  s_8f673d26fec59b::t_3e7d3c8dfa8e08 7-12,15-25,28-64,112-129,132-133,140
+Makefile
+  s_8f673d26fec59b::t_a3b56bfda5aafe 192
+  s_8f673d26fec59b::t_7b65c6c6eac084 180-190,193-194
+  s_8f673d26fec59b::t_cf776c899284d1 191
+docs/guides/format-bibtex.md
+  s_8f673d26fec59b::t_b39fdf4c793a0c 2,7,11,13-14,16-17,22-30,41-42,45-49,52-63,69-78,81-82,87-92,99-110,114-116,123-125,132,135,143-146,149-150,154-155,158-164
+packages/polars-refkit/README.md
+  s_8f673d26fec59b::t_411937d8946961 64
+scripts/tests/test_workflow_contract.py
+  s_8f673d26fec59b::t_cf776c899284d1 68-83,85-88
+  s_8f673d26fec59b::t_a39c5f15b6199e 84
+packages/refkit-js/package-lock.json
+  ai_agent 1-928
+packages/refkit-js/rust/Cargo.toml
+  s_8f673d26fec59b::t_7569eb802b6c7c 1-18
+packages/refkit-js/tests/consumer.ts
+  s_8f673d26fec59b::t_b327a9d17af08e 1-37
+packages/refkit-js/rust/src/raw.rs
+  s_8f673d26fec59b::t_e987200bfab430 37-45
+  s_8f673d26fec59b::t_aa003e1f7eb44a 57-61,70-72,88-96,106-109,126-127
+  s_8f673d26fec59b::t_acd9c7788d861a 1,3-21,23-29,31,33-36,46-56,128-152,154-160,162-217,219,222,225,228-234
+  s_8f673d26fec59b::t_d36c9bdc915788 62-69,74-75,80,82-87,97-105,111-112,117,119-125
+development_docs/repository-contracts.md
+  s_8f673d26fec59b::t_1aededb641089d 28-34,58,107
+  s_8f673d26fec59b::t_411937d8946961 12,15
+packages/refkit-js/src/runtime.ts
+  s_8f673d26fec59b::t_9be9eb29bb7a2c 9-10,12-13,15-19,21-23,25,28-29,31-41,43,49,51-58,87
+  s_8f673d26fec59b::t_0a274bd1595c15 1-4,30,50,59-62,64-70,72-78
+  s_8f673d26fec59b::t_15d33a8df3ab43 14,20,42,79-86
+  s_8f673d26fec59b::t_9da2e9647ba77d 44-45,47-48
+packages/refkit-js/tests/browser.spec.mjs
+  s_8f673d26fec59b::t_b327a9d17af08e 1-21,24-30,32-34,36-65,67-87
+  s_8f673d26fec59b::t_252362e7fee7b6 22
+  s_8f673d26fec59b::t_151deb2bd61220 23,31,35
+  s_8f673d26fec59b::t_de5fb30a43494a 66
+development_docs/packaging-and-release.md
+  s_8f673d26fec59b::t_411937d8946961 21,47,51
+  s_8f673d26fec59b::t_bd6d0b47a6cf62 57-58,61-62,70
+  s_8f673d26fec59b::t_6135c99586eaea 53
+  s_8f673d26fec59b::t_0120ee94378208 3,12,31,55-56,59-60,63-69,71-82,128-131,147
+packages/refkit-js/src/library.ts
+  s_8f673d26fec59b::t_10b12de533d0ea 42,100
+  s_8f673d26fec59b::t_0605001da526d0 19,23-25,35,37
+  s_8f673d26fec59b::t_5aba8be43864bf 47-50,65,70
+  s_8f673d26fec59b::t_c56073afb293e1 5-9,13,15-16,18,20,22,26,28-29,31-34,36,38-41,43-45,53-58,60-64,67-69,71-78,80-81,83,90-92,94-97,99,101,103-104,106-107,111-112
+packages/refkit-js/src/node.ts
+  s_8f673d26fec59b::t_0605001da526d0 111-115,122
+  s_8f673d26fec59b::t_827ab7a192e418 116-119
+  s_8f673d26fec59b::t_ff04ca785fd1c7 9-11,18-19,21-22,24-25,27-30,33-41,43-47,49-55,57,64-65,67-69,71-74,76-92,94-95,97-98,102-105,107,109-110,120-121,123
+  s_8f673d26fec59b::t_5aba8be43864bf 8,59-62
+  s_8f673d26fec59b::t_10b12de533d0ea 14,58,99-101,108
+docs/.vitepress/navigation.json
+  s_8f673d26fec59b::t_d4ac0406926167 6,35,44
+scripts/architecture_contract.py
+  s_8f673d26fec59b::t_7b65c6c6eac084 17,40-43,231-236,255,257-259,276-277
+packages/refkit-js/rust/src/library.rs
+  s_8f673d26fec59b::t_e987200bfab430 38-42
+  s_8f673d26fec59b::t_7569eb802b6c7c 1-2,5-24,26-32,34-37,43-61,133-134
+  s_8f673d26fec59b::t_acd9c7788d861a 3-4,62-81,83-85,87-109,111-114,116-123,126-127,129,132
+packages/refkit-js/package.json
+  s_8f673d26fec59b::t_411937d8946961 42
+  s_8f673d26fec59b::t_1d8b80b1780934 12,55-56
+  s_8f673d26fec59b::t_de5fb30a43494a 52
+  s_8f673d26fec59b::t_1408aa4d9dd44c 1-11,13-41,43-51,53-54,57-60,62,64-65
+packages/refkit-js/LICENSE
+  s_8f673d26fec59b::t_da0eee6c89e04f 1-201
+docs/.vitepress/config.mts
+  s_8f673d26fec59b::t_1aededb641089d 12
+packages/refkit-js/scripts/source.mjs
+  s_8f673d26fec59b::t_f3fbdd2bf9ed6e 5,7,9,17-19,21-22,24-28,33-34,36-38,40,43
+packages/refkit-js/src/tidy.ts
+  s_8f673d26fec59b::t_5aba8be43864bf 20-43
+  s_8f673d26fec59b::t_10b12de533d0ea 17
+  s_8f673d26fec59b::t_0c324f13810a8c 6-7,9-12,14-15,18,44-45
+packages/refkit-js/tests/parity.mjs
+  s_8f673d26fec59b::t_68460efb06948a 122-124
+  s_8f673d26fec59b::t_60abe2fdeb5ecc 101-121,125-131,136-138
+  s_8f673d26fec59b::t_3cd71c9d820cf1 133,139-149,152-161,192-195,197
+  s_8f673d26fec59b::t_c88365addbf4d7 1-100,132,134-135,150-151,162-191,196,198-246
+packages/refkit/pyproject.toml
+  s_8f673d26fec59b::t_411937d8946961 7,62-65
+packages/refkit-js/tests/bundle.mjs
+  s_8f673d26fec59b::t_de5fb30a43494a 27
+  s_8f673d26fec59b::t_151deb2bd61220 1
+packages/refkit-bench/pyproject.toml
+  s_8f673d26fec59b::t_411937d8946961 7
+.gitignore
+  s_8f673d26fec59b::t_d586725136ea0f 21-24
+  s_8f673d26fec59b::t_c1f6abee01c800 25
+Cargo.toml
+  s_8f673d26fec59b::t_d586725136ea0f 5
+packages/refkit-js/scripts/check-docs.mjs
+  s_8f673d26fec59b::t_a3b56bfda5aafe 1-40,62-76,83-111,114-138,151-156
+  s_8f673d26fec59b::t_4f797398603bc6 41-61,77-82,139-150
+  s_8f673d26fec59b::t_3d93ac6c3b0380 112-113
+README.md
+  s_8f673d26fec59b::t_3cd71c9d820cf1 89
+  s_8f673d26fec59b::t_df56a27c9d4656 132
+  s_8f673d26fec59b::t_1d8b80b1780934 94
+  s_8f673d26fec59b::t_6f6a8c8ffe477e 12,75-88,90-93,95
+packages/refkit-js/src/errors.ts
+  s_8f673d26fec59b::t_9be9eb29bb7a2c 2-3,5-6,8-14,16-17,19-20,22-31,34-50,52-59,61-65,67,69,71-72,74,76,78-94
+packages/refkit-js/scripts/check-dist.mjs
+  s_8f673d26fec59b::t_f3fbdd2bf9ed6e 5-6,8-9,11-13,16-17,19-20,22-26,28,31-32,35-36
+docs/reference/selectors.md
+  s_8f673d26fec59b::t_3e7d3c8dfa8e08 7,9,11-12,14-16,19-20,22-24,27,29,31-42,44,48
+  s_8f673d26fec59b::t_a541cc367fe4e8 46
+packages/refkit-js/README.md
+  s_8f673d26fec59b::t_3cd71c9d820cf1 23-25,42,61
+  s_8f673d26fec59b::t_d433c855ca337d 3-4
+  s_8f673d26fec59b::t_1d8b80b1780934 68
+  s_8f673d26fec59b::t_6f6a8c8ffe477e 1-2,5-22,26-41,43-60,62-67,69-72
+packages/refkit-js/rust/src/conversion.rs
+  s_8f673d26fec59b::t_22cd492a814751 1,3-20,22-26,28-41,43-57,59-62,64-70,72-74,76-79,81-84
+docs/reference/data-shapes.md
+  s_8f673d26fec59b::t_a1595f449e57ab 17,26
+  s_8f673d26fec59b::t_9ff80cb0c47849 74,94
+  s_8f673d26fec59b::t_94770d3681f4cc 7-16,18-25,27-31,35,37,39,41-45,55-63,65,69,73,75-78,86-92,98,102-104,113-118,120,136,140,142-146,148
+.github/AGENTS.md
+  s_8f673d26fec59b::t_411937d8946961 9,14
+scripts/release_contract.py
+  s_8f673d26fec59b::t_7b65c6c6eac084 4,60-61,77-81,83-84,86-87,89-90,108
+packages/refkit-js/src/citation.ts
+  s_8f673d26fec59b::t_c56073afb293e1 2-4,6-7,9-16,21-26,29-33,35,37-38,45-54,56,59-79,81,83-85,87-90
+  s_8f673d26fec59b::t_10b12de533d0ea 17,57
+packages/refkit-js/rust/src/tidy.rs
+  s_8f673d26fec59b::t_cd8f5a29b32657 1-50,52-54,56-62,64-69,71-78,80-83,85-86,89,93-99,101,104,107-131,133-149,151-154,156-161,163-183,185-204,206-218
+docs/guides/render-citations.md
+  s_8f673d26fec59b::t_ad1300c097e027 2,7,11-13,16-20,37-57,60-64,69,73,75-77,81-83,85,87,89,91,93,95-97,99-100,103-105,109-111,113-114,119-123,125,127-142,145-148,151-166,169-185,191,193
+  s_8f673d26fec59b::t_a6063ef44cf6da 67,187
+packages/polars-refkit/pyproject.toml
+  s_8f673d26fec59b::t_411937d8946961 7,66-69
+docs/troubleshooting.md
+  s_8f673d26fec59b::t_89d92967b94969 63
+  s_8f673d26fec59b::t_3d93ac6c3b0380 77
+  s_8f673d26fec59b::t_987beb5373c652 2,9,11,13-32,35-37,41,43-47,49,52-61,67,71,73,75,79,81,84-89,92-93,96,99,107-112,117
+development_docs/documentation.md
+  s_8f673d26fec59b::t_411937d8946961 92
+  s_8f673d26fec59b::t_3d93ac6c3b0380 52,54-55,60-63,121-122
+.github/workflows/publish.yml
+  s_8f673d26fec59b::t_797074aa4a6d55 206-235
+packages/refkit-js/tests/sdk.test.mjs
+  s_8f673d26fec59b::t_38baa335f636d1 10,38-41,85-86,105,116,137,182,188,192-195,198,215-217
+  s_8f673d26fec59b::t_ca93651914c62f 4,7,9,11,15,20-21,23-24,27,45-46,57,67-68,70,72,103-104,106,121-122,124,126,134-135,146,149,154-155,159-160,165,168,171-172,180-181,196-197,214,242
+  s_8f673d26fec59b::t_b327a9d17af08e 1-3,5-6,8,12-14,16-19,22,25-26,28-30,34-36,42-44,47-56,58-64,66,69,71,73-83,91-96,98-102,123,125,127-133,136,138-145,147-148,150-153,156-158,161-164,166-167,174-177,199-203,218-219,241
+  s_8f673d26fec59b::t_a39c5f15b6199e 220-227
+  s_8f673d26fec59b::t_68460efb06948a 84,87-90,107-115,117-120,183-187,189-191,232
+  s_8f673d26fec59b::t_1aededb641089d 240
+  s_8f673d26fec59b::t_252362e7fee7b6 31-33,65,169-170,173,179,204-207,209-211,213
+packages/refkit-js/src/index.ts
+  s_8f673d26fec59b::t_ff04ca785fd1c7 8-12,16-21,24-31,34-38
+  s_8f673d26fec59b::t_0a274bd1595c15 1-4
+docs/guides/edit-bibtex.md
+  s_8f673d26fec59b::t_a6063ef44cf6da 2,7,9,11-13,16-17,19,22-23,25-29,31-34,37-40,43-45,50-57,60,64-66,68-73,75-76,79-88,90,92-102,106-108,116-126,130-134,139,142-149,155-176,178,180
+packages/refkit-js/rust/src/lib.rs
+  s_8f673d26fec59b::t_7569eb802b6c7c 1-40
+docs/reference/errors.md
+  s_8f673d26fec59b::t_d4ac0406926167 98
+  s_8f673d26fec59b::t_c297db58283169 2,7,9-32,34-37,40-44,47,51-59,61,65-76,80-87,91,101,109
+  s_8f673d26fec59b::t_a1595f449e57ab 33
+Cargo.lock
+  ai_agent 20-24,475-484,500-505,818-860
+packages/refkit-js/rust/src/errors.rs
+  s_8f673d26fec59b::t_7569eb802b6c7c 1-16,18-40
+.github/workflows/ci.yml
+  s_8f673d26fec59b::t_797074aa4a6d55 77-79
+packages/refkit-js/tests/parity.py
+  s_8f673d26fec59b::t_7936dda51db122 232-241
+  s_8f673d26fec59b::t_a968df2417dbdd 211-217
+  s_8f673d26fec59b::t_38baa335f636d1 70-72,202
+  s_8f673d26fec59b::t_05de2592b0824b 1-2,5,7,12-30,34-46,48-53,56,59-69,73-160,163-173,176-183,218-219,230-231,301-302,336,341-349,359-366,373-377,381
+  s_8f673d26fec59b::t_a59ff66ce914fe 54-55,57-58,161-162,174-175,247-259,308,330,353,356-358
+  s_8f673d26fec59b::t_c88365addbf4d7 184-201,203-210,220-229,242-246,260-300,303-307,309-329,331-335,337-340,350-352,354,367-372
+packages/refkit-js/src/types.ts
+  s_8f673d26fec59b::t_9be9eb29bb7a2c 2-5,7,9-25,27-38,40-44,48,56-58,64-66,68-71,74-77,79-81,83-87,89-92,94-98,100-112,115-116,118,120-121,123,125-126,128-129,131-132,134-135,137-138,140-141,143-144,146,148-149,151-157,160-189,191-204
+packages/refkit-js/src/raw.ts
+  s_8f673d26fec59b::t_0c324f13810a8c 6-10,13-17,19-23,25-33,42-45,47-50,53,55-58,60-62,64-65,94-97,101-102,104-105,107-108,110-114,116-118,120,122-124,126,131-143,145,148-150,152-162,164-167,169,172-174,176-177,179-180,182-187,189-192,194,196-198,200,214-217,219-220,227-230,232-233,235-246,248-249,252-254
+  s_8f673d26fec59b::t_827ab7a192e418 37-41,221-225
+  s_8f673d26fec59b::t_e987200bfab430 70
+  s_8f673d26fec59b::t_0605001da526d0 34-36,51-52,54,63,66,90,98-100,103,106,109,115,119,121,125,127,130,144,146-147,151,163,168,170-171,175,178,181,188,193,195,199,201,204,218,226,231,234,247
+packages/refkit-js/tsconfig.json
+  s_8f673d26fec59b::t_1408aa4d9dd44c 1-5,7-13,16,19
+  s_8f673d26fec59b::t_b327a9d17af08e 6,17-18
+docs/guides/parse-bibliographies.md
+  s_8f673d26fec59b::t_31dc34689293ae 2,7,9,11,17-18,21-22,25-27,29,31-32,37,41-43,48,51-53,55-57,59,61,63-71,73-74,77-81,83,85,91-93,95-104,106-115,118-132,136-138,140,142-143,146,148-153
+  s_8f673d26fec59b::t_a6063ef44cf6da 35
+docs/concepts/parsing-and-recovery.md
+  s_8f673d26fec59b::t_0b5b36d74795b0 103
+  s_8f673d26fec59b::t_cd7352a7bf9b62 39
+  s_8f673d26fec59b::t_ea158cf107b41e 7,11,13-15,18-34,37,43,45,47-49,51,54-65,80,84,86,88-89,91,94-101,113
+packages/refkit-js/rust/src/document.rs
+  s_8f673d26fec59b::t_22cd492a814751 1-4,6-25,27-32,34-49,51-78,80-88,90-100,102-103,105-133
+packages/refkit-js/tests/lifetime.test.mjs
+  s_8f673d26fec59b::t_de5fb30a43494a 1-21
+packages/refkit-js/scripts/build.mjs
+  s_8f673d26fec59b::t_f3fbdd2bf9ed6e 6,8,10,21-23,25-26,32-33,35-37,64,66-67,69-72,77,90,94,98,101-102,104
+  s_8f673d26fec59b::t_797074aa4a6d55 11-12,17,27,31,38,40,51-52
+  s_8f673d26fec59b::t_c1f6abee01c800 53-54,62
+  s_8f673d26fec59b::t_8b85dfbd658036 78,80-81,84-85,88
+  s_8f673d26fec59b::t_411937d8946961 97
+scripts/tests/test_release_contract.py
+  s_8f673d26fec59b::t_7b65c6c6eac084 15-17,164-175
+.github/workflows/artifacts-refkit-js.yml
+  s_8f673d26fec59b::t_cf776c899284d1 34,36-39,81-84
+  s_8f673d26fec59b::t_797074aa4a6d55 1-26,42-67,71-80,85-86,89-95,103-107,112-118
+  s_8f673d26fec59b::t_a3b56bfda5aafe 40-41
+docs/concepts/bibliography-models.md
+  s_8f673d26fec59b::t_ea158cf107b41e 7,11-13,21-27,29,33,37-39,41,54-65,67-69,73-75,77-78,81-82,84,87-97,103-105,107-109,112-119
+  s_8f673d26fec59b::t_cd7352a7bf9b62 31
+  s_8f673d26fec59b::t_3d93ac6c3b0380 99
+docs/guides/browser.md
+  s_8f673d26fec59b::t_720777d9fd325f 1-24,26-77
+packages/refkit/README.md
+  s_8f673d26fec59b::t_411937d8946961 67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "0f86af7cc76487afec34a49c52f0a67477bcfd11",
+  "prompts": {},
+  "sessions": {
+    "s_8f673d26fec59b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a081a3-f793-7f80-9f12-cffc0d7e0912",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
