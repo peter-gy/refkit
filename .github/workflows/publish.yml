@@ -3,6 +3,16 @@ name: Publish
   push:
     tags:
       - v[0-9]*.[0-9]*.[0-9]*
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published tag whose retained release needs npm completion
+        required: true
+        type: string
+      source_run:
+        description: Completed Publish run containing tested artifacts and successful PyPI publications
+        required: true
+        type: string
 permissions:
   contents: read
 env:
@@ -14,17 +24,20 @@ jobs:
   source-checks:
     name: Source checks
     uses: ./.github/workflows/source-checks.yml
+    if: github.event_name == 'push'
   check-release-version:
     name: Check release version
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
+      benchmark-artifact: ${{ steps.retained.outputs.benchmark }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
@@ -32,10 +45,27 @@ jobs:
       - name: Check package versions
         id: version
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           version=$(python scripts/release_contract.py --tag "$RELEASE_TAG")
           echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Validate retained release
+        id: retained
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > retained-run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs?filter=all&per_page=100" --paginate --slurp > retained-jobs.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/artifacts?per_page=100" --paginate --slurp > retained-artifacts.json
+          benchmark=$(python scripts/release_recovery.py --run retained-run.json --jobs retained-jobs.json --artifacts retained-artifacts.json --tag "$RELEASE_TAG" --commit "$(git rev-parse "$RELEASE_TAG^{commit}")")
+          echo "benchmark=$benchmark" >> "$GITHUB_OUTPUT"
+    permissions:
+      contents: read
+      actions: read
   publish-refkit:
     name: refkit / Publish to PyPI
     needs:
@@ -74,6 +104,7 @@ jobs:
           uv publish --trusted-publishing always --check-url https://pypi.org/simple dist/refkit/*.whl dist/refkit/*.tar.gz
         env:
           RELEASE_VERSION: ${{ needs.check-release-version.outputs.version }}
+    if: github.event_name == 'push'
   publish-polars-refkit:
     name: polars-refkit / Publish to PyPI
     needs:
@@ -112,6 +143,7 @@ jobs:
           uv publish --trusted-publishing always --check-url https://pypi.org/simple dist/polars-refkit/*.whl dist/polars-refkit/*.tar.gz
         env:
           RELEASE_VERSION: ${{ needs.check-release-version.outputs.version }}
+    if: github.event_name == 'push'
   release-complete:
     name: Release complete
     needs:
@@ -119,6 +151,7 @@ jobs:
       - publish-polars-refkit
       - publish-refkit-js
       - benchmarks
+      - check-release-version
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -126,16 +159,18 @@ jobs:
       - name: Check package publish results
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
+          RETAINED_RELEASE: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           python - <<'PY'
           import json
           import os
 
           needs = json.loads(os.environ["NEEDS_JSON"])
+          retained = {"publish-refkit", "publish-polars-refkit", "benchmarks"} if os.environ["RETAINED_RELEASE"] == "true" else set()
           failed = {
               name: info["result"]
               for name, info in needs.items()
-              if info["result"] != "success"
+              if info["result"] != "success" and not (name in retained and info["result"] == "skipped")
           }
           if failed:
               raise SystemExit(f"Release publish jobs did not all succeed: {failed}")
@@ -145,17 +180,20 @@ jobs:
     needs:
       - release-complete
       - benchmarks
+      - check-release-version
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: release
     permissions:
       contents: write
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.release_tag || github.ref }}
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -167,21 +205,26 @@ jobs:
           npm ci --ignore-scripts --omit=dev --no-audit --no-fund
           npm audit --omit=dev --audit-level=high
       - name: Update release notes
-        run: .github/release-notes/node_modules/.bin/changelogithub
+        run: .github/release-notes/node_modules/.bin/changelogithub --to "$RELEASE_TAG" --name "$RELEASE_TAG"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
       - name: Download benchmark evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: ${{ needs.benchmarks.outputs.artifact-name }}
+          name: ${{ needs.benchmarks.outputs.artifact-name || needs.check-release-version.outputs.benchmark-artifact
+            }}
           path: benchmark-evidence
+          run-id: ${{ inputs.source_run || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Attach benchmark results
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           python -m scripts.benchmark_release benchmark-evidence
           gh release upload "$RELEASE_TAG" benchmark-results.zip benchmark-results.json benchmark-results.md --clobber
+    if: ${{ !cancelled() && needs.release-complete.result == 'success' }}
   benchmarks:
     name: Benchmark evidence
     needs: check-release-version
@@ -189,47 +232,59 @@ jobs:
       contents: read
       actions: read
     uses: ./.github/workflows/benchmarks.yml
+    if: github.event_name == 'push'
   artifacts-refkit:
     needs:
       - check-release-version
       - test-support
     uses: ./.github/workflows/artifacts-refkit.yml
+    if: github.event_name == 'push'
   artifacts-polars-refkit:
     needs:
       - check-release-version
       - test-support
     uses: ./.github/workflows/artifacts-polars-refkit.yml
+    if: github.event_name == 'push'
   docs:
     uses: ./.github/workflows/docs.yml
+    if: github.event_name == 'push'
   test-support:
     uses: ./.github/workflows/test-support.yml
+    if: github.event_name == 'push'
   artifacts-refkit-js:
     name: refkit-js artifacts
     uses: ./.github/workflows/artifacts-refkit-js.yml
+    if: github.event_name == 'push'
   publish-refkit-js:
     name: refkit-js / Publish to npm
     needs:
-    - check-release-version
-    - source-checks
-    - artifacts-refkit-js
-    - docs
+      - check-release-version
+      - source-checks
+      - artifacts-refkit-js
+      - docs
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: npm
     permissions:
       contents: read
       id-token: write
+      actions: read
     steps:
-    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-      with:
-        node-version: '24'
-        package-manager-cache: false
-    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-      with:
-        name: refkit-js-npm
-        path: dist
-    - name: Publish verified package
-      env:
-        RELEASE_VERSION: ${{ needs.check-release-version.outputs.version }}
-      run: npm publish "dist/refkit-js-${RELEASE_VERSION}.tgz" --access public --provenance --ignore-scripts
-        --tag "$(case "$RELEASE_VERSION" in *-rc.*) echo next;; *) echo latest;; esac)"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: refkit-js-npm
+          path: dist
+          run-id: ${{ inputs.source_run || github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Publish verified package
+        env:
+          RELEASE_VERSION: ${{ needs.check-release-version.outputs.version }}
+        run: npm publish "./dist/refkit-js-${RELEASE_VERSION}.tgz" --access public --provenance --ignore-scripts
+          --tag "$(case "$RELEASE_VERSION" in *-rc.*) echo next;; *) echo latest;; esac)"
+    if: ${{ !cancelled() && needs.check-release-version.result == 'success' && (github.event_name == 'workflow_dispatch'
+      || (needs.source-checks.result == 'success' && needs.artifacts-refkit-js.result == 'success' && needs.docs.result
+      == 'success')) }}
