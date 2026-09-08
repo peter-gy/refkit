@@ -1,11 +1,11 @@
 ---
 layout: home
 title: RefKit
-description: Parse, render, inspect, format, and edit bibliography data from Python and Polars.
+description: Parse, render, inspect, format, and edit bibliography data from Python, JavaScript, and Polars.
 
 hero:
-  text: Parse, cite, and tidy BibTeX from Python, fast.
-  tagline: Rust-core bibliography parsing, Citation Style Language rendering, raw BibTeX editing, and Polars expressions.
+  text: Parse, cite, and tidy bibliographies.
+  tagline: One Rust core. Python and TypeScript APIs for bibliography parsing, citation rendering, and source-preserving BibTeX edits.
   image:
     light: /brand/refkit-lockup-vertical-light.svg
     dark: /brand/refkit-lockup-vertical-dark.svg

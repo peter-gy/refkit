@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -56,6 +57,8 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
     expected = _tag_version(tag) if tag is not None else canonical
     versions = {
         "rust workspace": canonical,
+        "refkit-js": json.loads((root / "packages/refkit-js/package.json").read_text())["version"],
+        "refkit-js Rust crate": _package_version(root, "packages/refkit-js/rust/Cargo.toml"),
         "python workspace": _project_version(root, "pyproject.toml"),
         "refkit": _project_version(root, "packages/refkit/pyproject.toml"),
         "refkit native Rust crate": _package_version(root, "packages/refkit/rust/Cargo.toml"),
@@ -71,6 +74,20 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
         if version != expected
     ]
 
+    js = json.loads((root / "packages/refkit-js/package.json").read_text())
+    js_lock = json.loads((root / "packages/refkit-js/package-lock.json").read_text())
+    if js.get("name") != "refkit-js" or js.get("repository") != {
+        "type": "git",
+        "url": f"git+{REPOSITORY}.git",
+        "directory": "packages/refkit-js",
+    }:
+        mismatches.append("refkit-js must declare its npm name and repository directory")
+    if (
+        js_lock.get("version") != expected
+        or js_lock.get("packages", {}).get("", {}).get("version") != expected
+    ):
+        mismatches.append("refkit-js package lock version must match the release")
+
     cargo_workspace = _read_toml(root, "Cargo.toml")
     rust_core = cargo_workspace["workspace"]["dependencies"]["refkit-core"]
     if not isinstance(rust_core, dict) or rust_core.get("version") != expected:
@@ -78,6 +95,9 @@ def validate_release_contract(root: Path = ROOT, tag: str | None = None) -> str:
 
     rust_repositories = {
         "Rust workspace": cargo_workspace["workspace"]["package"].get("repository"),
+        "refkit-js Rust crate": _read_toml(root, "packages/refkit-js/rust/Cargo.toml")[
+            "package"
+        ].get("repository"),
         "polars-refkit Rust crate": _read_toml(root, "packages/polars-refkit/rust/Cargo.toml")[
             "package"
         ].get("repository"),

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  Parse, cite, and edit bibliography data from Python and Polars.
+  Parse, cite, and edit bibliography data from Python, JavaScript, and Polars.
 </p>
 
 <p align="center">
@@ -72,6 +72,28 @@ disambiguation share the same context. Continue with the
 [Python quickstart](https://peter-gy.github.io/refkit/get-started) or install
 `polars-refkit` for the [Polars guide](https://peter-gy.github.io/refkit/guides/polars).
 
+## Use JavaScript
+
+Install `refkit-js` for [Node.js](https://nodejs.org/) 22.19 or newer:
+
+```bash
+npm install refkit-js
+```
+
+```js
+import { Library, cite } from "refkit-js";
+
+const library = Library.parseBibtex(
+  "@article{doe2024, author={Doe, Jane}, title={Fast Citations}, year={2024}}",
+);
+console.log(cite(library, "doe2024").text);
+```
+
+The result is `(Doe, 2024)`. Browser applications import `refkit-js/browser`
+and call `await init()` before parsing. The
+[JavaScript guide](https://peter-gy.github.io/refkit/get-started)
+covers initialization, file reads, and browser asset delivery.
+
 ## Use with agents
 
 The `refkit` package includes an [Agent Plugin](https://agent-plugins.org/)
@@ -107,4 +129,4 @@ whose specification tests also inform RefKit's formatter checks and benchmarks.
 
 [Development](development_docs/README.md) ·
 [Report an issue](https://github.com/peter-gy/refkit/issues) ·
-[Apache-2.0 license](LICENSE) · [Upstream notices](NOTICE)
+[Apache-2.0 license](LICENSE)

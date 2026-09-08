@@ -61,4 +61,4 @@ help(polars_refkit.agent)
 
 RefKit is alpha software. Public APIs may change before 1.0.
 
-[Apache-2.0 license](https://github.com/peter-gy/refkit/blob/main/LICENSE) · [Upstream notices](https://github.com/peter-gy/refkit/blob/main/NOTICE)
+[Apache-2.0 license](https://github.com/peter-gy/refkit/blob/main/LICENSE)

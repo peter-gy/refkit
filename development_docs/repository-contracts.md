@@ -9,10 +9,10 @@ RefKit keeps cross-file invariants executable. Each contract has one source-leve
 | Architecture | `make architecture-check` | Core dependency classification, host-boundary ownership, workspace composition, audited engine sources, adapter direction, and locked native builds. |
 | Documentation source | `make docs-source-check` | Markdown-only developer docs, local link targets, VitePress routes, and the public-to-developer audience boundary. |
 | Documentation site | `make docs-site-check` | Locked pnpm install, TypeScript, root and Pages-base VitePress output, routes, public assets, social metadata, raw Markdown, llms indexes, local links, and heading fragments. |
+| JavaScript package | `make js-check` | Source freshness, npm exports, installed TypeScript consumer, Python parity, automatic memory lifetime, and browser and worker execution. |
 | Release metadata | `make release-check` | Lockstep versions, exact native dependency pins, repository metadata, and release tag grammar. |
 | Pyodide runtime | `make pyodide-lock-check` | Runtime requirements, resolved wheels, hashes, and the tested Python-to-Rust Polars plugin ABI mapping. |
-| Distribution archive | `scripts/distribution_contract.py <archives>` | Bytecode exclusion, developer-doc exclusion, normalized SBOM references, builder-path removal, and exact package-specific Agent Plugin resources. |
-| Wheel normalization | `python -m scripts.normalize_wheel <wheels>` | Stable SBOM references and matching `RECORD` hashes before archive validation. |
+| Distribution archive | `scripts/distribution_contract.py <archives>` | Bytecode exclusion, developer-doc exclusion, builder-path removal, and exact package-specific Agent Plugin resources. |
 
 Contract diagnostics should name the offending source or archive member and return a nonzero exit status. Keep validation deterministic and free from network access. Test a new failure mode beside the script before adding it to `make check` or CI.
 
@@ -24,6 +24,13 @@ Contract diagnostics should name the offending source or archive member and retu
 - native stubs in `packages/refkit/src/refkit/_native.pyi`
 - public exports, stubs, and helpers in `packages/refkit/src/refkit`
 - public tests and end-user API docs
+
+### JavaScript API
+
+- native WebAssembly adapter under `packages/refkit-js/rust`
+- public TypeScript exports, runtime classes, and types under `packages/refkit-js/src`
+- package exports and lockfile under `packages/refkit-js`
+- installed-package tests, browser tests, and Python parity comparisons
 
 ### Agent capability
 
@@ -48,6 +55,7 @@ Contract diagnostics should name the offending source or archive member and retu
 - root Python workspace version
 - `refkit` and `polars-refkit` project versions
 - native adapter and Polars Rust crate versions
+- JavaScript package, npm lockfile, and WebAssembly adapter versions
 
 `scripts/release_contract.py` lists the authoritative repeated sources.
 
@@ -55,6 +63,7 @@ Contract diagnostics should name the offending source or archive member and retu
 
 - root `Cargo.lock`
 - `packages/polars-refkit/rust/Cargo.lock`
+- `packages/refkit-js/rust/Cargo.lock`
 
 Update each lockfile whose workspace resolves the dependency. The Polars workspace keeps its plugin ABI family local.
 
@@ -78,7 +87,6 @@ Run `make pyodide-lock` to regenerate the lock, then `make pyodide-lock-check`.
 | Wheels and sdists | Derived build output. Validate archives and leave them untracked. |
 | Installed-test support wheel | Built from `packages/refkit-tests` and installed alongside candidate adapters. Run its probes outside the checkout. |
 | Agent Plugin wheel payload | Derived from each package's configured plugin manifest and skill tree. Validate its exact inventory in wheels and sdists. |
-| Wheel SBOMs | Derived by native builds, normalized before archive validation. |
 | Benchmark JSON and CSV | Local evidence under `packages/refkit-bench/results`. Keep audited code and fixtures tracked. |
 | `development_docs/` | Tracked maintainer guidance. Excluded from published distributions. |
 
@@ -97,6 +105,6 @@ Root `README.md` is the single public entry point allowed to link into the devel
 
 ## GitHub Actions
 
-Pin third-party actions to full commit SHAs. Build the shared `refkit-tests` support wheel through `test-support.yml`. Reuse each package artifact workflow for CI and publication, with build jobs feeding installed-artifact tests. The two package publish jobs run independently, then join at release completion. Native builds configure Rust path remapping before compilation. Publish jobs validate the merged archive set before trusted publication.
+Pin third-party actions to full commit SHAs. Build the shared `refkit-tests` support wheel through `test-support.yml`. Reuse each package artifact workflow for CI and publication, with build jobs feeding installed-artifact tests. The three package publish jobs run independently, then join at release completion. Native builds configure Rust path remapping before compilation. Publish jobs validate the merged archive set before trusted publication.
 
 The shared `Benchmarks` workflow fingerprints runtime, build, dependency, and harness inputs, reuses matching evidence, and measures release builds on Linux, Windows, and macOS when needed. Main and release workflows consume the consolidated artifact. `scripts/tests/test_workflow_contract.py` checks its matrix, failure handling, rerun artifact contract, and the trusted commit publisher's checkout and permissions. These tests run through `make test` in source checks. See [benchmarks](benchmarks.md#main-branch-and-release-benchmarks) for selection, comparisons, artifacts, and comments.

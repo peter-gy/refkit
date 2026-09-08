@@ -1,3 +1,4 @@
+JS_REFKIT_RUST := packages/refkit-js/rust/Cargo.toml
 POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
 UV_RUN := uv run --locked --all-packages --group dev
 PYTHON := uv run --isolated --locked --only-group build python
@@ -14,6 +15,7 @@ format:
 	$(UV_LINT) ruff format .
 	cargo fmt --all
 	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all
+	cargo fmt --manifest-path $(JS_REFKIT_RUST) --all
 
 .PHONY: python-lint
 python-lint:
@@ -24,7 +26,9 @@ python-lint:
 rust-lint:
 	cargo fmt --all --check
 	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all --check
+	cargo fmt --manifest-path $(JS_REFKIT_RUST) --all --check
 	cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+	cargo clippy --locked --manifest-path $(JS_REFKIT_RUST) --all-targets --all-features -- -D warnings
 	cargo clippy --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features -- -D warnings
 
 .PHONY: lint
@@ -63,8 +67,10 @@ benchmark-test:
 .PHONY: rust
 rust:
 	cargo check --locked --workspace --all-targets --all-features
+	cargo check --locked --manifest-path $(JS_REFKIT_RUST) --all-targets --all-features
 	cargo check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 	cargo test --locked --workspace
+	cargo test --locked --manifest-path $(JS_REFKIT_RUST)
 	cargo test --locked --manifest-path $(POLARS_REFKIT_RUST)
 
 .PHONY: rust-floor
@@ -74,6 +80,7 @@ rust-floor:
 		rustup toolchain install $(RUST_FLOOR) --profile minimal; \
 	fi
 	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --workspace --all-targets --all-features
+	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --manifest-path $(JS_REFKIT_RUST) --all-targets --all-features
 	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
 
 .PHONY: pyodide-lock pyodide-lock-check
@@ -136,7 +143,6 @@ build: clean-dist
 	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package refkit --wheel --no-create-gitignore
 	uv build --package polars-refkit --sdist --no-create-gitignore
 	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package polars-refkit --wheel --no-create-gitignore
-	$(PYTHON) -m scripts.normalize_wheel 'dist/*.whl'
 	$(PYTHON) scripts/distribution_contract.py dist/*
 
 .PHONY: lock
@@ -178,4 +184,18 @@ docs-build:
 docs-check: docs-source-check docs-site-check
 
 .PHONY: check
-check: lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test benchmark-test docs-examples-check rust rust-floor build
+check: js-check lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test benchmark-test docs-examples-check rust rust-floor build
+
+.PHONY: js-build js-check
+js-build:
+	npm --prefix packages/refkit-js ci --ignore-scripts --no-audit --no-fund
+	npm --prefix packages/refkit-js run build
+
+js-check: js-build
+	npm --prefix packages/refkit-js run lint
+	npm --prefix packages/refkit-js run typecheck
+	npm --prefix packages/refkit-js test
+	$(UV_RUN) python packages/refkit-js/tests/parity.py
+	npm --prefix packages/refkit-js run test:docs
+	npm --prefix packages/refkit-js run test:package
+	npm --prefix packages/refkit-js run test:browser

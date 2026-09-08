@@ -1,6 +1,6 @@
 # Packaging And Release
 
-RefKit publishes two Python distributions from one synchronized release version. `refkit` contains the Python API and native bibliography extension. `polars-refkit` contains the native Polars plugin.
+RefKit publishes two Python distributions and one npm package from one synchronized release version. `refkit` contains the Python API and native bibliography extension. `polars-refkit` contains the native Polars plugin. `refkit-js` contains the JavaScript API and WebAssembly bibliography module.
 
 A wheel is an installable Python archive. A source distribution, or sdist, contains source for a package build. ABI3 is Python's stable native extension application binary interface, which lets one compatible wheel cover several CPython releases.
 
@@ -9,6 +9,7 @@ A wheel is an installable Python archive. A source distribution, or sdist, conta
 | Distribution | Artifacts | Runtime relationship |
 | --- | --- | --- |
 | `refkit` | sdist, CPython ABI3 wheels, PyEmscripten wheel | Provides `refkit._native`, the public Python API, and its version-matched Agent Plugin. |
+| `refkit-js` | npm tarball | Provides typed ES modules and one WebAssembly module for Node.js and browsers. |
 | `polars-refkit` | sdist, CPython wheels, PyEmscripten wheel | Requires a compatible Polars runtime and provides `polars_refkit._internal`. |
 
 Build local CPython artifacts with:
@@ -17,7 +18,7 @@ Build local CPython artifacts with:
 make build
 ```
 
-The target clears prior distribution output, builds both packages, normalizes native wheel software bills of materials, and runs `scripts/distribution_contract.py` over every archive.
+The target clears prior distribution output, builds both packages and runs `scripts/distribution_contract.py` over every archive.
 
 ## Version Contract
 
@@ -27,6 +28,7 @@ The target clears prior distribution output, builds both packages, normalizes na
 - root Python workspace
 - `refkit` and its native Rust crate
 - `polars-refkit` and its native Rust crate
+- `refkit-js`, its npm lockfile, and its WebAssembly Rust crate
 - the shared `refkit-core` Rust dependency
 
 Release tags use `vX.Y.Z` or `vX.Y.Z-rc.N`. Validate a prepared tag locally with:
@@ -42,13 +44,42 @@ Creating or pushing a release tag changes public package state. Confirm release 
 
 Native release builds use locked Cargo resolution and path remapping. Remapping removes checkout, Cargo registry, Git checkout, Rust toolchain, and builder-home paths from compiled artifacts.
 
-Maturin is the Rust-backed Python package builder used by both distributions. It emits a software bill of materials (SBOM), an inventory of components inside the wheel. `scripts.normalize_wheel` replaces local references with stable package references, removes generated timestamps and serial numbers, and refreshes the affected wheel `RECORD` hashes. The distribution contract then rejects generated Python bytecode, developer documentation, local SBOM references, and embedded builder paths.
+Maturin builds the Rust-backed Python distributions. The distribution contract validates Python source, packaged Agent Plugin resources, and native artifacts before publication.
 
 Both package-local PEP 517 backends compose Maturin with `agent-plugins`. Each wheel carries its plugin manifest and exact package-specific skill tree. A source distribution stages the same files under `.agent-plugin` so a wheel rebuilt from that archive uses the captured release resources. An editable install stores a marker for the authored plugin root.
 
-GitHub's native and PyEmscripten jobs call Maturin directly for cross-platform wheel production. `agent-plugins attach-wheel` adds the configured plugin to each prebuilt wheel before SBOM normalization and archive validation.
+GitHub's native and PyEmscripten jobs call Maturin directly for cross-platform wheel production. `agent-plugins attach-wheel` adds the configured plugin to each prebuilt wheel before archive validation.
 
-Local `make build` normalizes and validates both wheel and sdist contents. The publish workflow uploads build artifacts, downloads the complete merged set, then runs `twine check --strict` and the distribution contract immediately before trusted publication.
+Local `make build` validates both wheel and sdist contents. The publish workflow uploads build artifacts, downloads the complete merged set, then runs `twine check --strict` and the distribution contract immediately before trusted publication.
+
+## JavaScript Builds
+
+Install the Rust target and matching binding generator, then build and
+validate the npm package:
+
+```bash
+rustup target add wasm32-unknown-unknown --toolchain stable
+cargo install wasm-bindgen-cli --version 0.2.126 --locked
+make js-check
+```
+
+`make js-build` installs the package-local locked npm dependencies, compiles
+the Rust adapter for `wasm32-unknown-unknown`, generates JavaScript bindings
+with the pinned `wasm-bindgen` version, and compiles TypeScript. The npm
+package includes the generated ES modules, declarations, WebAssembly asset,
+and license. Generated build output is regenerated for each package
+build.
+
+`.github/workflows/artifacts-refkit-js.yml` builds the npm tarball, installs
+it into clean consumers on Linux, macOS, and Windows, and checks Node.js
+22.19, 24, and 26. The browser job runs the installed package in Chromium,
+Firefox, and WebKit. These jobs exercise package exports, consumer types,
+WebAssembly loading, and bibliography behavior through the published layout.
+
+The `publish-refkit-js` job in `.github/workflows/publish.yml` publishes the
+validated tarball using npm trusted publishing and provenance. Its `npm`
+environment and workflow identity must match the trusted publisher configured
+for `refkit-js`. Publication requires every JavaScript artifact job to pass.
 
 ## PyEmscripten Builds
 
@@ -94,9 +125,10 @@ Native wheel jobs cover Linux, macOS, and Windows in both PR and release runs. W
 
 1. Build and test the `refkit` sdist, CPython wheels, and PyEmscripten wheel.
 2. Build and test the `polars-refkit` sdist, CPython wheels, and PyEmscripten wheel.
-3. Publish each validated distribution.
-4. Reuse matching benchmark evidence or run the shared cross-platform measurement workflow.
-5. Join both publishers and benchmark evidence at the release-complete check, then update release notes and attach benchmark JSON, Markdown, and the raw-results ZIP.
+3. Build and test the `refkit-js` npm tarball in Node.js and browsers.
+4. Publish each validated Python distribution and the npm package.
+5. Reuse matching benchmark evidence or run the shared cross-platform measurement workflow.
+6. Join all three publishers and benchmark evidence at the release-complete check, then update release notes and attach benchmark JSON, Markdown, and the raw-results ZIP.
 
 Build jobs import each sdist, test each wheel, and upload the artifacts. The same package artifact workflows run for pull requests and publication. Installed probes in `refkit_tests` exercise parsing, rendering, raw or column operations, reports, and the packaged agent examples. Publish jobs download the merged wheel and sdist sets, validate every archive, and use OpenID Connect (OIDC) trusted publishing so the workflow exchanges its GitHub identity for a short-lived package-index credential.
 
@@ -112,6 +144,6 @@ Before a release tag, run `make check` and validate the intended tag with the re
 2. Preserve the released version. Package indexes do not permit replacing an existing archive under the same filename.
 3. Re-run the failed package's artifact validation against the exact retained workflow artifacts.
 4. Publish the missing distribution with the same synchronized version when its artifacts remain valid.
-5. Run the release-complete checks and verify clean installs of both distributions.
+5. Run the release-complete checks and verify clean installs of all three packages.
 
 Escalate to a new version only when the retained artifact is invalid or the package index rejects the recovery upload.

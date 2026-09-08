@@ -4,7 +4,7 @@ version = "0.0.1"
 description = "Benchmark runner for refkit citation and BibTeX workflows"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE", "NOTICE"]
+license-files = ["LICENSE"]
 authors = [
     { name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }
 ]
@@ -40,7 +40,6 @@ ignore-vcs = true
 only-include = [
     "README.md",
     "LICENSE",
-    "NOTICE",
     "pyproject.toml",
     "src/refkit_bench",
     "tests",

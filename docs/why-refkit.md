@@ -35,7 +35,7 @@ The Polars interface returns native scalar, list, and struct columns. Report exp
 
 ## Run the same core in several hosts
 
-The Rust core accepts in-memory values and returns RefKit-owned records. Python owns paths, objects, and exceptions. Polars owns expression registration, broadcasting, dtypes, and row failures. PyEmscripten wheels carry the Python interfaces into Pyodide.
+The Rust core accepts in-memory values and returns RefKit-owned records. Python owns paths, objects, and exceptions. TypeScript exposes the same objects through WebAssembly in Node.js and browsers. Polars owns expression registration, broadcasting, dtypes, and row failures. PyEmscripten wheels carry the Python interfaces into Pyodide.
 
 This ownership model keeps bibliography behavior in one implementation while each host exposes native inputs and outputs.
 

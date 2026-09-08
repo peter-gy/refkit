@@ -21,6 +21,7 @@ jobs:
       - source-checks
       - artifacts-refkit
       - artifacts-polars-refkit
+      - artifacts-refkit-js
       - docs
       - test-support
     runs-on: ubuntu-latest
@@ -73,3 +74,6 @@ jobs:
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128
   test-support:
     uses: ./.github/workflows/test-support.yml
+  artifacts-refkit-js:
+    name: refkit-js artifacts
+    uses: ./.github/workflows/artifacts-refkit-js.yml

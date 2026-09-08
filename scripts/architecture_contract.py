@@ -14,6 +14,7 @@ else:
 ROOT = Path(__file__).parents[1]
 PORTABLE_CORE = Path("crates/refkit-core/Cargo.toml")
 NATIVE_ADAPTER = Path("packages/refkit/rust/Cargo.toml")
+JS_ADAPTER = Path("packages/refkit-js/rust/Cargo.toml")
 POLARS_ADAPTER = Path("packages/polars-refkit/rust/Cargo.toml")
 REFKIT_PROJECT = Path("packages/refkit/pyproject.toml")
 NATIVE_PACKAGES = (REFKIT_PROJECT, Path("packages/polars-refkit/pyproject.toml"))
@@ -26,6 +27,7 @@ REFKIT_RUNTIME_DEPENDENCIES = ["agent-plugins==0.2.0"]
 CARGO_LOCKS = (
     Path("Cargo.lock"),
     Path("packages/polars-refkit/rust/Cargo.lock"),
+    Path("packages/refkit-js/rust/Cargo.lock"),
 )
 ALLOWED_DEPENDENCIES = {
     PORTABLE_CORE: {
@@ -35,6 +37,10 @@ ALLOWED_DEPENDENCIES = {
     NATIVE_ADAPTER: {
         "dependencies": {"pyo3", "refkit-core", "serde_json"},
         "dev-dependencies": {"pyo3"},
+    },
+    JS_ADAPTER: {
+        "dependencies": {"refkit-core", "serde", "serde_json", "wasm-bindgen"},
+        "dev-dependencies": set(),
     },
     POLARS_ADAPTER: {
         "dependencies": {
@@ -223,7 +229,12 @@ def check_contract(root: Path) -> list[str]:
     polars = _load(root / POLARS_ADAPTER)
     errors = []
 
-    manifests = {PORTABLE_CORE: core, NATIVE_ADAPTER: native, POLARS_ADAPTER: polars}
+    manifests = {
+        PORTABLE_CORE: core,
+        NATIVE_ADAPTER: native,
+        POLARS_ADAPTER: polars,
+        JS_ADAPTER: _load(root / JS_ADAPTER),
+    }
     for manifest_path, allowed in ALLOWED_DEPENDENCIES.items():
         errors.extend(
             _dependency_errors(
@@ -238,13 +249,21 @@ def check_contract(root: Path) -> list[str]:
     locks = {relative_path: _load(root / relative_path) for relative_path in CARGO_LOCKS}
     errors.extend(_engine_dependency_errors(core, locks))
     errors.extend(
-        _xml_dependency_errors(core, {Path("Cargo.toml"): workspace, POLARS_ADAPTER: polars}, locks)
+        _xml_dependency_errors(
+            core,
+            {
+                Path("Cargo.toml"): workspace,
+                POLARS_ADAPTER: polars,
+                JS_ADAPTER: manifests[JS_ADAPTER],
+            },
+            locks,
+        )
     )
 
     members = set(workspace["workspace"]["members"])
     expected_members = {"crates/refkit-core", "packages/refkit/rust"}
     if members != expected_members:
-        errors.append("root workspace must contain the portable core and refkit native adapter")
+        errors.append("root workspace must contain the portable core and Python adapter")
     if "packages/polars-refkit/rust" in members:
         errors.append("Polars adapter must remain in its package-local Cargo workspace")
 
@@ -260,6 +279,14 @@ def check_contract(root: Path) -> list[str]:
     core_path = (root / POLARS_ADAPTER.parent / polars_core.get("path", "")).resolve()
     if core_path != (root / PORTABLE_CORE.parent).resolve():
         errors.append("Polars adapter must depend on the shared portable core")
+
+    javascript = manifests[JS_ADAPTER]
+    if "workspace" not in javascript:
+        errors.append("JavaScript adapter must declare its package-local workspace")
+    javascript_core = javascript.get("dependencies", {}).get("refkit-core", {})
+    javascript_core_path = (root / JS_ADAPTER.parent / javascript_core.get("path", "")).resolve()
+    if javascript_core_path != (root / PORTABLE_CORE.parent).resolve():
+        errors.append("JavaScript adapter must depend on the shared portable core")
 
     refkit = _load(root / REFKIT_PROJECT)
     errors.extend(_refkit_dependency_errors(refkit))

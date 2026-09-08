@@ -1,6 +1,6 @@
 # RefKit Architecture
 
-RefKit keeps bibliography semantics in one portable Rust core. Python and Polars adapt the portable core API to their host runtimes.
+RefKit keeps bibliography semantics in one portable Rust core. Python, JavaScript, and Polars adapt the portable core API to their host runtimes.
 
 ## Vocabulary And Boundaries
 
@@ -9,9 +9,9 @@ Use these terms consistently across source, tests, and documentation:
 | Term | Meaning |
 | --- | --- |
 | Capability | A user behavior such as parsing, rendering, formatting, inspecting, or editing. |
-| Interface | A public call surface. Current interfaces are Python objects and Polars expressions. |
+| Interface | A public call surface. Current interfaces are Python objects, JavaScript objects, and Polars expressions. |
 | Adapter | Code that converts host inputs and outputs to and from the portable core API. |
-| Distribution | An installable package such as `refkit` or `polars-refkit`. |
+| Distribution | An installable package such as `refkit`, `refkit-js`, or `polars-refkit`. |
 | Crate | A Rust package. `refkit-core` owns portable behavior. |
 | Native module | A compiled Python extension such as `refkit._native`. |
 | Plugin | The compiled Polars expression library loaded by Polars. |
@@ -22,23 +22,24 @@ A bibliography source is text or a file in BibTeX, BibLaTeX, or Hayagriva biblio
 
 ## Dependency Direction
 
-```text
-                    crates/refkit-core
-                       ^           ^
-                       |           |
-          packages/refkit     packages/polars-refkit
-                 ^                     ^
-                 |                     |
-          Python callers          Polars query plans
-
-packages/refkit-bench, packages/refkit-tests, scripts, and GitHub Actions consume the public packages
-from outside the runtime graph.
+```mermaid
+flowchart BT
+  python[Python callers] --> py[packages/refkit]
+  js[Node and browser callers] --> wasm[packages/refkit-js]
+  polars[Polars query plans] --> pl[packages/polars-refkit]
+  py --> core[crates/refkit-core]
+  wasm --> core
+  pl --> core
 ```
+
+`packages/refkit-bench`, `packages/refkit-tests`, `scripts`, and GitHub Actions
+consume the public packages from outside the runtime graph.
 
 Dependencies point inward toward `crates/refkit-core`:
 
 - [`crates/refkit-core`](../crates/refkit-core) owns in-memory bibliography behavior and RefKit-owned port types.
 - [`packages/refkit`](../packages/refkit) owns the Python adapter, filesystem access, native module registration, Python helpers, stubs, and the `refkit` distribution.
+- [`packages/refkit-js`](../packages/refkit-js) owns the WebAssembly adapter, JavaScript classes and types, Node filesystem helpers, and npm distribution.
 - [`packages/polars-refkit`](../packages/polars-refkit) owns the Polars adapter and its package-local Rust workspace.
 - [`packages/refkit-bench`](../packages/refkit-bench) measures public workflows through concrete comparison adapters.
 - [`packages/refkit-tests`](../packages/refkit-tests) owns shared installed-artifact probes, runtime tests, and agent-example execution. Its support wheel is installed beside candidate adapters.
@@ -63,13 +64,13 @@ Hayagriva, BibLaTeX, Citationberg, and serializers are pure in-process implement
 
 Core records describe bibliography behavior before an adapter chooses a host shape:
 
-- `EntryRecord` becomes Python `Entry` objects or Polars entry structs.
-- `Diagnostic`, `ParseFailure`, and `ParseReport` become Python diagnostic dictionaries and exceptions or Polars report structs.
-- `RawBlockInfo` and raw occurrence records become Python dictionaries and live raw handles.
-- `RenderedRecord` and `RenderedNode` become Python tree dictionaries. Polars rendered expressions project text and HTML into a struct.
-- `TidyResult`, `TidyWarning`, and `TidyRename` become Python objects/dictionaries or Polars report fields.
+- `EntryRecord` becomes Python `Entry` objects, JavaScript records, or Polars entry structs.
+- `Diagnostic`, `ParseFailure`, and `ParseReport` become Python or JavaScript diagnostic records and exceptions, or Polars report structs.
+- `RawBlockInfo` and raw occurrence records become Python or JavaScript records and live raw handles.
+- `RenderedRecord` and `RenderedNode` become Python tree dictionaries or JavaScript tree records. Polars rendered expressions project text and HTML into a struct.
+- `TidyResult`, `TidyWarning`, and `TidyRename` become Python or JavaScript result records, or Polars report fields.
 
-Keep Python dictionary keys, Polars dtype construction, JSON encoding, and host exceptions in adapters. Add a core record when more than one interface can reasonably consume the same semantic result.
+Keep Python dictionary keys, JavaScript property names, Polars dtype construction, JSON encoding, and host exceptions in adapters. Add a core record when more than one interface can reasonably consume the same semantic result.
 
 ## Adapters And Composition
 
@@ -78,6 +79,20 @@ Keep Python dictionary keys, Polars dtype construction, JSON encoding, and host 
 `packages/refkit/rust` translates the portable core API into PyO3 classes, Python exceptions, dictionaries, and rendered trees. `filesystem.rs` reads paths, infers bibliography formats, attaches path-specific decode diagnostics, and writes raw BibTeX. `module.rs` registers the native classes and functions as `refkit._native`.
 
 `packages/refkit/src/refkit/__init__.py` is the Python composition root. It exposes the supported native objects and adds the path-based `cite`, `full_bibliography`, and `tidy_file` helpers.
+
+### JavaScript
+
+`packages/refkit-js/rust` calls the portable core and converts records for
+[wasm-bindgen](https://wasm-bindgen.github.io/wasm-bindgen/), the Rust-to-JavaScript
+binding generator. `packages/refkit-js/src` owns JavaScript classes, camelCase
+record types, errors, and object lifetime. The package builds one
+`wasm32-unknown-unknown` module for Node.js and browsers.
+
+The root package entry selects Node initialization or browser initialization
+through package export conditions. `refkit-js/browser` exposes explicit
+`init()`. `refkit-js/node` owns asynchronous path reads, format detection,
+decoding diagnostics, and formatted writes. Shared classes take in-memory
+inputs. The core continues to own bibliography semantics.
 
 ### Polars
 
@@ -92,11 +107,12 @@ The Polars workspace owns its Polars, PyO3, and `pyo3-polars` application binary
 | `Library` | Normalized entries and parser diagnostics. |
 | `BibDocument` | Source-order raw BibTeX, occurrence identity, and edit-preserving writeback. |
 | `Style` | A prepared Citation Style Language style. |
-| `Locale` | A validated bundled locale code wrapper in the Python adapter. |
+| `Locale` | A validated bundled locale code wrapper in the Python and JavaScript adapters. |
 | `Document` | Prepared library, style, and optional locale inputs. |
 | Render or bibliography call | Fresh processor state for one ordered operation. |
 | Python filesystem adapter | Path reads, extension detection, decode context, and writes. |
 | Python composition root | Public import surface and one-call helpers. |
+| JavaScript adapter | WebAssembly initialization, host records, raw views, object lifetime, and Node file helpers. |
 | Polars adapter | Expression registration, broadcasting, dtype shape, and row failure mapping. |
 | Release contract | Synchronized package and Rust crate versions. |
 
@@ -134,6 +150,7 @@ The Python namespace translates columns or literals into a plugin call. Rust rec
 
 - Put reusable bibliography behavior and stable typed records in `crates/refkit-core`.
 - Put filesystem access, Python conversion, exceptions, GIL policy, and native registration in `packages/refkit`.
+- Put WebAssembly conversion, JavaScript types, initialization, and Node file access in `packages/refkit-js`.
 - Put dataframe broadcasting, dtype construction, and row-failure behavior in `packages/polars-refkit`.
 - Keep benchmark orchestration and comparison-package behavior in `packages/refkit-bench`.
 - Keep shared installed-artifact verification in `packages/refkit-tests`. Runtime adapters remain independent of test support.

@@ -117,6 +117,7 @@ jobs:
     needs:
       - publish-refkit
       - publish-polars-refkit
+      - publish-refkit-js
       - benchmarks
     if: always()
     runs-on: ubuntu-latest
@@ -202,3 +203,33 @@ jobs:
     uses: ./.github/workflows/docs.yml
   test-support:
     uses: ./.github/workflows/test-support.yml
+  artifacts-refkit-js:
+    name: refkit-js artifacts
+    uses: ./.github/workflows/artifacts-refkit-js.yml
+  publish-refkit-js:
+    name: refkit-js / Publish to npm
+    needs:
+    - check-release-version
+    - source-checks
+    - artifacts-refkit-js
+    - docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      with:
+        node-version: '24'
+        package-manager-cache: false
+    - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      with:
+        name: refkit-js-npm
+        path: dist
+    - name: Publish verified package
+      env:
+        RELEASE_VERSION: ${{ needs.check-release-version.outputs.version }}
+      run: npm publish "dist/refkit-js-${RELEASE_VERSION}.tgz" --access public --provenance --ignore-scripts
+        --tag "$(case "$RELEASE_VERSION" in *-rc.*) echo next;; *) echo latest;; esac)"

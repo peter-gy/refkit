@@ -6,7 +6,9 @@ description: Read rendered nodes in a custom consumer while preserving bibliogra
 
 `Rendered.tree` lets an application consume citation output directly. Each node identifies text, formatting, links, nesting, or bibliography entries. This text consumer handles every node kind:
 
-```python
+::: code-group
+
+```python [Python]
 import refkit as rk
 from refkit.types import BibliographyEntry, RenderedNode
 
@@ -39,9 +41,45 @@ assert text == "(Doe, 2024)"
 assert result.bibliography.layout is not None
 ```
 
+```ts [TypeScript]
+import * as rk from "refkit-js";
+import type { BibliographyEntry, RenderedNode } from "refkit-js";
+
+function visibleText(node: RenderedNode | BibliographyEntry): string {
+  switch (node.kind) {
+    case "Text":
+    case "Link":
+      return node.text;
+    case "Markup":
+      return node.value;
+    case "Element":
+      return node.children.map(visibleText).join("");
+    case "bibliography-entry": {
+      const label = node.label ? visibleText(node.label) : "";
+      const content = node.content.map(visibleText).join("");
+      return `${label} ${content}`.trim();
+    }
+    case "Transparent":
+      return "";
+  }
+}
+
+const library = rk.Library.parseBibtex(
+  "@article{doe2024, author={Doe, Jane}, title={Fast Citations}, year={2024}}",
+);
+const document = new rk.Document(library, rk.Style.load("apa"), { locale: "en-US" });
+const result = document.render([new rk.Citation("intro", "doe2024")]);
+const text = result.get("intro").tree.map(visibleText).join("");
+console.log(text);
+```
+
+:::
+
 ```text
 (Doe, 2024)
 ```
+
+TypeScript examples run in Node.js. In a browser, [initialize RefKit](/guides/browser#initialize-the-module) before creating the library.
 
 Use `.text` when the application needs the prepared plain-text result. A tree consumer can retain or transform specific nodes, create its own elements, or connect the output to a source inspector.
 
@@ -55,7 +93,7 @@ A bibliography node separates `label` from `content`. Render the label once, the
 
 ## Retain source identity
 
-An element's `meta` can identify its bibliography entry, cite-item index, name role, or name index. Use `meta["kind"]` to select the shape before reading its other fields. The bibliography entry's `key` connects rendered output to `library[key]`.
+An element's `meta` can identify its bibliography entry, cite-item index, name role, or name index. Read the metadata `kind` before accessing fields specific to that shape. The bibliography entry's `key` connects rendered output to `library.get(key)`.
 
 `Transparent` nodes carry a citation index and formatting metadata. They contribute no visible text.
 

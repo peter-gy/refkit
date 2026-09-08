@@ -25,7 +25,9 @@ SOURCE = "@article{doe2024, author={Doe, Jane}, title={Fast Citations}, year={20
 def check_examples(root: Path) -> None:
     for relative, compare_output in EXAMPLES:
         markdown = (root / relative).read_text(encoding="utf-8")
-        example = re.search(r"^```python\n(.*?)^```", markdown, re.MULTILINE | re.DOTALL)
+        example = re.search(
+            r"^```python(?: \[Python\])?\n(.*?)^```", markdown, re.MULTILINE | re.DOTALL
+        )
         if example is None:
             raise SystemExit(f"{relative}: missing Python example")
         with tempfile.TemporaryDirectory(prefix="refkit-doc-example-") as directory:

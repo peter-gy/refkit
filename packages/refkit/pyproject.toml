@@ -4,7 +4,7 @@ version = "0.1.1"
 description = "Fast Python citation parsing, rendering, and BibTeX editing backed by Rust"
 readme = "README.md"
 license = "Apache-2.0"
-license-files = ["LICENSE", "NOTICE"]
+license-files = ["LICENSE"]
 authors = [
     { name = "Péter Ferenc Gyarmati", email = "dev.petergy@gmail.com" }
 ]
@@ -59,3 +59,7 @@ exclude = [
     "src/**/*.pyc",
     "src/**/*.pyo",
 ]
+
+[tool.maturin.sbom]
+rust = false
+auditwheel = false

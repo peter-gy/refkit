@@ -49,13 +49,17 @@ The published site is `https://peter-gy.github.io/refkit/`. GitHub Pages serves 
 Public pages follow this reader path:
 
 1. The landing page establishes product fit and routes to one first result.
-2. Get Started installs one package and renders a visible citation.
+2. Get Started offers Python and TypeScript tabs for the same visible citation.
 3. Concepts define normalized and raw bibliography models, ordered rendering, and recovery.
-4. Guides complete parsing, rendering, raw editing, formatting, Polars, and Pyodide tasks.
-5. Reference pages define exact Python, Polars, data-shape, option, selector, error, Rust adapter, and agent-readable documentation contracts.
+4. Shared guides cover parsing, rendering, raw editing, and formatting. Runtime guides cover browsers, Polars, and Pyodide.
+5. Shared references define data shapes, options, selectors, and errors. Python, TypeScript, Polars, Rust, and agent references provide exact interface lookup.
 6. Troubleshooting diagnoses failures and provides recovery steps.
 
 Every public page must appear in navigation. Use extensionless internal links because VitePress owns the output suffix.
+
+Use VitePress's [native code groups](https://vitepress.dev/guide/markdown#code-groups) for equivalent Python and TypeScript examples. Label the fences `python [Python]` and `ts [TypeScript]` inside `::: code-group`. Explain the shared operation once, keep host-specific caveats beside the affected example, and use a complete first example on each page. Later examples can reuse that page's bindings. The default theme supplies tab switching, syntax highlighting, and copy controls.
+
+Keep browser initialization and asset delivery in the browser runtime guide. Shared task guides use Python and Node.js examples, with a link to browser setup.
 
 ## Agent-Readable Output
 
@@ -85,7 +89,7 @@ VitePress copies `docs/public` to the static output root. The site uses:
 - `og-dark.png` and `og-light.png` as the themed source variants.
 - Light and dark Lucide feature icons through VitePress's native `icon` frontmatter field.
 
-The feature icons are decorative because each card has a visible title. Keep their alternative text empty and preserve the Lucide license beside the public assets.
+The feature icons are decorative because each card has a visible title. Keep their alternative text empty.
 
 Keep alternative text, social metadata, and public filenames aligned. The static build verifier compares copied assets with their authored bytes and checks publication references. Use browser inspection to confirm which themed asset is active.
 
@@ -114,3 +118,5 @@ make docs-examples-check
 This target invokes `python -m refkit_tests.check_examples --root .` from the installed test-support package. The runner extracts the first Python example from the READMEs and selected task guides, executes each in an isolated temporary directory, and compares documented output or executes the example's assertions. Source integration runs it with the installed packages. Static documentation builds remain independent of native imports.
 
 The performance verifier computes medians from the published result rows and compares them with the authored performance table. Update the evidence and page together when publishing a new measurement.
+
+After building `refkit-js`, run `npm --prefix packages/refkit-js run test:docs` to typecheck and execute every paired example in both languages. The checker reads the authored Markdown, supplies bibliography file fixtures in temporary directories, and runs each page's snippets in order. `make js-check` and the JavaScript artifact workflow include this check.

@@ -9,7 +9,7 @@ const repository = "https://github.com/peter-gy/refkit"
 const siteUrl = new URL("https://peter-gy.github.io/refkit/")
 const socialImage = new URL("og.png", siteUrl).href
 const description =
-  "Parse, render, inspect, format, and edit bibliography data from Python and Polars."
+  "Parse, render, inspect, format, and edit bibliography data from Python, JavaScript, and Polars."
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "")
 const basePath = baseName ? `/${baseName}` : ""
 const publicPath = (path: string): string => `${basePath}${path}`
@@ -99,12 +99,6 @@ export default defineConfig({
     ],
   ],
   transformPageData(pageData) {
-    if (pageData.frontmatter.layout === "home" && pageData.frontmatter.hero) {
-      pageData.frontmatter.hero.text =
-        `Parse, cite, and tidy BibTeX from Python, ` +
-        `<a class="hero-fast" href="${publicPath("/performance")}" ` +
-        `aria-label="fast, view benchmark methodology">fast.</a>`
-    }
     const pageTitle =
       pageData.frontmatter.layout === "home"
         ? "RefKit"

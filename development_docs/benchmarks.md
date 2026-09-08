@@ -64,7 +64,7 @@ RefKit's public citation request also computes a bibliography. That cost remains
 
 ### Upstream formatter specifications
 
-The formatter cases come from [bibtex-tidy](https://github.com/FlamingTempura/bibtex-tidy) revision `f98c467e27a18e937c1c221caa3a6ecd760b69fb`. [The manifest](../packages/refkit-bench/src/refkit_bench/data/bibtex-tidy/cases.json) records source path, YAML document index, dimensions, license, and hashes of source, input, options, and expected output. The MIT license is retained beside the cases.
+The formatter cases come from [bibtex-tidy](https://github.com/FlamingTempura/bibtex-tidy) revision `f98c467e27a18e937c1c221caa3a6ecd760b69fb`. [The manifest](../packages/refkit-bench/src/refkit_bench/data/bibtex-tidy/cases.json) records source path, YAML document index, dimensions, license, and hashes of source, input, options, and expected output.
 
 Run the full conformance check:
 

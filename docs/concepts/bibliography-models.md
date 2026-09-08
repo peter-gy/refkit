@@ -4,35 +4,41 @@ description: Choose Library for normalized behavior or BibDocument for source-pr
 
 # Choose a Bibliography Model
 
-`Library` answers questions about bibliography meaning. `BibDocument` answers questions about raw BibTeX source. Choose the model from the information the workflow must retain.
+`Library` stores normalized citation data. `BibDocument` preserves [BibTeX](https://www.bibtex.org/) source, a text format for bibliography entries. Choose the model from the information the workflow must retain.
 
 ## Use `Library` for normalized data
 
-```python
+::: code-group
+
+```python [Python]
 import refkit as rk
 
 library = rk.Library.parse_bibtex("@article{doe2024, title={Fast Citations}, year={2024}}")
-
 entry = library["doe2024"]
 print(entry.key, entry.entry_type, entry.title)
 ```
 
-`Library` owns:
+```ts [TypeScript]
+import * as rk from "refkit-js";
 
-- Normalized entries and parent relationships.
-- Key lookup and ordered entry access.
-- Hayagriva selectors.
-- Projection into RefKit-owned dictionary fields.
-- Parser diagnostics from report recovery.
-- Input to citation and bibliography rendering.
+const library = rk.Library.parseBibtex("@article{doe2024, title={Fast Citations}, year={2024}}");
+const entry = library.get("doe2024")!;
+console.log(entry.key, entry.entryType, entry.title);
+```
 
-Normalized records discard raw layout details that have no normalized citation meaning.
+:::
+
+Both print `doe2024 Article Fast Citations`. TypeScript examples run in Node.js. For browsers, complete [browser initialization](/guides/browser#initialize-the-module) before calling the same APIs.
+
+`Library` owns normalized entries, parent relationships, key lookup, selection, projection, and parser diagnostics. Pass a library to the renderer when a workflow needs citations or a bibliography. Normalization discards source layout such as whitespace and field delimiters.
 
 ## Use `BibDocument` for source-preserving edits
 
-```python
-import refkit as rk
+Using the `rk` import, parse and edit a title:
 
+::: code-group
+
+```python [Python]
 source = """% reviewed by Jane
 @article{doe2024,
   title = {Old title},
@@ -42,45 +48,74 @@ source = """% reviewed by Jane
 
 document = rk.BibDocument.parse(source)
 document.entries["doe2024"].fields["title"].value = "Corrected title"
-
 print(document.to_bibtex())
 ```
 
-`BibDocument` owns:
+```ts [TypeScript]
+const source = `% reviewed by Jane
+@article{doe2024,
+  title = {Old title},
+  year = {2024}
+}
+`;
 
-- Whitespace, comments, preambles, string definitions, entries, failed blocks, and other top-level source.
-- Source-order entry and field occurrences.
-- Byte spans for blocks, entries, and fields.
-- Field-value validation against the original delimiter mode.
-- Writeback that keeps unrelated raw blocks in place.
+const document = rk.BibDocument.parse(source);
+document.entries.getUnique("doe2024")!.fields.getUnique("title")!.value = "Corrected title";
+console.log(document.toBibtex());
+```
+
+:::
+
+The output contains `title = {Corrected title}` and retains the comment, spacing, and year field. `BibDocument` keeps source-order blocks, entry and field occurrences, and byte spans. Field assignments validate the replacement against the original delimiter mode before changing the document.
 
 ## Address duplicates by occurrence
 
-Direct mapping lookup requires one matching occurrence. Use `get_all` when a key or field name appears more than once:
+An occurrence is one entry or field at one source position. A unique lookup raises `RefkitError` when the name has multiple occurrences. Retrieve the occurrences to choose which one to edit:
 
-```python
-document = rk.BibDocument.parse(
-    """
+::: code-group
+
+```python [Python]
+duplicates = rk.BibDocument.parse("""
 @article{same, title={First}}
 @article{same, title={Second}}
-"""
-)
-
-second = document.entries.get_all("same")[1]
+""")
+second = duplicates.entries.get_all("same")[1]
 second.fields["title"].value = "Updated second title"
+print(duplicates.to_bibtex())
 ```
 
-`occurrence_keys()` includes one key per source occurrence. `unique_keys()` includes each distinct key name once, even when that name has duplicate occurrences. `get_unique(key)` returns `None` for a missing name and raises `RefkitError` for an ambiguous name. `occurrences()` returns the source-order objects themselves.
+```ts [TypeScript]
+const duplicates = rk.BibDocument.parse(`
+@article{same, title={First}}
+@article{same, title={Second}}
+`);
+const second = duplicates.entries.getAll("same")[1]!;
+second.fields.getUnique("title")!.value = "Updated second title";
+console.log(duplicates.toBibtex());
+```
+
+:::
+
+The first title stays `First`. The second becomes `Updated second title`. Entry and field maps expose both unique names and source-order occurrences. See the [Python](/reference/python#raw-bibtex) and [TypeScript](/reference/javascript#raw-bibtex) references for lookup and missing-name behavior.
 
 ## Move between the models deliberately
 
-Parse the same source separately when a workflow needs both contracts:
+The models own separate state. Parse the edited document's writeback into a new library when rendering must reflect an edit:
 
-```python
-library = rk.Library.parse_bibtex(source, recovery="report")
-raw = rk.BibDocument.parse(source)
+::: code-group
+
+```python [Python]
+updated = rk.Library.parse_bibtex(document.to_bibtex())
+print(updated["doe2024"].title)
 ```
 
-The two objects own separate state. An edit in `raw` changes its writeback result. Parse `raw.to_bibtex()` into a new `Library` when normalized rendering must reflect that edit.
+```ts [TypeScript]
+const updated = rk.Library.parseBibtex(document.toBibtex());
+console.log(updated.get("doe2024")!.title);
+```
+
+:::
+
+Both print `Corrected title`.
 
 Continue with [Parsing and Recovery](/concepts/parsing-and-recovery) or [Edit Raw BibTeX](/guides/edit-bibtex).

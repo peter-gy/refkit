@@ -1,26 +1,40 @@
 ---
-description: Install RefKit and render one Citation Style Language citation with its bibliography.
+description: Install RefKit in Python or TypeScript and render the same citation and bibliography.
 ---
 
 # Get Started
 
-RefKit parses a bibliography, applies a [Citation Style Language](https://citationstyles.org/) (CSL) style, and returns a citation plus its bibliography. The first example uses the `refkit` Python package and runs on Python 3.10 through 3.14.
+RefKit parses a bibliography and applies a [Citation Style Language](https://citationstyles.org/) (CSL) style to produce citations and a bibliography. Choose a language tab to follow the same workflow in Python or [TypeScript](https://www.typescriptlang.org/), JavaScript with checked types.
 
-## Install `refkit`
+## Install
 
-Use [pip](https://pip.pypa.io/), Python's package installer:
+Use Python 3.10 through 3.14 or [Node.js](https://nodejs.org/) 22.19 or newer. The package managers [pip](https://pip.pypa.io/) and [npm](https://docs.npmjs.com/) install the corresponding binding:
 
-```bash
+::: code-group
+
+```bash [Python]
 python -m pip install refkit
 ```
 
-The package installs a native extension. Pip selects a compatible wheel when one is available and builds from the source distribution on other platforms. A source build requires a Rust toolchain and Git. Cargo retrieves pinned source for the [Hayagriva bibliography engine](https://github.com/typst/hayagriva) and [Citationberg CSL model](https://github.com/typst/citationberg) from GitHub. The initial build needs network access unless both revisions are already cached.
+```bash [TypeScript]
+npm install refkit-js
+```
+
+:::
+
+Node.js initializes RefKit during import. Browser applications [initialize the WebAssembly module](/guides/browser#initialize-the-module) before using the same objects.
+
+::: details Building Python from source
+Pip selects a compatible wheel when available. A source build requires Rust and Git and retrieves pinned revisions of the [Hayagriva bibliography engine](https://github.com/typst/hayagriva) and [Citationberg CSL model](https://github.com/typst/citationberg). The first build needs network access unless those revisions are cached.
+:::
 
 ## Render a citation
 
-Create `first_citation.py`:
+Save the example as `first_citation.py` or `first_citation.ts`:
 
-```python
+::: code-group
+
+```python [Python]
 import refkit as rk
 
 source = """
@@ -31,77 +45,67 @@ source = """
   year = {2024}
 }
 """
-
 library = rk.Library.parse_bibtex(source)
-style = rk.Style.load("apa")
-document = rk.Document(library, style, locale="en-US")
+document = rk.Document(library, rk.Style.load("apa"), locale="en-US")
 rendered = document.render([rk.Citation("intro", "doe2024")])
 
 print(rendered["intro"].text)
 print(rendered.bibliography.text)
 ```
 
-Run it:
+```ts [TypeScript]
+import * as rk from "refkit-js";
 
-```bash
+const source = `
+@article{doe2024,
+  author = {Doe, Jane},
+  title = {Fast Citations},
+  journal = {Journal of Citation Tests},
+  year = {2024}
+}
+`;
+const library = rk.Library.parseBibtex(source);
+const document = new rk.Document(library, rk.Style.load("apa"), { locale: "en-US" });
+const rendered = document.render([new rk.Citation("intro", "doe2024")]);
+
+console.log(rendered.get("intro").text);
+console.log(rendered.bibliography.text);
+```
+
+:::
+
+Run the file:
+
+::: code-group
+
+```bash [Python]
 python first_citation.py
 ```
 
-Expected output:
+```bash [TypeScript]
+node first_citation.ts
+```
+
+:::
+
+Both produce:
 
 ```text
 (Doe, 2024)
 Doe, J. (2024). Fast Citations. Journal of Citation Tests.
 ```
 
-The example introduces five RefKit objects:
+`Library` holds normalized references. `Style` selects the citation rules. `Document` combines them with a locale, and each `Citation` names a result. `RenderedDocument` gives you the named citations and the bibliography of entries they cite.
 
-- `Library` owns normalized bibliography entries and parser diagnostics.
-- `Style` owns one prepared CSL style.
-- `Document` combines a library, style, and locale for one ordered render operation.
-- `Citation` gives a citation a stable result name.
-- `RenderedDocument` returns named citations and the bibliography produced from them.
+## Choose the next task
 
-## Choose a bibliography model
+| Task | Continue with |
+| --- | --- |
+| Understand normalized records and editable source | [Choose a bibliography model](/concepts/bibliography-models) |
+| Inspect entries, fields, and diagnostics | [Parse bibliographies](/guides/parse-bibliographies) |
+| Render groups, locators, and ordered citations | [Render citations](/guides/render-citations) |
+| Preserve comments and duplicate occurrences during edits | [Edit raw BibTeX](/guides/edit-bibtex) |
+| Canonically format a bibliography | [Format BibTeX](/guides/format-bibtex) |
+| Process Python dataframe columns | [Use Polars expressions](/guides/polars) |
 
-RefKit exposes two views of bibliography data:
-
-| Question | Use | Result |
-| --- | --- | --- |
-| Which entries can I select, project, or render? | `Library` | Normalized entries with consistent fields. |
-| Which source blocks and duplicate occurrences must survive an edit? | `BibDocument` | Source-order BibTeX with editable field values. |
-
-Read [Choose a Bibliography Model](/concepts/bibliography-models) before a workflow that edits source files.
-
-## Choose a Python package
-
-Install `polars-refkit` when bibliography source lives in [Polars](https://pola.rs/) string columns:
-
-```bash
-python -m pip install polars-refkit
-```
-
-```python
-import polars as pl
-import polars_refkit
-
-source = """
-@article{doe2024,
-  author = {Doe, Jane},
-  title = {Fast Citations},
-  year = {2024}
-}
-"""
-frame = pl.DataFrame({"bibtex": [source], "key": ["doe2024"]})
-result = frame.select(
-    citation=pl.col("bibtex").refkit.cite("key"),
-    entries=pl.col("bibtex").refkit.entry_count(),
-)
-
-print(result.to_dicts())
-# [{'citation': '(Doe, 2024)', 'entries': 1}]
-```
-
-A string argument names a column in the Polars interface. Wrap a literal citation key or bibliography source with `pl.lit(...)`.
-
-Continue with [How RefKit Works](/concepts/how-refkit-works) or go directly to [Render Citations](/guides/render-citations).
+[How RefKit works](/concepts/how-refkit-works) connects these tasks through the shared object model.
