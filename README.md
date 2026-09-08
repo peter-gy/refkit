@@ -14,6 +14,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/refkit/"><img src="https://img.shields.io/pypi/v/refkit" alt="PyPI version"></a>
+  <a href="https://www.npmjs.com/package/refkit-js"><img src="https://img.shields.io/npm/v/refkit-js" alt="npm version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <a href="https://github.com/peter-gy/refkit/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/peter-gy/refkit/actions/workflows/ci.yml/badge.svg?branch=main&amp;event=push" alt="CI on main"></a>
 </p>
