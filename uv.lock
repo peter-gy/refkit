@@ -1882,7 +1882,7 @@ dev = [
     { name = "pyyaml" },
     { name = "refkit-tests" },
     { name = "ruff" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
+    { name = "tomli" },
     { name = "ty" },
 ]
 lint = [
@@ -1915,7 +1915,7 @@ dev = [
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "refkit-tests", editable = "packages/refkit-tests" },
     { name = "ruff", specifier = ">=0.16.5" },
-    { name = "tomli", marker = "python_full_version < '3.11'", specifier = "==2.3.1" },
+    { name = "tomli", specifier = "==2.3.1" },
     { name = "ty", specifier = ">=0.0.78" },
 ]
 lint = [{ name = "ruff", specifier = "==0.16.5" }]
