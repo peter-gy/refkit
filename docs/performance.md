@@ -1,65 +1,45 @@
 ---
-description: Inspect a dated RefKit parsing and citation-rendering measurement with its workload, command, environment, and limits.
+description: Measure RefKit capabilities with fixed inputs, correctness checks, isolated workers, and reproducible baseline comparisons.
 ---
 
 # Performance
 
-RefKit moves bibliography parsing and rendering into an in-process Rust core. A focused run on September 6, 2026 measured two small Python workflows from the public benchmark runner.
+RefKit's benchmark measures public bibliography operations with fixed inputs and checked outputs. Choose the capability that controls your workload: parsing, entry lookup, BibTeX edits, citation rendering, formatting, or Polars batch execution.
 
-## Results
+## Measure a capability
 
-`input.bibtex-text` parses three clean entries from an in-memory string. `render.prepared-citation` renders one prepared [APA](https://apastyle.apa.org/) citation. The comparison packages are [bibtexparser](https://github.com/sciunto-org/python-bibtexparser), [Pybtex](https://pybtex.org/), and [citeproc-py](https://github.com/citeproc-py/citeproc-py).
+The runner lives in `packages/refkit-bench` in the [source repository](https://github.com/peter-gy/refkit). Follow the [benchmark setup and methodology](https://github.com/peter-gy/refkit/blob/main/development_docs/benchmarks.md) to install the participants and build release-mode adapters.
 
-| Lane | Package | Median |
-| --- | --- | ---: |
-| `input.bibtex-text` | refkit 0.0.4rc5 | 41.4 µs |
-| `input.bibtex-text` | bibtexparser-2.x 2.0.0b9 | 90.3 µs |
-| `input.bibtex-text` | pybtex 0.26.1 | 180.5 µs |
-| `render.prepared-citation` | refkit 0.0.4rc5 | 321.8 µs |
-| `render.prepared-citation` | citeproc-py 0.10.1 | 1,350.9 µs |
-
-Each median covers 12 measured rounds after three warmups. The runner checked the expected result after every timed operation.
-
-[Inspect the 60 raw result rows →](/benchmarks/refkit-0.0.4rc5-macos-arm64-2026-09-06.json)
-
-## Reproduce the run
-
-Install [Git](https://git-scm.com/), [uv](https://docs.astral.sh/uv/), and the [Rust toolchain](https://www.rust-lang.org/tools/install). The recorded run used Python 3.12. Start from the repository revision that owns the benchmark inputs and adapters:
+From that checkout:
 
 ```bash
-git clone https://github.com/peter-gy/refkit.git
-cd refkit
-git checkout 7110d53705db9da2194c4e8615789772e04f0df3
-uv sync --locked --all-packages --group dev
+uv run --no-sync refkit-bench check --lane parse.bibtex --dataset real
+uv run --no-sync refkit-bench run --lane parse.bibtex --dataset real \
+  --output packages/refkit-bench/results/baseline
+uv run --no-sync refkit-bench report packages/refkit-bench/results/baseline
 ```
 
-Build the native Python adapter in release mode from the checkout root:
+This case parses the same 12-record bibliography through RefKit, [bibtexparser](https://github.com/sciunto-org/python-bibtexparser), and [Pybtex](https://pybtex.org/). Validation checks complete metadata. Timings cover in-memory model creation, with validation outside the timer.
+
+## Read the evidence
+
+[pyperf](https://pyperf.readthedocs.io/), a Python benchmarking tool, calibrates batches and collects repeated values in separate workers. A result directory contains:
+
+- `manifest.json`: input and artifact hashes, source provenance, setup boundaries, validation outcomes, runtime settings, and host identity.
+- `timings.json`: measured values, calibration, warmups, and worker metadata in pyperf's format.
+
+The summary reports the median of worker means for each case. Compare matched runs with:
 
 ```bash
-(cd packages/refkit && uv run maturin develop --release)
+uv run --no-sync refkit-bench compare \
+  packages/refkit-bench/results/baseline \
+  packages/refkit-bench/results/candidate
 ```
 
-Run the two lanes:
+The ratio is candidate time divided by baseline time. Values below 1 mean lower elapsed time. With enough independent workers, the report includes exploratory per-case bootstrap intervals. Repeat small effects in alternating baseline/candidate sessions on the same idle machine before attributing a gain to an implementation change.
 
-```bash
-uv run --locked --package refkit-bench python -m refkit_bench.runner \
-  --lane input.bibtex-text \
-  --lane render.prepared-citation \
-  --input tiny \
-  --rounds 12 \
-  --warmups 3 \
-  --build-mode auto \
-  --json packages/refkit-bench/results/performance.json
-```
+## Match the workflow
 
-The published result file normalizes the temporary source path to `synthetic/tiny.bib`. Input bytes, source identity, SHA-256 hash, package versions, build mode, setup time, per-round time, and runtime metadata remain unchanged.
+Parsing, rendering, formatting, and dataframe execution have different units and setup costs. Compare within a lane and dataset. The shared rendering fixture checks exact basic author-date output. Polars batch citation cases use the plugin's bundled APA style. The formatter corpus checks exact expectations from a pinned [bibtex-tidy](https://github.com/FlamingTempura/bibtex-tidy) revision and records differences from the published package.
 
-The run used RefKit revision `7110d53`, Python 3.12.0, macOS 26.6.2, and an Apple M3 Max with 36 GB of memory. The `tiny` workload contains three entries. `input.bibtex-text` includes in-memory parse and normalization. `render.prepared-citation` begins after bibliography and style setup.
-
-## Interpret the numbers
-
-These measurements describe two small workflows on one machine. They do not establish latency for large files, recovery, raw edits, full bibliographies, rendered trees, Polars plans, source builds, or Pyodide.
-
-The runner uses one process and deterministic participant order. It records raw rounds without process isolation, CPU affinity, or confidence intervals. Re-run the matching lane on the workload and host that control your decision.
-
-Read [How RefKit Works](/concepts/how-refkit-works) for the architecture behind these paths.
+The methodology guide lists every lane, its timed boundary, corpus coverage, known conformance differences, and commands for scaling experiments. A failed correctness check prevents that selected run from producing a timing comparison.

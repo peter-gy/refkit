@@ -181,7 +181,7 @@ for (const value of [
   withBasePath("/icons/file-pen-line-dark.svg"),
   withBasePath("/icons/table-properties-light.svg"),
   withBasePath("/icons/table-properties-dark.svg"),
-  `href="${withBasePath("/performance")}" aria-label="fast, view performance evidence">fast.</a>`,
+  `href="${withBasePath("/performance")}" aria-label="fast, view benchmark methodology">fast.</a>`,
 ]) {
   if (!index.includes(value)) errors.push(`home metadata or asset reference is missing: ${value}`)
 }
@@ -191,72 +191,6 @@ for (const path of publicFiles) {
   if (!readFileSync(join(publicRoot, path)).equals(readFileSync(join(outputRoot, path)))) {
     errors.push(`published asset differs from source: ${path}`)
   }
-}
-
-const benchmark = JSON.parse(
-  readFileSync(
-    join(outputRoot, "benchmarks", "refkit-0.0.4rc5-macos-arm64-2026-09-06.json"),
-    "utf8",
-  ),
-)
-if (benchmark.rows.length !== 60) errors.push("performance evidence must contain 60 raw rows")
-if (
-  benchmark.rows.some(
-    (row) =>
-      row.status !== "ok" ||
-      row.build_mode !== "release" ||
-      row.source_path !== "synthetic/tiny.bib",
-  )
-) {
-  errors.push("performance evidence has an unexpected status, build mode, or source path")
-}
-
-const performance = readFileSync(join(docsRoot, "performance.md"), "utf8")
-const tableRows = [...performance.matchAll(
-  /^\| `([^`]+)` \| ([^|]+?) \| ([\d,.]+) µs \|$/gm,
-)]
-const groupedRows = Map.groupBy(benchmark.rows, (row) => `${row.lane}|${row.package}`)
-if (tableRows.length !== groupedRows.size) {
-  errors.push("performance table must describe every measured lane and package once")
-}
-const described = new Set()
-for (const [, lane, packageLabel, publishedMedian] of tableRows) {
-  const matching = [...groupedRows.entries()].find(([, rows]) =>
-    rows[0].lane === lane && `${rows[0].package} ${rows[0].package_version}` === packageLabel,
-  )
-  if (!matching || described.has(matching[0])) {
-    errors.push(`performance table has an unknown or repeated measurement: ${lane} ${packageLabel}`)
-    continue
-  }
-  const [key, rows] = matching
-  described.add(key)
-  const seconds = rows.map((row) => row.seconds).sort((a, b) => a - b)
-  if (seconds.length !== rows[0].rounds || seconds.some((value) => !Number.isFinite(value) || value < 0)) {
-    errors.push(`performance evidence has invalid measurements for ${key}`)
-    continue
-  }
-  const middle = Math.floor(seconds.length / 2)
-  const median = (seconds.length % 2 ? seconds[middle] : (seconds[middle - 1] + seconds[middle]) / 2) * 1_000_000
-  if (Number(publishedMedian.replaceAll(",", "")) !== Math.round(median * 10) / 10) {
-    errors.push(`performance table median does not match evidence for ${key}`)
-  }
-}
-
-if (
-  benchmark.metadata.refkit_commit !== "7110d53" ||
-  benchmark.metadata.build_mode !== "release" ||
-  benchmark.metadata.python !== "3.12.0" ||
-  benchmark.metadata.packages.refkit !== "0.0.4rc5" ||
-  benchmark.metadata.packages.bibtexparser !== "2.0.0b9" ||
-  benchmark.metadata.packages.pybtex !== "0.26.1" ||
-  benchmark.metadata.packages["citeproc-py"] !== "0.10.1" ||
-  benchmark.rows.some((row) => row.rounds !== 12 || row.warmups !== 3) ||
-  benchmark.rows.some(
-    (row) =>
-      row.setup_included !== (row.lane === "input.bibtex-text"),
-  )
-) {
-  errors.push("performance evidence metadata or setup boundary drifted")
 }
 
 const htmlFiles = []

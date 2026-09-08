@@ -1,0 +1,288 @@
+{
+  "repository": "https://github.com/FlamingTempura/bibtex-tidy",
+  "revision": "f98c467e27a18e937c1c221caa3a6ecd760b69fb",
+  "license": "MIT",
+  "selection": "One first-document case per distinct formatter capability, selected before participant execution.",
+  "cases": [
+    {
+      "name": "defaults",
+      "title": "defaults",
+      "input": "@ARTICLE {feinberg1983technique,\n    number={1},\n    title={A technique for radiolabeling DNA restriction endonuclease fragments to high specific activity},\n  author=\"Feinberg, Andrew P and Vogelstein, Bert\",\n    journal    = {Analytical biochemistry},\n    volume = 132,\n    pages={6-13},\n    year={1983},\n    month={aug},\n    publisher={Elsevier},}\n",
+      "options": {},
+      "expected": "@article{feinberg1983technique,\n  number        = {1},\n  title         = {A technique for radiolabeling DNA restriction endonuclease fragments to high specific activity},\n  author        = \"Feinberg, Andrew P and Vogelstein, Bert\",\n  journal       = {Analytical biochemistry},\n  volume        = 132,\n  pages         = {6--13},\n  year          = {1983},\n  month         = {aug},\n  publisher     = {Elsevier}\n}\n",
+      "dimensions": [
+        "layout"
+      ],
+      "source_path": "test/spec/defaults.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "033257ff2ec7063ce3031dd4ec69c52dc88438058196b27e103c7472d8a7da2a",
+      "input_sha256": "1f7ec897ae85d54ed1075340bb09b5f5395491b15453f6931e1226c4fb0a722e",
+      "expected_sha256": "1bdd24c582bd24424ad0e5b3bf9dd3196bcad8b9228ea384b14654c42d16bc5f",
+      "options_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "concatenation",
+      "title": "remove empty fields",
+      "input": "@ARTICLE {test,\n  author   = aubert#\" and \"#Varacca,\n  journal = abc # { 123 },\n    title = \"A\"#\"B\"\n}\n",
+      "options": {},
+      "expected": "@article{test,\n  author        = aubert # \" and \" # Varacca,\n  journal       = abc # { 123 },\n  title         = \"A\" # \"B\"\n}\n",
+      "dimensions": [
+        "macro-concatenation"
+      ],
+      "source_path": "test/spec/concatenation.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "6d77400ae971cabd4e058f778178bb2b17b82601a822375af8084ce374788423",
+      "input_sha256": "d5cde436d36422e0852e59695dee82f4dec34cf66642faa9de66aae927b1fdf6",
+      "expected_sha256": "5bf02be9ebafd43c274ec3c3988304252874c032d716ffdb6ef0601ddcac3c99",
+      "options_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "big-numbers",
+      "title": "should not mess up long numbers",
+      "input": "@article{blah,\n  title={Blah},\n  isbn=993320203004020203040583893423432329499585399559303,\n  year=2009\n}\n",
+      "options": {},
+      "expected": "@article{blah,\n  title         = {Blah},\n  isbn          = 993320203004020203040583893423432329499585399559303,\n  year          = 2009\n}\n",
+      "dimensions": [
+        "numeric-precision"
+      ],
+      "source_path": "test/spec/big-numbers.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "7e4f01354c9f20b4338c2dbc2e8583538e9c9f17c037d146142d38cced4ebbe7",
+      "input_sha256": "ece1bb39af5139677f15c82b9ce5aa6a1f5c22220c5a6ed0ba33acd58b52fb09",
+      "expected_sha256": "f18528860bf20605466b8000edefec5b09e29404b43b17c093b976abd35010e5",
+      "options_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "paragraph",
+      "title": "paragraphs in values",
+      "input": " @ARTICLE {foobar, title={Foo Bar}, abstract={ Paragraph 1\n ...continued\n \n\n Paragraph 2\r\n\r\nParagraph 3\r\rParagraph 4 }, }",
+      "options": {
+        "align": 20
+      },
+      "expected": "@article{foobar,\n  title               = {Foo Bar},\n  abstract            = {\n    Paragraph 1 ...continued\n\n    Paragraph 2\n\n    Paragraph 3\n\n    Paragraph 4\n  }\n}\n",
+      "dimensions": [
+        "multiline-values"
+      ],
+      "source_path": "test/spec/paragraph.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "672d3ee719cd6b84af4ffe397a6397683dca5ab5fb305139ca1ec6e422afb251",
+      "input_sha256": "b13c42f7fcddaa3ed2fba1f4debf36cca69fa0096c18ce5f9b00eb12562f9bb5",
+      "expected_sha256": "d9693f44485cb2e784a366ba12ae2391795a70de1944c4d12cc2d569fc922764",
+      "options_sha256": "a021b3ab6949beee24ec95ccf5dae37e5a67034e58ff23a30f23e019c3ca3de3"
+    },
+    {
+      "name": "at-symbol-in-comment",
+      "title": "@ in comment",
+      "input": "@blah @article{foo,foo=bar}\nfoo@blah @article{bar,foo=bar}\n",
+      "options": {},
+      "expected": "@blah\n@article{foo,\n  foo           = bar\n}\nfoo@blah\n@article{bar,\n  foo           = bar\n}\n",
+      "dimensions": [
+        "comments"
+      ],
+      "source_path": "test/spec/at-symbol-in-comment.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "abe52c37d57e4a595efcd903ecbc7959b3635a5f3195267b656f8e7b1b57c8ef",
+      "input_sha256": "16cf73b9e5dbd83328049e660c064c4b431589b1db01ebd2aaebb84431aca274",
+      "expected_sha256": "d786fa62457161c890a2af8ff4ab5058d97cca0a6cf87856a2a51166e1a5b5f1",
+      "options_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "at-symbol-in-title",
+      "title": "@ in title",
+      "input": "@article{ art,\nAuthor = {No, one},\nTitle = {{Blah blah blah blah blah blah blah blah blah blah blah blah blah blah\n  @blah blah blah blah blah.}},\n}\n",
+      "options": {},
+      "expected": "@article{art,\n  author        = {No, one},\n  title         = {{Blah blah blah blah blah blah blah blah blah blah blah blah blah blah \\@blah blah blah blah blah.}}\n}\n",
+      "dimensions": [
+        "at-signs"
+      ],
+      "source_path": "test/spec/at-symbol-in-title.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "7d5686b879cd9cc60527ecbd741744e72a2bc4e20ecc34ef204f432b1721730e",
+      "input_sha256": "0eecf3f4e2221c1b7a1c6ec1516311e2f08330093d28995452db86d2d4da796b",
+      "expected_sha256": "adb807c251a97a91a4f7c4dc5bf26eb511193a72e5c7798550d2c96a6e8b5d24",
+      "options_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "escape",
+      "title": "escape special characters",
+      "input": "@misc{q,\n  author = {Chars \\\", _, $, @, &, é, ɛ, ū, {\"}},\n  title = {Math expression $\\\\alpha$ stay unescaped}\n}\n",
+      "options": {
+        "escape": true
+      },
+      "expected": "@misc{q,\n  author        = {Chars \\\", \\_, \\$, \\@, \\&, \\'{e}, \\varepsilon{}, \\={u}, {\"}},\n  title         = {Math expression $\\\\alpha$ stay unescaped}\n}\n",
+      "dimensions": [
+        "unicode-escaping"
+      ],
+      "source_path": "test/spec/escape.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "d97386ed2584c0d5b14f5d9a2f8f4926dec66566ddf5a9ca2a993baebd849482",
+      "input_sha256": "fe558775327f3e054546f7e98c82074ae6b96afc5ee25b7bfabb4095f419e263",
+      "expected_sha256": "1f0676e277bbbf33204169d7689a934e863418c8ca219e2e937f44fffab9c96a",
+      "options_sha256": "5b103cc0fd80c80743b5f5ddce13ee97757a68ec11c0037abc31d1c191d333a2"
+    },
+    {
+      "name": "enclosing-braces-around-command",
+      "title": "enclosing braces should keep braces directly around commands",
+      "input": "@incollection{BlattelMink2021,\n\ttitle = {{Das Innovationsverst{\\\"a}ndnis von Joseph A. Schumpeter}},\n\tauthor = {Bl{\\\"a}ttel-Mink, Birgit},\n}\n",
+      "options": {
+        "enclosingBraces": true
+      },
+      "expected": "@incollection{BlattelMink2021,\n  title         = {{Das Innovationsverst{\\\"a}ndnis von Joseph A. Schumpeter}},\n  author        = {Bl{\\\"a}ttel-Mink, Birgit}\n}\n",
+      "dimensions": [
+        "tex-braces"
+      ],
+      "source_path": "test/spec/enclosing-braces-around-command.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "c597ac4e7dc7b6fa84bcaaf85e31ce40f46aa26274461191e7df2d797a812be9",
+      "input_sha256": "0118ea41210f32a87466d6ff8ab3e790dcebbea21ed6faeab1651b5f53a574c8",
+      "expected_sha256": "1199b24fa26f2ff9d5cf42bff13d1399ae7be85b4fa1f264e8efed0306c28bf2",
+      "options_sha256": "a1907391e8040994b3cd30141f299765a0e04a889d98a680d9a6e7abed96f5a9"
+    },
+    {
+      "name": "numeric",
+      "title": "numeric (enforce numeric values)",
+      "input": "@ARTICLE {feinberg1983technique,\n  number={1},\n  title={A technique for radiolabeling DNA restriction endonuclease fragments to high specific activity},\nauthor=\"Feinberg, Andrew P and Vogelstein, Bert\",\n  journal    = {Analytical biochemistry},\n  volume = 132,\n  pages={6-13},\n  year={1983},\n  month={aug},\n  publisher={Elsevier},}\n",
+      "options": {
+        "numeric": true
+      },
+      "expected": "@article{feinberg1983technique,\n  number        = 1,\n  title         = {A technique for radiolabeling DNA restriction endonuclease fragments to high specific activity},\n  author        = \"Feinberg, Andrew P and Vogelstein, Bert\",\n  journal       = {Analytical biochemistry},\n  volume        = 132,\n  pages         = {6--13},\n  year          = 1983,\n  month         = {aug},\n  publisher     = {Elsevier}\n}\n",
+      "dimensions": [
+        "numeric-values"
+      ],
+      "source_path": "test/spec/numeric.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "5b29e8d460f1b7f65a3397e852bf803d38dcf7c36f5f716a20575faf1af48174",
+      "input_sha256": "42f2d8829f7ec59f11c2550927f286c26f36e74d33605fb3a3959984ce7f3ad1",
+      "expected_sha256": "2a71e67e45eff99e50513490f17efa3d3c3deb55a34109107307af98ef6ccb04",
+      "options_sha256": "723fef6d0a3ad894fc61a5c3a35e139d6d95320c9f0088d3b79b3ffe2b0714e9"
+    },
+    {
+      "name": "remove-empty-fields",
+      "title": "remove empty fields",
+      "input": "@ARTICLE {feinberg1983technique,\n    number={1},\n    title={A technique for radiolabeling DNA restriction endonuclease fragments to high specific activity},\n  author=\"Feinberg, Andrew P and Vogelstein, Bert\",\n    journal    = {Analytical biochemistry},\n    volume = 132,\n    pages={},\n    year={},\n    day,\n    month={aug},\n    publisher={Elsevier},}\n",
+      "options": {
+        "removeEmptyFields": true
+      },
+      "expected": "@article{feinberg1983technique,\n  number        = {1},\n  title         = {A technique for radiolabeling DNA restriction endonuclease fragments to high specific activity},\n  author        = \"Feinberg, Andrew P and Vogelstein, Bert\",\n  journal       = {Analytical biochemistry},\n  volume        = 132,\n  month         = {aug},\n  publisher     = {Elsevier}\n}\n",
+      "dimensions": [
+        "empty-fields"
+      ],
+      "source_path": "test/spec/remove-empty-fields.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "a15c0f3cf629d635eb95da319bf41bc6884a284859868646f74af8e7c28fd9aa",
+      "input_sha256": "158ceb5551cc8e6c31523a4373f4b46e82118ab64a839b48c9ff249c8bae66ef",
+      "expected_sha256": "3c167099b67bcfae65ced4791d425cefc1b8aed65c6072e75039fcf64626fc2a",
+      "options_sha256": "ff7f799d1a009f64c433a5f1cf27ee3477e5497b5dc32ff375c251153a4d8af4"
+    },
+    {
+      "name": "remove-duplicate-fields",
+      "title": "remove duplicate fields",
+      "input": "@book{test,\nauthor = \"Alan, Jo\",\nauthor = \"Alan, Les\",\nyear = {1990},\ntitle = {Methods}\n}\n",
+      "options": {},
+      "expected": "@book{test,\n  author        = \"Alan, Jo\",\n  year          = {1990},\n  title         = {Methods}\n}\n",
+      "dimensions": [
+        "duplicate-fields"
+      ],
+      "source_path": "test/spec/remove-duplicate-fields.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "d84e90dd64055d61ff57ff8b3b4bcffb2b5c35fa4d166130ad51085d3c43e69e",
+      "input_sha256": "d79f429e85c6ff47436311dd648757a732d6ac6ae4bb56e47423d15502e4f669",
+      "expected_sha256": "d91c35c3010df00c4980655ecb30f167472e01ada29cd9e644fe241cfe73be63",
+      "options_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "sort-multi-key",
+      "title": "sort entries by multiple keys",
+      "input": "@inproceedings{Q,\n  title = {Q},\n  year = 2008\n}\n@article{W,\n  title = {W},\n  year = 2001\n}\n@article{E,\n  title = {E},\n  year = 2004\n}\n@book{R,\n  title = {R},\n  year = 2018\n}\n@Misc{R,\n  title = {R},\n  year = 2011\n}\n@conference{T,\n  title = {T},\n  year = 1998\n}\n@ARTICLE{Y,\n  title = {Y},\n  year = 2019\n}\n@misc{U,\n  title = {U},\n  year = 2001\n}\n@inproceedings{I,\n  title = {I},\n  year = 2018\n}\n",
+      "options": {
+        "sort": [
+          "type",
+          "title"
+        ]
+      },
+      "expected": "@article{E,\n  title         = {E},\n  year          = 2004\n}\n@article{W,\n  title         = {W},\n  year          = 2001\n}\n@article{Y,\n  title         = {Y},\n  year          = 2019\n}\n@book{R,\n  title         = {R},\n  year          = 2018\n}\n@conference{T,\n  title         = {T},\n  year          = 1998\n}\n@inproceedings{I,\n  title         = {I},\n  year          = 2018\n}\n@inproceedings{Q,\n  title         = {Q},\n  year          = 2008\n}\n@misc{R,\n  title         = {R},\n  year          = 2011\n}\n@misc{U,\n  title         = {U},\n  year          = 2001\n}\n",
+      "dimensions": [
+        "multi-field-sort"
+      ],
+      "source_path": "test/spec/sort-multi-key.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "806083d8dfa5ed7dd2ff584c49639cb29779ad73f0d0843cd825f1aaf625b5cc",
+      "input_sha256": "fb78adf75caad32c85e2881b7ff14b9471d3592b79fe03485adc711a5755a60a",
+      "expected_sha256": "14331a5564a7d8d291aced78faca5f49593c3f4a054dd56f14b3f6ea4f4496b8",
+      "options_sha256": "9a6babb32b274bbc356822015e183968eb779a10eafe87cb5d7bd051670d2572"
+    },
+    {
+      "name": "duplicate-merge-first",
+      "title": "merge duplicates (keep first)",
+      "input": "@book{sweig42,\n\ttitle        = {The impossible book},\n\tauthor       = {Stefa{n} Sweig},\n\tyear         = 1942,\n\tmonth        = mar,\n\tpublisher    = {Dead Poet Society}\n}\n@book{sweigdd42,\n\ttitle        = {The impossible BOOK},\n\tauthor       = {Stefa{n} Sweig},\n\tyear         = 1942,\n\tmonth        = mar,\n\tpublisher    = {Dead Poet Society},\n\t\tn=1\n}\n",
+      "options": {
+        "merge": "first"
+      },
+      "expected": "@book{sweig42,\n  title         = {The impossible book},\n  author        = {Stefa{n} Sweig},\n  year          = 1942,\n  month         = mar,\n  publisher     = {Dead Poet Society}\n}\n",
+      "dimensions": [
+        "merge-first"
+      ],
+      "source_path": "test/spec/duplicate-merge-first.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "7f583551ae8144cac71bc6030b1815a17625ab28075d548f3e8900e9fc7ea3e1",
+      "input_sha256": "6ffa98748f7fa66178789394fb1c0c031924c8e6f7a4ff21ab8e43ec2fa9230d",
+      "expected_sha256": "e4755c1e3bf4430d7ab690b57d291f128c44280f6a1e0e9c0d0c09813d70e31d",
+      "options_sha256": "6a5366703ca7efdaba2091c359d4f79e5598fd3ffed1e389aee83ace1327fd58"
+    },
+    {
+      "name": "duplicate-merge-last",
+      "title": "merge duplicates (keep last)",
+      "input": "@book{sweig42,\n\ttitle        = {The impossible book},\n\tauthor       = {Stefa{n} Sweig},\n\tyear         = 1942,\n\tmonth        = mar,\n\tpublisher    = {Dead Poet Society}\n}\n@book{sweigdd42,\n\ttitle        = {The impossible BOOK},\n\tauthor       = {Stefa{n} Sweig},\n\tyear         = 1942,\n\tmonth        = mar,\n\tpublisher    = {Dead Poet Society},\n\t\tn=1\n}\n",
+      "options": {
+        "merge": "last"
+      },
+      "expected": "@book{sweigdd42,\n  title         = {The impossible BOOK},\n  author        = {Stefa{n} Sweig},\n  year          = 1942,\n  month         = mar,\n  publisher     = {Dead Poet Society},\n  n             = 1\n}\n",
+      "dimensions": [
+        "merge-last"
+      ],
+      "source_path": "test/spec/duplicate-merge-last.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "7901116373a4a39a5f5735f7c71a28df18c60a9f78ce05b9bf235cedddf60928",
+      "input_sha256": "6ffa98748f7fa66178789394fb1c0c031924c8e6f7a4ff21ab8e43ec2fa9230d",
+      "expected_sha256": "a3545c58cfe81cdd8f08820c691689f439b7277cc70a603198edb46c7f6e25cc",
+      "options_sha256": "1a173af4c72679971b712efbd35edc7f3d9fa70b4797bcaf9948e3f56fec2480"
+    },
+    {
+      "name": "duplicate-merge-overwrite",
+      "title": "merge duplicates (overwrite)",
+      "input": "@book{sweig42,\n\ttitle        = {The impossible book},\n\tauthor       = {Stefa{n} Sweig},\n\tyear         = 1942,\n\tmonth        = mar,\n\tpublisher    = {Dead Poet Society}\n}\n@book{sweigdd42,\n\ttitle        = {The impossible BOOK},\n\tauthor       = {Stefa{n} Sweig},\n\tyear         = 1942,\n\tmonth        = mar,\n\tpublisher    = {Dead Poet Society},\n\t\tn=1\n}\n",
+      "options": {
+        "merge": "overwrite"
+      },
+      "expected": "@book{sweig42,\n  title         = {The impossible BOOK},\n  author        = {Stefa{n} Sweig},\n  year          = 1942,\n  month         = mar,\n  publisher     = {Dead Poet Society},\n  n             = 1\n}\n",
+      "dimensions": [
+        "merge-overwrite"
+      ],
+      "source_path": "test/spec/duplicate-merge-overwrite.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "7915f16f32cde20ef9fffb5b459354de0c67418169bd181474922206ab295150",
+      "input_sha256": "6ffa98748f7fa66178789394fb1c0c031924c8e6f7a4ff21ab8e43ec2fa9230d",
+      "expected_sha256": "4fefe40d731a0cff162db8c80f17fd0ed7f33e19283e7d1b234d6f68ad40d270",
+      "options_sha256": "aafa9b678aa584c36bd0a0f226cac4d45fce68a34cb3528ba3ce46da1e3965bf"
+    },
+    {
+      "name": "generate-keys",
+      "title": "Generate Keys",
+      "input": "@ARTICLE{article-minimal,\n  author = {Aamport, L[eslie] A.},\n  title = {The Gnats and Gnus Document Preparation System},\n  journal = {\\\\mbox{G-Animal's} Journal},\n  year = 1986,\n}\n\n@ARTICLE{article-full,\n  author = {Aamport, L[eslie] A.},\n  title = {The Gnats and Gnus Document Preparation System},\n  journal = {\\\\mbox{G-Animal's} Journal},\n  year = 1986,\n  volume = 41,\n  number = 7,\n  pages = \"73+\",\n  month = jul,\n  note = \"This is a full ARTICLE entry\",\n}\n\n@INBOOK{inbook-minimal,\n  author = \"Knuth, Donald E.\",\n  title = \"Fundamental Algorithms\",\n  publisher = \"Addison-Wesley\",\n  year = \"1973\",\n  chapter = \"1.2\",\n}\n\n@INBOOK{inbook-full,\n  author = \"Knuth, Donald E.\",\n  title = \"Fundamental Algorithms\",\n  volume = 1,\n  series = \"The Art of Computer Programming\",\n  publisher = \"Addison-Wesley\",\n  address = \"Reading, Massachusetts\",\n  edition = \"Second\",\n  month = \"10~\" # jan,\n  year = \"1973\",\n  type = \"Section\",\n  chapter = \"1.2\",\n  pages = \"10--119\",\n  note = \"This is a full INBOOK entry\",\n}\n\n@BOOK{whole-set,\n  author = \"Knuth, Donald E.\",\n  publisher = \"Addison-Wesley\",\n  title = \"The Art of Computer Programming\",\n  series = \"Four volumes\",\n  year = \"1968\",\n  note = \"Seven volumes planned (this is a cross-referenced set of BOOKs)\",\n}\n\n@BOOKLET{booklet-minimal,\n  key = \"Kn{\\\\printfirst{v}{1987}}\",\n  title = \"The Programming of Computer Art\",\n}\n\n@BOOK{whole-collection,\n  editor = \"David J. Lipcoll and D. H. Lawrie and A. H. Sameh\",\n  title = \"High Speed Computer and Algorithm Organization\",\n  booktitle = \"High Speed Computer and Algorithm Organization\",\n  number = 23,\n  series = \"Fast Computers\",\n  publisher = \"Academic Press\",\n  address = \"New York\",\n  edition = \"Third\",\n  month = sep,\n  year = 1977,\n  note = \"This is a cross-referenced BOOK (collection) entry\",\n}\n\n@MANUAL{manual-minimal,\n  key = \"Manmaker\",\n  title = \"The Definitive Computer Manual\",\n}\n\n@MANUAL{manual-full,\n  author = \"Larry Manmaker\",\n  title = \"The Definitive Computer Manual\",\n  organization = \"Chips-R-Us\",\n  address = \"Silicon Valley\",\n  edition = \"Silver\",\n  month = apr # \"-\" # may,\n  year = 1986,\n  note = \"This is a full MANUAL entry\",\n}\n\n@MASTERSTHESIS{mastersthesis-minimal,\n  author = \"{\\\\'{E}}douard Masterly\",\n  title = \"Mastering Thesis Writing\",\n  school = \"Stanford University\",\n  year = 1988,\n}\n\n@INPROCEEDINGS{inproceedings-full,\n  author = \"Oaho, Alfred V. and Jeffrey D. Ullman and Mihalis Yannakakis\",\n  title = \"On Notions of Information Transfer in {VLSI} Circuits\",\n  editor = \"Wizard V. Oz and Mihalis Yannakakis\",\n  booktitle = \"Proc. Fifteenth Annual ACM\" # STOC,\n  number = 17,\n  series = \"All ACM Conferences\",\n  pages = \"133--139\",\n  month = mar,\n  year = 1983,\n  address = \"Boston\",\n  organization = ACM,\n  publisher = \"Academic Press\",\n  note = \"This is a full INPROCEDINGS entry\",\n}\n\n@PROCEEDINGS{whole-proceedings,\n  key = STOC-key,\n  organization = ACM,\n  title = \"Proc. Fifteenth Annual\" # STOC,\n  address = \"Boston\",\n  year = 1983,\n  booktitle = \"Proc. Fifteenth Annual ACM\" # STOC,\n  note = \"This is a cross-referenced PROCEEDINGS\",\n}\n\n@UNPUBLISHED{unpublished-minimal,\n  author = \"Ulrich Underwood and Ned Net and Paul Pot\",\n  title = \"Lower Bounds for Wishful Research Results\",\n  note = \"Talk at Fanstord University (this is a minimal UNPUBLISHED entry)\",\n}\n\n@UNPUBLISHED{unpublished-full,\n  author = \"Ulrich Underwood and Ned Net and Paul Pot\",\n  title = \"Lower Bounds for Wishful Research Results\",\n  month = nov # \", \" # dec,\n  year = 1988,\n  note = \"Talk at Fanstord University (this is a full UNPUBLISHED entry)\",\n}\n\n@UNPUBLISHED{unpublished-full,\n  author = \"Ulrich Underwood and Ned Net and Paul Pot\",\n  booktitle = \"Lower Bounds for Wishful Research Results 2\",\n  month = nov # \", \" # dec,\n  year = 1988,\n  note = \"Talk at Fanstord University (this is a full UNPUBLISHED entry)\",\n}\n@inproceedings{aristidou2008predicting,\n  title = {\n  Predicting Missing Markers to Drive Real-Time Centre of Rotation\n  \n    Estimation\n  },\n  author       = {Aristidou, Andreas and Cameron, Jonathan and Lasenby, Joan},\n  year         = 2008,\n  booktitle    = {\n    AMDO '08: Proceedings of the 5th international conference on Articulated\n  \n    Motion and Deformable Objects\n  },\n  location     = {Port d'Andratx, Mallorca, Spain},\n  publisher    = {Springer-Verlag},\n  address      = {Berlin, Heidelberg},\n  pages        = {238--247},\n  isbn         = {978-3-540-70516-1}\n  }\n\n  @article{foo_bar,\n    author = {~[]()=Foo Bar , Moo},\n    year = 2000,\n    title = \"Baa baa\",\n  }\n",
+      "options": {
+        "generateKeys": true
+      },
+      "expected": "@article{aamport1986gnats1,\n  author        = {Aamport, L[eslie] A.},\n  title         = {The Gnats and Gnus Document Preparation System},\n  journal       = {\\\\mbox{G-Animal's} Journal},\n  year          = 1986\n}\n@article{aamport1986gnats2,\n  author        = {Aamport, L[eslie] A.},\n  title         = {The Gnats and Gnus Document Preparation System},\n  journal       = {\\\\mbox{G-Animal's} Journal},\n  year          = 1986,\n  volume        = 41,\n  number        = 7,\n  pages         = \"73+\",\n  month         = jul,\n  note          = \"This is a full ARTICLE entry\"\n}\n@inbook{knuth1973fundamental1,\n  author        = \"Knuth, Donald E.\",\n  title         = \"Fundamental Algorithms\",\n  publisher     = \"Addison-Wesley\",\n  year          = \"1973\",\n  chapter       = \"1.2\"\n}\n@inbook{knuth1973fundamental2,\n  author        = \"Knuth, Donald E.\",\n  title         = \"Fundamental Algorithms\",\n  volume        = 1,\n  series        = \"The Art of Computer Programming\",\n  publisher     = \"Addison-Wesley\",\n  address       = \"Reading, Massachusetts\",\n  edition       = \"Second\",\n  month         = \"10~\" # jan,\n  year          = \"1973\",\n  type          = \"Section\",\n  chapter       = \"1.2\",\n  pages         = \"10--119\",\n  note          = \"This is a full INBOOK entry\"\n}\n@book{knuth1968art,\n  author        = \"Knuth, Donald E.\",\n  publisher     = \"Addison-Wesley\",\n  title         = \"The Art of Computer Programming\",\n  series        = \"Four volumes\",\n  year          = \"1968\",\n  note          = \"Seven volumes planned (this is a cross-referenced set of BOOKs)\"\n}\n@booklet{booklet-minimal,\n  key           = \"Kn{\\\\printfirst{v}{1987}}\",\n  title         = \"The Programming of Computer Art\"\n}\n@book{whole-collection,\n  editor        = \"David J. Lipcoll and D. H. Lawrie and A. H. Sameh\",\n  title         = \"High Speed Computer and Algorithm Organization\",\n  booktitle     = \"High Speed Computer and Algorithm Organization\",\n  number        = 23,\n  series        = \"Fast Computers\",\n  publisher     = \"Academic Press\",\n  address       = \"New York\",\n  edition       = \"Third\",\n  month         = sep,\n  year          = 1977,\n  note          = \"This is a cross-referenced BOOK (collection) entry\"\n}\n@manual{manual-minimal,\n  key           = \"Manmaker\",\n  title         = \"The Definitive Computer Manual\"\n}\n@manual{manmaker1986definitive,\n  author        = \"Larry Manmaker\",\n  title         = \"The Definitive Computer Manual\",\n  organization  = \"Chips-R-Us\",\n  address       = \"Silicon Valley\",\n  edition       = \"Silver\",\n  month         = apr # \"-\" # may,\n  year          = 1986,\n  note          = \"This is a full MANUAL entry\"\n}\n@mastersthesis{masterly1988mastering,\n  author        = \"{\\\\'{E}}douard Masterly\",\n  title         = \"Mastering Thesis Writing\",\n  school        = \"Stanford University\",\n  year          = 1988\n}\n@inproceedings{oaho1983notions,\n  author        = \"Oaho, Alfred V. and Jeffrey D. Ullman and Mihalis Yannakakis\",\n  title         = \"On Notions of Information Transfer in {VLSI} Circuits\",\n  editor        = \"Wizard V. Oz and Mihalis Yannakakis\",\n  booktitle     = \"Proc. Fifteenth Annual ACM\" # STOC,\n  number        = 17,\n  series        = \"All ACM Conferences\",\n  pages         = \"133--139\",\n  month         = mar,\n  year          = 1983,\n  address       = \"Boston\",\n  organization  = ACM,\n  publisher     = \"Academic Press\",\n  note          = \"This is a full INPROCEDINGS entry\"\n}\n@proceedings{whole-proceedings,\n  key           = STOC-key,\n  organization  = ACM,\n  title         = \"Proc. Fifteenth Annual\" # STOC,\n  address       = \"Boston\",\n  year          = 1983,\n  booktitle     = \"Proc. Fifteenth Annual ACM\" # STOC,\n  note          = \"This is a cross-referenced PROCEEDINGS\"\n}\n@unpublished{unpublished-minimal,\n  author        = \"Ulrich Underwood and Ned Net and Paul Pot\",\n  title         = \"Lower Bounds for Wishful Research Results\",\n  note          = \"Talk at Fanstord University (this is a minimal UNPUBLISHED entry)\"\n}\n@unpublished{underwood1988lower1,\n  author        = \"Ulrich Underwood and Ned Net and Paul Pot\",\n  title         = \"Lower Bounds for Wishful Research Results\",\n  month         = nov # \", \" # dec,\n  year          = 1988,\n  note          = \"Talk at Fanstord University (this is a full UNPUBLISHED entry)\"\n}\n@unpublished{underwood1988lower2,\n  author        = \"Ulrich Underwood and Ned Net and Paul Pot\",\n  booktitle     = \"Lower Bounds for Wishful Research Results 2\",\n  month         = nov # \", \" # dec,\n  year          = 1988,\n  note          = \"Talk at Fanstord University (this is a full UNPUBLISHED entry)\"\n}\n@inproceedings{aristidou2008predicting,\n  title         = {\n    Predicting Missing Markers to Drive Real-Time Centre of Rotation\n\n    Estimation\n  },\n  author        = {Aristidou, Andreas and Cameron, Jonathan and Lasenby, Joan},\n  year          = 2008,\n  booktitle     = {\n    AMDO '08: Proceedings of the 5th international conference on Articulated\n\n    Motion and Deformable Objects\n  },\n  location      = {Port d'Andratx, Mallorca, Spain},\n  publisher     = {Springer-Verlag},\n  address       = {Berlin, Heidelberg},\n  pages         = {238--247},\n  isbn          = {978-3-540-70516-1}\n}\n@article{foobar2000baa,\n  author        = {~[]()=Foo Bar , Moo},\n  year          = 2000,\n  title         = \"Baa baa\"\n}\n",
+      "dimensions": [
+        "key-collisions",
+        "name-parsing"
+      ],
+      "source_path": "test/spec/generate-keys.spec.yaml",
+      "source_document": 1,
+      "source_sha256": "bbd733bc251aeb6c0d8696341e61be43cbc1cbd29061c476cbb0a446f928a9c6",
+      "input_sha256": "10ce02960426ab9a61eba0bc058b1940056a31462371da79d321ab8bef51e9be",
+      "expected_sha256": "29375a752440a51145a905e07b9f347081f139f881624ca487bb3a34d2771485",
+      "options_sha256": "38221dd5ca8af2b54a9fc46a5deb46cdcb38aedec35b3eedc1aa7cffc9f8bfe5"
+    }
+  ]
+}

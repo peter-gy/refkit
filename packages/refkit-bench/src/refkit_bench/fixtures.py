@@ -5,21 +5,11 @@ from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
-SIZES: dict[str, int] = {
-    "tiny": 3,
-    "medium": 48,
-    "large": 192,
-}
+SIZES = {"tiny": 3, "medium": 48, "large": 192}
 SCALING_SIZES = {"1k": 1_000, "5k": 5_000, "10k": 10_000}
-WORKLOAD_NAMES = (*SIZES, "real")
-WORKLOAD_FAMILY = "synthetic_scale"
-WORKLOAD_SOURCE_LICENSE = "Apache-2.0"
-REAL_WORKLOAD_FAMILY = "real_bibliography_subset"
-REAL_WORKLOAD_SOURCE_LICENSE = "CC0-1.0"
-
-FAILED_BIBTEX = "@article{unfinished, title = {Missing closing braces"
+WORKLOAD_NAMES = (*SIZES, "real", *SCALING_SIZES)
 JOURNAL = "Journal of Citation Benchmarks"
-REAL_RECORDS_PATH = Path(__file__).resolve().parent / "data" / "real-bibliography" / "records.json"
+REAL_RECORDS_PATH = Path(__file__).with_name("data") / "real-bibliography" / "records.json"
 
 
 @dataclass(frozen=True)
@@ -54,79 +44,35 @@ class Workload:
     size: str
     records: tuple[Record, ...]
     bibtex: str
-    raw_bibtex: str
-    dirty_bibtex: str
-    duplicate_bibtex: str
     csl_json: list[dict[str, object]]
-    bibtex_path: Path
-    raw_bibtex_path: Path
-    dirty_bibtex_path: Path
-    duplicate_bibtex_path: Path
-    family_name: str = WORKLOAD_FAMILY
-    source_license_name: str = WORKLOAD_SOURCE_LICENSE
-    raw_preservation_terms: tuple[str, ...] = ()
-    duplicate_entry_key: str = ""
-    duplicate_field_key: str = ""
-    duplicate_field_name: str = "title"
+    source_license_name: str
+    family_name: str
+    provenance: str
 
     @property
     def keys(self) -> list[str]:
         return [record.key for record in self.records]
 
     @property
-    def family(self) -> str:
-        return self.family_name
-
-    @property
     def record_count(self) -> int:
         return len(self.records)
 
-    def source_text(self, source_format: str) -> str:
-        if source_format == "failed_bibtex":
-            return FAILED_BIBTEX
-        if source_format == "bibtex":
-            return self.bibtex
-        if source_format == "raw_bibtex":
-            return self.raw_bibtex
-        if source_format == "dirty_bibtex":
-            return self.dirty_bibtex
-        if source_format == "duplicate_bibtex":
-            return self.duplicate_bibtex
-        if source_format == "csl_json":
-            return json.dumps(self.csl_json, sort_keys=True, separators=(",", ":"))
-        return ""
 
-    def source_name(self, source_format: str) -> str:
-        if not self.source_text(source_format):
-            return ""
-        return f"{self.family}:{self.size}:{source_format}"
-
-    def source_path(self, source_format: str) -> str:
-        if source_format == "bibtex":
-            return str(self.bibtex_path)
-        if source_format == "raw_bibtex":
-            return str(self.raw_bibtex_path)
-        if source_format == "dirty_bibtex":
-            return str(self.dirty_bibtex_path)
-        if source_format == "duplicate_bibtex":
-            return str(self.duplicate_bibtex_path)
-        return ""
-
-    def source_license(self, source_format: str) -> str:
-        if source_format == "failed_bibtex":
-            return WORKLOAD_SOURCE_LICENSE
-        if not self.source_text(source_format):
-            return ""
-        return self.source_license_name
-
-    def source_byte_count(self, source_format: str) -> int:
-        return len(self.source_text(source_format).encode("utf-8"))
-
-    def source_sha256(self, source_format: str) -> str:
-        text = self.source_text(source_format)
-        if not text:
-            return ""
-        return sha256(text.encode("utf-8")).hexdigest()
+def load_workload(name: str) -> Workload:
+    records = real_records() if name == "real" else records_for_size(name)
+    return Workload(
+        size=name,
+        records=records,
+        bibtex=bibtex_for_records(records),
+        csl_json=csl_json_for_records(records),
+        source_license_name="CC0-1.0" if name == "real" else "Apache-2.0",
+        family_name="curated-metadata" if name == "real" else "fixed-shape-scaling",
+        provenance=(
+            "records.json:" + sha256(REAL_RECORDS_PATH.read_bytes()).hexdigest()
+            if name == "real"
+            else "refkit-bench synthetic records v1"
+        ),
+    )
 
 
 def records_for_size(size: str) -> tuple[Record, ...]:
@@ -138,143 +84,8 @@ def records_for_size(size: str) -> tuple[Record, ...]:
     return tuple(_record(index) for index in range(1, count + 1))
 
 
-def materialize_workload(size: str, directory: Path) -> Workload:
-    if size == "real":
-        return materialize_real_workload(directory)
-
-    records = records_for_size(size)
-    bibtex = bibtex_for_records(records)
-    raw_bibtex = raw_bibtex_for_records(records)
-    dirty_bibtex = dirty_bibtex_for_records(records)
-    duplicate_bibtex = duplicate_bibtex_for_records(records)
-    bibtex_path = directory / f"{size}.bib"
-    raw_bibtex_path = directory / f"{size}-raw.bib"
-    dirty_bibtex_path = directory / f"{size}-dirty.bib"
-    duplicate_bibtex_path = directory / f"{size}-duplicates.bib"
-    bibtex_path.write_text(bibtex, encoding="utf-8")
-    raw_bibtex_path.write_text(raw_bibtex, encoding="utf-8")
-    dirty_bibtex_path.write_text(dirty_bibtex, encoding="utf-8")
-    duplicate_bibtex_path.write_text(duplicate_bibtex, encoding="utf-8")
-    return Workload(
-        size=size,
-        records=records,
-        bibtex=bibtex,
-        raw_bibtex=raw_bibtex,
-        dirty_bibtex=dirty_bibtex,
-        duplicate_bibtex=duplicate_bibtex,
-        csl_json=csl_json_for_records(records),
-        bibtex_path=bibtex_path,
-        raw_bibtex_path=raw_bibtex_path,
-        dirty_bibtex_path=dirty_bibtex_path,
-        duplicate_bibtex_path=duplicate_bibtex_path,
-        raw_preservation_terms=(
-            "benchmark fixture with raw BibTeX blocks",
-            "benchjournal",
-            "Reference benchmark fixture",
-        ),
-        duplicate_entry_key=records[0].key,
-        duplicate_field_key=records[1].key,
-    )
-
-
-def materialize_real_workload(directory: Path) -> Workload:
-    records = real_records()
-    bibtex = bibtex_for_records(records)
-    raw_bibtex = "% Curated bibliography metadata\n" + bibtex
-    dirty_bibtex = bibtex
-    duplicate_bibtex = duplicate_bibtex_for_records(records)
-    bibtex_path = directory / "real.bib"
-    raw_bibtex_path = directory / "real-raw.bib"
-    dirty_bibtex_path = directory / "real-dirty.bib"
-    duplicate_bibtex_path = directory / "real-duplicates.bib"
-    bibtex_path.write_text(bibtex, encoding="utf-8")
-    raw_bibtex_path.write_text(raw_bibtex, encoding="utf-8")
-    dirty_bibtex_path.write_text(dirty_bibtex, encoding="utf-8")
-    duplicate_bibtex_path.write_text(duplicate_bibtex, encoding="utf-8")
-    return Workload(
-        size="real",
-        records=records,
-        bibtex=bibtex,
-        raw_bibtex=raw_bibtex,
-        dirty_bibtex=dirty_bibtex,
-        duplicate_bibtex=duplicate_bibtex,
-        csl_json=csl_json_for_records(records),
-        bibtex_path=bibtex_path,
-        raw_bibtex_path=raw_bibtex_path,
-        dirty_bibtex_path=dirty_bibtex_path,
-        duplicate_bibtex_path=duplicate_bibtex_path,
-        family_name=REAL_WORKLOAD_FAMILY,
-        source_license_name=REAL_WORKLOAD_SOURCE_LICENSE,
-        raw_preservation_terms=("Curated bibliography metadata",),
-        duplicate_entry_key=records[0].key,
-        duplicate_field_key=records[1].key,
-    )
-
-
 def bibtex_for_records(records: tuple[Record, ...]) -> str:
     return "\n\n".join(_bibtex_entry(record) for record in records) + "\n"
-
-
-def raw_bibtex_for_records(records: tuple[Record, ...]) -> str:
-    body = bibtex_for_records(records)
-    return (
-        "% benchmark fixture with raw BibTeX blocks\n"
-        "@string{benchjournal = {Journal of Citation Benchmarks}}\n"
-        "@preamble{Reference benchmark fixture}\n\n"
-        f"{body}"
-    )
-
-
-def dirty_bibtex_for_records(records: tuple[Record, ...]) -> str:
-    entries = [_bibtex_entry(record) for record in records]
-    first = records[0]
-    entries[0] = (
-        f"@article{{{first.key},\n"
-        f"  author = {{{first.family}, {first.given}}},\n"
-        f"  title = {{{first.title}}},\n"
-        "  journal = JMLR # { Extra},\n"
-        f"  year = {{{first.year}}},\n"
-        "  month = {16},\n"
-        f"  volume = {{{first.volume}}},\n"
-        f"  pages = {{{first.page_start}-{first.page_end}}},\n"
-        f"  doi = {{{first.doi}}}\n"
-        "}"
-    )
-    duplicate = (
-        "\n\n"
-        f"@article{{{records[0].key},\n"
-        "  title = {Duplicate benchmark record},\n"
-        "  year = {2024}\n"
-        "}\n"
-    )
-    return "\n\n".join(entries) + "\n\n@broken{missing,\n  title = {No close}\n" + duplicate
-
-
-def duplicate_bibtex_for_records(records: tuple[Record, ...]) -> str:
-    if len(records) < 3:
-        raise ValueError("duplicate benchmark source requires at least three records")
-    entry_duplicate = records[0]
-    field_duplicate = records[1]
-    steady = records[2]
-    return (
-        f"@article{{{entry_duplicate.key},\n"
-        f"  title = {{{entry_duplicate.title}}},\n"
-        f"  year = {{{entry_duplicate.year}}}\n"
-        "}\n\n"
-        f"@article{{{entry_duplicate.key},\n"
-        "  title = {Duplicate benchmark entry},\n"
-        f"  year = {{{entry_duplicate.year + 1}}}\n"
-        "}\n\n"
-        f"@article{{{field_duplicate.key},\n"
-        f"  title = {{{field_duplicate.title}}},\n"
-        "  title = {Duplicate benchmark field},\n"
-        f"  year = {{{field_duplicate.year}}}\n"
-        "}\n\n"
-        f"@article{{{steady.key},\n"
-        f"  title = {{{steady.title}}},\n"
-        f"  year = {{{steady.year}}}\n"
-        "}\n"
-    )
 
 
 def csl_json_for_records(records: tuple[Record, ...]) -> list[dict[str, object]]:
