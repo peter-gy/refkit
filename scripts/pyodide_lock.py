@@ -7,11 +7,15 @@ import re
 import subprocess
 import sys
 import tempfile
-import tomllib
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 ROOT = Path(__file__).parents[1]
 REQUIREMENTS_PATH = ROOT / ".github" / "pyodide" / "requirements.in"

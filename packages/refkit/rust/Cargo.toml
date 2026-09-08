@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-extension-module = ["pyo3/extension-module", "pyo3/abi3-py311"]
+extension-module = ["pyo3/extension-module", "pyo3/abi3-py310"]
 
 [dependencies]
 pyo3.workspace = true

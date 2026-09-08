@@ -15,6 +15,7 @@ GitHub Actions builds and tests source, CPython distributions, and PyEmscripten 
 - Record source revision, tool versions, build constraints, and archive hashes with each artifact. Verify the complete package artifact set before publication.
 - Validate the complete archive set on Linux before each artifact workflow succeeds. Keep text checkout bytes at LF through `.gitattributes` so packaged resources match across operating systems.
 - Run shared installed probes from the installed `refkit-tests` wheel on CPython, Pyodide, and rebuilt sdists. Agent recipe checks read the installed skill resources. `test-support.yml` builds shared support once per run, and candidate probes execute outside the checkout.
+- Build CPython wheels with the Python 3.10 stable ABI. Test source, installed wheels, and rebuilt sdists on Python 3.10, and retain Python 3.14 runtime coverage.
 - Treat tags and publish jobs as external state changes that require explicit authorization.
 
 Run `actionlint .github/workflows/*.yml` and the affected package checks. See [packaging and release](../development_docs/packaging-and-release.md) for the artifact contract.

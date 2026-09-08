@@ -4,7 +4,7 @@ description: Install RefKit and render one Citation Style Language citation with
 
 # Get Started
 
-RefKit parses a bibliography, applies a [Citation Style Language](https://citationstyles.org/) (CSL) style, and returns a citation plus its bibliography. The first example uses the `refkit` Python package and runs on Python 3.11 through 3.14.
+RefKit parses a bibliography, applies a [Citation Style Language](https://citationstyles.org/) (CSL) style, and returns a citation plus its bibliography. The first example uses the `refkit` Python package and runs on Python 3.10 through 3.14.
 
 ## Install `refkit`
 

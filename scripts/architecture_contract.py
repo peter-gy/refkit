@@ -3,9 +3,13 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 ROOT = Path(__file__).parents[1]
 PORTABLE_CORE = Path("crates/refkit-core/Cargo.toml")

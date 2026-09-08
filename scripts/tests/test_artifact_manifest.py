@@ -12,9 +12,9 @@ from scripts.artifact_manifest import check, record
 
 def _artifact_set(root: Path) -> None:
     artifacts = {
-        "cpython_Linux": "refkit-1.2.3-cp311-abi3-manylinux_2_17_x86_64.whl",
-        "cpython_macOS": "refkit-1.2.3-cp311-abi3-macosx_11_0_arm64.whl",
-        "cpython_Windows": "refkit-1.2.3-cp311-abi3-win_amd64.whl",
+        "cpython_Linux": "refkit-1.2.3-cp310-abi3-manylinux_2_17_x86_64.whl",
+        "cpython_macOS": "refkit-1.2.3-cp310-abi3-macosx_11_0_arm64.whl",
+        "cpython_Windows": "refkit-1.2.3-cp310-abi3-win_amd64.whl",
         "pyemscripten_3.14": "refkit-1.2.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
         "sdist": "refkit-1.2.3.tar.gz",
     }
@@ -46,6 +46,22 @@ def test_release_artifacts_match_recorded_builds(tmp_path: Path) -> None:
     _artifact_set(tmp_path)
 
     assert check(tmp_path, "refkit", "1.2.3", "a" * 40) == []
+
+
+@pytest.mark.parametrize("tags", ["cp311-abi3", "cp310-cp310"])
+def test_cpython_artifacts_require_python310_stable_abi(tmp_path: Path, tags: str) -> None:
+    _artifact_set(tmp_path)
+    manifest = tmp_path / "refkit_cpython_Linux.json"
+    document = json.loads(manifest.read_text())
+    original, digest = next(iter(document["files"].items()))
+    renamed = original.replace("cp310-abi3", tags)
+    (tmp_path / original).rename(tmp_path / renamed)
+    document["files"] = {renamed: digest}
+    manifest.write_text(json.dumps(document))
+
+    assert check(tmp_path, "refkit", "1.2.3", "a" * 40) == [
+        f"{renamed}: CPython wheels must use the Python 3.10 stable ABI"
+    ]
 
 
 @pytest.mark.parametrize("failure", ["content", "missing", "source", "version"])

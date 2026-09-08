@@ -29,7 +29,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
         with:
-          python-version: '3.11'
+          python-version: '3.10'
           enable-cache: false
           cache-dependency-glob: uv.lock
       - name: Configure reproducible Rust paths
@@ -43,7 +43,7 @@ jobs:
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b
         with:
           working-directory: packages/polars-refkit
-          args: --locked --release --out dist --interpreter 3.11
+          args: --locked --release --out dist --interpreter 3.10
           maturin-version: v1.15.0
           rust-toolchain: stable
       - name: Package Agent Plugin
@@ -55,7 +55,7 @@ jobs:
           uv run --locked --only-group build twine check --strict packages/polars-refkit/dist/*
           python scripts/distribution_contract.py packages/polars-refkit/dist/*
 
-          python scripts/artifact_manifest.py record packages/polars-refkit/dist --package polars-refkit --artifact "polars_refkit_cpython_${{ runner.os }}" --rust-toolchain "stable"
+          uv run --locked --only-group build python scripts/artifact_manifest.py record packages/polars-refkit/dist --package polars-refkit --artifact "polars_refkit_cpython_${{ runner.os }}" --rust-toolchain "stable"
       - name: Upload wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -157,7 +157,7 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact-os: Linux
-            python-version: '3.11'
+            python-version: '3.10'
             polars: polars==1.29.0
           - os: ubuntu-latest
             artifact-os: Linux
@@ -165,7 +165,7 @@ jobs:
             polars: polars
           - os: macos-15
             artifact-os: macOS
-            python-version: '3.11'
+            python-version: '3.10'
             polars: polars==1.29.0
           - os: macos-15
             artifact-os: macOS
@@ -173,7 +173,7 @@ jobs:
             polars: polars
           - os: windows-latest
             artifact-os: Windows
-            python-version: '3.11'
+            python-version: '3.10'
             polars: polars==1.29.0
           - os: windows-latest
             artifact-os: Windows
@@ -279,7 +279,7 @@ jobs:
           workspace="$(pwd -P)"
           sdists=("$workspace"/dist/polars_refkit-*.tar.gz)
           support=("$workspace"/support/refkit_tests-*.whl)
-          uv venv --python 3.11 "$RUNNER_TEMP/candidate"
+          uv venv --python 3.10 "$RUNNER_TEMP/candidate"
           uv pip install --python "$RUNNER_TEMP/candidate/bin/python" --build-constraint "$workspace/support/build-constraints.txt" "${sdists[0]}" "${support[0]}"
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/candidate/bin/python" -m refkit_tests.smoke_polars_refkit

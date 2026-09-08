@@ -6,7 +6,7 @@ import random
 import secrets
 import sys
 import tempfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -190,7 +190,7 @@ def run_cases(cases: list[Case], args: argparse.Namespace) -> int:
     random.Random(seed).shuffle(plan)
     manifest: dict[str, Any] = {
         "schema": 1,
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "profile": "smoke" if args.smoke else "measurement",
         "status": "checking",
         "environment": environment(),

@@ -6,7 +6,7 @@ Parse bibliography data, render citations and bibliographies, and edit raw BibTe
 
 ## Render a citation
 
-Install in Python 3.11 through 3.14:
+Install in Python 3.10 through 3.14:
 
 ```bash
 python -m pip install refkit
