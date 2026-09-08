@@ -23,23 +23,23 @@ impl Entry {
 #[pymethods]
 impl Entry {
     #[getter]
-    fn key(&self) -> String {
-        self.data.key.clone()
+    fn key(&self) -> &str {
+        &self.data.key
     }
 
     #[getter]
-    fn entry_type(&self) -> String {
-        self.data.entry_type.clone()
+    fn entry_type(&self) -> &str {
+        &self.data.entry_type
     }
 
     #[getter]
-    fn title(&self) -> Option<String> {
-        self.data.title.clone()
+    fn title(&self) -> Option<&str> {
+        self.data.title.as_deref()
     }
 
     #[getter]
-    fn date(&self) -> Option<String> {
-        self.data.date.clone()
+    fn date(&self) -> Option<&str> {
+        self.data.date.as_deref()
     }
 
     #[getter]
@@ -53,13 +53,13 @@ impl Entry {
     }
 
     #[getter]
-    fn volume(&self) -> Option<String> {
-        self.data.volume.clone()
+    fn volume(&self) -> Option<&str> {
+        self.data.volume.as_deref()
     }
 
     #[getter]
-    fn doi(&self) -> Option<String> {
-        self.data.doi.clone()
+    fn doi(&self) -> Option<&str> {
+        self.data.doi.as_deref()
     }
 
     fn __repr__(&self) -> String {

@@ -92,10 +92,10 @@ pub(crate) fn parse_projection_keys(
     Ok(Some(parsed))
 }
 
-pub(crate) fn project_rows_to_py(
+pub(crate) fn project_rows_to_py<'a>(
     py: Python<'_>,
     fields: &[ProjectionField],
-    records: &[EntryRecord],
+    records: impl IntoIterator<Item = &'a EntryRecord>,
 ) -> PyResult<Py<PyAny>> {
     let rows = PyList::empty(py);
     for record in records {

@@ -147,14 +147,14 @@ impl Library {
     ) -> PyResult<Py<PyAny>> {
         let fields = parse_project_fields_arg(fields)?;
         let keys = parse_projection_keys(self.inner.as_ref(), keys)?;
-        let records = match keys {
-            Some(keys) => keys
-                .iter()
-                .filter_map(|key| self.inner.get_record(key).cloned())
-                .collect(),
-            None => self.inner.records().to_vec(),
-        };
-        project_rows_to_py(py, &fields, &records)
+        match keys {
+            Some(keys) => project_rows_to_py(
+                py,
+                &fields,
+                keys.iter().filter_map(|key| self.inner.get_record(key)),
+            ),
+            None => project_rows_to_py(py, &fields, self.inner.records()),
+        }
     }
 
     fn __len__(&self) -> usize {
