@@ -1,0 +1,20 @@
+README.md
+  s_9fddfede21feba::t_2d56f6729f3951 16-20
+  s_9fddfede21feba::t_c72721cd204db6 100-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "3450151c2c8cbd44a7b85ad1490cf12c187563dc",
+  "prompts": {},
+  "sessions": {
+    "s_9fddfede21feba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07d16-eb2f-7103-95c3-d5cca6784a83",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
