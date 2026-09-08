@@ -392,7 +392,7 @@ dependencies = [
 
 [[package]]
 name = "refkit-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "biblatex",
  "hayagriva",
@@ -402,7 +402,7 @@ dependencies = [
 
 [[package]]
 name = "refkit-js-native"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "refkit-core",
  "serde",
