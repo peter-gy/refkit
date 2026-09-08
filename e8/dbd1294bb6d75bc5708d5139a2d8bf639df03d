@@ -1,0 +1,50 @@
+pyproject.toml
+  s_8f673d26fec59b::t_9e60e6a43a5649 3,15,38-39,47,50-52,55,57
+packages/refkit/pyproject.toml
+  s_8f673d26fec59b::t_9e60e6a43a5649 3,26,38
+scripts/architecture_contract.py
+  s_8f673d26fec59b::t_9e60e6a43a5649 26
+Cargo.toml
+  s_8f673d26fec59b::t_9e60e6a43a5649 9,17
+packages/refkit-js/package.json
+  s_8f673d26fec59b::t_9e60e6a43a5649 3
+packages/polars-refkit/rust/Cargo.toml
+  s_8f673d26fec59b::t_9e60e6a43a5649 3
+.github/workflows/publish.yml
+  s_8f673d26fec59b::t_9e60e6a43a5649 35,138,170,176,181,212-215,223-235
+packages/polars-refkit/pyproject.toml
+  s_8f673d26fec59b::t_9e60e6a43a5649 3,27,39,41
+packages/refkit-bench/pyproject.toml
+  s_8f673d26fec59b::t_9e60e6a43a5649 13-15,17-20,32
+scripts/tests/test_distribution_contract.py
+  s_8f673d26fec59b::t_9e60e6a43a5649 64,294-298,303,306,376
+packages/refkit-js/rust/Cargo.toml
+  s_8f673d26fec59b::t_9e60e6a43a5649 3
+packages/refkit-tests/pyproject.toml
+  s_8f673d26fec59b::t_9e60e6a43a5649 7,10
+scripts/tests/test_workflow_contract.py
+  s_8f673d26fec59b::t_9e60e6a43a5649 65,85
+development_docs/packaging-and-release.md
+  s_8f673d26fec59b::t_9e60e6a43a5649 23-26,45-46
+  s_8f673d26fec59b::t_315423e8b59fb3 122
+scripts/tests/test_architecture_contract.py
+  s_8f673d26fec59b::t_9e60e6a43a5649 23,26
+scripts/tests/test_artifact_manifest.py
+  s_8f673d26fec59b::t_9e60e6a43a5649 35-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e8dbd1294bb6d75bc5708d5139a2d8bf639df03d",
+  "prompts": {},
+  "sessions": {
+    "s_8f673d26fec59b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a081a3-f793-7f80-9f12-cffc0d7e0912",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
