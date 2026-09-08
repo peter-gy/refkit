@@ -21,6 +21,7 @@ ROOT = Path(__file__).parents[1]
 REQUIREMENTS_PATH = ROOT / ".github" / "pyodide" / "requirements.in"
 LOCK_PATH = ROOT / ".github" / "pyodide" / "pylock.314.toml"
 RUNTIME_PATH = ROOT / ".github" / "pyodide" / "runtime.json"
+BUILD_LOCK_PATH = ROOT / "uv.lock"
 RUNTIME = json.loads(RUNTIME_PATH.read_text())
 PYTHON_VERSION = RUNTIME["python-version"]
 XBUILDENV_VERSION = RUNTIME["xbuildenv-version"]
@@ -117,10 +118,17 @@ def validate_lock(path: Path) -> list[str]:
 
     workspace = tomllib.loads((ROOT / "pyproject.toml").read_text())
     build_requirement = (
-        f"pyodide-build=={RUNTIME['pyodide-build-version']}; python_version >= '3.12'"
+        f"pyodide-build>={RUNTIME['pyodide-build-version']}; python_version >= '3.12'"
     )
     if workspace["dependency-groups"].get("pyodide-build") != [build_requirement]:
         errors.append(f"pyodide-build group must contain {build_requirement}")
+
+    build_packages = tomllib.loads(BUILD_LOCK_PATH.read_text())["package"]
+    build_versions = {
+        package["version"] for package in build_packages if package["name"] == "pyodide-build"
+    }
+    if build_versions != {RUNTIME["pyodide-build-version"]}:
+        errors.append(f"uv.lock must resolve pyodide-build to {RUNTIME['pyodide-build-version']}")
 
     polars_wheels = packages.get("polars", {}).get("wheels", [])
     if len(polars_wheels) != 1 or POLARS_WHEEL_TAG not in polars_wheels[0]["name"]:

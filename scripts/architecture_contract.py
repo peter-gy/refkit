@@ -23,7 +23,7 @@ HAYAGRIVA_REPOSITORY = "https://github.com/typst/hayagriva"
 HAYAGRIVA_REVISION = "e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e"
 CITATIONBERG_REPOSITORY = "https://github.com/typst/citationberg"
 CITATIONBERG_REVISION = "06a591e2f237d25e1dfdedac3f3d1494c496c52d"
-REFKIT_RUNTIME_DEPENDENCIES = ["agent-plugins==0.2.0"]
+REFKIT_RUNTIME_DEPENDENCIES = ["agent-plugins>=0.2"]
 CARGO_LOCKS = (
     Path("Cargo.lock"),
     Path("packages/polars-refkit/rust/Cargo.lock"),

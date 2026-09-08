@@ -1,6 +1,6 @@
 [project]
 name = "refkit"
-version = "0.2.0"
+version = "0.2.1"
 description = "Fast Python citation parsing, rendering, and BibTeX editing backed by Rust"
 readme = "README.md"
 license = "Apache-2.0"
@@ -23,7 +23,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "agent-plugins==0.2.0",
+    "agent-plugins>=0.2",
 ]
 
 [project.urls]
@@ -35,7 +35,7 @@ Repository = "https://github.com/peter-gy/refkit"
 refkit = "refkit.agent"
 
 [build-system]
-requires = ["agent-plugins==0.2.0", "maturin>=1.9,<2"]
+requires = ["agent-plugins>=0.2", "maturin>=1.15.0"]
 build-backend = "build_backend"
 backend-path = ["."]
 

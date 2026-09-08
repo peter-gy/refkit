@@ -32,9 +32,9 @@ def _artifact_set(root: Path) -> None:
                 "rust_toolchain": "stable" if target != "sdist" else None,
                 "uv": "uv 0.11.0",
                 "build_constraints": [
-                    "maturin==1.15.0",
-                    "agent-plugins==0.2.0",
-                    "hatchling==1.32.0",
+                    "maturin>=1.15.0",
+                    "agent-plugins>=0.2",
+                    "hatchling>=1.32.0",
                 ],
             },
             "files": {filename: hashlib.sha256(archive.read_bytes()).hexdigest()},

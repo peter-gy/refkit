@@ -227,8 +227,8 @@ def _wheel_agent_plugin_violations(contents: dict[str, bytes], package: str) -> 
 
     metadata_path = f"{dist_info}/METADATA"
     metadata = contents.get(metadata_path, b"").decode(errors="replace")
-    if "Requires-Dist: agent-plugins==0.2.0" not in metadata:
-        violations.append("wheel must require agent-plugins==0.2.0")
+    if "Requires-Dist: agent-plugins>=0.2" not in metadata.splitlines():
+        violations.append("wheel must require agent-plugins>=0.2")
     return violations
 
 

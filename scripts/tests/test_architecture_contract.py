@@ -20,10 +20,10 @@ def test_repository_matches_the_architecture_contract() -> None:
 
 
 def test_refkit_runtime_dependency_contract_rejects_additional_packages() -> None:
-    manifest = {"project": {"dependencies": ["agent-plugins==0.2.0", "requests"]}}
+    manifest = {"project": {"dependencies": ["agent-plugins>=0.2", "requests"]}}
 
     assert _refkit_dependency_errors(manifest) == [
-        "packages/refkit runtime dependencies must contain only agent-plugins==0.2.0"
+        "packages/refkit runtime dependencies must contain only agent-plugins>=0.2"
     ]
 
 
