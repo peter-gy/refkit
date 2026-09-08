@@ -1,0 +1,21 @@
+pyproject.toml
+  s_ece726c48e7985::t_90513b7ea1215e 47
+uv.lock
+  ai_agent 1885,1918
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "65971f4aeeab9847e65b078e8fd98f74aa5d32dc",
+  "prompts": {},
+  "sessions": {
+    "s_ece726c48e7985": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08131-6d8f-7780-9b39-4b8ef4cdcfcc",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
