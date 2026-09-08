@@ -1,4 +1,4 @@
-refkit
+refkit-bench
 
 refkit uses citation and bibliography components from the Typst project ecosystem:
 
@@ -8,3 +8,12 @@ refkit uses citation and bibliography components from the Typst project ecosyste
 
 Hayagriva and citationberg also acknowledge Citation Style Language style or
 locale resources under CC-BY-SA 3.0 in their upstream NOTICE files.
+
+Formatter benchmark cases are extracted from bibtex-tidy:
+https://github.com/FlamingTempura/bibtex-tidy
+Revision: f98c467e27a18e937c1c221caa3a6ecd760b69fb
+Copyright (c) 2017 Peter West
+License: MIT
+The exact source paths, document indexes, and hashes accompany each case in
+src/refkit_bench/data/bibtex-tidy/cases.json. The license is retained at
+src/refkit_bench/data/bibtex-tidy/LICENSE.

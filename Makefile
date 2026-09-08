@@ -57,7 +57,8 @@ polars-refkit-develop-release:
 
 .PHONY: benchmark-test
 benchmark-test:
-	$(UV_RUN) python -m pytest -c packages/refkit-bench/pyproject.toml packages/refkit-bench/tests
+	npm ci --ignore-scripts --no-audit --no-fund --prefix packages/refkit-bench/node
+	$(UV_RUN) python -m pytest -c packages/refkit-bench/pyproject.toml --cov-config=packages/refkit-bench/pyproject.toml packages/refkit-bench/tests
 
 .PHONY: rust
 rust:
@@ -177,4 +178,4 @@ docs-build:
 docs-check: docs-source-check docs-site-check
 
 .PHONY: check
-check: lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test docs-examples-check rust rust-floor build
+check: lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test benchmark-test docs-examples-check rust rust-floor build

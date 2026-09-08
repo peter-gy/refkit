@@ -103,7 +103,7 @@ export default defineConfig({
       pageData.frontmatter.hero.text =
         `Parse, cite, and tidy BibTeX from Python, ` +
         `<a class="hero-fast" href="${publicPath("/performance")}" ` +
-        `aria-label="fast, view performance evidence">fast.</a>`
+        `aria-label="fast, view benchmark methodology">fast.</a>`
     }
     const pageTitle =
       pageData.frontmatter.layout === "home"

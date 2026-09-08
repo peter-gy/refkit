@@ -1,0 +1,8 @@
+{
+  "name": "refkit-bench-node",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "bibtex-tidy": "1.14.0"
+  }
+}
