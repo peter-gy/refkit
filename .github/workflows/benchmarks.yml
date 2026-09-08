@@ -1,0 +1,45 @@
+name: Benchmarks
+'on':
+  push:
+    branches:
+      - main
+  workflow_call:
+    outputs:
+      artifact-name:
+        description: Consolidated benchmark artifact
+        value: ${{ jobs.plan.outputs.artifact-name }}
+permissions:
+  contents: read
+  actions: read
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      baseline: ${{ steps.inputs.outputs.baseline }}
+      fingerprint: ${{ steps.inputs.outputs.fingerprint }}
+      baseline-fingerprint: ${{ steps.inputs.outputs.baseline-fingerprint }}
+      artifact-name: benchmark-results-${{ steps.inputs.outputs.fingerprint }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Identify benchmark inputs
+        id: inputs
+        env:
+          BASE_SHA: ${{ github.event.before }}
+        run: |
+          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA=$(git rev-parse HEAD^)
+          fi
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          python -m scripts.benchmark_inputs --baseline "$BASE_SHA"
+  results:
+    needs: plan
+    uses: ./.github/workflows/benchmark-results.yml
+    with:
+      baseline: ${{ needs.plan.outputs.baseline }}
+      fingerprint: ${{ needs.plan.outputs.fingerprint }}
+      baseline-fingerprint: ${{ needs.plan.outputs.baseline-fingerprint }}
+      require-measurements: ${{ github.ref_type == 'tag' }}

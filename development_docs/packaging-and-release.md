@@ -95,9 +95,12 @@ Native wheel jobs cover Linux, macOS, and Windows in both PR and release runs. W
 1. Build and test the `refkit` sdist, CPython wheels, and PyEmscripten wheel.
 2. Build and test the `polars-refkit` sdist, CPython wheels, and PyEmscripten wheel.
 3. Publish each validated distribution.
-4. Join both publish jobs at the release-complete check, then update release notes.
+4. Reuse matching benchmark evidence or run the shared cross-platform measurement workflow.
+5. Join both publishers and benchmark evidence at the release-complete check, then update release notes and attach benchmark JSON, Markdown, and the raw-results ZIP.
 
 Build jobs import each sdist, test each wheel, and upload the artifacts. The same package artifact workflows run for pull requests and publication. Installed probes in `refkit_tests` exercise parsing, rendering, raw or column operations, reports, and the packaged agent examples. Publish jobs download the merged wheel and sdist sets, validate every archive, and use OpenID Connect (OIDC) trusted publishing so the workflow exchanges its GitHub identity for a short-lived package-index credential.
+
+The [benchmark workflow](benchmarks.md#main-branch-and-release-benchmarks) shares results between main and release runs by input fingerprint. Release packaging verifies the fingerprint, requested commit, platform coverage, and raw timing hashes before attaching evidence.
 
 ## Release Completion
 

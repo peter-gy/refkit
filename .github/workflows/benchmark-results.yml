@@ -1,0 +1,154 @@
+name: Benchmark results
+'on':
+  workflow_call:
+    inputs:
+      require-measurements:
+        required: true
+        type: boolean
+      fingerprint:
+        required: true
+        type: string
+      baseline-fingerprint:
+        required: true
+        type: string
+      baseline:
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: benchmark-inputs-${{ inputs.fingerprint }}
+  queue: max
+jobs:
+  lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run-id: ${{ steps.cache.outputs.run-id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Find matching measurements
+        id: cache
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUTS_SHA256: ${{ inputs.fingerprint }}
+          BASELINE_INPUTS_SHA256: ${{ inputs.baseline-fingerprint }}
+          CANDIDATE_ONLY: ${{ inputs.require-measurements }}
+        run: python -m scripts.benchmark_cache "$INPUTS_SHA256"
+  measure:
+    name: Measure (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-15
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Checkout baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.baseline }}
+          path: baseline
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.14'
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
+        with:
+          toolchain: stable
+      - uses: ./.github/actions/configure-rust-build
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          shared-key: benchmarks
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Build and measure revisions
+        env:
+          RESULTS: ${{ runner.temp }}/benchmark-results/${{ runner.os }}
+        run: python -m scripts.benchmark_ci --candidate . --baseline baseline --output "$RESULTS" --platform "${{ runner.os
+          }}"
+        shell: bash
+      - name: Upload platform evidence
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: benchmark-shard-${{ runner.os }}
+          overwrite: true
+          path: |
+            ${{ runner.temp }}/benchmark-results/${{ runner.os }}/comparison.json
+            ${{ runner.temp }}/benchmark-results/${{ runner.os }}/baseline/*.json
+            ${{ runner.temp }}/benchmark-results/${{ runner.os }}/candidate/*.json
+          retention-days: 1
+          if-no-files-found: warn
+    needs: lookup
+    if: needs.lookup.outputs.run-id == '' && (inputs.fingerprint != inputs.baseline-fingerprint || inputs.require-measurements)
+  report:
+    name: Consolidated results
+    needs:
+      - lookup
+      - measure
+    if: ${{ always() && !cancelled() && needs.lookup.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 2
+      - continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: benchmark-shard-*
+          path: results/shards
+        if: needs.lookup.outputs.run-id == ''
+      - name: Download matching measurements
+        if: needs.lookup.outputs.run-id != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: benchmark-results-${{ inputs.fingerprint }}
+          run-id: ${{ needs.lookup.outputs.run-id }}
+          github-token: ${{ github.token }}
+          path: results/report
+      - name: Consolidate results and write job summary
+        env:
+          BASE_SHA: ${{ inputs.baseline }}
+          CANDIDATE_SHA: ${{ github.sha }}
+          INPUTS_SHA256: ${{ inputs.fingerprint }}
+          BASELINE_INPUTS_SHA256: ${{ inputs.baseline-fingerprint }}
+          REUSED_RUN: ${{ needs.lookup.outputs.run-id }}
+          UNCHANGED_ONLY: ${{ needs.lookup.outputs.run-id == '' && inputs.fingerprint == inputs.baseline-fingerprint && !inputs.require-measurements }}
+        run: |
+          mkdir -p results/report
+          for platform in Linux Windows macOS; do
+            shard="results/shards/benchmark-shard-$platform"
+            if [[ -d "$shard" ]]; then
+              mv "$shard" "results/report/$platform"
+            fi
+          done
+          python -m scripts.benchmark_report results/report --baseline "$BASE_SHA" --candidate "$CANDIDATE_SHA"
+      - name: Upload consolidated results
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: benchmark-results-${{ inputs.fingerprint }}
+          path: results/report
+          retention-days: 30
+          if-no-files-found: error
+          overwrite: true

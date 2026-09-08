@@ -98,3 +98,5 @@ Root `README.md` is the single public entry point allowed to link into the devel
 ## GitHub Actions
 
 Pin third-party actions to full commit SHAs. Build the shared `refkit-tests` support wheel through `test-support.yml`. Reuse each package artifact workflow for CI and publication, with build jobs feeding installed-artifact tests. The two package publish jobs run independently, then join at release completion. Native builds configure Rust path remapping before compilation. Publish jobs validate the merged archive set before trusted publication.
+
+The shared `Benchmarks` workflow fingerprints runtime, build, dependency, and harness inputs, reuses matching evidence, and measures release builds on Linux, Windows, and macOS when needed. Main and release workflows consume the consolidated artifact. `scripts/tests/test_workflow_contract.py` checks its matrix, failure handling, rerun artifact contract, and the trusted commit publisher's checkout and permissions. These tests run through `make test` in source checks. See [benchmarks](benchmarks.md#main-branch-and-release-benchmarks) for selection, comparisons, artifacts, and comments.
