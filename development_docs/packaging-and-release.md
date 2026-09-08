@@ -147,3 +147,13 @@ Before a release tag, run `make check` and validate the intended tag with the re
 5. Run the release-complete checks and verify clean installs of all three packages.
 
 Escalate to a new version only when the retained artifact is invalid or the package index rejects the recovery upload.
+
+When both Python publications succeeded and npm publication failed, complete the current release from retained artifacts:
+
+```bash
+gh workflow run publish.yml --ref main \
+  -f release_tag=v0.2.0 \
+  -f source_run="$TAG_RUN_ID"
+```
+
+Set `TAG_RUN_ID` to the completed tag-triggered Publish run. Main must still carry the release version. The workflow verifies the tag commit, successful Python publishers, JavaScript artifact tests, and benchmark evidence before publishing the retained npm tarball and completing the release notes. The tag and published Python archives retain their original identities.

@@ -62,7 +62,11 @@ def test_release_uses_shared_benchmarks_and_attaches_matching_evidence() -> None
     assert "benchmarks" in jobs["release-complete"]["needs"]
     steps = jobs["release-notes"]["steps"]
     download = next(step for step in steps if step.get("name") == "Download benchmark evidence")
-    assert download["with"]["name"] == "${{ needs.benchmarks.outputs.artifact-name }}"
+    assert download["with"]["name"] == (
+        "${{ needs.benchmarks.outputs.artifact-name || "
+        "needs.check-release-version.outputs.benchmark-artifact }}"
+    )
+    assert download["with"]["run-id"] == "${{ inputs.source_run || github.run_id }}"
     attach = next(step for step in steps if step.get("name") == "Attach benchmark results")
     assert "python -m scripts.benchmark_release benchmark-evidence" in attach["run"]
 
