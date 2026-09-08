@@ -1,0 +1,41 @@
+Cargo.toml
+  s_8f673d26fec59b::t_1a248672da7053 9,17
+pyproject.toml
+  s_8f673d26fec59b::t_377e86db157665 3
+packages/refkit-js/package.json
+  s_8f673d26fec59b::t_4754e9c8c4606e 3
+packages/polars-refkit/rust/Cargo.toml
+  s_8f673d26fec59b::t_1a248672da7053 3
+packages/polars-refkit/pyproject.toml
+  s_8f673d26fec59b::t_377e86db157665 3
+packages/refkit/pyproject.toml
+  s_8f673d26fec59b::t_377e86db157665 3
+Cargo.lock
+  ai_agent 458,471
+packages/refkit-js/rust/Cargo.toml
+  s_8f673d26fec59b::t_1a248672da7053 3
+packages/polars-refkit/rust/Cargo.lock
+  ai_agent 1402,1691
+packages/refkit-js/package-lock.json
+  ai_agent 3,9
+packages/refkit-js/rust/Cargo.lock
+  ai_agent 395,405
+uv.lock
+  ai_agent 1268,1806,1861
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "68c27b18b559110f3067f570c14f1f7ee3475d9d",
+  "prompts": {},
+  "sessions": {
+    "s_8f673d26fec59b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a081a3-f793-7f80-9f12-cffc0d7e0912",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
