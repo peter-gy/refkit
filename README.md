@@ -13,6 +13,12 @@
 </p>
 
 <p align="center">
+  <a href="https://pypi.org/project/refkit/"><img src="https://img.shields.io/pypi/v/refkit" alt="PyPI version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
+  <a href="https://github.com/peter-gy/refkit/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/peter-gy/refkit/actions/workflows/ci.yml/badge.svg?branch=main&amp;event=push" alt="CI on main"></a>
+</p>
+
+<p align="center">
   <a href="https://peter-gy.github.io/refkit/">Documentation</a> ·
   <a href="https://peter-gy.github.io/refkit/get-started">Quickstart</a> ·
   <a href="https://peter-gy.github.io/refkit/reference/agent-docs">For agents</a> ·
@@ -90,6 +96,14 @@ covers discovery and packaged resources.
 [Pyodide](https://peter-gy.github.io/refkit/pyodide)
 
 RefKit is alpha software. Public APIs may change before 1.0.
+
+## Acknowledgements
+
+RefKit uses [Typst](https://github.com/typst/)'s
+[Hayagriva](https://github.com/typst/hayagriva) for bibliography modeling and citation rendering,
+and [BibLaTeX](https://github.com/typst/biblatex) for parsing.
+Its BibTeX formatter follows [bibtex-tidy](https://github.com/FlamingTempura/bibtex-tidy),
+whose specification tests also inform RefKit's formatter checks and benchmarks.
 
 [Development](development_docs/README.md) ·
 [Report an issue](https://github.com/peter-gy/refkit/issues) ·
