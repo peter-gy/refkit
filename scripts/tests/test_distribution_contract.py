@@ -61,7 +61,7 @@ def _sdist(path: Path, members: list[str]) -> None:
 def _refkit_wheel(path: Path, plugin_files: tuple[str, ...] = _AGENT_PLUGIN_FILES) -> None:
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(f"{_DIST_INFO}/WHEEL", "Wheel-Version: 1.0\n")
-        archive.writestr(f"{_DIST_INFO}/METADATA", "Requires-Dist: agent-plugins==0.2.0\n")
+        archive.writestr(f"{_DIST_INFO}/METADATA", "Requires-Dist: agent-plugins>=0.2\n")
         archive.writestr(
             f"{_DIST_INFO}/entry_points.txt",
             "[marimo.agent.capability]\nrefkit = refkit.agent\n",
@@ -291,15 +291,19 @@ def test_refkit_wheel_validates_capability_entry_point(
     assert agent_plugin_violations(wheel) == [expected]
 
 
-def test_refkit_wheel_requires_agent_plugins_dependency(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "requirement",
+    ["another-package", "agent-plugins==0.2.0", "agent-plugins>=0.2,<0.3"],
+)
+def test_refkit_wheel_requires_open_agent_plugins_bound(tmp_path: Path, requirement: str) -> None:
     wheel = tmp_path / "refkit-1.0.0-py3-none-any.whl"
     _refkit_wheel(wheel)
     _rewrite_wheel(
         wheel,
-        add={f"{_DIST_INFO}/METADATA": "Requires-Dist: another-package\n"},
+        add={f"{_DIST_INFO}/METADATA": f"Requires-Dist: {requirement}\n"},
     )
 
-    assert agent_plugin_violations(wheel) == ["wheel must require agent-plugins==0.2.0"]
+    assert agent_plugin_violations(wheel) == ["wheel must require agent-plugins>=0.2"]
 
 
 def test_refkit_sdist_contains_agent_plugin_and_backend(tmp_path: Path) -> None:
@@ -369,7 +373,7 @@ def test_polars_distribution_carries_its_agent_skill(tmp_path: Path, archive_for
         plugin_root = "polars_refkit-1.0.0.agent-plugin"
         with zipfile.ZipFile(path, "w") as archive:
             archive.writestr(f"{dist_info}/WHEEL", "Wheel-Version: 1.0\n")
-            archive.writestr(f"{dist_info}/METADATA", "Requires-Dist: agent-plugins==0.2.0\n")
+            archive.writestr(f"{dist_info}/METADATA", "Requires-Dist: agent-plugins>=0.2\n")
             archive.writestr(
                 f"{dist_info}/entry_points.txt",
                 "[marimo.agent.capability]\npolars_refkit = polars_refkit.agent\n",

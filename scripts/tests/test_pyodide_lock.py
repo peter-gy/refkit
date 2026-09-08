@@ -97,3 +97,13 @@ def test_pyodide_lock_requires_installable_wheel_records(tmp_path: Path) -> None
     assert pyodide_lock.validate_lock(invalid) == [
         "agent-plugins must resolve to exactly one wheel"
     ]
+
+
+def test_pyodide_build_lock_matches_selected_runtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lock = tmp_path / "uv.lock"
+    lock.write_text('[[package]]\nname = "pyodide-build"\nversion = "0.34.0"\n')
+    monkeypatch.setattr(pyodide_lock, "BUILD_LOCK_PATH", lock)
+
+    assert "uv.lock must resolve pyodide-build to 0.35.1" in pyodide_lock.validate_lock(LOCK_PATH)
