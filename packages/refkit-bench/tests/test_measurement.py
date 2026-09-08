@@ -477,3 +477,28 @@ def test_cli_interruption_retains_an_incomplete_manifest(tmp_path: Path, monkeyp
     assert runner.main(["run", "--output", str(output), "--smoke"]) == 130
     assert json.loads((output / "manifest.json").read_text())["status"] == "interrupted"
     assert "Benchmark interrupted" in capsys.readouterr().err
+
+
+def test_workers_preserve_preflight_runtime_configuration(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("PYTHONUTF8", "1")
+    output = tmp_path / "configured-runtime"
+    assert (
+        runner.main(
+            [
+                "run",
+                "--lane",
+                "parse.bibtex",
+                "--dataset",
+                "tiny",
+                "--package",
+                "pybtex",
+                "--smoke",
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
+    manifest, _ = load_result(output)
+    flags = json.loads(manifest["checks"][0]["artifact"]["python_flags"])
+    assert flags["utf8_mode"] == 1

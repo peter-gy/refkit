@@ -56,7 +56,7 @@ def run(candidate: Path, baseline: Path, output: Path, platform: str) -> int:
                     str(candidate),
                     "--locked",
                     "--python",
-                    sys.executable,
+                    environment.get("UV_PYTHON", sys.executable),
                     "--package",
                     "refkit-bench",
                     "--no-default-groups",
