@@ -181,7 +181,6 @@ for (const value of [
   withBasePath("/icons/file-pen-line-dark.svg"),
   withBasePath("/icons/table-properties-light.svg"),
   withBasePath("/icons/table-properties-dark.svg"),
-  `href="${withBasePath("/performance")}" aria-label="fast, view benchmark methodology">fast.</a>`,
 ]) {
   if (!index.includes(value)) errors.push(`home metadata or asset reference is missing: ${value}`)
 }

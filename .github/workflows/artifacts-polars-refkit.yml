@@ -51,7 +51,6 @@ jobs:
         run: uv run --locked --only-group build agent-plugins attach-wheel packages/polars-refkit/dist/*.whl --project packages/polars-refkit
       - name: Check metadata
         run: |
-          python -m scripts.normalize_wheel packages/polars-refkit/dist/*.whl
           uv run --locked --only-group build twine check --strict packages/polars-refkit/dist/*
           python scripts/distribution_contract.py packages/polars-refkit/dist/*
 
@@ -110,7 +109,6 @@ jobs:
         run: uv run --locked --only-group build agent-plugins attach-wheel packages/polars-refkit/dist/*.whl --project packages/polars-refkit
       - name: Check metadata
         run: |
-          python -m scripts.normalize_wheel packages/polars-refkit/dist/*.whl
           uv run --locked --only-group build twine check --strict packages/polars-refkit/dist/*
           python scripts/distribution_contract.py packages/polars-refkit/dist/*
 

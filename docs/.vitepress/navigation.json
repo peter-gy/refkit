@@ -3,7 +3,7 @@
     { "text": "Start", "link": "/get-started" },
     { "text": "Concepts", "link": "/concepts/how-refkit-works" },
     { "text": "Guides", "link": "/guides/parse-bibliographies" },
-    { "text": "Reference", "link": "/reference/python" }
+    { "text": "Reference", "link": "/reference/data-shapes" }
   ],
   "sidebar": [
     {
@@ -32,6 +32,7 @@
         { "text": "Edit raw BibTeX", "link": "/guides/edit-bibtex" },
         { "text": "Format BibTeX", "link": "/guides/format-bibtex" },
         { "text": "Process Polars columns", "link": "/guides/polars" },
+        { "text": "Run in a browser", "link": "/guides/browser" },
         { "text": "Run in Pyodide", "link": "/pyodide" },
         { "text": "Troubleshooting", "link": "/troubleshooting" }
       ]
@@ -40,6 +41,7 @@
       "text": "Reference",
       "items": [
         { "text": "Python API", "link": "/reference/python" },
+        { "text": "TypeScript API", "link": "/reference/javascript" },
         { "text": "Data shapes", "link": "/reference/data-shapes" },
         { "text": "Tidy options", "link": "/reference/tidy-options" },
         { "text": "Polars expressions", "link": "/reference/polars" },

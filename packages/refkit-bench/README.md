@@ -19,4 +19,4 @@ The [benchmark guide](../../development_docs/benchmarks.md) covers lane boundari
 
 ## License
 
-Apache-2.0, with the license in [LICENSE](LICENSE). The curated [bibtex-tidy](https://github.com/FlamingTempura/bibtex-tidy) specification inputs and expectations retain their MIT license and source provenance. See [NOTICE](NOTICE).
+Apache-2.0, with the license in [LICENSE](LICENSE). The curated [bibtex-tidy](https://github.com/FlamingTempura/bibtex-tidy) specification inputs and expectations retain their MIT license and source provenance.

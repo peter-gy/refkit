@@ -11,7 +11,7 @@ Scripts under this directory validate source, generated state, wheels, sdists, a
 
 The architecture contract classifies top-level, target-specific, build, and renamed Rust dependencies. It rejects unclassified Rust dependencies, host I/O in the portable core, direct engine dependencies in adapters, unclassified `refkit` runtime dependencies, and workspace changes that alter composition ownership.
 
-Direct Maturin builds call `agent-plugins attach-wheel` before archive normalization. The distribution contract owns each adapter's plugin, skill, entry-point, backend, and dependency artifact shape and compares skill bytes with release sources. `artifact_manifest.py` records build provenance and verifies the complete package artifact set before publication.
+Direct Maturin builds call `agent-plugins attach-wheel` before archive validation. The distribution contract owns each adapter's plugin, skill, entry-point, backend, and dependency artifact shape and compares skill bytes with release sources. `artifact_manifest.py` records build provenance and verifies the complete package artifact set before publication.
 
 The core uses released BibLaTeX and audited Hayagriva and Citationberg revisions declared by the architecture contract. Keep canonical repositories, full commit revisions, manifest versions, both Citationberg workspace patches, and both Cargo locks aligned. The core pins quick-xml 0.41.0, and every resolved quick-xml version must meet that floor.
 

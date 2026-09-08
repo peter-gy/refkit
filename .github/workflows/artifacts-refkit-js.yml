@@ -1,0 +1,118 @@
+name: JavaScript artifacts
+'on':
+  workflow_call: null
+permissions:
+  contents: read
+jobs:
+  build:
+    name: Build npm package
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - name: Install binding generator
+        run: cargo install wasm-bindgen-cli --version 0.2.126 --locked
+      - name: Build and check JavaScript package
+        run: |
+          make js-build
+          npm --prefix packages/refkit-js run lint
+          npm --prefix packages/refkit-js run typecheck
+          npm --prefix packages/refkit-js test
+          npm --prefix packages/refkit-js audit --audit-level=high
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          python-version: '3.14'
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Compare Python and JavaScript APIs
+        run: uv run --locked --package refkit --group dev python packages/refkit-js/tests/parity.py
+      - name: Check paired documentation examples
+        run: npm --prefix packages/refkit-js run test:docs
+      - name: Pack release artifact
+        working-directory: packages/refkit-js
+        run: npm pack
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: refkit-js-npm
+          path: packages/refkit-js/refkit-js-*.tgz
+          if-no-files-found: error
+  node:
+    name: Node ${{ matrix.node }} / ${{ matrix.os }}
+    needs:
+      - build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        node:
+          - 22.19.0
+          - '24'
+          - '26'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: refkit-js-npm
+          path: artifacts
+      - name: Install test tools
+        run: npm --prefix packages/refkit-js ci --ignore-scripts --no-audit --no-fund
+      - name: Read package version
+        id: package
+        shell: bash
+        run: echo "version=$(node -p 'require("./packages/refkit-js/package.json").version')" >> "$GITHUB_OUTPUT"
+      - name: Test installed package and consumer types
+        shell: bash
+        run: npm --prefix packages/refkit-js run test:package -- "${{ github.workspace }}/artifacts/refkit-js-${{
+          steps.package.outputs.version }}.tgz"
+  browser:
+    name: Browser package
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: refkit-js-npm
+          path: artifacts
+      - name: Install test tools and package
+        run: |
+          npm --prefix packages/refkit-js ci --ignore-scripts --no-audit --no-fund
+          mkdir -p packages/refkit-js/.browser-package
+          tar -xzf artifacts/refkit-js-*.tgz -C packages/refkit-js/.browser-package
+      - name: Install browsers
+        working-directory: packages/refkit-js
+        run: npm exec playwright install --with-deps chromium firefox webkit
+      - name: Test installed browser package
+        env:
+          REFKIT_PACKAGE_ROOT: ${{ github.workspace }}/packages/refkit-js/.browser-package/package
+        run: npm --prefix packages/refkit-js run test:browser

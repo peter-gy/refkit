@@ -4,44 +4,45 @@ description: Filter normalized Library entries by type, fields, alternatives, an
 
 # Selectors
 
-`Library.select(selector)` filters normalized entries with the [Hayagriva selector language](https://github.com/typst/hayagriva/blob/main/docs/selectors.md). Selectors match entry types, fields, and parent structure.
+`Library.select(selector)` filters normalized entries with the [Hayagriva selector language](https://github.com/typst/hayagriva/blob/main/docs/selectors.md), a grammar for matching entry types, fields, and parent structure.
 
-## Match an entry type
+::: code-group
 
-```python
-articles = library.select("article")
-everything = library.select("*")
+```python [Python]
+import refkit as rk
+
+library = rk.Library.parse_bibtex("@book{doe2024, title={Example}, year={2024}}")
+selected = library.select("book[title,date]")
+print([entry.key for entry in selected])  # ['doe2024']
 ```
 
-String selectors are case-insensitive. The entry type must be part of Hayagriva's bibliography model.
+```ts [TypeScript]
+import * as rk from "refkit-js";
 
-## Require fields
-
-```python
-dated_articles = library.select("article[date]")
-complete_articles = library.select("article[author,title,date]")
+const library = rk.Library.parseBibtex("@book{doe2024, title={Example}, year={2024}}");
+const selected = library.select("book[title,date]");
+console.log(selected.map((entry) => entry.key)); // ["doe2024"]
 ```
 
-Every field listed inside brackets must contain a value.
+:::
 
-## Match parent structure
+## Grammar
 
-```python
-periodical_articles = library.select("article > periodical[volume]")
-```
+| Selector | Matches |
+| --- | --- |
+| `article` | Entries of the named type. |
+| `*` | Every entry. |
+| `article[date]` | Articles with a date. |
+| `article[author,title,date]` | Articles with a value for every listed field. |
+| `article > periodical[volume]` | Articles with a periodical parent that has a volume. |
+| `article > (conference & video)` | Articles with both matching parent types. |
+| `book \| article` | Either entry type. |
+| `!book` | Entries that fail the book selector. |
 
-`>` requires a matching parent. It can be chained to inspect deeper parent relationships.
+String selectors are case-insensitive. Entry types and fields use Hayagriva's normalized bibliography model. For example, a BibTeX `year` becomes part of `date`.
 
-## Combine conditions
+`>` requires a matching parent and can be chained for deeper relationships. `&` requires multiple matching parents on the right side of `>`. `|` selects alternatives, `!` negates the next selector, and parentheses group expressions.
 
-```python
-media_articles = library.select("article > (conference & video)")
-books_or_articles = library.select("book | article")
-not_books = library.select("!book")
-```
+`select` returns the top-level `Entry` objects that match. Selector bindings participate in matching. The returned records are the matching entries.
 
-`|` selects alternatives. `&` requires multiple matching parents on the right side of `>`. `!` negates the next selector. Parentheses group expressions.
-
-RefKit returns the top-level `Entry` objects that match. Selector bindings remain an internal part of matching and are not returned by `Library.select`.
-
-An invalid selector raises `ValueError` before any result list is returned.
+An invalid selector raises Python `ValueError` or JavaScript `RangeError` before any result list is returned.

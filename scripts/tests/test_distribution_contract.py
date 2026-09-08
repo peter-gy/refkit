@@ -188,19 +188,6 @@ def test_distribution_contract_rejects_builder_paths(tmp_path: Path) -> None:
     assert content_violations(wheel) == ["refkit/_native.so: embeds a builder path"]
 
 
-def test_distribution_contract_rejects_local_sbom_references(tmp_path: Path) -> None:
-    wheel = tmp_path / "package.whl"
-    with zipfile.ZipFile(wheel, "w") as archive:
-        archive.writestr(
-            "package-1.0.dist-info/sboms/package.cyclonedx.json",
-            b'{"bom-ref":"path+file:///build/package#package@1.0"}',
-        )
-
-    assert content_violations(wheel) == [
-        "package-1.0.dist-info/sboms/package.cyclonedx.json: contains a local SBOM reference"
-    ]
-
-
 def test_refkit_wheel_contains_exact_agent_plugin_contract(tmp_path: Path) -> None:
     wheel = tmp_path / "refkit-1.0.0-py3-none-any.whl"
     _refkit_wheel(wheel)

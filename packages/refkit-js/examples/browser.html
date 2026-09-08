@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RefKit bibliography editor</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font:
+          17px/1.5 system-ui,
+          sans-serif;
+      }
+      body {
+        max-width: 48rem;
+        margin: 3rem auto;
+        padding: 0 1rem;
+      }
+      h1 {
+        font-size: 1.6rem;
+      }
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 0.75rem;
+        font: 14px/1.5 monospace;
+      }
+      button {
+        margin: 1rem 0;
+        padding: 0.5rem 1rem;
+        font: inherit;
+        cursor: pointer;
+      }
+      output {
+        display: block;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      #status {
+        min-height: 1.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Render a bibliography</h1>
+    <p>Edit the BibTeX source, then render every entry with the APA style.</p>
+    <label for="source">BibTeX source</label>
+    <textarea id="source" rows="8" spellcheck="false">
+@article{doe2024,
+  author = {Doe, Jane},
+  title = {Fast Citations},
+  journal = {Journal of Citation Tests},
+  year = {2024}
+}</textarea>
+    <button id="render" disabled>Render bibliography</button>
+    <p id="status" role="status">Loading RefKit…</p>
+    <output id="bibliography" aria-label="Rendered bibliography"></output>
+    <script type="module">
+      import { fullBibliography, init, Library } from "../dist/index.js";
+
+      const source = document.querySelector("#source");
+      const button = document.querySelector("#render");
+      const status = document.querySelector("#status");
+      const output = document.querySelector("#bibliography");
+
+      function render() {
+        try {
+          const library = Library.parseBibtex(source.value);
+          output.textContent = fullBibliography(library).text;
+          status.textContent = `${library.size} reference${library.size === 1 ? "" : "s"} rendered.`;
+        } catch (error) {
+          output.textContent = "";
+          status.textContent = error.message;
+        }
+      }
+
+      button.addEventListener("click", render);
+      try {
+        await init();
+        button.disabled = false;
+        render();
+      } catch (error) {
+        status.textContent = `Could not load RefKit: ${error.message}`;
+      }
+    </script>
+  </body>
+</html>

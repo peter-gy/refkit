@@ -136,7 +136,6 @@ build: clean-dist
 	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package refkit --wheel --no-create-gitignore
 	uv build --package polars-refkit --sdist --no-create-gitignore
 	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package polars-refkit --wheel --no-create-gitignore
-	$(PYTHON) -m scripts.normalize_wheel 'dist/*.whl'
 	$(PYTHON) scripts/distribution_contract.py dist/*
 
 .PHONY: lock
@@ -178,4 +177,18 @@ docs-build:
 docs-check: docs-source-check docs-site-check
 
 .PHONY: check
-check: lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test benchmark-test docs-examples-check rust rust-floor build
+check: js-check lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test benchmark-test docs-examples-check rust rust-floor build
+
+.PHONY: js-build js-check
+js-build:
+	npm --prefix packages/refkit-js ci --ignore-scripts --no-audit --no-fund
+	npm --prefix packages/refkit-js run build
+
+js-check: js-build
+	npm --prefix packages/refkit-js run lint
+	npm --prefix packages/refkit-js run typecheck
+	npm --prefix packages/refkit-js test
+	$(UV_RUN) python packages/refkit-js/tests/parity.py
+	npm --prefix packages/refkit-js run test:docs
+	npm --prefix packages/refkit-js run test:package
+	npm --prefix packages/refkit-js run test:browser

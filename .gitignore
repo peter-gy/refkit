@@ -18,3 +18,8 @@ packages/refkit-bench/results/*
 .venv
 node_modules/
 docs/.vitepress/cache/
+packages/refkit-js/src/wasm/
+packages/refkit-js/*.tgz
+packages/refkit-js/playwright-report/
+packages/refkit-js/test-results/
+packages/refkit-js/.browser-package/

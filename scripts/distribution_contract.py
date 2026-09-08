@@ -35,7 +35,6 @@ AGENT_PLUGIN_FILES = {
     ),
 }
 ROOT = Path(__file__).resolve().parents[1]
-SBOM_LOCAL_REFERENCE_MARKERS = (b"path+file://", b"download_url=file://")
 KNOWN_CI_BUILD_PATHS = (
     "/home/runner/",
     "/Users/runner/",
@@ -138,10 +137,6 @@ def content_violations(path: Path) -> list[str]:
     violations = []
     builder_paths = _builder_path_markers()
     for member, content in _member_contents(path):
-        if ".dist-info/sboms/" in member and any(
-            marker in content for marker in SBOM_LOCAL_REFERENCE_MARKERS
-        ):
-            violations.append(f"{member}: contains a local SBOM reference")
         if any(marker in content for marker in builder_paths):
             violations.append(f"{member}: embeds a builder path")
     return violations

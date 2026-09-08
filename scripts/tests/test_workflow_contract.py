@@ -65,3 +65,24 @@ def test_release_uses_shared_benchmarks_and_attaches_matching_evidence() -> None
     assert download["with"]["name"] == "${{ needs.benchmarks.outputs.artifact-name }}"
     attach = next(step for step in steps if step.get("name") == "Attach benchmark results")
     assert "python -m scripts.benchmark_release benchmark-evidence" in attach["run"]
+
+
+def test_npm_publish_uses_tested_artifact_and_trusted_environment() -> None:
+    root = Path(__file__).resolve().parents[2]
+    jobs = yaml.safe_load((root / ".github/workflows/publish.yml").read_text())["jobs"]
+    publish = jobs["publish-refkit-js"]
+    assert publish["environment"] == "npm"
+    assert publish["permissions"]["id-token"] == "write"
+    assert {"source-checks", "artifacts-refkit-js", "check-release-version"} <= set(
+        publish["needs"]
+    )
+    assert "publish-refkit-js" in jobs["release-complete"]["needs"]
+    download = next(
+        step for step in publish["steps"] if "download-artifact@" in step.get("uses", "")
+    )
+    assert download["with"]["name"] == "refkit-js-npm"
+    command = next(step["run"] for step in publish["steps"] if "npm publish" in step.get("run", ""))
+    assert "dist/refkit-js-${RELEASE_VERSION}.tgz" in command
+    assert "--provenance" in command
+    ci = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())["jobs"]
+    assert "artifacts-refkit-js" in ci["check"]["needs"]

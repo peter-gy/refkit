@@ -12,6 +12,9 @@ from scripts.release_contract import ReleaseContractError, validate_release_cont
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_FILES = (
     "Cargo.toml",
+    "packages/refkit-js/package.json",
+    "packages/refkit-js/package-lock.json",
+    "packages/refkit-js/rust/Cargo.toml",
     "pyproject.toml",
     "crates/refkit-core/Cargo.toml",
     "packages/polars-refkit/pyproject.toml",
@@ -158,3 +161,15 @@ def test_release_contract_command_prints_validated_version() -> None:
     assert result.returncode == 0
     assert result.stdout == f"{version}\n"
     assert result.stderr == ""
+
+
+def test_release_contract_reports_javascript_lock_drift(tmp_path: Path) -> None:
+    import json
+
+    copy_contract_files(tmp_path)
+    lock = tmp_path / "packages/refkit-js/package-lock.json"
+    value = json.loads(lock.read_text())
+    value["packages"][""]["version"] = "9.9.9"
+    lock.write_text(json.dumps(value))
+    with pytest.raises(ReleaseContractError, match="package lock version"):
+        validate_release_contract(tmp_path)
