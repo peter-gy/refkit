@@ -1,0 +1,65 @@
+packages/polars-refkit/rust/Cargo.toml
+  s_ece726c48e7985::t_c8e9e8a2a910a9 23
+packages/refkit/pyproject.toml
+  s_ece726c48e7985::t_c8e9e8a2a910a9 11,17
+docs/get-started.md
+  s_ece726c48e7985::t_48b3de7a8edcd0 7
+pyproject.toml
+  s_ece726c48e7985::t_c8e9e8a2a910a9 4,33,104,114
+packages/refkit-bench/src/refkit_bench/runner.py
+  s_ece726c48e7985::t_48b3de7a8edcd0 9,193
+Makefile
+  s_ece726c48e7985::t_116263228d2545 3
+packages/refkit-tests/pyproject.toml
+  s_ece726c48e7985::t_c8e9e8a2a910a9 5
+scripts/release_contract.py
+  s_ece726c48e7985::t_48b3de7a8edcd0 9-12
+packages/refkit/rust/Cargo.toml
+  s_ece726c48e7985::t_c8e9e8a2a910a9 20
+packages/refkit/README.md
+  s_ece726c48e7985::t_48b3de7a8edcd0 9
+packages/polars-refkit/README.md
+  s_ece726c48e7985::t_48b3de7a8edcd0 9
+packages/polars-refkit/pyproject.toml
+  s_ece726c48e7985::t_c8e9e8a2a910a9 11,17
+README.md
+  s_ece726c48e7985::t_48b3de7a8edcd0 41
+scripts/architecture_contract.py
+  s_ece726c48e7985::t_48b3de7a8edcd0 9-12
+packages/polars-refkit/tests/test_pyodide_packaging.py
+  s_ece726c48e7985::t_48b3de7a8edcd0 3,12-15
+packages/refkit-bench/pyproject.toml
+  s_ece726c48e7985::t_c8e9e8a2a910a9 11
+.github/workflows/artifacts-polars-refkit.yml
+  s_ece726c48e7985::t_c8e9e8a2a910a9 32,46,58,160,168,176,282
+.github/workflows/source-checks.yml
+  s_ece726c48e7985::t_c8e9e8a2a910a9 32,64-69
+scripts/artifact_manifest.py
+  s_ece726c48e7985::t_116263228d2545 133-134
+  s_ece726c48e7985::t_48b3de7a8edcd0 13-16
+.github/AGENTS.md
+  s_ece726c48e7985::t_116263228d2545 18
+scripts/pyodide_lock.py
+  s_ece726c48e7985::t_48b3de7a8edcd0 15-18
+scripts/tests/test_artifact_manifest.py
+  s_ece726c48e7985::t_53a5ecb7415bc0 51-66
+  s_ece726c48e7985::t_0b180e0167b7ef 15-17
+.github/workflows/artifacts-refkit.yml
+  s_ece726c48e7985::t_c8e9e8a2a910a9 32,45,57,158,164,170,275
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d812ba53d2b04cb818118987fd674028653c03b2",
+  "prompts": {},
+  "sessions": {
+    "s_ece726c48e7985": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08131-6d8f-7780-9b39-4b8ef4cdcfcc",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
