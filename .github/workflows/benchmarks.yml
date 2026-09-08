@@ -3,6 +3,12 @@ name: Benchmarks
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: Full commit SHA to compare against
+        required: true
+        type: string
   workflow_call:
     outputs:
       artifact-name:
@@ -28,10 +34,14 @@ jobs:
       - name: Identify benchmark inputs
         id: inputs
         env:
-          BASE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ inputs.baseline || github.event.before }}
         run: |
           if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
             BASE_SHA=$(git rev-parse HEAD^)
+          fi
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Baseline must be a full commit SHA" >&2
+            exit 1
           fi
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
           python -m scripts.benchmark_inputs --baseline "$BASE_SHA"
