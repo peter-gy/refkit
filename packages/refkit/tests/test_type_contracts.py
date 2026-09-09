@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import refkit as rk
-from refkit.types import Diagnostic, RawBlock, RenderedTree, TidyRename
+from refkit.types import Diagnostic, RawBlock, RenderedTree, ResolvedBibEntry, TidyRename
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -61,9 +61,16 @@ def renamed_keys(renames: list[TidyRename]) -> list[str]:
     return [rename["new_key"] for rename in renames]
 
 
+def resolved_fields(entries: list[ResolvedBibEntry]) -> list[dict[str, str]]:
+    return [entry["fields"] for entry in entries]
+
+
 def test_public_record_types_support_consumer_annotations() -> None:
     source = "@article{old,author={Doe, Jane},title={Work},year={2024}}"
     library = rk.Library.parse_bibtex(source)
     result = rk.tidy_bibtex(source, options=rk.TidyOptions(generate_keys="[auth:lower][year]"))
     assert diagnostic_messages(library.diagnostics) == []
     assert renamed_keys(result.renames) == ["doe2024"]
+    assert resolved_fields(rk.BibDocument.parse(source).resolve()) == [
+        {"author": "Doe, Jane", "title": "Work", "year": "2024"}
+    ]

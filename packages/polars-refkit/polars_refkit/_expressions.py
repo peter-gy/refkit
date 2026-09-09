@@ -190,6 +190,16 @@ def entries(
     )
 
 
+def resolve(bibtex_col: ColumnExpr) -> pl.Expr:
+    """Resolve string macros and concatenations into BibTeX entry fields.
+
+    Returns List[Struct{key, entry_type, fields: List[Struct{name, value}]}].
+    TeX markup and custom fields are preserved. Row failures and missing inputs
+    return null. Empty bibliographies return empty lists. Strings name columns.
+    """
+    return _register("resolve", [bibtex_col], kwargs=None, output_name="resolve")
+
+
 def diagnostics(bibtex_col: ColumnExpr, *, recovery: RecoveryMode = "error") -> pl.Expr:
     """Return parser diagnostics as a list column for each BibTeX row."""
 

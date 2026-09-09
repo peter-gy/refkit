@@ -8,6 +8,7 @@
 - Use pure implementation dependencies directly. Introduce a trait port when the core must reach replaceable I/O or a runtime service.
 - Preserve source spans, UTF-8 boundaries, unrelated valid entries, and deterministic diagnostic order during recovery.
 - Keep raw BibTeX parsing and tidy formatting on one syntax model.
+- `RawDocument.resolve()` projects current source fields through the shared bounded macro expander. Preserve TeX text and keep citation normalization in `Library`.
 - Add semantic behavior here before exposing it through an adapter.
 
 Validate bibliography macro and inheritance dependencies before upstream normalization. Keep recovery diagnostics structured and map every span to the original UTF-8 source. Recover a failing value locally while preserving valid macro definitions and unrelated entries.

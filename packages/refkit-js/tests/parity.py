@@ -99,7 +99,12 @@ def render_case(case: dict[str, Any]) -> dict[str, Any]:
 
 
 def raw_state(document: rk.BibDocument) -> dict[str, Any]:
+    try:
+        resolution: Any = document.resolve()
+    except rk.ParseError as error:
+        resolution = {"error": "ParseError", "diagnostics": error.diagnostics}
     return {
+        "resolution": resolution,
         "bibtex": document.to_bibtex(),
         "diagnostics": document.diagnostics,
         "comments": document.comments,
@@ -261,6 +266,23 @@ def cases() -> list[dict[str, Any]]:
     )
     values.extend(
         [
+            {
+                "name": "raw-resolved-fields",
+                "kind": "raw",
+                "source": (
+                    '@string{host="https://example.test/"}\n'
+                    "@misc{entry,title={A {Protected} Title},url=host # {paper},custom={Kept}}"
+                ),
+                "edits": [
+                    {
+                        "key": "entry",
+                        "entry": 0,
+                        "field": "url",
+                        "occurrence": 0,
+                        "value": "https://example.test/revised",
+                    },
+                ],
+            },
             {
                 "name": "raw-duplicate-edits",
                 "kind": "raw",

@@ -135,6 +135,14 @@ Create a live raw BibTeX document from a file or string. Malformed blocks remain
 | `tidy(*, options=None)` | Strictly formats the current state into `TidyResult`. |
 | `write(path)` | Writes the current state as UTF-8. |
 
+### `BibDocument.resolve()`
+
+Returns `list[refkit.types.ResolvedBibEntry]` in source order. Each record has
+`key`, `entry_type`, and a `fields` dictionary containing every source field
+with string macros and concatenations expanded. Results are detached from the
+document and reflect its current edits. Invalid or ambiguous input raises
+`ParseError` with diagnostics. See [field resolution](/guides/edit-bibtex#resolve-fields-for-inspection).
+
 ### `BibEntryMap` and `BibFieldMap`
 
 Both lengths count source occurrences, including duplicates. `unique_keys()` counts names through its returned list.

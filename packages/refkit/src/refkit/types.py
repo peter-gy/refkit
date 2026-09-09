@@ -62,6 +62,12 @@ class ProjectionRow(TypedDict, total=False):
     volume: str | None
 
 
+class ResolvedBibEntry(TypedDict):
+    key: str
+    entry_type: str
+    fields: dict[str, str]
+
+
 class RenderedFormatting(TypedDict):
     font_style: Literal["Normal", "Italic"]
     font_variant: Literal["Normal", "SmallCaps"]

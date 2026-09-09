@@ -1,6 +1,12 @@
 export type RecoveryPolicy = "error" | "report";
 export type RawSpan = readonly [number, number];
 
+export interface ResolvedBibEntry {
+  readonly key: string;
+  readonly entryType: string;
+  readonly fields: Readonly<Record<string, string>>;
+}
+
 export interface Diagnostic {
   readonly code: string;
   readonly severity: "error" | "warning";

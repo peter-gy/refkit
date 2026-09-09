@@ -162,7 +162,18 @@ function renderCase(input) {
 }
 
 function rawState(document) {
+  let resolution;
+  try {
+    resolution = document.resolve().map(({ entryType, ...value }) => ({
+      ...value,
+      entry_type: entryType,
+    }));
+  } catch (error) {
+    if (!(error instanceof ParseError)) throw error;
+    resolution = { error: "ParseError", diagnostics: error.diagnostics };
+  }
   return {
+    resolution,
     bibtex: document.toBibtex(),
     diagnostics: document.diagnostics,
     comments: document.comments,

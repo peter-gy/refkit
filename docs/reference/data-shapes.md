@@ -64,6 +64,28 @@ Polars diagnostics use the same fields. `span` is a nullable `Struct[start: UInt
 
 The default projection is `key`, `title`, `doi`, and `volume`. Both bindings return a list of `ProjectionRow` records. Each row contains exactly the requested fields, using the requested property names.
 
+## Resolved entry records
+
+`BibDocument.resolve()` returns detached records in source order:
+
+| Field | Python | TypeScript |
+| --- | --- | --- |
+| Citation key | `key: str` | `key: string` |
+| Lowercase source entry type | `entry_type: str` | `entryType: string` |
+| Expanded source fields | `fields: dict[str, str]` | `fields: Readonly<Record<string, string>>` |
+
+Field names are lowercase. String macros and concatenations are expanded while
+literal TeX grouping and escapes are preserved. The fields include custom names
+and source reference keys such as `crossref`.
+
+Resolution errors use the same diagnostic shape. Their spans address the
+current serialized document, including edits made before the call.
+
+Polars `resolve` returns `List[Struct[key: String, entry_type: String,
+fields: List[Struct[name: String, value: String]]]]`. The field list represents
+the dictionary within Polars' fixed dtype system. Empty bibliographies return
+an empty list. Null input or a resolution failure returns null.
+
 ## Rendered nodes
 
 `Rendered.tree` contains a `RenderedTree` list. Each node has a case-sensitive `kind`:

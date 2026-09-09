@@ -15,7 +15,9 @@ use crate::quoted;
 use crate::strings::entry_type_name;
 
 pub use self::diagnostic::{Diagnostic, DiagnosticAction, DiagnosticSeverity, ParseFailure};
-pub(crate) use self::guard::{normalize_reference, validate_literal, validate_source};
+pub(crate) use self::guard::{
+    FieldResolver, normalize_reference, validate_literal, validate_source, validate_source_size,
+};
 pub use self::parse::parse_bibtex_report;
 use self::parse::{parse_biblatex_library, parse_hayagriva_yaml};
 

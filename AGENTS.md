@@ -51,7 +51,7 @@ Reject changes that bypass this graph. Extend the executable contract when sourc
 ## State Owners
 
 - `Library` owns normalized citation data and parser diagnostics.
-- `BibDocument` owns source-order raw BibTeX, occurrence identity, and edit-preserving writeback.
+- `BibDocument` owns source-order raw BibTeX, occurrence identity, edit-preserving writeback, and resolved source-field views.
 - `Document` owns prepared library, style, and locale inputs. Each render or bibliography call owns fresh citation state.
 - The Python, JavaScript, and Polars adapters own host conversion, registration, filesystem access, and runtime lifecycle.
 - `refkit.agent` owns lazy code-mode guidance and version-matched Agent Plugin resource lookup. It calls the public Python API and defines no bibliography behavior.

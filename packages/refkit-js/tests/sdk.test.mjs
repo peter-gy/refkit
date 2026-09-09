@@ -195,6 +195,61 @@ test("document tidy formats current edits while preserving editable source", () 
   assert.equal(document.toBibtex(), edited);
 });
 
+test("raw resolution exposes expanded fields and current edits as detached records", () => {
+  const document = rk.BibDocument.parse(String.raw`
+@string{host = "https://example.test/"}
+@misc{entry,
+  title = {A {Protected} \LaTeX{} Title},
+  url = host # {paper},
+  custom = {Keep Me},
+  month = jan
+}`);
+  const before = document.toBibtex();
+  const [record] = document.resolve();
+  assert.deepEqual(record, {
+    key: "entry",
+    entryType: "misc",
+    fields: {
+      title: String.raw`A {Protected} \LaTeX{} Title`,
+      url: "https://example.test/paper",
+      custom: "Keep Me",
+      month: "January",
+    },
+  });
+  assert.equal(document.toBibtex(), before);
+  record.fields.url = "Changed outside document";
+  assert.equal(document.resolve()[0].fields.url, "https://example.test/paper");
+  document.entries.getUnique("entry").fields.getUnique("url").value =
+    "https://example.test/revised";
+  assert.equal(
+    document.resolve()[0].fields.url,
+    "https://example.test/revised",
+  );
+});
+
+test("raw resolution errors retain structured diagnostics across WebAssembly", () => {
+  const source = "@misc{entry,title=未定}";
+  assert.throws(
+    () => rk.BibDocument.parse(source).resolve(),
+    (error) => {
+      assert.ok(error instanceof rk.ParseError);
+      const diagnostic = error.diagnostics.find(
+        (item) => item.code === "unknown_abbreviation",
+      );
+      assert.ok(diagnostic);
+      assert.equal(diagnostic.entry, "entry");
+      assert.equal(diagnostic.field, "title");
+      assert.equal(
+        new TextDecoder().decode(
+          new TextEncoder().encode(source).slice(...diagnostic.span),
+        ),
+        "未定",
+      );
+      return true;
+    },
+  );
+});
+
 test("tidy rejects invalid option types and values", () => {
   for (const options of [{ space: -1 }, { space: 1.5 }, { sort: "key" }]) {
     assert.throws(

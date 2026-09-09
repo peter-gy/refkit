@@ -217,6 +217,16 @@ def test_raw_bib_document_write_releases_gil_for_worker_thread(tmp_path: Path) -
     assert output.read_text(encoding="utf-8").count("@article") == 10_000
 
 
+def test_raw_bib_document_resolve_releases_gil_for_worker_thread() -> None:
+    raw = rk.BibDocument.parse(_many_bibtex_records(10_000))
+
+    entries = _run_with_worker_progress(raw.resolve)
+
+    assert len(entries) == 10_000
+    assert entries[0]["key"] == "item0000"
+    assert entries[-1]["key"] == "item9999"
+
+
 def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
     library = rk.Library.parse_bibtex(
         """@article{inline,
@@ -1248,6 +1258,60 @@ def test_raw_bib_document_parse_accepts_source_strings_and_mapping_helpers(
 
     written = rk.BibDocument.read(output)
     assert written.entries["inline"].fields["title"].value == "Inline Raw"
+
+
+def test_raw_bib_document_resolve_returns_expanded_source_fields() -> None:
+    source = r"""@string{site = "https://example.org/"}
+@online{work,
+  title = {An {API} for \LaTeX},
+  url = site # "work",
+  custom = {kept}
+}
+@misc{other, title = {Other}}
+"""
+    raw = rk.BibDocument.parse(source)
+
+    assert raw.resolve() == [
+        {
+            "key": "work",
+            "entry_type": "online",
+            "fields": {
+                "title": r"An {API} for \LaTeX",
+                "url": "https://example.org/work",
+                "custom": "kept",
+            },
+        },
+        {"key": "other", "entry_type": "misc", "fields": {"title": "Other"}},
+    ]
+    assert raw.to_bibtex() == source
+
+
+def test_raw_bib_document_resolve_reflects_edits_and_returns_independent_records() -> None:
+    raw = rk.BibDocument.parse('@string{label = "First"}\n@misc{work, title=label}')
+    initial = raw.resolve()
+    raw.entries["work"].fields["title"].value = "Edited title"
+
+    current = raw.resolve()
+
+    assert initial[0]["fields"]["title"] == "First"
+    assert current[0]["fields"]["title"] == "Edited title"
+    current[0]["fields"]["title"] = "Consumer edit"
+    assert raw.resolve()[0]["fields"]["title"] == "Edited title"
+
+
+def test_raw_bib_document_resolve_reports_structured_parse_errors() -> None:
+    raw = rk.BibDocument.parse("@misc{work, title=unknown}")
+
+    with pytest.raises(rk.ParseError) as raised:
+        raw.resolve()
+
+    diagnostic = raised.value.diagnostics[0]
+    assert diagnostic["severity"] == "error"
+    assert diagnostic["action"] == "rejected"
+    assert diagnostic["entry"] == "work"
+    assert diagnostic["field"] == "title"
+    assert diagnostic["span"] is not None
+    assert "unknown" in str(raised.value)
 
 
 def test_raw_bib_document_accepts_permissive_citation_keys() -> None:
