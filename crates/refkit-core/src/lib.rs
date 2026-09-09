@@ -15,6 +15,7 @@ pub use library::{
 };
 pub use raw::{
     RawBlockInfo, RawDocument, RawEditError, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo,
+    ResolvedBibEntry,
 };
 pub use render::{
     RenderedOutput, is_bundled_locale, render_library_bibliography, render_library_citation,

@@ -11,7 +11,11 @@ const MAX_EXPANDED_BYTES: usize = 16 * 1024 * 1024;
 const MAX_STEPS: usize = 100_000;
 
 pub(crate) fn validate_source(source: &str) -> Result<(), Diagnostic> {
-    if source.len() > MAX_SOURCE_BYTES {
+    validate_source_size(source.len())
+}
+
+pub(crate) fn validate_source_size(bytes: usize) -> Result<(), Diagnostic> {
+    if bytes > MAX_SOURCE_BYTES {
         return Err(limit(None, "bibliography source exceeds 16 MiB"));
     }
     Ok(())
@@ -61,7 +65,7 @@ pub(crate) fn normalize_reference<'a>(
 ) -> Result<Vec<String>, Diagnostic> {
     let lookup = abbreviations
         .iter()
-        .map(|pair| (pair.key.v, &pair.value.v))
+        .map(|pair| (pair.key.v.to_string(), &pair.value.v))
         .collect();
     resolve_field(field, &lookup)?;
     let span = field.first().map_or(0, |chunk| chunk.span.start)
@@ -96,7 +100,7 @@ pub(crate) fn normalize_reference<'a>(
 
 pub(crate) fn resolve_field(
     field: &Field<'_>,
-    abbreviations: &HashMap<&str, &Field<'_>>,
+    abbreviations: &HashMap<String, &Field<'_>>,
 ) -> Result<String, Diagnostic> {
     let mut output = String::new();
     let mut ancestors = Vec::new();
@@ -107,18 +111,25 @@ pub(crate) fn resolve_field(
         &mut ancestors,
         &mut steps,
         &mut output,
+        false,
     )?;
     Ok(output)
 }
 
 fn expand<'a>(
     field: &Field<'a>,
-    abbreviations: &HashMap<&str, &Field<'a>>,
+    abbreviations: &HashMap<String, &Field<'a>>,
     ancestors: &mut Vec<String>,
     steps: &mut usize,
     output: &mut String,
+    strict: bool,
 ) -> Result<(), Diagnostic> {
-    validate_value(field)?;
+    validate_value(field).map_err(|mut diagnostic| {
+        if strict {
+            diagnostic.span = field.first().map(|chunk| chunk.span.clone());
+        }
+        diagnostic
+    })?;
     for chunk in field {
         *steps += 1;
         if *steps > MAX_STEPS || ancestors.len() >= MAX_DEPTH {
@@ -130,17 +141,33 @@ fn expand<'a>(
         match chunk.v {
             RawChunk::Normal(text) => output.push_str(text),
             RawChunk::Abbreviation(name) => {
-                if ancestors.iter().any(|ancestor| ancestor == name) {
+                let key = if strict {
+                    name.to_ascii_lowercase()
+                } else {
+                    name.to_string()
+                };
+                if ancestors.contains(&key) {
                     return Err(Diagnostic::error(
                         "cyclic_abbreviation",
                         Some(chunk.span.clone()),
                         format!("cyclic BibTeX abbreviation {name:?}"),
                     ));
                 }
-                if let Some(value) = abbreviations.get(name) {
-                    ancestors.push(name.to_string());
-                    expand(value, abbreviations, ancestors, steps, output)?;
+                if let Some(value) = abbreviations.get(&key) {
+                    ancestors.push(key);
+                    expand(value, abbreviations, ancestors, steps, output, strict)?;
                     ancestors.pop();
+                } else if strict {
+                    match month(&key) {
+                        Some(month) => output.push_str(month),
+                        None => {
+                            return Err(Diagnostic::error(
+                                "unknown_abbreviation",
+                                Some(chunk.span.clone()),
+                                format!("unknown BibTeX abbreviation {name:?}"),
+                            ));
+                        }
+                    }
                 } else {
                     output.push_str(name);
                 }
@@ -156,6 +183,60 @@ fn expand<'a>(
     Ok(())
 }
 
+pub(crate) struct FieldResolver<'a> {
+    abbreviations: HashMap<String, &'a Field<'a>>,
+    steps: usize,
+    bytes: usize,
+}
+
+impl<'a> FieldResolver<'a> {
+    pub(crate) fn new(abbreviations: HashMap<String, &'a Field<'a>>) -> Self {
+        Self {
+            abbreviations,
+            steps: 0,
+            bytes: 0,
+        }
+    }
+
+    pub(crate) fn resolve(&mut self, field: &Field<'a>) -> Result<String, Diagnostic> {
+        let mut output = String::new();
+        expand(
+            field,
+            &self.abbreviations,
+            &mut Vec::new(),
+            &mut self.steps,
+            &mut output,
+            true,
+        )?;
+        self.bytes = self.bytes.saturating_add(output.len());
+        if self.bytes > MAX_EXPANDED_BYTES {
+            return Err(limit(
+                field.first().map(|chunk| chunk.span.clone()),
+                "bibliography expansion exceeds 16 MiB",
+            ));
+        }
+        Ok(output)
+    }
+}
+
+fn month(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "jan" => "January",
+        "feb" => "February",
+        "mar" => "March",
+        "apr" => "April",
+        "may" => "May",
+        "jun" => "June",
+        "jul" => "July",
+        "aug" => "August",
+        "sep" => "September",
+        "oct" => "October",
+        "nov" => "November",
+        "dec" => "December",
+        _ => return None,
+    })
+}
+
 pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> {
     for abbreviation in &raw.abbreviations {
         validate_value(&abbreviation.value.v)?;
@@ -163,7 +244,7 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
     let abbreviations: HashMap<_, _> = raw
         .abbreviations
         .iter()
-        .map(|pair| (pair.key.v, &pair.value.v))
+        .map(|pair| (pair.key.v.to_string(), &pair.value.v))
         .collect();
     let has_references = raw
         .entries
@@ -183,6 +264,7 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
                 &mut ancestors,
                 &mut expansion_steps,
                 &mut value,
+                false,
             )
             .map_err(|mut diagnostic| {
                 diagnostic.entry = Some(entry.v.key.v.to_string());

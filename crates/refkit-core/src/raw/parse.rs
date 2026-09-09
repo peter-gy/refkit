@@ -775,6 +775,11 @@ fn skip_field_trivia(body: &str, cursor: &mut usize) {
 }
 
 fn parse_assignment(body: &str) -> Option<(String, String)> {
+    let (key, value, _) = parse_assignment_atoms(body)?;
+    Some((key, value))
+}
+
+pub(super) fn parse_assignment_atoms(body: &str) -> Option<(String, String, Vec<RawValueAtom>)> {
     let equals = body.find('=')?;
     let key = body[..equals].trim().to_ascii_lowercase();
     if !is_valid_identifier(&key) {
@@ -782,13 +787,17 @@ fn parse_assignment(body: &str) -> Option<(String, String)> {
     }
     let mut cursor = equals + 1;
     skip_field_space(body, &mut cursor);
-    let (value, end, _, _, _) = parse_value(body, cursor, 0).ok()?;
+    let (value, end, _, _, atoms) = parse_value(body, cursor, 0).ok()?;
     cursor = end;
     skip_field_trivia(body, &mut cursor);
+    if body[cursor..].starts_with(',') {
+        cursor += 1;
+        skip_field_trivia(body, &mut cursor);
+    }
     if cursor != body.len() {
         return None;
     }
-    Some((key, value))
+    Some((key, value, atoms))
 }
 
 fn parse_preamble_value(body: &str) -> String {

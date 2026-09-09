@@ -1,11 +1,69 @@
 use polars::prelude::*;
 use polars_core::chunked_array::builder::{AnonymousOwnedListBuilder, ListBuilderTrait};
 use pyo3_polars::derive::polars_expr;
-use refkit_core::{EntryField, EntryRecord};
+use refkit_core::{EntryField, EntryRecord, RawDocument, ResolvedBibEntry};
 
 use super::EntriesKwargs;
 use super::broadcast::{compute_error, parse_value_library_source};
-use super::dtypes::{entries_output, entry_struct_dtype};
+use super::dtypes::{
+    entries_output, entry_struct_dtype, resolved_entry_struct_dtype, resolved_field_struct_dtype,
+    resolved_output,
+};
+
+#[polars_expr(output_type_func=resolved_output)]
+fn resolve(inputs: &[Series]) -> PolarsResult<Series> {
+    let bibtex = inputs[0].str()?;
+    let mut builder = AnonymousOwnedListBuilder::new(
+        "resolve".into(),
+        bibtex.len(),
+        Some(resolved_entry_struct_dtype()),
+    );
+    for source in bibtex.iter() {
+        match source.and_then(|source| RawDocument::parse(source).resolve().ok()) {
+            Some(entries) => builder.append_series(&resolved_entries_to_series(&entries)?)?,
+            None => builder.append_null(),
+        }
+    }
+    Ok(builder.finish().into_series())
+}
+
+fn resolved_entries_to_series(entries: &[ResolvedBibEntry]) -> PolarsResult<Series> {
+    let mut fields = AnonymousOwnedListBuilder::new(
+        "fields".into(),
+        entries.len(),
+        Some(resolved_field_struct_dtype()),
+    );
+    for entry in entries {
+        let columns = [
+            StringChunked::from_iter_values("name".into(), entry.fields.keys().map(String::as_str))
+                .into_series(),
+            StringChunked::from_iter_values(
+                "value".into(),
+                entry.fields.values().map(String::as_str),
+            )
+            .into_series(),
+        ];
+        fields.append_series(
+            &StructChunked::from_series("field".into(), entry.fields.len(), columns.iter())?
+                .into_series(),
+        )?;
+    }
+    let columns = [
+        StringChunked::from_iter_values(
+            "key".into(),
+            entries.iter().map(|entry| entry.key.as_str()),
+        )
+        .into_series(),
+        StringChunked::from_iter_values(
+            "entry_type".into(),
+            entries.iter().map(|entry| entry.entry_type.as_str()),
+        )
+        .into_series(),
+        fields.finish().into_series(),
+    ];
+    StructChunked::from_series("entry".into(), entries.len(), columns.iter())
+        .map(|entries| entries.into_series())
+}
 
 #[polars_expr(output_type_func_with_kwargs=entries_output)]
 fn entries(inputs: &[Series], kwargs: EntriesKwargs) -> PolarsResult<Series> {

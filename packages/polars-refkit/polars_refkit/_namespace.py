@@ -100,6 +100,9 @@ class RefkitExprNamespace:
     def diagnostics(self, *, recovery: RecoveryMode = "error") -> pl.Expr:
         return expressions.diagnostics(self._expr, recovery=recovery)
 
+    def resolve(self) -> pl.Expr:
+        return expressions.resolve(self._expr)
+
     def parse_report(self, *, recovery: RecoveryMode = "error") -> pl.Expr:
         return expressions.parse_report(self._expr, recovery=recovery)
 

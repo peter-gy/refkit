@@ -1,4 +1,4 @@
-use refkit_core::{DocumentError, LibraryError, StyleError};
+use refkit_core::{DocumentError, LibraryError, ParseFailure, StyleError};
 use serde_json::json;
 use wasm_bindgen::JsValue;
 
@@ -6,16 +6,20 @@ pub fn error(name: &str, message: impl ToString) -> JsValue {
     JsValue::from_str(&json!({"name": name, "message": message.to_string()}).to_string())
 }
 
+pub fn parse_error(value: ParseFailure) -> JsValue {
+    JsValue::from_str(
+        &json!({
+            "name": "ParseError", "message": value.to_string(),
+            "diagnostics": crate::conversion::diagnostics(&value.diagnostics)
+        })
+        .to_string(),
+    )
+}
+
 pub fn library_error(value: LibraryError) -> JsValue {
-    match &value {
+    match value {
         LibraryError::Biblatex(failure) | LibraryError::HayagrivaYaml(failure) => {
-            JsValue::from_str(
-                &json!({
-                    "name": "ParseError", "message": value.to_string(),
-                    "diagnostics": crate::conversion::diagnostics(&failure.diagnostics)
-                })
-                .to_string(),
-            )
+            parse_error(failure)
         }
         LibraryError::Selector(_) => error("RangeError", value),
     }

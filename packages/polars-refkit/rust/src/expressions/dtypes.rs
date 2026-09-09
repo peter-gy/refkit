@@ -31,6 +31,31 @@ pub(super) fn entries_output(input_fields: &[Field], kwargs: EntriesKwargs) -> P
     ))
 }
 
+pub(super) fn resolved_output(input_fields: &[Field]) -> PolarsResult<Field> {
+    fixed_output(
+        input_fields,
+        DataType::List(Box::new(resolved_entry_struct_dtype())),
+    )
+}
+
+pub(super) fn resolved_field_struct_dtype() -> DataType {
+    DataType::Struct(vec![
+        Field::new("name".into(), DataType::String),
+        Field::new("value".into(), DataType::String),
+    ])
+}
+
+pub(super) fn resolved_entry_struct_dtype() -> DataType {
+    DataType::Struct(vec![
+        Field::new("key".into(), DataType::String),
+        Field::new("entry_type".into(), DataType::String),
+        Field::new(
+            "fields".into(),
+            DataType::List(Box::new(resolved_field_struct_dtype())),
+        ),
+    ])
+}
+
 pub(super) fn rendered_output(input_fields: &[Field]) -> PolarsResult<Field> {
     let field = input_fields[0].clone();
     Ok(Field::new(field.name, rendered_struct_dtype()))

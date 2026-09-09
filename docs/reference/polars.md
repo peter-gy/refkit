@@ -23,12 +23,20 @@ Rendering accepts `output="text"`, `"html"`, or `"rendered"`. The output choice 
 | `has_diagnostics(bibtex_col, *, recovery="error")` | `Boolean` | Reflects diagnostic presence. |
 | `keys(bibtex_col, *, recovery="error")` | `List[String]` | Null. |
 | `entries(bibtex_col, *, fields=None, recovery="error")` | `List[Struct]` | Null. |
+| `resolve(bibtex_col)` | `List[ResolvedBibEntry]` | Null. |
 | `diagnostics(bibtex_col, *, recovery="error")` | `List[Diagnostic]` | Structured diagnostic records. |
 | `parse_report(bibtex_col, *, recovery="error")` | Parse report struct | `ok=False` with diagnostics. |
 
 `entries` defaults to `key`, `title`, `doi`, and `volume`. Supported fields are `key`, `entry_type`, `type`, `title`, `date`, `doi`, and `volume`. An empty field list returns one empty struct per entry. Unknown or repeated fields abort the query.
 
 `parse_report` performs one parse for `ok`, `entry_count`, `keys`, and `diagnostics`. Null source produces a null report. [Data Shapes](/reference/data-shapes) defines report and diagnostic fields.
+
+`resolve` expands string macros and concatenations across every source field,
+including custom fields. It preserves literal TeX grouping and escapes. Each
+row is independent, and an empty bibliography produces an empty list. See
+[resolved entry records](/reference/data-shapes#resolved-entry-records) for the
+fixed nested dtype. Use `BibDocument.resolve()` in Python to inspect a failed
+row's structured `ParseError` diagnostics.
 
 ## Render citations
 

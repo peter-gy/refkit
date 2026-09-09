@@ -4,7 +4,7 @@ use refkit_core::{
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
 
-use crate::errors::error;
+use crate::errors::{error, parse_error};
 
 #[wasm_bindgen]
 pub struct NativeRawDocument {
@@ -180,6 +180,21 @@ impl NativeRawDocument {
         self.inner
             .render()
             .map_err(|value| error("RefkitError", value))
+    }
+
+    pub fn resolve(&self) -> Result<String, JsValue> {
+        let entries = self.inner.resolve().map_err(parse_error)?;
+        Ok(json!(
+            entries
+                .iter()
+                .map(|entry| json!({
+                    "key": entry.key,
+                    "entryType": entry.entry_type,
+                    "fields": entry.fields,
+                }))
+                .collect::<Vec<_>>()
+        )
+        .to_string())
     }
 }
 

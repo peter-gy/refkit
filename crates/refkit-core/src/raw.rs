@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::Range;
 
@@ -5,6 +6,7 @@ use indexmap::IndexMap;
 
 mod edit;
 mod parse;
+mod resolve;
 mod sanitize;
 #[cfg(test)]
 mod tests;
@@ -111,6 +113,13 @@ pub struct RawDocumentData {
 #[derive(Debug, Clone)]
 pub struct RawDocument {
     data: RawDocumentData,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedBibEntry {
+    pub key: String,
+    pub entry_type: String,
+    pub fields: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -257,6 +266,10 @@ impl RawDocument {
         Self {
             data: parse_raw_document(source),
         }
+    }
+
+    pub fn resolve(&self) -> Result<Vec<ResolvedBibEntry>, crate::ParseFailure> {
+        resolve::resolve_document(self)
     }
 
     pub fn entry_count(&self) -> usize {

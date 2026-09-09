@@ -38,6 +38,51 @@ The field handle updates the shared `BibDocument`. Serializing the document pres
 
 Field assignment validates the replacement against the original delimiter mode. An unsafe replacement raises `ValueError` in Python or `RangeError` in TypeScript before the document changes.
 
+## Resolve fields for inspection
+
+`resolve()` returns detached entry records with string macros and `#`
+concatenations expanded in every field. Custom field names are included.
+Literal TeX grouping and escapes remain available for downstream processing.
+
+::: code-group
+
+```python [Python]
+resolved_document = rk.BibDocument.parse(r"""
+@string{topic = {Visual {Data}}}
+@article{guide, title = {A } # topic # { Guide \& Examples}, year = 2024}
+""")
+print(resolved_document.resolve()[0]["fields"]["title"])
+```
+
+```ts [TypeScript]
+const resolvedDocument = rk.BibDocument.parse(String.raw`
+@string{topic = {Visual {Data}}}
+@article{guide, title = {A } # topic # { Guide \& Examples}, year = 2024}
+`);
+console.log(resolvedDocument.resolve()[0]!.fields.title);
+```
+
+:::
+
+```text
+A Visual {Data} Guide \& Examples
+```
+
+Each call uses the current field edits and leaves the document unchanged.
+Entry keys retain their case. Entry types and field names are lowercase.
+Macro names are case-insensitive. Definitions can appear after their uses,
+and the last definition wins. Built-in month names such as `jan` expand to
+`January` unless the document defines that macro.
+`crossref` and `xdata` values are resolved as field text. Use `Library` when
+you need inherited citation metadata and normalized names or dates.
+
+Undefined or cyclic macros reached from entry fields, duplicate entry keys or
+fields, malformed entry or string-definition syntax, and expansion-limit
+violations raise `ParseError` with diagnostics. Resolution
+diagnostic spans refer to the current serialized source. See
+[resolved entry records](/reference/data-shapes#resolved-entry-records) for the
+result shape and its Polars representation.
+
 ## Inspect source-order blocks
 
 ::: code-group

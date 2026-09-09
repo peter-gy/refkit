@@ -31,6 +31,25 @@ Return the entry preview, diagnostic preview, and their total counts together. D
 
 Use `Library.read(path)` for files, `Library.parse_yaml(source)` for [Hayagriva bibliography YAML](https://github.com/typst/hayagriva), and `Library.select(selector)` for [Hayagriva selectors](https://github.com/typst/hayagriva#selectors). Use `project(..., keys=selected_keys)` to constrain subsequent output.
 
+Use `BibDocument.resolve()` for every source field, including custom fields,
+with string macros and concatenations expanded. It preserves TeX grouping and
+escapes. Results are detached records with `key`, `entry_type`, and `fields`.
+The call uses current edits and raises `ParseError` for ambiguous or invalid
+source. It resolves `crossref` and `xdata` as field text. Choose `Library` for
+inherited citation metadata.
+
+```python
+import refkit as rk
+
+document = rk.BibDocument.parse("""
+@string{host = {https://example.org/}}
+@misc{guide, custom_link = host # {guide}, title = {A {Guide}}}
+""")
+entry = document.resolve()[0]
+assert entry["fields"]["custom_link"] == "https://example.org/guide"
+assert entry["fields"]["title"] == "A {Guide}"
+```
+
 When parsing cannot retain an entry, handle the typed failure and report its diagnostics:
 
 ```python

@@ -8,6 +8,7 @@ import type {
   RawBlock,
   RawFailedBlock,
   RawSpan,
+  ResolvedBibEntry,
   TidyResult,
 } from "./types.js";
 
@@ -88,6 +89,9 @@ export class BibDocument {
   }
   toBibtex(): string {
     return callNative(() => this.#native.to_bibtex());
+  }
+  resolve(): readonly ResolvedBibEntry[] {
+    return readNative(() => this.#native.resolve());
   }
   tidy(settings: TidySettings = {}): TidyResult {
     return tidyBibtex(this.toBibtex(), settings);

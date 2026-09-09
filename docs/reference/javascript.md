@@ -167,12 +167,18 @@ remain available through `failedBlocks`.
 | `strings` | String definitions keyed by name. |
 | `failedBlocks` / `blocks` | Failed blocks or every source-order block. |
 | `toBibtex()` | Serializes the current edits. |
+| `resolve()` | Returns detached `ResolvedBibEntry` records with expanded source fields. |
 | `tidy({ options } = {})` | Formats the current edits into a `TidyResult`. |
 
 `BibEntry` exposes `key`, `kind`, `fields`, and `span`. `BibField` exposes
 `name`, mutable `value`, and `span`. Assigning `value` validates the original
 field delimiter before updating the document. `tidy()` returns a formatted
 result and preserves the current raw document.
+
+`resolve()` returns source-ordered records with `key`, `entryType`, and `fields`.
+It uses the current field edits and raises `ParseError` for invalid or ambiguous
+input. See [field resolution](/guides/edit-bibtex#resolve-fields-for-inspection)
+for macro handling and diagnostics.
 
 ### `BibEntryMap` and `BibFieldMap`
 

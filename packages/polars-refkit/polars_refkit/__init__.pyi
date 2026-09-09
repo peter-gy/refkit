@@ -10,6 +10,7 @@ from ._expressions import has_diagnostics as has_diagnostics
 from ._expressions import keys as keys
 from ._expressions import parse_report as parse_report
 from ._expressions import render_report as render_report
+from ._expressions import resolve as resolve
 from ._expressions import tidy_bibtex as tidy_bibtex
 from ._expressions import tidy_bibtex_report as tidy_bibtex_report
 from ._internal import build_mode as build_mode
@@ -43,6 +44,7 @@ __all__ = [
     "has_diagnostics",
     "keys",
     "entries",
+    "resolve",
     "diagnostics",
     "parse_report",
     "tidy_bibtex",

@@ -60,6 +60,41 @@ test("failed initialization can retry from supplied bytes", async ({
   expect(result).toEqual({ failed: true, title: "A" });
 });
 
+test("browser resolution returns expanded fields and typed parse failures", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const result = await page.evaluate(async () => {
+    const rk = await import("/dist/index.js");
+    await rk.init();
+    const document = rk.BibDocument.parse(
+      '@string{host="https://example.test/"}\n@misc{entry,url=host # {paper}}',
+    );
+    const records = document.resolve();
+    try {
+      rk.BibDocument.parse("@misc{entry,title=undefined}").resolve();
+    } catch (error) {
+      return {
+        records,
+        typedError: error instanceof rk.ParseError,
+        diagnostic: error.diagnostics[0].code,
+      };
+    }
+    throw new Error("Unresolved string was accepted");
+  });
+  expect(result).toEqual({
+    records: [
+      {
+        key: "entry",
+        entryType: "misc",
+        fields: { url: "https://example.test/paper" },
+      },
+    ],
+    typedError: true,
+    diagnostic: "unknown_abbreviation",
+  });
+});
+
 test("module workers use the same browser entry point", async ({ page }) => {
   await page.goto("/");
   const result = await page.evaluate(async () => {

@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyModule};
 
 use crate::conversion::diagnostics_to_py;
-use crate::errors::RefkitError;
+use crate::errors::{RefkitError, library_error_to_py};
 use crate::filesystem::{read_bibtex, write_bibtex};
 use crate::repr::quoted;
 use crate::tidy::{TidyOptions, TidyResult, tidy_error_to_py};
@@ -101,6 +101,22 @@ impl BibDocument {
     fn to_bibtex(&self, py: Python<'_>) -> PyResult<String> {
         let data = self.doc.borrow().clone();
         py.detach(move || render_document(&data))
+    }
+
+    fn resolve(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let data = self.doc.borrow().clone();
+        let entries = py
+            .detach(move || data.resolve())
+            .map_err(|error| library_error_to_py(py, refkit_core::LibraryError::Biblatex(error)))?;
+        let values = PyList::empty(py);
+        for entry in entries {
+            let value = PyDict::new(py);
+            value.set_item("key", entry.key)?;
+            value.set_item("entry_type", entry.entry_type)?;
+            value.set_item("fields", entry.fields)?;
+            values.append(value)?;
+        }
+        Ok(values.into_any().unbind())
     }
 
     #[pyo3(signature = (*, options = None))]

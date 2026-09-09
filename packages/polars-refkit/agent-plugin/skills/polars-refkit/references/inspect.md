@@ -26,3 +26,17 @@ assert preview[2]["report"] is None
 ```
 
 Diagnostics contain `code`, `severity`, `action`, `span`, `entry`, `field`, and `message`. `span` is a struct containing UTF-8 byte offsets `start` and `end` when a source location is available. Return diagnostics beside the affected input row. Null source rows remain null.
+
+Use `resolve` to expand macros and concatenations in every source field,
+including custom fields. It returns a list of records with `key`, `entry_type`,
+and `fields`. Each `fields` value is a list of `{name, value}` records. Invalid
+source rows become null. Empty bibliographies become empty lists.
+
+```python
+import polars as pl
+import polars_refkit
+
+frame = pl.DataFrame({"bibtex": ["@misc{guide, custom={A {Guide}}}"]})
+expanded = frame.select(pl.col("bibtex").refkit.resolve()).item()
+assert expanded.to_list()[0]["fields"] == [{"name": "custom", "value": "A {Guide}"}]
+```
