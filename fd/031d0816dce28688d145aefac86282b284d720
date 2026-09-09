@@ -1,0 +1,133 @@
+docs/reference/javascript.md
+  s_b2fc299f4eea16::t_65cbb538f75516 170,178-181
+crates/refkit-core/src/lib.rs
+  s_b2fc299f4eea16::t_9c402a1c128c59 18
+AGENTS.md
+  s_b2fc299f4eea16::t_8de569adb0ab6c 54
+packages/polars-refkit/polars_refkit/_namespace.py
+  s_b2fc299f4eea16::t_e6a86d27fd45be 103-105
+packages/refkit-js/tests/parity.py
+  s_b2fc299f4eea16::t_700478b96aaaf1 103,274
+  s_b2fc299f4eea16::t_79cb112219b63a 102,104-105,107,269-273,275-285
+crates/refkit-core/src/library/mod.rs
+  s_b2fc299f4eea16::t_5c86411883985f 18-20
+crates/refkit-core/src/raw/parse.rs
+  s_b2fc299f4eea16::t_9c402a1c128c59 778-782,790,793-796,800
+packages/refkit-js/tests/browser.spec.mjs
+  ai_agent 63-65,86-92
+  s_b2fc299f4eea16::t_79cb112219b63a 66-85,93-97
+docs/reference/data-shapes.md
+  s_b2fc299f4eea16::t_65cbb538f75516 67-80,84-88
+  s_b2fc299f4eea16::t_8ac50127cb5504 81-83
+packages/refkit-js/tests/sdk.test.mjs
+  s_b2fc299f4eea16::t_79cb112219b63a 198-201,203-212,214-223,228-239,242-245,247-252
+  s_b2fc299f4eea16::t_b1f469a00d2e2c 224-227,240-241
+  s_b2fc299f4eea16::t_72710df5000910 246
+  s_b2fc299f4eea16::t_0ee3a7786af563 202,213
+packages/refkit/src/refkit/types.py
+  s_b2fc299f4eea16::t_296c43c29593ed 65-70
+packages/refkit/src/refkit/_native.pyi
+  s_b2fc299f4eea16::t_296c43c29593ed 12,272
+crates/refkit-core/src/raw.rs
+  s_b2fc299f4eea16::t_9c402a1c128c59 1,9,118-124,271-272
+skills/refkit/references/inspect.md
+  s_b2fc299f4eea16::t_9a2245c2157211 34-43,45-46,48-52
+  s_b2fc299f4eea16::t_d8561dd6426352 44,47
+packages/polars-refkit/tests/test_resolve.py
+  s_b2fc299f4eea16::t_55c1fce5d739f9 5-6,10,17,77,96-104
+  s_b2fc299f4eea16::t_80d50ce919d06a 1-4,7-9,11-16,18-76,78-95
+packages/refkit/rust/src/raw.rs
+  s_b2fc299f4eea16::t_296c43c29593ed 11,106-119
+  s_d6c1969625d69a::t_a8575f36f35b98 120-121
+packages/refkit-js/tests/parity.mjs
+  s_b2fc299f4eea16::t_79cb112219b63a 165-174,176
+packages/refkit-js/rust/src/errors.rs
+  ai_agent 22
+  s_b2fc299f4eea16::t_bff9e3c044571c 1,9-18,20
+packages/refkit-js/rust/src/raw.rs
+  s_b2fc299f4eea16::t_bff9e3c044571c 7,184-186
+  ai_agent 187-197
+packages/refkit-js/src/types.ts
+  s_b2fc299f4eea16::t_bff9e3c044571c 4-9
+packages/refkit/tests/test_public_api.py
+  s_b2fc299f4eea16::t_fe8abc51d4428e 220-229
+  s_b2fc299f4eea16::t_263c4b8aedf7fc 1263,1265,1267-1270,1272-1278,1280-1291,1293-1296,1298,1300-1316
+  s_b2fc299f4eea16::t_e645d8ff2f5e28 1264,1266,1271,1279
+  s_b2fc299f4eea16::t_e35315e933a723 1292,1297,1299
+docs/guides/edit-bibtex.md
+  s_b2fc299f4eea16::t_d8561dd6426352 50,53
+  s_b2fc299f4eea16::t_8ac50127cb5504 73-75
+  s_b2fc299f4eea16::t_65cbb538f75516 41-49,51-52,54-72,76-78,82-85
+  s_6001eb79a1c8e5::t_23753b458f7113 79-81
+packages/refkit-js/src/raw.ts
+  s_b2fc299f4eea16::t_bff9e3c044571c 11,93-94
+docs/reference/python.md
+  s_b2fc299f4eea16::t_65cbb538f75516 138-145
+packages/refkit-js/tests/consumer.ts
+  s_b2fc299f4eea16::t_bff9e3c044571c 2,11,18-21,37-41
+packages/polars-refkit/rust/src/expressions/dtypes.rs
+  s_b2fc299f4eea16::t_e6a86d27fd45be 34-58
+crates/refkit-core/src/library/guard.rs
+  s_b2fc299f4eea16::t_f3655ad52d8f75 127-132
+  s_b2fc299f4eea16::t_5c86411883985f 14-18
+  s_b2fc299f4eea16::t_9c402a1c128c59 68,103,114,121,125,144-149,156-158,160-170,186-239,247,267
+packages/polars-refkit/polars_refkit/_expressions.py
+  s_b2fc299f4eea16::t_e6a86d27fd45be 193-202
+packages/polars-refkit/rust/src/expressions/entries.rs
+  ai_agent 38-39,52-56
+  s_b2fc299f4eea16::t_e6a86d27fd45be 4,8-37,40-51,57-66
+packages/polars-refkit/polars_refkit/__init__.pyi
+  s_b2fc299f4eea16::t_e6a86d27fd45be 13,47
+docs/reference/polars.md
+  s_b2fc299f4eea16::t_65cbb538f75516 26,34-39
+crates/refkit-core/src/raw/resolve.rs
+  s_b2fc299f4eea16::t_0a0469a4e83d56 8-10,15-19,21-23,25-33,41-42,221-224,227,232-240,249-252
+  s_b2fc299f4eea16::t_5c86411883985f 12-14,20,24,51-52,59-61,66-73,79-83,85-90,100-101,106-107,130-142,159-165,167-184,190-192,195-197,207-220,303-306,314-319,326-333,341-345,348-355,359,362-369,371-382
+  s_6001eb79a1c8e5::t_b0779c9b93697f 265-267,271-276
+  s_b2fc299f4eea16::t_0deab84c65fc22 1-7,11,43-50,53-58,62-65,74-78,84,91-99,102-105,108-129,143-158,166,185-189,193-194,198-206,297-302,307-313,320-325,334-340,346-347,356-358,360-361,370,383-384
+  s_b2fc299f4eea16::t_f3655ad52d8f75 225-226,228-231,241-248,253-259,280-282,285-290
+  s_6001eb79a1c8e5::t_45e175432ce903 34-40,283-284,291-296
+  s_6001eb79a1c8e5::t_23753b458f7113 260-264,268-270,277-279
+packages/polars-refkit/agent-plugin/skills/polars-refkit/references/inspect.md
+  s_b2fc299f4eea16::t_9a2245c2157211 29-42
+crates/refkit-core/AGENTS.md
+  s_b2fc299f4eea16::t_8de569adb0ab6c 11
+docs/reference/rust.md
+  s_b2fc299f4eea16::t_194ec980d44dc7 16,23-30
+packages/refkit/tests/test_type_contracts.py
+  s_b2fc299f4eea16::t_296c43c29593ed 6,64-67,74-76
+packages/polars-refkit/polars_refkit/__init__.py
+  s_b2fc299f4eea16::t_e6a86d27fd45be 17,51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "fd031d0816dce28688d145aefac86282b284d720",
+  "prompts": {},
+  "sessions": {
+    "s_6001eb79a1c8e5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a084d8-8e6c-7341-bf40-cf9ddcb89e32",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_b2fc299f4eea16": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07701-a536-7f73-bfd5-6731d2663cd9",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_d6c1969625d69a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07552-1c83-7ca1-94c1-af71c3cc9acc",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
