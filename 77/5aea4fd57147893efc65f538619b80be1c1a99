@@ -1,0 +1,35 @@
+uv.toml
+  s_ca87c9377f2028::t_295aea03409740 1-2
+packages/refkit-bench/README.md
+  s_ca87c9377f2028::t_295aea03409740 8
+development_docs/development.md
+  s_ca87c9377f2028::t_295aea03409740 10
+development_docs/benchmarks.md
+  s_ca87c9377f2028::t_295aea03409740 12
+pyproject.toml
+  s_ca87c9377f2028::t_1d7ea27fb457da 20
+AGENTS.md
+  s_ca87c9377f2028::t_295aea03409740 9
+development_docs/repository-contracts.md
+  s_ca87c9377f2028::t_295aea03409740 85
+development_docs/README.md
+  s_ca87c9377f2028::t_295aea03409740 17
+Makefile
+  s_ca87c9377f2028::t_295aea03409740 3,12-16,158-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "775aea4fd57147893efc65f538619b80be1c1a99",
+  "prompts": {},
+  "sessions": {
+    "s_ca87c9377f2028": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a085a7-4d77-7d01-b612-22670eac05ea",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
