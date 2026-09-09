@@ -1,9 +1,5 @@
-import {
-  NativeDocument,
-  NativeStyle,
-  is_bundled_locale,
-} from "./wasm/refkit_js_native.js";
-import { assertInitialized } from "./runtime.js";
+import type { NativeDocument, NativeStyle } from "./wasm/refkit_js_native.js";
+import { getNative } from "./runtime.js";
 import { callNative, readNative, MissingReferenceError } from "./errors.js";
 import { object, string } from "./inputs.js";
 import { Library, nativeLibrary } from "./library.js";
@@ -26,11 +22,11 @@ export class Style {
     styles.set(this, native);
   }
   static load(name: string): Style {
-    assertInitialized();
+    const { NativeStyle } = getNative();
     return new Style(callNative(() => NativeStyle.load(string(name, "name"))));
   }
   static fromXml(xml: string): Style {
-    assertInitialized();
+    const { NativeStyle } = getNative();
     return new Style(
       callNative(() => NativeStyle.from_xml(string(xml, "xml"))),
     );
@@ -49,7 +45,7 @@ export class Locale {
     Object.freeze(this);
   }
   static load(code: string): Locale {
-    assertInitialized();
+    const { is_bundled_locale } = getNative();
     string(code, "code");
     if (!callNative(() => is_bundled_locale(code)))
       throw new RangeError(`unknown bundled locale ${JSON.stringify(code)}`);
@@ -96,7 +92,7 @@ export class RenderedDocument {
 export class Document {
   readonly #native: NativeDocument;
   constructor(library: Library, style: Style, options: DocumentOptions = {}) {
-    assertInitialized();
+    const { NativeDocument } = getNative();
     object(options, "options", ["locale"]);
     const locale =
       options.locale instanceof Locale ? options.locale.code : options.locale;

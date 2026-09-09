@@ -90,7 +90,11 @@ record types, errors, and object lifetime. The package builds one
 
 The root package entry selects Node initialization or browser initialization
 through package export conditions. `refkit-js/browser` exposes explicit
-`init()`. `refkit-js/node` owns asynchronous path reads, format detection,
+`init()`. The shared runtime dynamically imports generated bindings at initialization
+and retains the validated module for synchronous API calls. The generated loader owns
+the binary URL, keeping embedded assets in the deferred chunk when a library bundler
+inlines WebAssembly. Node supplies its statically imported bindings to the same runtime
+and initializes synchronously during import. `refkit-js/node` owns asynchronous path reads, format detection,
 decoding diagnostics, and formatted writes. Shared classes take in-memory
 inputs. The core continues to own bibliography semantics.
 

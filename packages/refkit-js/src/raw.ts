@@ -1,5 +1,5 @@
-import { NativeRawDocument } from "./wasm/refkit_js_native.js";
-import { assertInitialized } from "./runtime.js";
+import type { NativeRawDocument } from "./wasm/refkit_js_native.js";
+import { getNative } from "./runtime.js";
 import { callNative, readNative } from "./errors.js";
 import { string } from "./inputs.js";
 import { tidyBibtex, type TidySettings } from "./tidy.js";
@@ -55,7 +55,7 @@ export class BibDocument {
     this.#native = native;
   }
   static parse(source: string): BibDocument {
-    assertInitialized();
+    const { NativeRawDocument } = getNative();
     return new BibDocument(
       callNative(() => NativeRawDocument.parse(string(source, "source"))),
     );

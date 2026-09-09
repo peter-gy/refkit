@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { decode_bibliography } from "./wasm/refkit_js_native.js";
+import * as bindings from "./wasm/refkit_js_native.js";
 import { initializeSync } from "./runtime.js";
 import { readNative, RefkitError } from "./errors.js";
 import { object, string } from "./inputs.js";
@@ -17,6 +17,7 @@ import type { TidySettings } from "./tidy.js";
 import type { Diagnostic, TidyResult } from "./types.js";
 
 initializeSync(
+  bindings,
   readFileSync(new URL("./wasm/refkit_js_native_bg.wasm", import.meta.url)),
 );
 
@@ -48,7 +49,7 @@ async function readBibliography(
   path: FilePath,
 ): Promise<{ text: string; diagnostic: Diagnostic | null }> {
   const bytes = await readBytes(path);
-  return readNative(() => decode_bibliography(bytes));
+  return readNative(() => bindings.decode_bibliography(bytes));
 }
 
 export async function readLibrary(

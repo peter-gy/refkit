@@ -121,12 +121,134 @@ test("module workers use the same browser entry point", async ({ page }) => {
   expect(result).toEqual(["worker"]);
 });
 
-test("bundled npm consumer emits and loads the WebAssembly asset", async ({
+for (const mode of ["bundle", "library"]) {
+  test(`${mode} consumer defers engine transfer until use`, async ({
+    page,
+  }) => {
+    const errors = [];
+    const responses = [];
+    const requests = [];
+    page.on("request", (request) => requests.push(request.url()));
+    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("response", (response) => responses.push(response));
+    await page.goto(`/${mode}/index.html`);
+    await expect(page.locator("#result")).toHaveText("Imported");
+    const startup = await Promise.all(
+      responses
+        .filter((response) => response.request().resourceType() === "script")
+        .map(async (response) => (await response.body()).byteLength),
+    );
+    expect(startup.length).toBeGreaterThan(0);
+    expect(startup.reduce((sum, bytes) => sum + bytes, 0)).toBeLessThan(
+      100_000,
+    );
+    expect(
+      requests.some((url) => new URL(url).pathname.endsWith(".wasm")),
+    ).toBe(false);
+    const before = responses.length;
+    await page.getByRole("button", { name: "Render citation" }).click();
+    await expect(page.locator("#result")).toHaveText("(Doe, 2024)");
+    expect(responses.length).toBeGreaterThan(before);
+    expect(errors).toEqual([]);
+  });
+}
+
+test("browser import defers bindings and compilation until initialization", async ({
+  page,
+}) => {
+  const requests = [];
+  page.on("request", (request) => requests.push(request.url()));
+  await page.goto("/");
+  await page.evaluate(() => {
+    const instantiate = WebAssembly.instantiate;
+    const streaming = WebAssembly.instantiateStreaming;
+    window.compilations = 0;
+    WebAssembly.instantiate = (...args) => {
+      window.compilations++;
+      return instantiate(...args);
+    };
+    WebAssembly.instantiateStreaming = (...args) => {
+      window.compilations++;
+      return streaming(...args);
+    };
+  });
+  const imported = await page.evaluate(async () => {
+    const rk = await import("/dist/index.js");
+    return { key: new rk.Cite("a").key, compilations: window.compilations };
+  });
+  expect(imported).toEqual({ key: "a", compilations: 0 });
+  expect(requests.some((url) => /refkit_js_native/.test(url))).toBe(false);
+  const initialized = await page.evaluate(async () => {
+    const rk = await import("/dist/index.js");
+    const first = rk.init();
+    const shared = first === rk.init();
+    await first;
+    await rk.init();
+    return {
+      shared,
+      compilations: window.compilations,
+      version: rk.getBuildInfo().version === rk.version,
+    };
+  });
+  expect(initialized).toEqual({ shared: true, compilations: 1, version: true });
+  expect(requests.filter((url) => url.endsWith(".wasm"))).toHaveLength(1);
+});
+
+test("failed fetch is shared and can retry a promised asset URL", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const result = await page.evaluate(async () => {
+    const rk = await import("/dist/index.js");
+    const first = rk.init("/missing.wasm");
+    const shared = first === rk.init();
+    const failed = await first.then(
+      () => false,
+      () => true,
+    );
+    await rk.init({
+      module_or_path: Promise.resolve(
+        new URL("/dist/wasm/refkit_js_native_bg.wasm", location.origin),
+      ),
+    });
+    return {
+      shared,
+      failed,
+      keys: rk.Library.parseBibtex("@book{a,title={A}}").keys(),
+    };
+  });
+  expect(result).toEqual({ shared: true, failed: true, keys: ["a"] });
+});
+
+test("rejected input is handled while the binding chunk loads", async ({
   page,
 }) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/bundle/index.html");
-  await expect(page.locator("#result")).toHaveText("(Doe, 2024)");
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/wasm/refkit_js_native.js", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.goto("/");
+  try {
+    const result = await page.evaluate(async () => {
+      const rk = await import("/dist/index.js");
+      return rk.init(Promise.reject(new Error("Input unavailable"))).then(
+        () => "unexpected success",
+        (error) => error.message,
+      );
+    });
+    expect(result).toBe("Input unavailable");
+  } finally {
+    release();
+  }
+  await page.evaluate(async () => {
+    const rk = await import("/dist/index.js");
+    await rk.init();
+  });
   expect(errors).toEqual([]);
 });
