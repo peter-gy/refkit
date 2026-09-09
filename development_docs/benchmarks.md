@@ -9,7 +9,7 @@ Start with the operation you want to improve. Keep its inputs and output contrac
 Install [uv](https://docs.astral.sh/uv/), the Python workspace manager, [Rust](https://www.rust-lang.org/tools/install), and [Node.js](https://nodejs.org/) 26 for the JavaScript formatter participant. From the checkout root:
 
 ```bash
-uv sync --locked --all-packages --group dev
+make sync
 npm ci --ignore-scripts --prefix packages/refkit-bench/node
 make refkit-develop-release polars-refkit-develop-release
 uv run --no-sync refkit-bench list --lane parse.bibtex --dataset real

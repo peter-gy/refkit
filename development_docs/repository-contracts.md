@@ -82,7 +82,7 @@ Run `make pyodide-lock` to regenerate the lock, then `make pyodide-lock-check`.
 | Artifact | Policy |
 | --- | --- |
 | Python `.pyi` files | Tracked public contracts. Update them with runtime exports. |
-| Cargo and uv locks | Tracked resolution contracts. Validate them before tests. |
+| Cargo and uv locks | Tracked resolution contracts. Run `make lock-upgrade` to refresh uv from `pyproject.toml`, then validate the locks before tests. |
 | Pyodide lock | Tracked generated runtime input. Regenerate through `scripts/pyodide_lock.py`. |
 | Wheels and sdists | Derived build output. Validate archives and leave them untracked. |
 | Installed-test support wheel | Built from `packages/refkit-tests` and installed alongside candidate adapters. Run its probes outside the checkout. |

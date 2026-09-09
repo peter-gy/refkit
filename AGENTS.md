@@ -6,7 +6,7 @@ RefKit exposes bibliography parsing, raw BibTeX editing, Citation Style Language
 
 | Purpose | Command | Expected result |
 | --- | --- | --- |
-| Install | `uv sync --locked --all-packages --group dev` | Workspace packages resolve and install. |
+| Install | `make sync` | Workspace packages resolve from the repository uv configuration and install. |
 | Build Python adapter | `make refkit-develop` | `refkit._native` and its Agent Plugin are installed. |
 | Build JavaScript adapter | `make js-build` | TypeScript and WebAssembly artifacts are built. |
 | Build Polars adapter | `(cd packages/polars-refkit && uv run maturin develop)` | `polars_refkit._internal` is installed. |

@@ -1,13 +1,20 @@
 JS_REFKIT_RUST := packages/refkit-js/rust/Cargo.toml
 POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
-UV_RUN := uv run --locked --all-packages --group dev
-PYTHON := uv run --isolated --locked --only-group build python
-UV_LINT := uv run --isolated --locked --only-group lint
+UV_EXCLUDE_NEWER := 3 days
+UV_EXCLUDE_NEWER_PACKAGE := agent-plugins=2026-09-07T00:00:00Z
+UV_RESOLVER_FLAGS := --no-config --exclude-newer "$(UV_EXCLUDE_NEWER)" --exclude-newer-package "$(UV_EXCLUDE_NEWER_PACKAGE)"
+UV_RUN := uv run $(UV_RESOLVER_FLAGS) --locked --all-packages --group dev
+PYTHON := uv run $(UV_RESOLVER_FLAGS) --isolated --locked --only-group build python
+UV_LINT := uv run $(UV_RESOLVER_FLAGS) --isolated --locked --only-group lint
 PNPM_DOCS := pnpm --dir docs
 DOCS_PAGES_BASE_PATH := /refkit
 RUST_FLOOR := 1.88
 RUST_SYSROOT := $(shell rustc --print sysroot)
 RUST_REMAP_FLAGS := --remap-path-prefix=$(HOME)=home --remap-path-prefix=$(HOME)/.cargo/registry/src=cargo-registry --remap-path-prefix=$(HOME)/.cargo/git/checkouts=cargo-git --remap-path-prefix=$(HOME)/.rustup=rustup --remap-path-prefix=$(RUST_SYSROOT)=rust-toolchain --remap-path-prefix=$(CURDIR)=refkit
+
+.PHONY: sync
+sync:
+	uv sync $(UV_RESOLVER_FLAGS) --locked --all-packages --group dev
 
 .PHONY: format
 format:
@@ -45,19 +52,19 @@ test:
 
 .PHONY: refkit-develop
 refkit-develop:
-	uv pip install --reinstall --no-deps --editable packages/refkit
+	uv pip install $(UV_RESOLVER_FLAGS) --reinstall --no-deps --editable packages/refkit
 
 .PHONY: refkit-develop-release
 refkit-develop-release:
-	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install --reinstall --no-deps --editable packages/refkit
+	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install $(UV_RESOLVER_FLAGS) --reinstall --no-deps --editable packages/refkit
 
 .PHONY: polars-refkit-develop
 polars-refkit-develop:
-	uv pip install --reinstall --no-deps --editable packages/polars-refkit
+	uv pip install $(UV_RESOLVER_FLAGS) --reinstall --no-deps --editable packages/polars-refkit
 
 .PHONY: polars-refkit-develop-release
 polars-refkit-develop-release:
-	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install --reinstall --no-deps --editable packages/polars-refkit
+	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install $(UV_RESOLVER_FLAGS) --reinstall --no-deps --editable packages/polars-refkit
 
 .PHONY: benchmark-test
 benchmark-test:
@@ -139,15 +146,19 @@ clean:
 
 .PHONY: build
 build: clean-dist
-	uv build --package refkit --sdist --no-create-gitignore
-	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package refkit --wheel --no-create-gitignore
-	uv build --package polars-refkit --sdist --no-create-gitignore
-	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build --package polars-refkit --wheel --no-create-gitignore
+	uv build $(UV_RESOLVER_FLAGS) --package refkit --sdist --no-create-gitignore
+	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build $(UV_RESOLVER_FLAGS) --package refkit --wheel --no-create-gitignore
+	uv build $(UV_RESOLVER_FLAGS) --package polars-refkit --sdist --no-create-gitignore
+	RUSTFLAGS="$(RUST_REMAP_FLAGS)" uv build $(UV_RESOLVER_FLAGS) --package polars-refkit --wheel --no-create-gitignore
 	$(PYTHON) scripts/distribution_contract.py dist/*
 
 .PHONY: lock
 lock:
-	uv lock --check
+	uv lock $(UV_RESOLVER_FLAGS) --check
+
+.PHONY: lock-upgrade
+lock-upgrade:
+	uv lock $(UV_RESOLVER_FLAGS) --upgrade
 
 .PHONY: release-check
 release-check:

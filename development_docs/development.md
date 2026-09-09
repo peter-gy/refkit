@@ -7,7 +7,7 @@ Use package-focused rebuilds and checks while iterating. Run the complete reposi
 Install the uv, Rust, Node.js, and pnpm prerequisites from the [developer index](README.md), then synchronize the Python workspace. The development group provides Maturin for native adapter builds.
 
 ```bash
-uv sync --locked --all-packages --group dev
+make sync
 make refkit-develop
 make polars-refkit-develop
 ```
