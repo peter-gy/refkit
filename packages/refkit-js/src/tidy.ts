@@ -1,5 +1,4 @@
-import { tidy_bibtex } from "./wasm/refkit_js_native.js";
-import { assertInitialized } from "./runtime.js";
+import { getNative } from "./runtime.js";
 import { readNative } from "./errors.js";
 import { object, string } from "./inputs.js";
 import type { TidyOptions, TidyResult } from "./types.js";
@@ -12,7 +11,7 @@ export function tidyBibtex(
   source: string,
   settings: TidySettings = {},
 ): TidyResult {
-  assertInitialized();
+  const { tidy_bibtex } = getNative();
   string(source, "source");
   object(settings, "settings", ["options"]);
   const options = settings.options ?? {};

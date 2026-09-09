@@ -1,5 +1,5 @@
-import { NativeLibrary } from "./wasm/refkit_js_native.js";
-import { assertInitialized } from "./runtime.js";
+import type { NativeLibrary } from "./wasm/refkit_js_native.js";
+import { getNative } from "./runtime.js";
 import { callNative, readNative } from "./errors.js";
 import { object, string, strings } from "./inputs.js";
 import type {
@@ -38,7 +38,7 @@ export class Library implements Iterable<Entry> {
   }
 
   static parseBibtex(source: string, options: ParseOptions = {}): Library {
-    assertInitialized();
+    const { NativeLibrary } = getNative();
     object(options, "options", ["recovery"]);
     return new Library(
       callNative(() =>
@@ -54,7 +54,7 @@ export class Library implements Iterable<Entry> {
   }
 
   static parseYaml(source: string): Library {
-    assertInitialized();
+    const { NativeLibrary } = getNative();
     return new Library(
       callNative(() => NativeLibrary.parse_yaml(string(source, "source"))),
     );

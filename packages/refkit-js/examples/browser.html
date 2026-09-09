@@ -52,8 +52,8 @@
   journal = {Journal of Citation Tests},
   year = {2024}
 }</textarea>
-    <button id="render" disabled>Render bibliography</button>
-    <p id="status" role="status">Loading RefKit…</p>
+    <button id="render">Render bibliography</button>
+    <p id="status" role="status">Ready to render.</p>
     <output id="bibliography" aria-label="Rendered bibliography"></output>
     <script type="module">
       import { fullBibliography, init, Library } from "../dist/index.js";
@@ -63,25 +63,23 @@
       const status = document.querySelector("#status");
       const output = document.querySelector("#bibliography");
 
-      function render() {
+      async function render() {
+        button.disabled = true;
+        status.textContent = "Preparing bibliography…";
         try {
+          await init();
           const library = Library.parseBibtex(source.value);
           output.textContent = fullBibliography(library).text;
           status.textContent = `${library.size} reference${library.size === 1 ? "" : "s"} rendered.`;
         } catch (error) {
           output.textContent = "";
           status.textContent = error.message;
+        } finally {
+          button.disabled = false;
         }
       }
 
       button.addEventListener("click", render);
-      try {
-        await init();
-        button.disabled = false;
-        render();
-      } catch (error) {
-        status.textContent = `Could not load RefKit: ${error.message}`;
-      }
     </script>
   </body>
 </html>

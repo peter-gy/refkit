@@ -30,20 +30,23 @@ citation list and returns plain text, HTML, and a structured tree.
 
 ## Browser initialization
 
-Import the browser entry and await initialization before creating objects:
+Import the browser entry at startup and call `init()` when a bibliography is needed:
 
 ```js
 import { init, Library, cite } from "refkit-js/browser";
 
-await init();
-const library = Library.parseBibtex(
-  "@book{doe2024, author={Doe, Jane}, title={Fast Citations}, year={2024}}",
-);
-document.querySelector("#citation").textContent = cite(library, "doe2024").text;
+export async function renderCitation(source, key) {
+  await init();
+  return cite(Library.parseBibtex(source), key).text;
+}
 ```
 
-The page supplies an element with `id="citation"`. Serve the JavaScript modules
-and bundled `.wasm` asset over HTTP or HTTPS. Your bundler must emit the `.wasm`
+Call `renderCitation(source, key)` from the action that needs a citation. Importing
+the browser entry loads the JavaScript API. The first `init()` dynamically loads
+the generated bindings and WebAssembly. Concurrent calls share that operation,
+and subsequent calls reuse it. Parsing and rendering then run synchronously.
+
+Serve the JavaScript modules and bundled `.wasm` asset over HTTP or HTTPS. Your bundler must emit the `.wasm`
 asset at its module-relative URL, or pass its deployed URL to `init()`.
 
 A [Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy)

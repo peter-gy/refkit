@@ -15,19 +15,24 @@ and compile-time checking of every exported signature and record.
 | Import | Contract |
 | --- | --- |
 | `refkit-js` | Shared API and Node helpers under Node.js, with WebAssembly initialized during import. Browser resolution requires `await init()`. |
-| `refkit-js/browser` | Shared API with explicit asynchronous initialization. |
+| `refkit-js/browser` | Shared API with bindings and WebAssembly deferred until `init()`. |
 | `refkit-js/node` | Shared API and asynchronous filesystem helpers for Node.js. |
 | `refkit-js/refkit.wasm` | Packaged WebAssembly asset for bundlers and deployment tooling. |
 
 ### `init(input?)`
 
-Loads the packaged WebAssembly module and returns a promise. With no argument,
+Dynamically loads the generated bindings and packaged WebAssembly module and returns
+a `Promise<void>`. Importing the browser entry leaves this loading operation deferred. With no argument,
 the browser loader resolves the packaged `.wasm` file relative to its module.
 Pass a URL for a separately served asset. `InitOptions` also accepts a request,
 response, byte buffer, compiled `WebAssembly.Module`, a promise for those inputs,
-or a `{ module_or_path: input }` object. Concurrent calls share initialization.
-Calls after successful initialization resolve immediately. Await initialization before calling
-the browser API. Read the [browser deployment requirements](/guides/browser#initialize-the-module)
+or a `{ module_or_path: input }` object. Concurrent calls share one promise and use
+the first call's input. A failed WebAssembly download or compilation rejects the promise and
+allows a subsequent call to retry.
+Calls after successful initialization resolve immediately and retain the loaded module.
+Await initialization before parsing, rendering, formatting, loading styles or locales,
+or calling `getBuildInfo()`. Citation descriptions such as `Cite` and `Citation`
+can be constructed before initialization. Read the [browser deployment requirements](/guides/browser#initialize-the-module)
 for asset delivery and content security policy.
 
 ## Normalized bibliography

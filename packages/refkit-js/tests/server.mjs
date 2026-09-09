@@ -34,7 +34,9 @@ const server = createServer(async (request, response) => {
       );
       return;
     }
-    const root = pathname.startsWith("/bundle/") ? bundleRoot : packageRoot;
+    const root = /^\/(bundle|library)\//.test(pathname)
+      ? bundleRoot
+      : packageRoot;
     const path = resolve(root, `.${pathname}`);
     if (!path.startsWith(root + sep)) {
       response.writeHead(403).end();

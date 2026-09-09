@@ -1,34 +1,32 @@
-import initialize, {
-  build_info,
-  initSync,
-  type InitInput,
-  type SyncInitInput,
-} from "./wasm/refkit_js_native.js";
+import type { InitInput, SyncInitInput } from "./wasm/refkit_js_native.js";
 import { RefkitError, readNative } from "./errors.js";
 import { version } from "./wasm/version.js";
 
+type Native = typeof import("./wasm/refkit_js_native.js");
 export type InitOptions =
   | InitInput
   | Promise<InitInput>
   | { module_or_path: InitInput | Promise<InitInput> };
-const supportsFinalization = typeof FinalizationRegistry === "function";
-let ready = false;
+let native: Native | undefined;
 let pending: Promise<void> | undefined;
 
-/** Initialize the shared WebAssembly module before calling the browser API. */
+/** Load the browser bindings and WebAssembly before calling the synchronous API. */
 export function init(input?: InitOptions): Promise<void> {
   assertRuntimeSupport();
-  if (ready) return Promise.resolve();
+  if (native) return Promise.resolve();
   if (!pending) {
     const moduleOrPath =
       input && typeof input === "object" && "module_or_path" in input
         ? input.module_or_path
-        : (input ??
-          new URL("./wasm/refkit_js_native_bg.wasm", import.meta.url));
-    pending = initialize({ module_or_path: moduleOrPath })
-      .then(() => {
-        verifyVersion();
-        ready = true;
+        : input;
+    // Attach input rejection handling while the binding chunk is loading.
+    pending = Promise.all([import("./wasm/refkit_js_native.js"), moduleOrPath])
+      .then(async ([bindings, source]) => {
+        await bindings.default(
+          source === undefined ? undefined : { module_or_path: source },
+        );
+        verifyVersion(bindings);
+        native = bindings;
       })
       .catch((error: unknown) => {
         pending = undefined;
@@ -38,24 +36,25 @@ export function init(input?: InitOptions): Promise<void> {
   return pending;
 }
 
-export function initializeSync(module: SyncInitInput): void {
+export function initializeSync(bindings: Native, module: SyncInitInput): void {
   assertRuntimeSupport();
-  if (ready) return;
+  if (native) return;
   if (pending) {
     throw new RefkitError(
       "Await the pending browser initialization before importing refkit-js/node.",
     );
   }
-  initSync({ module });
-  verifyVersion();
-  ready = true;
+  bindings.initSync({ module });
+  verifyVersion(bindings);
+  native = bindings;
 }
 
-export function assertInitialized(): void {
-  if (!ready)
+export function getNative(): Native {
+  if (!native)
     throw new RefkitError(
       "RefKit is not initialized. Await init() before calling the browser API.",
     );
+  return native;
 }
 
 export interface BuildInfo {
@@ -64,8 +63,8 @@ export interface BuildInfo {
   readonly target: string;
 }
 
-function verifyVersion(): void {
-  const info = readNative<BuildInfo>(() => build_info());
+function verifyVersion(bindings: Native): void {
+  const info = readNative<BuildInfo>(() => bindings.build_info());
   if (info.version !== version) {
     throw new RefkitError(
       `WebAssembly version ${info.version} is incompatible with refkit-js ${version}. Install JavaScript and WebAssembly from the same release.`,
@@ -74,12 +73,12 @@ function verifyVersion(): void {
 }
 
 export function getBuildInfo(): BuildInfo {
-  assertInitialized();
-  return readNative(() => build_info());
+  const bindings = getNative();
+  return readNative(() => bindings.build_info());
 }
 
 function assertRuntimeSupport(): void {
-  if (!supportsFinalization) {
+  if (typeof FinalizationRegistry !== "function") {
     throw new RefkitError(
       "RefKit requires FinalizationRegistry. Use Node.js 22.19 or newer, or update your browser.",
     );
