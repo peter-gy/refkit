@@ -14,7 +14,7 @@ Workspace synchronization installs [Maturin](https://www.maturin.rs/), the build
 ## Set Up The Workspace
 
 ```bash
-uv sync --locked --all-packages --group dev
+make sync
 make refkit-develop
 make polars-refkit-develop
 ```

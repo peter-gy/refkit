@@ -12,13 +12,14 @@ dependencies = [
 exclude-newer = "3 days"
 exclude-newer-package = { agent-plugins = "2026-09-07T00:00:00Z" }
 package = false
+constraint-dependencies = ["pyodide-build==0.35.1"]
 build-constraint-dependencies = ["maturin>=1.15.0", "agent-plugins>=0.2", "hatchling>=1.32.0"]
 
 [tool.uv.sources]
 refkit-bench = { workspace = true }
 polars-refkit = { workspace = true }
 refkit = { workspace = true }
-refkit-tests = {workspace = true}
+refkit-tests = { workspace = true }
 
 [tool.uv.workspace]
 members = [

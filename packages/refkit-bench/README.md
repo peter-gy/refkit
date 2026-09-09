@@ -5,7 +5,7 @@ Measure bibliography parsing, inspection, editing, rendering, formatting, and Po
 From the repository root:
 
 ```bash
-uv sync --locked --all-packages --group dev
+make sync
 npm ci --ignore-scripts --prefix packages/refkit-bench/node
 make refkit-develop-release polars-refkit-develop-release
 uv run --no-sync refkit-bench check --lane parse.bibtex --dataset real
