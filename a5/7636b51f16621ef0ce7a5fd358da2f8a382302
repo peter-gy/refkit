@@ -1,0 +1,36 @@
+scripts/benchmark_ci.py
+  s_93f4d1359a0be2::t_85c0431208706f 131-138
+scripts/tests/test_benchmark_ci.py
+  s_93f4d1359a0be2::t_85c0431208706f 180-191
+packages/refkit-bench/src/refkit_bench/cases.py
+  s_93f4d1359a0be2::t_711008af201c6d 10,21-38,122-124,179-184,197-198
+  s_93f4d1359a0be2::t_1ab6a7124a3b71 189-194
+packages/refkit-bench/tests/test_stress.py
+  s_93f4d1359a0be2::t_5a4893b8ca7b77 21-22,92-94
+  s_93f4d1359a0be2::t_447aea6c759e0e 1-20,23-91
+packages/refkit-bench/src/refkit_bench/stress.py
+  s_93f4d1359a0be2::t_711008af201c6d 1-172
+packages/refkit-bench/AGENTS.md
+  s_93f4d1359a0be2::t_447aea6c759e0e 11
+packages/refkit-bench/src/refkit_bench/api-version.json
+  s_93f4d1359a0be2::t_711008af201c6d 1
+development_docs/benchmarks.md
+  s_93f4d1359a0be2::t_447aea6c759e0e 37-40,59-62,69-78,169
+  s_93f4d1359a0be2::t_85c0431208706f 190
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a57636b51f16621ef0ce7a5fd358da2f8a382302",
+  "prompts": {},
+  "sessions": {
+    "s_93f4d1359a0be2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a4d8-3070-7811-a991-7a9913f580e6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
