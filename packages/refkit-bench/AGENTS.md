@@ -8,6 +8,7 @@
 - Keep comparison-package behavior in adapters. Do not distort a package API to force it into an unrelated lane.
 - Record workload provenance, source license, hashes, setup placement, execution mode, package versions, and build mode.
 - Generate real BibTeX and CSL JSON from the same curated records. Check every required field against independently authored expectations through public observable values.
+- Keep malformed-source, field-size, and text-chunk scaling inputs in `stress.py`. Their dedicated datasets apply to their declared lanes, with recovery and exact-output checks outside timing.
 - Fingerprint Python wrappers, native binaries, and relevant runtime dependencies. Keep artifact identity separate from the benchmark checkout. Use unknown when installed metadata cannot establish a source revision.
 - Build native adapters in release mode before collecting timing evidence.
 - Keep generated result directories under `results/` and out of commits. Track benchmark code, tests, audited fixtures, and dependency locks.
