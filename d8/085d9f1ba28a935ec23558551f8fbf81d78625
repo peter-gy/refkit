@@ -1,0 +1,19 @@
+development_docs/benchmarks.md
+  s_93f4d1359a0be2::t_45661951bf00d1 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d8085d9f1ba28a935ec23558551f8fbf81d78625",
+  "prompts": {},
+  "sessions": {
+    "s_93f4d1359a0be2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a4d8-3070-7811-a991-7a9913f580e6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
