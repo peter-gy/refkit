@@ -19,4 +19,6 @@ Run `make python-lint typecheck test`. See [repository contracts](../development
 
 Benchmark CI orchestration keeps both revisions on one runner and uses the candidate harness and Python dependency lock. Fingerprint tracked runtime, build, lock, and harness inputs before starting measurement jobs. Reuse complete matching evidence while preserving its measured commits and environment. Consolidated reports preserve failed platforms and raw samples. Release attachments verify the requested commit, fingerprint, and raw timing hashes. The commit publisher runs from the default branch, consumes validated artifact data, and checks main-branch run and commit identities before updating its bot comment. Keep artifact publication separate from executing candidate code.
 
+Compare revisions only when their benchmark API version declarations match. A different or undeclared baseline version requires candidate-only measurements. Schema 2 distinguishes comparisons from absolute measurements. Cache, report and release validation must require the raw samples appropriate to that mode and must never invent baseline values or ratios.
+
 Give each benchmark revision separate Cargo target and intermediate build directories, including when the caller supplies a shared cache root. Verify compiled source identity through observable behavior.

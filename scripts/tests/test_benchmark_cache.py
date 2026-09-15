@@ -12,7 +12,7 @@ import pytest
 from scripts import benchmark_cache, benchmark_report
 from scripts.benchmark_inputs import fingerprint
 from scripts.benchmark_release import package
-from scripts.tests.test_benchmark_ci import CANDIDATE, report
+from scripts.tests.test_benchmark_ci import CANDIDATE, absolute_report, report
 
 IDENTITY = "e" * 64
 
@@ -82,6 +82,7 @@ def test_documentation_and_test_changes_reuse_runtime_fingerprint(source):
         "packages/polars-refkit/rust/Cargo.lock",
         "uv.lock",
         "packages/refkit-bench/src/refkit_bench/data/styles/author-date.csl",
+        "packages/refkit-bench/src/refkit_bench/api-version.json",
         ".github/actions/configure-rust-build/action.yml",
     ],
 )
@@ -246,3 +247,20 @@ def test_matching_transition_reuses_its_original_comparison(tmp_path, monkeypatc
     text = (tmp_path / "summary.md").read_text()
     assert "reuses this measured comparison" in text
     assert "-20.0%" in text
+
+
+def test_absolute_evidence_is_reusable_and_publishable_without_baseline_samples(tmp_path, cache):
+    data = {**absolute_report(), "inputs_sha256": IDENTITY}
+    cache.files = {
+        name: content for name, content in cache.files.items() if "/baseline/" not in name
+    }
+    cache.files["report.json"] = json.dumps(data).encode()
+    assert benchmark_cache.find("owner/repo", IDENTITY, candidate_only=True) == "10"
+    for name, content in cache.files.items():
+        path = tmp_path / "evidence" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    package(tmp_path / "evidence", tmp_path / "assets", IDENTITY, CANDIDATE)
+    assert "versions differ" in (tmp_path / "assets/benchmark-results.md").read_text()
+    del cache.files["Windows/candidate/manifest.json"]
+    assert benchmark_cache.find("owner/repo", IDENTITY, candidate_only=True) == ""

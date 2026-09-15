@@ -18,6 +18,7 @@
 - Apply CPU affinity before participant setup and child startup. Verify effective process and Linux thread masks outside the timing boundary.
 - On Windows, enforce measurement deadlines through the parent case process. pyperf 2.10 uses a socket-only `select()` call for timed pipe reads.
 - Compare independent worker observations with matched case and host contracts. Keep smoke runs distinct from measurements and report per-case uncertainty.
+- Increment `src/refkit_bench/api-version.json` when the harness requires incompatible runtime APIs. CI compares revisions with matching declared versions and measures the candidate alone otherwise. Preserve absolute timings and their raw evidence through reports, caches, and release attachments.
 - Use the package-local coverage configuration for subprocess tests. Node dependencies belong under `node/` and are installed by `make benchmark-test`.
 
 Run `make benchmark-test`. See the [benchmark guide](../../development_docs/benchmarks.md) for commands and interpretation rules.

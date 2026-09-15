@@ -163,11 +163,11 @@ A docs-only commit skips measurement, reuses saved candidate timings when availa
 
 ### Measurement and comparison
 
-For a new measurement, the baseline is the previous `main` tip and the candidate is the new tip. A release tag uses its commit's first parent. A push containing several commits measures their combined effect. Each OS builds both revisions in release mode, then measures them sequentially on the same runner. The three OS jobs run in parallel, independently of distribution and documentation checks. Rust compilation and Python downloads are cached.
+For a new measurement, the requested baseline is the previous `main` tip and the candidate is the new tip. A release tag uses its commit's first parent. A push containing several commits measures their combined effect. Each OS builds comparable revisions in release mode, then measures them sequentially on the same runner. The three OS jobs run in parallel, independently of distribution and documentation checks. Rust compilation and Python downloads are cached.
 
 Each revision uses separate Cargo target and intermediate build directories beneath the configured `CARGO_TARGET_DIR` root. [Cargo build state](https://doc.rust-lang.org/cargo/reference/build-cache.html) tracks relative source paths and modification times, so these directories belong to one revision. Dependency download caches remain shared.
 
-Both revisions use the candidate's benchmark harness and locked Python dependencies in separate environments. The comparison isolates RefKit's Python and native implementation changes under that dependency set. Changes to dependency versions need a separate experiment using each revision's dependencies.
+Revisions with matching declarations in `packages/refkit-bench/src/refkit_bench/api-version.json` use the candidate's benchmark harness and locked Python dependencies in separate environments. The comparison isolates RefKit's Python and native implementation changes under that dependency set. When the baseline has a different or missing API version, CI builds and measures the candidate alone and reports absolute timings as a new baseline. Increment the API version when the harness requires an incompatible runtime API. Changes to dependency versions need a separate experiment using each revision's dependencies.
 
 The CI selection is `--lane all --dataset real --package refkit --package polars-eager --package polars-lazy`. It covers 14 cases across parsing, inspection, editing, rendering, formatting, and eager/lazy Polars expressions. Each case uses five workers, five warmup batches, five measured batches, and a 50 ms calibration target. Case order uses seed 2026. Revision order alternates with the workflow run number.
 
@@ -196,10 +196,10 @@ The `Consolidated results` job writes tables to the [job summary](https://docs.g
 
 | File | Contents |
 | --- | --- |
-| `report.json` | Schema 1, input fingerprint, measured commits, current request and reuse status, the 5% comparison band, and per-platform comparisons. |
+| `report.json` | Schema 2, input fingerprint, measured commits, current request and reuse status, the 5% comparison band, and per-platform comparison or absolute-measurement results. |
 | `summary.md` | The overview and tables shown in the job summary. Reused evidence shows saved candidate timings. |
-| `<OS>/comparison.json` | Revision identities, execution order, runner image, elapsed times, worker counts, ratios, and intervals. |
-| `<OS>/baseline/*.json`, `<OS>/candidate/*.json` | Validation manifests, artifact fingerprints, environment metadata, and raw pyperf samples. |
+| `<OS>/comparison.json` | Revision identities, API versions, measurement mode, execution order, runner image, elapsed times and worker counts. Comparable revisions also include ratios and intervals. |
+| `<OS>/baseline/*.json`, `<OS>/candidate/*.json` | Validation manifests, artifact fingerprints, environment metadata, and raw pyperf samples. Absolute measurements contain candidate evidence only. |
 
 The consolidated artifact is retained for 30 days. Per-platform transfer artifacts expire after one day. Failed-job reruns reuse successful platform artifacts while they remain available. Reuse validates coverage and raw timing hashes. Missing measurements appear as failed platforms.
 
