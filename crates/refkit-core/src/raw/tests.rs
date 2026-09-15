@@ -7,6 +7,96 @@ fn raw_field_value(doc: &RawDocument, entry_key: &str, field_key: &str) -> Strin
 }
 
 #[test]
+fn non_bibliography_text_preserves_delimiters_and_unicode() {
+    let source = "研究 { unclosed ( \"quotes\" } }\n% commentaire égaré { \"\nfin 🙂";
+    let document = RawDocument::parse(source);
+    assert_eq!(document.entry_count(), 0);
+    assert!(document.failed_blocks().is_empty());
+    assert_eq!(document.render().unwrap(), source);
+}
+
+#[test]
+fn unmatched_blocks_recover_without_consuming_following_entries() {
+    use std::fmt::Write as _;
+
+    let mut source = String::new();
+    for index in 0..256 {
+        writeln!(source, "@misc{{broken{index},title={{unfinished").unwrap();
+    }
+    source.push_str("@misc{kept,title={Complete}}\n");
+    let document = RawDocument::parse(&source);
+    assert_eq!(document.entry_count(), 1);
+    assert!(document.contains_entry("kept"));
+    assert_eq!(document.failed_blocks().len(), 256);
+    assert_eq!(document.render().unwrap(), source);
+}
+
+#[test]
+fn indexed_nested_regions_preserve_root_specific_syntax() {
+    let source = concat!(
+        "% unmatched delimiters in a root comment: { (\n",
+        "@comment((}) )\n",
+        "@misc(parenthesized,\n",
+        " title = {Closing ) remains text, as does ( an opener},\n",
+        " note = \"Quoted {\"protected\"} words\",\n",
+        " abstract = {A multiline value\n@misc{not_an_entry,title={Nested}}\nends here}\n",
+        ")\n",
+        "@misc{following,title={After}}\n",
+    );
+    let document = RawDocument::parse(source);
+    assert_eq!(document.entry_count(), 2);
+    assert!(document.failed_blocks().is_empty());
+    assert_eq!(
+        raw_field_value(&document, "parenthesized", "title"),
+        "Closing ) remains text, as does ( an opener"
+    );
+    assert_eq!(
+        raw_field_value(&document, "parenthesized", "note"),
+        "Quoted {\"protected\"} words"
+    );
+    assert_eq!(document.render().unwrap(), source);
+}
+
+#[test]
+fn malformed_openers_and_parentheses_keep_recovery_boundaries() {
+    for malformed in ["@unknown\n", "@misc(broken,title=(\n"] {
+        let source = format!(
+            "{}@misc{{kept,title={{Complete}}}}\n",
+            malformed.repeat(128)
+        );
+        let document = RawDocument::parse(&source);
+        assert!(
+            document.contains_entry("kept"),
+            "failed to recover after {malformed:?}"
+        );
+        assert_eq!(document.render().unwrap(), source);
+    }
+}
+
+#[test]
+fn unfinished_entry_keys_do_not_swallow_following_blocks() {
+    let source = "@book{a,title=未定}\n@broken{unfinished\n@book{b,title=缺失}";
+    let document = RawDocument::parse(source);
+    assert_eq!(document.entry_keys(), ["a", "b"]);
+    let start = source.find("@broken").unwrap();
+    let end = source.find("@book{b").unwrap();
+    assert!(matches!(
+        document.failed_blocks().as_slice(),
+        [RawBlockInfo::Failed { span, .. }] if *span == (start..end)
+    ));
+    assert_eq!(document.render().unwrap(), source);
+}
+
+#[test]
+fn valid_keys_on_following_lines_are_not_recovery_markers() {
+    let source = "@misc{\n@x(foo,title={First}}\n@misc{\n@simple,title={Second}}";
+    let document = RawDocument::parse(source);
+    assert_eq!(document.entry_keys(), ["@x(foo", "@simple"]);
+    assert!(document.failed_blocks().is_empty());
+    assert_eq!(document.render().unwrap(), source);
+}
+
+#[test]
 fn parse_raw_document_preserves_blocks_and_recovers_entries() {
     let source = concat!(
         "% file comment\n",

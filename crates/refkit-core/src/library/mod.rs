@@ -209,22 +209,20 @@ impl Library {
             },
         )
         .map_err(|error| LibraryError::Record(RecordError::new("records", error.to_string())))?;
-        let mut keys = std::collections::HashSet::new();
-        let mut engine = HayLibrary::new();
-        for record in &records {
-            if !keys.insert(record.key.clone()) {
-                return Err(LibraryError::Record(RecordError::new(
-                    &record.key,
-                    "duplicate entry key",
-                )));
-            }
-            engine.push(&record.to_engine().map_err(LibraryError::Record)?);
-        }
-        let index = records
+        let mut index = HashMap::with_capacity(records.len());
+        let engine = records
             .iter()
             .enumerate()
-            .map(|(index, record)| (record.key.clone(), index))
-            .collect();
+            .map(|(position, record)| {
+                if index.insert(record.key.clone(), position).is_some() {
+                    return Err(LibraryError::Record(RecordError::new(
+                        &record.key,
+                        "duplicate entry key",
+                    )));
+                }
+                record.to_engine().map_err(LibraryError::Record)
+            })
+            .collect::<Result<HayLibrary, _>>()?;
         Ok(Self {
             inner: engine,
             diagnostics: Vec::new(),
@@ -522,16 +520,22 @@ mod recovery_contracts {
     }
 
     #[test]
-    fn typed_recovery_preserves_the_literalized_macro_definition_span() {
+    fn typed_recovery_distinguishes_macro_and_field_source_spans() {
         let source = "@string{badyear=unknown}\n@book{a,title={A},year=badyear}";
         let report = parse_bibtex_report(source, RecoveryPolicy::Report);
         assert!(report.ok);
         assert_eq!(report.diagnostics.len(), 2);
         let start = source.find("unknown").unwrap();
-        for diagnostic in &report.diagnostics {
-            assert_eq!(diagnostic.span, Some(start..start + "unknown".len()));
-        }
+        assert_eq!(
+            report.diagnostics[0].span,
+            Some(start..start + "unknown".len())
+        );
         let diagnostic = &report.diagnostics[1];
+        let field_start = source.rfind("badyear").unwrap();
+        assert_eq!(
+            diagnostic.span,
+            Some(field_start..field_start + "badyear".len())
+        );
         assert_eq!(diagnostic.code, "invalid_field");
         assert_eq!(diagnostic.entry.as_deref(), Some("a"));
         assert_eq!(diagnostic.field.as_deref(), Some("year"));

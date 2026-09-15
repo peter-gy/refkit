@@ -11,11 +11,11 @@ The normalized parser has two recovery policies:
 - `Error` uses the exact parser and returns typed diagnostics in `ParseFailure`.
 - `Report` repairs affected blocks or fields and returns ordered diagnostics beside entries.
 
-Report recovery keeps the first duplicate key, drops later duplicate blocks, repairs unresolved string atoms where possible, drops invalid typed fields, and can drop an entry whose fields cannot identify a usable type. It preserves valid macro definitions and unaffected normalized values. Diagnostics retain original input spans through internal edits. Report recovery is capped at 128 changes.
+Report recovery keeps the first duplicate key, drops later duplicate blocks, repairs unresolved string atoms where possible, drops invalid typed fields, and can drop an entry whose fields cannot identify a usable type. It preserves valid macro definitions and unaffected normalized values. Independent repairs are batched. Diagnostics retain original UTF-8 spans through same-length source masks and edits to parsed values.
 
 An empty source can create an empty `Library`. A non-empty source that recovers to zero entries with diagnostics fails. Keep this distinction in every adapter's null or exception mapping.
 
-Cycle and expansion checks run before recursive upstream normalization. Source and expanded data are bounded at 16 MiB, value and dependency nesting at 64 levels, and dependency traversal at 100,000 steps. Report recovery can remove rejected components while retaining independent valid entries.
+Cycle and expansion checks run before recursive upstream normalization. Source and expanded data are bounded at 16 MiB, value and dependency nesting at 64 levels, and dependency traversal at 100,000 steps. Cascading recovery is bounded by 100,000 revisited raw atoms and 128 MiB of cumulative source reparsing. Exceeding a budget returns a resource-limit failure. Report recovery can remove rejected components while retaining independent valid entries.
 
 ## Normalized Records
 

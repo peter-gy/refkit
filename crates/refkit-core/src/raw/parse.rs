@@ -1,4 +1,8 @@
+mod boundaries;
+
 use std::ops::Range;
+
+use boundaries::BoundaryIndex;
 
 use indexmap::IndexMap;
 
@@ -16,6 +20,7 @@ type ParsedValue = (
     Vec<RawValueAtom>,
 );
 pub fn parse_raw_document(source: &str) -> RawDocumentData {
+    let boundaries = BoundaryIndex::new(source);
     let mut blocks = Vec::new();
     let mut entries: IndexMap<String, Vec<usize>> = IndexMap::new();
     let mut entry_blocks = Vec::new();
@@ -36,7 +41,7 @@ pub fn parse_raw_document(source: &str) -> RawDocumentData {
         }
 
         if ch == '%' {
-            let end = take_comment(source, pos);
+            let end = take_comment(source, pos, &boundaries);
             blocks.push(RawBlock::Comment {
                 raw: source[pos..end].to_string(),
                 span: pos..end,
@@ -55,7 +60,7 @@ pub fn parse_raw_document(source: &str) -> RawDocumentData {
             continue;
         }
 
-        let (mut block, parsed_entry, end) = parse_at_block(source, pos);
+        let (mut block, parsed_entry, end) = parse_at_block(source, pos, &boundaries);
         if let Some(entry) = parsed_entry {
             let id = entry_blocks.len();
             if let RawBlock::Entry { id: block_id, .. } = &mut block {
@@ -75,8 +80,12 @@ pub fn parse_raw_document(source: &str) -> RawDocumentData {
     }
 }
 
-fn parse_at_block(source: &str, start: usize) -> (RawBlock, Option<RawEntryData>, usize) {
-    match find_at_block_end(source, start) {
+fn parse_at_block(
+    source: &str,
+    start: usize,
+    boundaries: &BoundaryIndex,
+) -> (RawBlock, Option<RawEntryData>, usize) {
+    match find_at_block_end(source, start, boundaries) {
         Ok(end) => parse_complete_at_block(source, start, end),
         Err((end, error))
             if error == "entry opener is missing" && is_line_style_comment(source, start) =>
@@ -346,14 +355,18 @@ fn parse_entry_key(body: &str) -> (String, usize) {
     (body.trim().to_string(), body.len())
 }
 
-fn find_at_block_end(source: &str, start: usize) -> Result<usize, (usize, String)> {
-    let escape_aware = find_at_block_end_with_escape_mode(source, start, true);
+fn find_at_block_end(
+    source: &str,
+    start: usize,
+    boundaries: &BoundaryIndex,
+) -> Result<usize, (usize, String)> {
+    let escape_aware = find_at_block_end_with_escape_mode(source, start, true, boundaries);
     if let Ok(end) = escape_aware
         && !source[start..end].contains('\\')
     {
         return Ok(end);
     }
-    let permissive = find_at_block_end_with_escape_mode(source, start, false);
+    let permissive = find_at_block_end_with_escape_mode(source, start, false, boundaries);
     match (escape_aware, permissive) {
         (Ok(escaped_end), Ok(permissive_end))
             if permissive_end < escaped_end && follows_block_boundary(source, permissive_end) =>
@@ -386,6 +399,7 @@ fn find_at_block_end_with_escape_mode(
     source: &str,
     start: usize,
     escape_aware: bool,
+    boundaries: &BoundaryIndex,
 ) -> Result<usize, (usize, String)> {
     if is_line_style_comment(source, start) {
         return Err((
@@ -393,13 +407,12 @@ fn find_at_block_end_with_escape_mode(
             "entry opener is missing".to_string(),
         ));
     }
-    let Some(open_rel) = source[start..].find(['{', '(']) else {
+    let Some(open) = boundaries.next_opener(start) else {
         return Err((
             find_recovery_block_start(source, start).unwrap_or_else(|| take_line(source, start)),
             "entry opener is missing".to_string(),
         ));
     };
-    let open = start + open_rel;
     if let Some(next) = find_recovery_block_start(&source[..open], start) {
         return Err((next, "entry opener is missing".to_string()));
     }
@@ -408,68 +421,67 @@ fn find_at_block_end_with_escape_mode(
     let root_closer = if opener == '{' { '}' } else { ')' };
     let kind = source[start + 1..open].trim().to_ascii_lowercase();
     let raw_comment = kind == "comment";
-    let mut in_entry_key =
-        is_valid_identifier(&kind) && !matches!(kind.as_str(), "comment" | "preamble" | "string");
-    let mut closers = vec![root_closer];
-    let mut in_quote = false;
-    let mut quote_brace_depth = 0usize;
-    let mut escaped = false;
     let mut pos = open + opener.len_utf8();
-
-    while let Some(ch) = char_at(source, pos) {
-        if in_entry_key {
-            if ch == ',' {
-                in_entry_key = false;
-                pos += ch.len_utf8();
-                continue;
-            } else if ch == '=' {
-                in_entry_key = false;
-            } else if ch == root_closer {
-                return Ok(pos + ch.len_utf8());
-            } else {
-                pos += ch.len_utf8();
-                continue;
-            }
+    if is_valid_identifier(&kind) && !matches!(kind.as_str(), "comment" | "preamble" | "string") {
+        pos = boundaries.key_end(pos, root_closer).unwrap_or(source.len());
+        if let Some(next) = incomplete_key_boundary(source, start, open + 1, pos) {
+            return Err((next, "entry ended before closing delimiter".to_string()));
         }
-        if in_quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '{' {
-                quote_brace_depth += 1;
-            } else if ch == '}' && quote_brace_depth > 0 {
-                quote_brace_depth -= 1;
-            } else if ch == '"' && quote_brace_depth == 0 {
-                in_quote = false;
-            }
-        } else if escaped {
-            escaped = false;
-        } else if escape_aware && ch == '\\' {
-            escaped = true;
-        } else if ch == '%' && closers.len() == 1 && !raw_comment {
-            pos = take_comment(source, pos);
-            continue;
-        } else if ch == '"' && closers.len() == 1 && !raw_comment {
-            in_quote = true;
-            quote_brace_depth = 0;
-        } else if ch == '{' {
-            closers.push('}');
-        } else if ch == '(' && closers.last() == Some(&')') {
-            closers.push(')');
-        } else if closers.last() == Some(&ch) {
-            closers.pop();
-            if closers.is_empty() {
-                return Ok(pos + ch.len_utf8());
-            }
+        match char_at(source, pos) {
+            Some(',') => pos += 1,
+            Some(character) if character == root_closer => return Ok(pos + 1),
+            _ => {}
         }
-        pos += ch.len_utf8();
     }
-
+    while let Some(ch) = char_at(source, pos) {
+        if escape_aware && ch == '\\' {
+            pos += ch.len_utf8();
+            if let Some(escaped) = char_at(source, pos) {
+                pos += escaped.len_utf8();
+            }
+            continue;
+        }
+        if ch == '%' && !raw_comment {
+            pos = take_comment(source, pos, boundaries);
+            continue;
+        }
+        let end = match ch {
+            '"' if !raw_comment => boundaries.quote_end(pos),
+            character if character == '{' || (character == '(' && root_closer == ')') => {
+                boundaries.delimiter_end(pos, escape_aware)
+            }
+            character if character == root_closer => return Ok(pos + ch.len_utf8()),
+            _ => {
+                pos += ch.len_utf8();
+                continue;
+            }
+        };
+        let Some(end) = end else { break };
+        pos = end;
+    }
     Err((
         find_recovery_block_start(source, start).unwrap_or(source.len()),
         "entry ended before closing delimiter".to_string(),
     ))
+}
+
+fn incomplete_key_boundary(
+    source: &str,
+    start: usize,
+    key_start: usize,
+    key_end: usize,
+) -> Option<usize> {
+    if is_valid_entry_key(source[key_start..key_end].trim()) {
+        return None;
+    }
+    let mut cursor = start;
+    while let Some(next) = find_recovery_block_start(&source[..key_end], cursor) {
+        if is_parseable_at_start(source, next) {
+            return Some(next);
+        }
+        cursor = next;
+    }
+    None
 }
 
 fn find_recovery_block_start(source: &str, start: usize) -> Option<usize> {
@@ -504,14 +516,14 @@ fn find_next_root_break(source: &str, start: usize) -> Option<usize> {
     None
 }
 
-fn take_comment(source: &str, start: usize) -> usize {
+fn take_comment(source: &str, start: usize, boundaries: &BoundaryIndex) -> usize {
     let line_end = take_line(source, start);
     let mut cursor = start + 1;
     while let Some(ch) = char_at(source, cursor) {
         if cursor >= line_end {
             break;
         }
-        if ch == '@' && is_complete_parseable_at_start(source, cursor) {
+        if ch == '@' && is_complete_parseable_at_start(source, cursor, boundaries) {
             return cursor;
         }
         cursor += ch.len_utf8();
@@ -519,11 +531,11 @@ fn take_comment(source: &str, start: usize) -> usize {
     line_end
 }
 
-fn is_complete_parseable_at_start(source: &str, start: usize) -> bool {
+fn is_complete_parseable_at_start(source: &str, start: usize, boundaries: &BoundaryIndex) -> bool {
     if !is_parseable_at_start(source, start) {
         return false;
     }
-    match find_at_block_end(source, start) {
+    match find_at_block_end(source, start, boundaries) {
         Ok(end) => match find_recovery_block_start(source, start) {
             Some(next) => next >= end,
             None => true,

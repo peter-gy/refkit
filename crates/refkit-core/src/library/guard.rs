@@ -1,14 +1,20 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use biblatex::{ChunksExt, Field, Pair, RawBibliography, RawChunk, RawEntry, Spanned};
 
 use super::Diagnostic;
 
+mod cycles;
+mod dates;
+
+pub(crate) use dates::validate_date_parser_input;
+use dates::{is_date_parser_field, is_plain_date_text};
+
 const MAX_SOURCE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_DEPTH: usize = 64;
 const MAX_EXPANDED_BYTES: usize = 16 * 1024 * 1024;
-const MAX_STEPS: usize = 100_000;
+pub(super) const MAX_STEPS: usize = 100_000;
 
 pub(crate) fn validate_source(source: &str) -> Result<(), Diagnostic> {
     validate_source_size(source.len())
@@ -241,7 +247,7 @@ impl<'a> FieldResolver<'a> {
     }
 }
 
-fn month(name: &str) -> Option<&'static str> {
+pub(super) fn month(name: &str) -> Option<&'static str> {
     Some(match name {
         "jan" => "January",
         "feb" => "February",
@@ -260,8 +266,21 @@ fn month(name: &str) -> Option<&'static str> {
 }
 
 pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> {
+    validate_raw_report(raw)?
+        .into_iter()
+        .next()
+        .map_or(Ok(()), Err)
+}
+
+pub(super) fn validate_raw_report(
+    raw: &RawBibliography<'_>,
+) -> Result<Vec<Diagnostic>, Diagnostic> {
     for abbreviation in &raw.abbreviations {
         validate_value(&abbreviation.value.v)?;
+    }
+    let abbreviation_cycles = cycles::abbreviations(raw)?;
+    if !abbreviation_cycles.is_empty() {
+        return Ok(abbreviation_cycles);
     }
     let abbreviations: HashMap<_, _> = raw
         .abbreviations
@@ -272,9 +291,9 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
         .entries
         .iter()
         .any(|entry| entry.v.fields.iter().any(|field| is_reference(field.key.v)));
-    let (weights, needs_date_check) = expansion_weights(raw, &abbreviations)?;
+    let (weights, needs_date_check, mut diagnostics) = expansion_weights(raw, &abbreviations)?;
     if !has_references && !needs_date_check {
-        return Ok(());
+        return Ok(diagnostics);
     }
     let entry_index: HashMap<_, _> = raw
         .entries
@@ -285,19 +304,19 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
     let mut graph = vec![Vec::new(); raw.entries.len()];
     let detached = detach_references(raw);
     let Ok(normalized) = biblatex::Bibliography::from_raw(detached) else {
-        return Ok(());
+        return Ok(diagnostics);
     };
     if needs_date_check {
-        validate_normalized_dates(raw, &normalized)?;
+        diagnostics = validate_normalized_dates(raw, &normalized);
     }
     if !has_references {
-        return Ok(());
+        return Ok(diagnostics);
     }
     for (edges, entry) in graph.iter_mut().zip(&raw.entries) {
         let Some(normalized_entry) = normalized.get(entry.v.key.v) else {
             continue;
         };
-        for field in &entry.v.fields {
+        for field in effective_references(&entry.v) {
             let keys = if field.key.v.eq_ignore_ascii_case("crossref") {
                 normalized_entry
                     .get_as::<String>("__refkit_guard_crossref")
@@ -319,6 +338,11 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
         }
     }
     let mut ancestors = Vec::new();
+    let reference_cycles = cycles::references(&graph, raw)?;
+    if !reference_cycles.is_empty() {
+        diagnostics.extend(reference_cycles);
+        return Ok(diagnostics);
+    }
     let mut steps = 0;
     let mut inherited_bytes = 0;
     for index in 0..graph.len() {
@@ -332,20 +356,22 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
             &mut inherited_bytes,
         )?;
     }
-    Ok(())
+    Ok(diagnostics)
 }
 
 fn expansion_weights(
     raw: &RawBibliography<'_>,
     abbreviations: &HashMap<String, &Field<'_>>,
-) -> Result<(Vec<usize>, bool), Diagnostic> {
+) -> Result<(Vec<usize>, bool, Vec<Diagnostic>), Diagnostic> {
     let mut weights = vec![1usize; raw.entries.len()];
     let mut bytes = 0usize;
     let mut expansion_steps = 0usize;
     let mut value = String::new();
     let mut ancestors = Vec::new();
     let mut needs_date_check = false;
+    let mut diagnostics = Vec::new();
     for (weight, entry) in weights.iter_mut().zip(&raw.entries) {
+        let mut date_fields = HashSet::new();
         for field in &entry.v.fields {
             value.clear();
             expand(
@@ -361,8 +387,13 @@ fn expansion_weights(
                 diagnostic.field = Some(field.key.v.to_ascii_lowercase());
                 diagnostic
             })?;
-            let field_name = field.key.v.to_ascii_lowercase();
-            needs_date_check |= is_date_parser_field(&field_name);
+            needs_date_check |= check_expanded_date(
+                field,
+                entry.v.key.v,
+                &value,
+                &mut date_fields,
+                &mut diagnostics,
+            );
             bytes = bytes.saturating_add(value.len());
             if bytes > MAX_EXPANDED_BYTES {
                 return Err(limit(
@@ -373,105 +404,130 @@ fn expansion_weights(
             *weight = weight.saturating_add(value.len());
         }
     }
-    Ok((weights, needs_date_check))
+    Ok((weights, needs_date_check, diagnostics))
+}
+
+fn check_expanded_date(
+    field: &Pair<'_>,
+    entry_key: &str,
+    value: &str,
+    date_fields: &mut HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> bool {
+    let name = field.key.v.to_ascii_lowercase();
+    if !is_date_parser_field(&name) {
+        return false;
+    }
+    let duplicate = !date_fields.insert(name.clone());
+    if !is_plain_date_text(value) {
+        return true;
+    }
+    if let Err(message) = validate_date_parser_input(&name, value) {
+        diagnostics.push(invalid_date(
+            entry_key,
+            &name,
+            field.value.span.clone(),
+            message,
+        ));
+    }
+    duplicate
+}
+
+fn effective_references<'a>(entry: &'a RawEntry<'a>) -> impl Iterator<Item = &'a Pair<'a>> {
+    let positions = ["crossref", "xdata"].map(|name| {
+        entry
+            .fields
+            .iter()
+            .rposition(|field| field.key.v.eq_ignore_ascii_case(name))
+    });
+    entry
+        .fields
+        .iter()
+        .enumerate()
+        .filter(move |(index, _)| positions.contains(&Some(*index)))
+        .map(|(_, field)| field)
 }
 
 fn detach_references<'a>(raw: &RawBibliography<'a>) -> RawBibliography<'a> {
-    let mut detached = raw.clone();
-    for entry in &mut detached.entries {
-        entry.v.fields.retain(|field| {
-            !field.key.v.eq_ignore_ascii_case("__refkit_guard_crossref")
-                && !field.key.v.eq_ignore_ascii_case("__refkit_guard_xdata")
-        });
-        for field in &mut entry.v.fields {
-            if field.key.v.eq_ignore_ascii_case("crossref") {
-                field.key.v = "__refkit_guard_crossref";
-            } else if field.key.v.eq_ignore_ascii_case("xdata") {
-                field.key.v = "__refkit_guard_xdata";
-            }
-        }
+    RawBibliography {
+        preamble: String::new(),
+        abbreviations: raw.abbreviations.clone(),
+        entries: raw
+            .entries
+            .iter()
+            .filter_map(|entry| {
+                let fields = entry
+                    .v
+                    .fields
+                    .iter()
+                    .filter_map(|field| {
+                        let name = field.key.v.to_ascii_lowercase();
+                        let guard_name = match name.as_str() {
+                            "crossref" => "__refkit_guard_crossref",
+                            "xdata" => "__refkit_guard_xdata",
+                            _ if is_date_parser_field(&name) => field.key.v,
+                            _ => return None,
+                        };
+                        let mut field = field.clone();
+                        field.key.v = guard_name;
+                        Some(field)
+                    })
+                    .collect::<Vec<_>>();
+                (!fields.is_empty()).then(|| {
+                    Spanned::new(
+                        RawEntry {
+                            key: entry.v.key.clone(),
+                            kind: entry.v.kind.clone(),
+                            fields,
+                        },
+                        entry.span.clone(),
+                    )
+                })
+            })
+            .collect(),
     }
-    detached
+}
+
+fn invalid_date(key: &str, name: &str, span: Range<usize>, message: String) -> Diagnostic {
+    let mut diagnostic = Diagnostic::error("invalid_field", Some(span), message);
+    diagnostic.entry = Some(key.to_string());
+    diagnostic.field = Some(name.to_string());
+    diagnostic
 }
 
 fn validate_normalized_dates(
     raw: &RawBibliography<'_>,
     normalized: &biblatex::Bibliography,
-) -> Result<(), Diagnostic> {
+) -> Vec<Diagnostic> {
+    let mut diagnostics = Vec::new();
     for entry in &raw.entries {
         let Some(normalized_entry) = normalized.get(entry.v.key.v) else {
             continue;
         };
-        for field in &entry.v.fields {
+        let mut seen = HashSet::new();
+        for field in entry.v.fields.iter().rev() {
             let name = field.key.v.to_ascii_lowercase();
-            if !is_date_parser_field(&name) {
+            if !is_date_parser_field(&name) || !seen.insert(name.clone()) {
                 continue;
             }
             let Some(chunks) = normalized_entry.fields.get(&name) else {
                 continue;
             };
-            validate_date_parser_input(&name, &chunks.format_verbatim()).map_err(|message| {
-                let mut diagnostic =
-                    Diagnostic::error("invalid_field", Some(field.value.span.clone()), message);
-                diagnostic.entry = Some(entry.v.key.v.to_string());
-                diagnostic.field = Some(name);
-                diagnostic
-            })?;
+            if let Err(message) = validate_date_parser_input(&name, &chunks.format_verbatim()) {
+                let diagnostic =
+                    invalid_date(entry.v.key.v, &name, field.value.span.clone(), message);
+                diagnostics.push(diagnostic);
+            }
         }
     }
-    Ok(())
+    diagnostics
 }
 
 fn is_reference(name: &str) -> bool {
     name.eq_ignore_ascii_case("crossref") || name.eq_ignore_ascii_case("xdata")
 }
 
-pub(crate) fn validate_date_parser_input(name: &str, value: &str) -> Result<(), String> {
-    let name = name.to_ascii_lowercase();
-    let value = value.trim_start();
-    // biblatex 0.12 performs unchecked arithmetic before returning date errors.
-    if ["date", "urldate", "origdate", "eventdate"].contains(&name.as_str())
-        && value.contains(['X', 'x'])
-        && value.bytes().take_while(u8::is_ascii_digit).count() > 4
-    {
-        return Err("BibLaTeX uncertain-year dates require a four-digit year pattern".into());
-    }
-    if ["month", "urlmonth", "origmonth", "eventmonth"].contains(&name.as_str()) {
-        let digits = value.bytes().take(2).take_while(u8::is_ascii_digit).count();
-        let consumed = if digits > 0 {
-            if value[..digits].parse::<u8>().ok() == Some(0) {
-                return Err("BibLaTeX numeric months start at one".into());
-            }
-            digits
-        } else {
-            value.bytes().take_while(u8::is_ascii_alphabetic).count()
-        };
-        let tail = value[consumed..]
-            .trim_start_matches(|c: char| c.is_whitespace() && c != '\u{a0}')
-            .trim_start_matches(['-', '\u{a0}']);
-        let day_len = tail.bytes().take_while(u8::is_ascii_digit).count();
-        if day_len > 0 && tail[..day_len].parse::<u8>().is_err() {
-            return Err("BibLaTeX day embedded in a month field exceeds the numeric range".into());
-        }
-    }
-    Ok(())
-}
-
-fn is_date_parser_field(name: &str) -> bool {
-    [
-        "date",
-        "urldate",
-        "origdate",
-        "eventdate",
-        "month",
-        "urlmonth",
-        "origmonth",
-        "eventmonth",
-    ]
-    .contains(&name)
-}
-
-type ReferenceGraph = Vec<Vec<(usize, Range<usize>, String)>>;
+type ReferenceGraph = cycles::Graph;
 
 #[expect(
     clippy::indexing_slicing,

@@ -249,10 +249,10 @@ fn malformed_date_inputs_fail_before_upstream_arithmetic() {
         assert!(Library::parse_biblatex(&source, refkit_core::RecoveryPolicy::Error).is_err());
         let recovered =
             Library::parse_biblatex(&source, refkit_core::RecoveryPolicy::Report).unwrap();
-        assert_eq!(recovered.keys(), ["good"]);
+        assert_eq!(recovered.keys(), ["bad", "good"]);
         assert_eq!(
             recovered.diagnostics()[0].action,
-            refkit_core::DiagnosticAction::DroppedBlock
+            refkit_core::DiagnosticAction::DroppedField
         );
     }
     assert!(

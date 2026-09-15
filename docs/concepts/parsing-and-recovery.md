@@ -107,7 +107,8 @@ Bibliography source is limited to 16 MiB of UTF-8 text. BibTeX parsing also boun
 | Macro or bibliography-reference depth | 64 levels |
 | Expanded bibliography data | 16 MiB |
 | Dependency traversal | 100,000 steps |
-| Report recovery | 128 changes |
+| Cascading recovery traversal | 100,000 revisited raw atoms |
+| Recovery source reparsing | 128 MiB cumulatively |
 
 A limit failure produces a `resource_limit` diagnostic and raises `ParseError` under both recovery policies. Split large independent bibliographies or simplify deeply nested values before retrying. Tidy applies the same source-size and value-nesting guards before recursive formatting.
 
