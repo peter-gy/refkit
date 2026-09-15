@@ -3,6 +3,20 @@ from pathlib import Path
 import yaml
 
 
+def test_rust_quality_jobs_install_uv_before_running_contracts() -> None:
+    root = Path(__file__).resolve().parents[2]
+    jobs = yaml.safe_load((root / ".github/workflows/source-checks.yml").read_text())["jobs"]
+    for name, command in (("rust", "make rust-lint"), ("rust-dependencies", "make rust-audit")):
+        steps = jobs[name]["steps"]
+        setup = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("uses", "").startswith("astral-sh/setup-uv@")
+        )
+        check = next(index for index, step in enumerate(steps) if step.get("run") == command)
+        assert setup < check, f"{name} requires uv before its Python-backed contract check"
+
+
 def test_documentation_deployment_waits_for_required_checks() -> None:
     root = Path(__file__).resolve().parents[2]
     workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())

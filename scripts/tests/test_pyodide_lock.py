@@ -14,6 +14,14 @@ def test_pyodide_lock_matches_the_runtime_contract() -> None:
     assert pyodide_lock.validate_lock(LOCK_PATH) == []
 
 
+def test_pyodide_compiler_matches_the_shared_rust_floor(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(pyodide_lock.RUNTIME, "rust-toolchain", "1.93.0")
+    assert any(
+        error.startswith("Pyodide Rust toolchain must be ")
+        for error in pyodide_lock.validate_lock(LOCK_PATH)
+    )
+
+
 def test_pyodide_lock_rejects_a_host_platform_polars_wheel(tmp_path: Path) -> None:
     invalid = tmp_path / "pylock.toml"
     invalid.write_text(

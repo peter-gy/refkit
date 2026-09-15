@@ -91,6 +91,11 @@ def validate_lock(path: Path) -> list[str]:
     except (OSError, ValueError, tomllib.TOMLDecodeError) as error:
         return [str(error)]
     errors = []
+    rust_workspace = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]
+    rust_floor = rust_workspace["package"]["rust-version"]
+    rust_toolchain = rust_floor if rust_floor.count(".") == 2 else f"{rust_floor}.0"
+    if RUNTIME.get("rust-toolchain") != rust_toolchain:
+        errors.append(f"Pyodide Rust toolchain must be {rust_toolchain} for the shared build floor")
     requirements = _direct_requirements()
     missing = requirements.keys() - packages.keys()
     if missing:

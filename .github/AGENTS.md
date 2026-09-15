@@ -4,10 +4,12 @@ GitHub Actions builds and tests source, CPython distributions, and PyEmscripten 
 
 - Pin third-party actions to full commit SHAs and keep `persist-credentials: false` on checkout steps.
 - Reuse `workflows/source-checks.yml` for Python, Rust, MSRV, and repository contracts.
+- Install uv before Rust lint and audit commands because their source-policy check runs in Python.
 - Check the Windows benchmark worker protocol and process deadline with the Python participant. Benchmark tests use their package-local Python and Node dependencies. The source-check workflow runs capability tests and a smoke measurement, with timing thresholds reserved for controlled hosts.
 - Reuse `workflows/artifacts-refkit.yml` and `workflows/artifacts-polars-refkit.yml` from CI and publication. Keep build jobs separate from installed-artifact tests so failures identify the affected boundary.
 - Configure Rust path remapping before native compilation. Run the distribution contract before upload.
 - Resolve Pyodide toolchains from `.github/pyodide/runtime.json` and the pinned xbuild environment.
+- Pin the Pyodide Rust compiler at the shared build floor. Keep Emscripten, ABI tags, and linker flags from the pinned xbuild environment, and verify the resulting wheels in Pyodide.
 - Keep workflows outside product semantics. Compose Make targets, build distributions, install them in clean environments, and report failures at the affected package boundary.
 - Publish `refkit` and `polars-refkit` after their own artifact tests, then join both packages at release completion.
 - `workflows/docs.yml` validates the root and `/refkit/` documentation builds. `workflows/ci.yml` deploys the validated Pages artifact on main.

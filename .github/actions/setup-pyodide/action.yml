@@ -3,7 +3,7 @@ description: Resolve the locked Pyodide toolchain and install its Emscripten SDK
 
 outputs:
   rust-toolchain:
-    description: Rust toolchain required by the selected Pyodide ABI.
+    description: Rust toolchain pinned for the Pyodide wheels.
     value: ${{ steps.config.outputs.rust-toolchain }}
   emscripten-version:
     description: Emscripten version required by the selected Pyodide ABI.
@@ -39,7 +39,9 @@ runs:
         export PYODIDE_XBUILDENV_PATH="${RUNNER_TEMP}/refkit-pyodide-${xbuildenv_version}"
         uv run --python "${python_version}" --locked --only-group pyodide-build \
           pyodide xbuildenv install "${xbuildenv_version}"
-        rust_toolchain="$(uv run --python "${python_version}" --locked --only-group pyodide-build pyodide config get rust_toolchain)"
+        rust_toolchain="$(
+          python -c 'import json; print(json.load(open(".github/pyodide/runtime.json"))["rust-toolchain"])'
+        )"
         emscripten_version="$(uv run --python "${python_version}" --locked --only-group pyodide-build pyodide config get emscripten_version)"
         pyodide_abi_version="$(uv run --python "${python_version}" --locked --only-group pyodide-build pyodide config get pyodide_abi_version)"
         rustflags="$(uv run --python "${python_version}" --locked --only-group pyodide-build pyodide config get rustflags)"

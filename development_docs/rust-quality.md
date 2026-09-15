@@ -35,6 +35,8 @@ Cargo-shear checks dependency usage, source reachability, and redundant ignores 
 
 Both native adapters use the `abi3` feature for the Python 3.10 stable ABI. Maturin selects extension linking through `PYO3_BUILD_EXTENSION_MODULE` while building wheels. Cargo tests run with all features and ordinary Python linking. Installed CPython and Pyodide tests verify the extension boundary separately.
 
+Pyodide wheels pin the shared Rust floor in `.github/pyodide/runtime.json`. Their Emscripten SDK, ABI tag, and linker flags come from the pinned xbuild environment. The Pyodide lock check rejects compiler-floor drift.
+
 For a Rust API comparison, install the pinned checker with `make rust-semver-tools`, then run `make rust-semver BASE_REV=...` with an explicitly reviewed tag or commit. This checks the portable Rust API, not Python or TypeScript compatibility. Deliberately breaking releases need a versioning decision, not a comparison against the current commit to manufacture a pass.
 
 Keep commit hooks limited to formatting and Clippy when using a local Rust build host. Dependency audits, compatibility checks, artifacts, and runtime tests belong in CI. For remote-only development, run these commands on the build host rather than configuring a hook that compiles on the source-editing machine.
