@@ -56,7 +56,7 @@ Inspection uses package-owned lookup APIs. Any lookup map materialization requir
 
 The synthetic records hold field shape constant as entry count grows. They isolate size scaling for that shape. The real metadata's sources and license are in [its provenance note](../packages/refkit-bench/src/refkit_bench/data/real-bibliography/README.md).
 
-Parsing checks require key, type, title, ordered full author names, year, container, volume, pages, and DOI. RefKit exposes authors and pages through rendering, so its checker renders the **actual parsed library** through the authored validation style outside timing. The other parsers expose those fields directly. Raw editing checks all entry fields and the preserved comment, string definition, and preamble.
+Parsing checks require key, type, title, ordered full author names, year, container, volume, pages, and DOI. RefKit's checker reads those fields from complete records and renders the **actual parsed library** through the authored validation style outside timing. The other parsers are checked through their field APIs. Raw editing checks all entry fields and the preserved comment, string definition, and preamble.
 
 Rendering participants consume the same [Citation Style Language](https://citationstyles.org/) XML, a format for citation rules. The authored style uses explicit `en-US` terms, complete author lists, and a fixed bibliography sort order. Checks compare exact text and native output order. This style measures basic author-date rendering. APA fidelity, locale coverage, and disambiguation need their own cases and expectations.
 
