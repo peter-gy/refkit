@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -27,7 +28,7 @@ def comparison(ratio=0.8, interval=(0.75, 0.85)):
     }
 
 
-def report():
+def report() -> dict[str, Any]:
     return {
         "schema": 2,
         "threshold": 0.05,
@@ -50,7 +51,7 @@ def declare_api(root, version=1):
     path.write_text(json.dumps({"api_version": version}))
 
 
-def absolute_report():
+def absolute_report() -> dict[str, Any]:
     data = report()
     for platform in data["platforms"].values():
         platform.pop("comparison")
