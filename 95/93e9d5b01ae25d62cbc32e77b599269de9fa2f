@@ -1,0 +1,34 @@
+.github/workflows/source-checks.yml
+  s_93f4d1359a0be2::t_8388e5cffbfd58 102-106
+scripts/tests/test_pyodide_lock.py
+  s_93f4d1359a0be2::t_6dfa45eb800531 17-24
+.github/actions/setup-pyodide/action.yml
+  s_93f4d1359a0be2::t_6dfa45eb800531 6,42-44
+.github/AGENTS.md
+  s_93f4d1359a0be2::t_6dfa45eb800531 12
+  s_93f4d1359a0be2::t_8388e5cffbfd58 7
+scripts/pyodide_lock.py
+  s_93f4d1359a0be2::t_6dfa45eb800531 94-98
+development_docs/rust-quality.md
+  s_93f4d1359a0be2::t_6dfa45eb800531 38-39
+scripts/tests/test_workflow_contract.py
+  s_93f4d1359a0be2::t_8388e5cffbfd58 6-19
+.github/pyodide/runtime.json
+  s_93f4d1359a0be2::t_6dfa45eb800531 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9593e9d5b01ae25d62cbc32e77b599269de9fa2f",
+  "prompts": {},
+  "sessions": {
+    "s_93f4d1359a0be2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a4d8-3070-7811-a991-7a9913f580e6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
