@@ -24,7 +24,7 @@ impl RecoveryArg {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 pub(super) struct ParseKwargs {
     pub(super) recovery: RecoveryArg,
 }

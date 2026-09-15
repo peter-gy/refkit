@@ -12,16 +12,22 @@ use serde_json::Value;
 use crate::{Diagnostic, EntryRecord, Library, LibraryError, RecoveryPolicy};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Supported normalized bibliography interchange formats.
 pub enum BibliographyFormat {
     #[serde(rename = "biblatex")]
+    /// BibTeX and BibLaTeX fields, distinct from source-preserving raw snapshots.
     Biblatex,
     #[serde(rename = "hayagriva")]
+    /// Hayagriva's YAML record format.
     Hayagriva,
     #[serde(rename = "csl-json")]
+    /// The documented RefKit support profile for CSL-JSON.
     CslJson,
 }
 
 impl BibliographyFormat {
+    #[must_use]
+    /// Return the format identifier accepted by the host APIs.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Biblatex => "biblatex",
@@ -46,8 +52,11 @@ impl FromStr for BibliographyFormat {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Whether an interchange operation may return a lossy result.
 pub enum LossPolicy {
+    /// Refuse a result when any conversion issue is lossy.
     Error,
+    /// Return the result together with its conversion issues.
     Report,
 }
 
@@ -63,54 +72,79 @@ impl FromStr for LossPolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// One retained, approximated, unsupported, or discarded part of a conversion.
 pub struct ConversionIssue {
+    /// Machine-readable conversion issue code.
     pub code: String,
+    /// `decode` or `encode`, identifying where the issue arose.
     pub stage: String,
+    /// Affected entry key when attributable to one record.
     pub entry: Option<String>,
+    /// Canonical record field path.
     pub path: String,
+    /// Whether strict loss policy rejects this issue.
     pub lossy: bool,
+    /// Explanation of the mapping and its consequence.
     pub message: String,
 }
 
+/// Decoded records and issues discovered before source information is lost.
 pub struct DecodeReport {
+    /// Constructed normalized library.
     pub library: Library,
+    /// Format used to interpret the input.
     pub format: BibliographyFormat,
+    /// Conversion findings in deterministic traversal order.
     pub issues: Vec<ConversionIssue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Normalized source text and its representational limitations.
 pub struct EncodeReport {
+    /// Target format of the encoded text.
     pub format: BibliographyFormat,
+    /// Newly serialized bibliography text.
     pub text: String,
+    /// Mapping losses and readback differences.
     pub issues: Vec<ConversionIssue>,
 }
 
 #[derive(Debug, Clone)]
+/// Combined decode and encode result for a format-to-format conversion.
 pub struct ConversionReport {
+    /// Input bibliography format.
     pub source_format: BibliographyFormat,
+    /// Output bibliography format.
     pub target_format: BibliographyFormat,
+    /// Normalized target-format text.
     pub text: String,
+    /// Decode findings followed by encode findings.
     pub issues: Vec<ConversionIssue>,
+    /// Parser recovery diagnostics from the source library.
     pub diagnostics: Vec<Diagnostic>,
 }
 
 #[derive(Debug, Clone)]
+/// Invalid interchange input or a conversion refused by strict loss policy.
 pub struct CodecError {
+    /// Summary of the failed operation.
     pub message: String,
+    /// Field-level conversion findings collected before refusal.
     pub issues: Vec<ConversionIssue>,
+    /// Associated parser diagnostics when source interpretation failed.
     pub diagnostics: Vec<Diagnostic>,
 }
 
 impl CodecError {
-    pub(crate) fn new(message: impl ToString) -> Self {
+    pub(crate) fn new(message: impl Into<String>) -> Self {
         Self {
-            message: message.to_string(),
+            message: message.into(),
             issues: Vec::new(),
             diagnostics: Vec::new(),
         }
     }
-    pub(crate) fn at(path: &str, message: impl ToString) -> Self {
-        let message = message.to_string();
+    pub(crate) fn at(path: &str, message: impl Into<String>) -> Self {
+        let message = message.into();
         Self {
             issues: vec![ConversionIssue {
                 code: "invalid_value".into(),
@@ -180,6 +214,11 @@ impl From<LibraryError> for CodecError {
     }
 }
 
+/// Decode normalized records while retaining source-specific extensions.
+///
+/// # Errors
+/// Rejects invalid or oversized input, invalid record shapes, unsupported recovery
+/// policies, and lossy mappings when `loss` is [`LossPolicy::Error`].
 pub fn decode(
     source: &str,
     format: BibliographyFormat,
@@ -240,6 +279,11 @@ fn decode_inner(
     })
 }
 
+/// Encode records and compare the decoded output with the retained input data.
+///
+/// # Errors
+/// Rejects unrepresentable output, failed readback, and lossy mappings when
+/// `loss` is [`LossPolicy::Error`]. Source-preserving writeback uses raw snapshots.
 pub fn encode(
     library: &Library,
     format: BibliographyFormat,
@@ -289,6 +333,10 @@ fn encode_inner(
     })
 }
 
+/// Decode one bibliography format and encode another with combined loss reporting.
+///
+/// # Errors
+/// Returns the first decode or encode failure, including strict loss refusal.
 pub fn convert(
     source: &str,
     source_format: BibliographyFormat,
@@ -338,59 +386,80 @@ pub(super) fn issue(
     });
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "Codec inputs are immutable Library records whose finite extension numbers and JSON serialization were validated during construction."
+)]
 fn semantic_record(record: &EntryRecord) -> Value {
     let mut value = serde_json::to_value(record).expect("validated record serializes");
-    fn normalize(value: &mut Value, record: &EntryRecord) {
-        let Some(object) = value.as_object_mut() else {
-            return;
-        };
-        if let Some(Value::Object(namespaces)) = object.get_mut("extensions") {
-            for (namespace, fields) in namespaces.iter_mut() {
-                if let Some(fields) = fields.as_object_mut() {
-                    fields.retain(|field, _| {
-                        !field.starts_with('@')
-                            && !(namespace == "biblatex"
-                                && record
-                                    .extensions
-                                    .get(namespace)
-                                    .and_then(|values| values.get(field))
-                                    .is_some_and(|value| {
-                                        biblatex::redundant_extension(record, field, value)
-                                    }))
-                    });
-                }
-            }
-            namespaces
-                .retain(|_, fields| fields.as_object().is_some_and(|fields| !fields.is_empty()));
-        }
-        if let Some(Value::Array(parents)) = object.get_mut("parents") {
-            for (parent, record) in parents.iter_mut().zip(&record.parents) {
-                normalize(parent, record);
-            }
-        }
-        for field in object.values_mut() {
-            if let Some(chunks) = field.get_mut("chunks").and_then(Value::as_array_mut) {
-                let mut merged: Vec<Value> = Vec::new();
-                for chunk in std::mem::take(chunks) {
-                    if let Some(previous) = merged
-                        .last_mut()
-                        .filter(|previous| previous["kind"] == chunk["kind"])
-                    {
-                        previous["text"] = Value::String(format!(
-                            "{}{}",
-                            previous["text"].as_str().unwrap_or_default(),
-                            chunk["text"].as_str().unwrap_or_default()
-                        ));
-                    } else {
-                        merged.push(chunk);
-                    }
-                }
-                *chunks = merged;
-            }
+    normalize_record_value(&mut value, record);
+    value
+}
+
+fn normalize_record_value(value: &mut Value, record: &EntryRecord) {
+    let Some(object) = value.as_object_mut() else {
+        return;
+    };
+    normalize_extensions(object.get_mut("extensions"), record);
+    if let Some(Value::Array(parents)) = object.get_mut("parents") {
+        for (parent, record) in parents.iter_mut().zip(&record.parents) {
+            normalize_record_value(parent, record);
         }
     }
-    normalize(&mut value, record);
-    value
+    for chunks in object
+        .values_mut()
+        .filter_map(|field| field.get_mut("chunks").and_then(Value::as_array_mut))
+    {
+        merge_text_chunks(chunks);
+    }
+}
+
+fn normalize_extensions(value: Option<&mut Value>, record: &EntryRecord) {
+    let Some(namespaces) = value.and_then(Value::as_object_mut) else {
+        return;
+    };
+    for (namespace, fields) in namespaces.iter_mut() {
+        let Some(fields) = fields.as_object_mut() else {
+            continue;
+        };
+        fields.retain(|field, _| {
+            !(field.starts_with('@')
+                || namespace == "biblatex"
+                    && record
+                        .extensions
+                        .get(namespace)
+                        .and_then(|values| values.get(field))
+                        .is_some_and(|value| biblatex::redundant_extension(record, field, value)))
+        });
+    }
+    namespaces.retain(|_, fields| fields.as_object().is_some_and(|fields| !fields.is_empty()));
+}
+
+fn merge_text_chunks(chunks: &mut Vec<Value>) {
+    let mut merged: Vec<Value> = Vec::new();
+    for chunk in std::mem::take(chunks) {
+        let previous = merged
+            .last_mut()
+            .filter(|previous| previous.get("kind") == chunk.get("kind"))
+            .and_then(Value::as_object_mut);
+        if let Some(previous) = previous {
+            let text = format!(
+                "{}{}",
+                previous
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+                chunk
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+            );
+            previous.insert("text".into(), Value::String(text));
+        } else {
+            merged.push(chunk);
+        }
+    }
+    *chunks = merged;
 }
 
 fn differences(

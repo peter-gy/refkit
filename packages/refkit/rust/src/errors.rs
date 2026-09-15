@@ -14,11 +14,10 @@ create_exception!(refkit, MergeError, RefkitError);
 
 pub(crate) fn merge_error_to_py(py: Python<'_>, error: refkit_core::MergeError) -> PyErr {
     let exception = MergeError::new_err(error.message);
-    match crate::conversion::json_to_py(
-        py,
-        &serde_json::to_string(&error.code).expect("owned enum serializes"),
-    )
-    .and_then(|code| exception.value(py).setattr("code", code))
+    match serde_json::to_string(&error.code)
+        .map_err(|error| RefkitError::new_err(error.to_string()))
+        .and_then(|code| crate::conversion::json_to_py(py, &code))
+        .and_then(|code| exception.value(py).setattr("code", code))
     {
         Ok(()) => exception,
         Err(error) => error,
@@ -32,7 +31,8 @@ pub(crate) fn patch_error_to_py(py: Python<'_>, error: refkit_core::BibPatchErro
             "code",
             crate::conversion::json_to_py(
                 py,
-                &serde_json::to_string(&error.code).expect("owned enum serializes"),
+                &serde_json::to_string(&error.code)
+                    .map_err(|error| RefkitError::new_err(error.to_string()))?,
             )?,
         )?;
         exception.value(py).setattr("operation", error.operation)?;
@@ -105,12 +105,12 @@ pub(crate) fn library_error_to_py(py: Python<'_>, error: refkit_core::LibraryErr
         return PyValueError::new_err(error.to_string());
     }
     let exception = ParseError::new_err(error.to_string());
-    let diagnostics = match &error {
+    let diagnostics = match error {
         refkit_core::LibraryError::Biblatex(failure)
-        | refkit_core::LibraryError::HayagrivaYaml(failure) => failure.diagnostics.as_slice(),
-        _ => &[],
+        | refkit_core::LibraryError::HayagrivaYaml(failure) => failure.diagnostics,
+        _ => Vec::new(),
     };
-    match crate::conversion::diagnostics_to_py(py, diagnostics)
+    match crate::conversion::diagnostics_to_py(py, &diagnostics)
         .and_then(|diagnostics| exception.value(py).setattr("diagnostics", diagnostics))
     {
         Ok(()) => exception,

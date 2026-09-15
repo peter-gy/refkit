@@ -11,12 +11,19 @@ mod validate;
 
 use self::validate::{validate_macros, validate_xml_budget};
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Style lookup, XML validation, or supplied-parent resolution failure.
 pub enum StyleError {
+    /// A prior failure poisoned the prepared-style cache lock.
     CachePoisoned,
+    /// A dependent style requires the named independent parent resource.
     MissingParent(String),
+    /// Supplied parent identity or style kind is incompatible with the child.
     InvalidParent(String),
+    /// Style XML is invalid or exceeds its structural budget.
     InvalidXml(String),
+    /// Macro references form an invalid or oversized expansion graph.
     InvalidMacro(String),
+    /// No bundled style has the supplied name or alias.
     UnknownBundledStyle(String),
 }
 
@@ -38,6 +45,7 @@ impl fmt::Display for StyleError {
 impl std::error::Error for StyleError {}
 
 #[derive(Debug, Clone)]
+/// Validated style rules with the requested style's identity and locale precedence.
 pub struct PreparedStyle {
     pub(crate) inner: Arc<IndependentStyle>,
     title: String,
@@ -45,13 +53,24 @@ pub struct PreparedStyle {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Catalog metadata for one bundled independent CSL style.
 pub struct StyleMetadata {
+    /// Canonical name accepted by bundled-style lookup.
     pub name: String,
+    /// Additional accepted lookup names.
     pub aliases: Vec<String>,
+    /// Human-readable archived style title.
     pub title: String,
+    /// CSL style identifier.
     pub csl_id: String,
 }
 
+#[must_use]
+/// List bundled styles sorted by canonical name.
+#[expect(
+    clippy::indexing_slicing,
+    reason = "The pinned archive's names slice always starts with a canonical name followed by aliases. Catalog tests exercise every archived style through this lookup."
+)]
 pub fn style_catalog() -> Vec<StyleMetadata> {
     let mut styles: Vec<_> = archive::ArchivedStyle::all()
         .iter()
@@ -59,7 +78,7 @@ pub fn style_catalog() -> Vec<StyleMetadata> {
             name: style.names()[0].to_string(),
             aliases: style.names()[1..]
                 .iter()
-                .map(|name| name.to_string())
+                .map(std::string::ToString::to_string)
                 .collect(),
             title: style.display_name().to_string(),
             csl_id: style.csl_id().to_string(),
@@ -81,15 +100,23 @@ impl PreparedStyle {
         }
     }
 
+    #[must_use]
+    /// Return the requested style's title, including for a dependent style.
     pub fn title(&self) -> &str {
         &self.title
     }
 
+    #[must_use]
+    /// Return the requested style's CSL identity rather than its parent's identity.
     pub fn csl_id(&self) -> &str {
         &self.csl_id
     }
 }
 
+/// Load and cache a bundled style by case-insensitive canonical name or alias.
+///
+/// # Errors
+/// Returns an error for an unknown name, a poisoned cache, or invalid archived rules.
 pub fn load_prepared_style(name: &str) -> Result<Arc<PreparedStyle>, StyleError> {
     static STYLES: OnceLock<Mutex<HashMap<String, Arc<PreparedStyle>>>> = OnceLock::new();
 
@@ -115,6 +142,11 @@ pub fn load_prepared_style(name: &str) -> Result<Arc<PreparedStyle>, StyleError>
     Ok(style)
 }
 
+/// Validate supplied CSL XML and optionally resolve a dependent style's parent.
+///
+/// # Errors
+/// Rejects invalid XML, resource-limit violations, invalid macros, missing parents,
+/// or a supplied parent whose kind or CSL identity does not match the child.
 pub fn prepare_style_from_xml(
     xml: &str,
     parent_xml: Option<&str>,
@@ -172,6 +204,7 @@ fn prepare_csl_style(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fmt::Write as _;
 
     #[test]
     fn catalog_exposes_loadable_names_and_aliases_in_sorted_order() {
@@ -283,10 +316,12 @@ mod tests {
     fn custom_style_bounds_macro_expansion() {
         let mut definitions = r#"<macro name="m0"><text value="end"/></macro>"#.to_string();
         for index in 1..66 {
-            definitions.push_str(&format!(
+            write!(
+                definitions,
                 r#"<macro name="m{index}"><text macro="m{}"/></macro>"#,
                 index - 1
-            ));
+            )
+            .unwrap();
         }
         let error =
             prepare_style_from_xml(&custom_style(&definitions, r#"<text macro="m65"/>"#), None)
@@ -299,7 +334,7 @@ mod tests {
     #[test]
     fn custom_style_accepts_xml_comments_and_bounded_nesting() {
         let nested = nested_groups(60, r#"<text value="bounded"/>"#);
-        let source = custom_style(r#"<!-- <group> is an example -->"#, &nested);
+        let source = custom_style(r"<!-- <group> is an example -->", &nested);
         let style = prepare_style_from_xml(&source, None).unwrap();
         assert_eq!(style.title(), "Macro contract");
         let library =
@@ -334,7 +369,7 @@ mod tests {
         let mut definitions = r#"<macro name="m0"><text value="end"/></macro>"#.to_string();
         for index in 1..19 {
             let previous = index - 1;
-            definitions.push_str(&format!(r#"<macro name="m{index}"><group><text macro="m{previous}"/><text macro="m{previous}"/></group></macro>"#));
+            write!(definitions, r#"<macro name="m{index}"><group><text macro="m{previous}"/><text macro="m{previous}"/></group></macro>"#).unwrap();
         }
         let error =
             prepare_style_from_xml(&custom_style(&definitions, r#"<text macro="m18"/>"#), None)

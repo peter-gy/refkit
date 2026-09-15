@@ -16,15 +16,7 @@ pub(super) fn resolve_document(
     for block in &data.blocks {
         match block {
             RawBlock::StringDef { raw, span, .. } => {
-                let body_start = raw.find(['{', '(']).expect("parsed block has an opener") + 1;
-                let (key, _, atoms) = parse_assignment_atoms(&raw[body_start..raw.len() - 1])
-                    .ok_or_else(|| {
-                        Diagnostic::error(
-                            "syntax_error",
-                            Some(span.clone()),
-                            "invalid BibTeX string definition".to_string(),
-                        )
-                    })?;
+                let (key, atoms) = string_definition(raw, span)?;
                 definitions.push((key, atoms, span.clone()));
             }
             RawBlock::Failed { error, span, .. } => {
@@ -98,6 +90,23 @@ pub(super) fn resolve_document(
     Ok(entries)
 }
 
+fn string_definition(
+    raw: &str,
+    span: &Range<usize>,
+) -> Result<(String, Vec<RawValueAtom>), Diagnostic> {
+    let invalid = || {
+        Diagnostic::error(
+            "syntax_error",
+            Some(span.clone()),
+            "invalid BibTeX string definition".to_string(),
+        )
+    };
+    let body_start = raw.find(['{', '(']).ok_or_else(invalid)? + 1;
+    let body = raw.get(body_start..raw.len() - 1).ok_or_else(invalid)?;
+    let (key, _, atoms) = parse_assignment_atoms(body).ok_or_else(invalid)?;
+    Ok((key, atoms))
+}
+
 fn as_field<'a>(atoms: &'a [RawValueAtom], span: &Range<usize>) -> Field<'a> {
     atoms
         .iter()
@@ -117,6 +126,7 @@ fn as_field<'a>(atoms: &'a [RawValueAtom], span: &Range<usize>) -> Field<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fmt::Write as _;
 
     #[test]
     fn resolves_source_fields_with_macros_and_preserves_tex() {
@@ -201,9 +211,9 @@ mod tests {
     #[test]
     fn macro_lookup_uses_final_definitions_and_preserves_literal_escapes() {
         let entries = RawDocument::parse(
-            r#"@misc{Work,title=pub,month=JAN,note={A \} B}}
+            r"@misc{Work,title=pub,month=JAN,note={A \} B}}
 @misc{work,title={lowercase key}}
-@string{PUB={old}}@string{pub=next,}@string{next={new}}@string{jan={Custom Month}}"#,
+@string{PUB={old}}@string{pub=next,}@string{next={new}}@string{jan={Custom Month}}",
         )
         .resolve()
         .unwrap();
@@ -329,11 +339,13 @@ mod tests {
     fn bounds_aggregate_expansion_and_dependency_depth() {
         let mut source = "@string{x0={}}".to_string();
         for index in 1..20 {
-            source.push_str(&format!(
+            write!(
+                source,
                 "@string{{x{index}=x{} # x{}}}",
                 index - 1,
                 index - 1
-            ));
+            )
+            .unwrap();
         }
         source.push_str("@misc{work,title=x19}");
         assert_eq!(
@@ -347,7 +359,7 @@ mod tests {
 
         let mut source = "@string{x0={ok}}".to_string();
         for index in 1..65 {
-            source.push_str(&format!("@string{{x{index}=x{}}}", index - 1));
+            write!(source, "@string{{x{index}=x{}}}", index - 1).unwrap();
         }
         source.push_str("@misc{work,title=x64}");
         assert_eq!(

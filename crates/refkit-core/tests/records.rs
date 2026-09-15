@@ -1,3 +1,7 @@
+//! Owned record construction, retained source data, and reconstruction.
+
+#![cfg(test)]
+
 use std::collections::BTreeMap;
 
 use refkit_core::{

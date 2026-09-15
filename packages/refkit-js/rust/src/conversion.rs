@@ -58,6 +58,10 @@ pub fn validation(report: &refkit_core::ValidationReport) -> Value {
     })).collect::<Vec<_>>()})
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "Record-key conversion rejects noncanonical keys only on host input. The to_host direction recursively renames keys and cannot return an error."
+)]
 pub fn record(value: &EntryRecord) -> Value {
     record_keys(json!(value), true).expect("core records use canonical field names")
 }
@@ -120,7 +124,7 @@ pub fn rendered(value: &RenderedRecord) -> Value {
     let layout = value.layout.map(|layout| {
         json!({
             "hangingIndent": layout.hanging_indent,
-            "secondFieldAlign": layout.second_field_align.map(|align| align.as_str()),
+            "secondFieldAlign": layout.second_field_align.map(refkit_core::SecondFieldAlign::as_str),
             "lineSpacing": layout.line_spacing, "entrySpacing": layout.entry_spacing
         })
     });
@@ -128,7 +132,7 @@ pub fn rendered(value: &RenderedRecord) -> Value {
         "tree": value.tree_nodes().iter().map(node).collect::<Vec<_>>()})
 }
 
-fn formatting(value: &RenderedFormatting) -> Value {
+fn formatting(value: RenderedFormatting) -> Value {
     json!({"fontStyle": value.font_style.as_str(), "fontVariant": value.font_variant.as_str(),
         "fontWeight": value.font_weight.as_str(), "textDecoration": value.text_decoration.as_str(),
         "verticalAlign": value.vertical_align.as_str()})
@@ -155,24 +159,24 @@ fn node(value: &RenderedNode) -> Value {
         RenderedNode::Text {
             text,
             formatting: format,
-        } => json!({"kind": "Text", "text": text, "formatting": formatting(format)}),
+        } => json!({"kind": "Text", "text": text, "formatting": formatting(*format)}),
         RenderedNode::Element {
             display,
             meta,
             children,
         } => json!({"kind": "Element",
-            "display": display.map(|display| display.as_str()), "meta": meta.as_ref().map(metadata),
+            "display": display.map(refkit_core::RenderedDisplay::as_str), "meta": meta.as_ref().map(metadata),
             "children": children.iter().map(node).collect::<Vec<_>>()}),
         RenderedNode::Markup { value } => json!({"kind": "Markup", "value": value}),
         RenderedNode::Link {
             text,
             url,
             formatting: format,
-        } => json!({"kind": "Link", "text": text, "url": url, "formatting": formatting(format)}),
+        } => json!({"kind": "Link", "text": text, "url": url, "formatting": formatting(*format)}),
         RenderedNode::Transparent {
             cite_idx,
             formatting: format,
-        } => json!({"kind": "Transparent", "citeIdx": cite_idx, "formatting": formatting(format)}),
+        } => json!({"kind": "Transparent", "citeIdx": cite_idx, "formatting": formatting(*format)}),
         RenderedNode::BibliographyEntry {
             key,
             label,

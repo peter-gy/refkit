@@ -217,7 +217,7 @@ fn parse_entry(
     body_start: usize,
     body: &str,
 ) -> Result<RawEntryData, String> {
-    let (key, mut cursor) = parse_entry_key(body)?;
+    let (key, mut cursor) = parse_entry_key(body);
     if !is_valid_entry_key(&key) {
         return Err(format!("entry key {} is invalid", quoted(&key)));
     }
@@ -238,57 +238,53 @@ fn parse_entry(
         }
 
         let value_start;
-        let (value, value_end, inner_span, value_mode, value_atoms) = if cursor >= body.len()
-            || matches!(body[cursor..].chars().next(), Some(',' | '}' | ')'))
-        {
-            value_start = cursor;
-            (
-                String::new(),
-                cursor,
-                None,
-                RawValueMode::Missing,
-                Vec::new(),
-            )
-        } else {
-            while cursor < body.len() && body[cursor..].chars().next().unwrap().is_whitespace() {
-                cursor += body[cursor..].chars().next().unwrap().len_utf8();
-            }
-            if !body[cursor..].starts_with('=') {
-                return Err(format!("field {name} is missing '='"));
-            }
-            cursor += 1;
-            while cursor < body.len() && body[cursor..].chars().next().unwrap().is_whitespace() {
-                cursor += body[cursor..].chars().next().unwrap().len_utf8();
-            }
-            value_start = cursor;
-            parse_value(body, cursor, body_start)?
-        };
+        let (value, value_end, inner_span, value_mode, value_atoms) =
+            if cursor >= body.len() || matches!(char_at(body, cursor), Some(',' | '}' | ')')) {
+                value_start = cursor;
+                (
+                    String::new(),
+                    cursor,
+                    None,
+                    RawValueMode::Missing,
+                    Vec::new(),
+                )
+            } else {
+                skip_field_space(body, &mut cursor);
+                if !body[cursor..].starts_with('=') {
+                    return Err(format!("field {name} is missing '='"));
+                }
+                cursor += 1;
+                skip_field_space(body, &mut cursor);
+                value_start = cursor;
+                parse_value(body, cursor, body_start)?
+            };
         cursor = value_end;
+        skip_field_trivia(body, &mut cursor);
+        let comma = if let Some(ch) = char_at(body, cursor) {
+            if ch != ',' {
+                return Err(format!("field {name} is missing a separator"));
+            }
+            let position = body_start + cursor;
+            cursor += ch.len_utf8();
+            Some(position)
+        } else {
+            None
+        };
         let field_id = field_blocks.len();
         fields
             .entry(name.to_ascii_lowercase())
             .or_default()
             .push(field_id);
         field_blocks.push(RawFieldData {
-            name: name.clone(),
+            name,
             value,
             value_mode,
             value_atoms,
             span: inner_span.unwrap_or((body_start + value_start)..(body_start + value_end)),
             patch_span: (body_start + value_start)..(body_start + value_end),
             assignment_span: (body_start + assignment_start)..(body_start + value_end),
-            comma: None,
+            comma,
         });
-
-        skip_field_trivia(body, &mut cursor);
-        if cursor < body.len() {
-            let ch = body[cursor..].chars().next().unwrap();
-            if ch != ',' {
-                return Err(format!("field {name} is missing a separator"));
-            }
-            field_blocks[field_id].comma = Some(body_start + cursor);
-            cursor += ch.len_utf8();
-        }
     }
 
     let key_start = body_start + body.len() - body.trim_start().len();
@@ -309,8 +305,7 @@ fn parse_entry(
 fn parse_field_name(body: &str, start: usize) -> Result<(String, usize), String> {
     let mut cursor = start;
     let mut name = String::new();
-    while cursor < body.len() {
-        let ch = body[cursor..].chars().next().unwrap();
+    while let Some(ch) = char_at(body, cursor) {
         if ch == '=' || ch == ',' || ch == '}' || ch == ')' {
             break;
         }
@@ -327,29 +322,28 @@ fn parse_field_name(body: &str, start: usize) -> Result<(String, usize), String>
     Ok((name.trim().to_string(), cursor))
 }
 
-fn parse_entry_key(body: &str) -> Result<(String, usize), String> {
+fn parse_entry_key(body: &str) -> (String, usize) {
     let mut cursor = 0;
     skip_field_space(body, &mut cursor);
     if cursor >= body.len() {
-        return Ok((String::new(), cursor));
+        return (String::new(), cursor);
     }
 
     let mut probe = cursor;
-    while probe < body.len() {
-        let ch = body[probe..].chars().next().unwrap();
+    while let Some(ch) = char_at(body, probe) {
         if ch == ',' {
-            return Ok((body[..probe].trim().to_string(), probe + ch.len_utf8()));
+            return (body[..probe].trim().to_string(), probe + ch.len_utf8());
         }
         if ch == '=' {
-            return Ok((String::new(), cursor));
+            return (String::new(), cursor);
         }
         if ch == '}' || ch == ')' {
-            return Ok((body[..probe].trim().to_string(), probe));
+            return (body[..probe].trim().to_string(), probe);
         }
         probe += ch.len_utf8();
     }
 
-    Ok((body.trim().to_string(), body.len()))
+    (body.trim().to_string(), body.len())
 }
 
 fn find_at_block_end(source: &str, start: usize) -> Result<usize, (usize, String)> {
@@ -377,8 +371,7 @@ fn find_at_block_end(source: &str, start: usize) -> Result<usize, (usize, String
 }
 
 fn follows_block_boundary(source: &str, mut cursor: usize) -> bool {
-    while cursor < source.len() {
-        let ch = source[cursor..].chars().next().unwrap();
+    while let Some(ch) = char_at(source, cursor) {
         if !ch.is_whitespace() {
             break;
         }
@@ -410,7 +403,8 @@ fn find_at_block_end_with_escape_mode(
     if let Some(next) = find_recovery_block_start(&source[..open], start) {
         return Err((next, "entry opener is missing".to_string()));
     }
-    let opener = source[open..].chars().next().unwrap();
+    let opener =
+        char_at(source, open).ok_or_else(|| (open, "entry opener is missing".to_string()))?;
     let root_closer = if opener == '{' { '}' } else { ')' };
     let kind = source[start + 1..open].trim().to_ascii_lowercase();
     let raw_comment = kind == "comment";
@@ -422,8 +416,7 @@ fn find_at_block_end_with_escape_mode(
     let mut escaped = false;
     let mut pos = open + opener.len_utf8();
 
-    while pos < source.len() {
-        let ch = source[pos..].chars().next().unwrap();
+    while let Some(ch) = char_at(source, pos) {
         if in_entry_key {
             if ch == ',' {
                 in_entry_key = false;
@@ -483,8 +476,7 @@ fn find_recovery_block_start(source: &str, start: usize) -> Option<usize> {
     let mut cursor = take_line(source, start);
     while cursor < source.len() {
         let line_start = cursor;
-        while cursor < source.len() {
-            let ch = source[cursor..].chars().next().unwrap();
+        while let Some(ch) = char_at(source, cursor) {
             if !ch.is_whitespace() || ch == '\n' {
                 break;
             }
@@ -500,8 +492,7 @@ fn find_recovery_block_start(source: &str, start: usize) -> Option<usize> {
 
 fn find_next_root_break(source: &str, start: usize) -> Option<usize> {
     let mut cursor = start;
-    while cursor < source.len() {
-        let ch = source[cursor..].chars().next().unwrap();
+    while let Some(ch) = char_at(source, cursor) {
         if ch == '%' {
             return Some(cursor);
         }
@@ -516,8 +507,10 @@ fn find_next_root_break(source: &str, start: usize) -> Option<usize> {
 fn take_comment(source: &str, start: usize) -> usize {
     let line_end = take_line(source, start);
     let mut cursor = start + 1;
-    while cursor < line_end {
-        let ch = source[cursor..].chars().next().unwrap();
+    while let Some(ch) = char_at(source, cursor) {
+        if cursor >= line_end {
+            break;
+        }
         if ch == '@' && is_complete_parseable_at_start(source, cursor) {
             return cursor;
         }
@@ -643,8 +636,7 @@ fn parse_value_atom(body: &str, start: usize, body_offset: usize) -> Result<Pars
     }
 
     let mut cursor = start;
-    while cursor < body.len() {
-        let ch = body[cursor..].chars().next().unwrap();
+    while let Some(ch) = char_at(body, cursor) {
         if ch.is_whitespace() || ch == ',' || ch == '#' || ch == '%' {
             break;
         }
@@ -692,7 +684,7 @@ fn find_balanced_in_body(
 
 fn follows_non_closing_value_boundary(body: &str, mut cursor: usize) -> bool {
     skip_field_space(body, &mut cursor);
-    matches!(body[cursor..].chars().next(), Some(',' | '#'))
+    matches!(char_at(body, cursor), Some(',' | '#'))
 }
 
 fn find_balanced_in_body_with_escape_mode(
@@ -705,8 +697,7 @@ fn find_balanced_in_body_with_escape_mode(
     let mut depth = 0usize;
     let mut cursor = start;
     let mut escaped = false;
-    while cursor < body.len() {
-        let ch = body[cursor..].chars().next().unwrap();
+    while let Some(ch) = char_at(body, cursor) {
         if escaped {
             escaped = false;
         } else if escape_aware && ch == '\\' {
@@ -728,8 +719,7 @@ fn find_quoted_end(body: &str, start: usize) -> Result<usize, String> {
     let mut cursor = start + 1;
     let mut escaped = false;
     let mut brace_depth = 0usize;
-    while cursor < body.len() {
-        let ch = body[cursor..].chars().next().unwrap();
+    while let Some(ch) = char_at(body, cursor) {
         if escaped {
             escaped = false;
         } else if ch == '\\' {
@@ -747,8 +737,7 @@ fn find_quoted_end(body: &str, start: usize) -> Result<usize, String> {
 }
 
 fn skip_field_gap(body: &str, cursor: &mut usize) {
-    while *cursor < body.len() {
-        let ch = body[*cursor..].chars().next().unwrap();
+    while let Some(ch) = char_at(body, *cursor) {
         if ch.is_whitespace() || ch == ',' {
             *cursor += ch.len_utf8();
             continue;
@@ -762,8 +751,7 @@ fn skip_field_gap(body: &str, cursor: &mut usize) {
 }
 
 fn skip_field_space(body: &str, cursor: &mut usize) {
-    while *cursor < body.len() {
-        let ch = body[*cursor..].chars().next().unwrap();
+    while let Some(ch) = char_at(body, *cursor) {
         if !ch.is_whitespace() {
             break;
         }
@@ -824,8 +812,7 @@ fn parse_preamble_value(body: &str) -> String {
 }
 fn take_while(source: &str, start: usize, predicate: impl Fn(char) -> bool) -> usize {
     let mut cursor = start;
-    while cursor < source.len() {
-        let ch = source[cursor..].chars().next().unwrap();
+    while let Some(ch) = char_at(source, cursor) {
         if !predicate(ch) {
             break;
         }
@@ -837,6 +824,9 @@ fn take_while(source: &str, start: usize, predicate: impl Fn(char) -> bool) -> u
 fn take_line(source: &str, start: usize) -> usize {
     source[start..]
         .find('\n')
-        .map(|offset| start + offset + 1)
-        .unwrap_or(source.len())
+        .map_or(source.len(), |offset| start + offset + 1)
+}
+
+fn char_at(source: &str, offset: usize) -> Option<char> {
+    source.get(offset..)?.chars().next()
 }

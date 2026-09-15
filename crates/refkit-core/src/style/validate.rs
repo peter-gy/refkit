@@ -27,14 +27,7 @@ pub(super) fn validate_xml_budget(xml: &str) -> Result<(), StyleError> {
             .read_event()
             .map_err(|error| StyleError::InvalidXml(error.to_string()))?;
         if let Event::Start(element) | Event::Empty(element) = &event {
-            for (index, attribute) in element.attributes().with_checks(false).enumerate() {
-                if index >= MAX_STYLE_ATTRIBUTES {
-                    return Err(StyleError::InvalidXml(
-                        "element exceeds 256 attributes".to_string(),
-                    ));
-                }
-                attribute.map_err(|error| StyleError::InvalidXml(error.to_string()))?;
-            }
+            validate_attributes(element)?;
         }
         match event {
             Event::Eof => break,
@@ -67,6 +60,10 @@ pub(super) fn validate_xml_budget(xml: &str) -> Result<(), StyleError> {
     Ok(())
 }
 
+#[expect(
+    clippy::indexing_slicing,
+    reason = "Macro-name resolution validates every edge before traversal. State and edge vectors use the same macro enumeration plus the document root, and only those indices enter the work stack."
+)]
 pub(super) fn validate_macros(style: &IndependentStyle) -> Result<(), StyleError> {
     let mut indices = HashMap::new();
     for (index, definition) in style.macros.iter().enumerate() {
@@ -119,75 +116,80 @@ pub(super) fn validate_macros(style: &IndependentStyle) -> Result<(), StyleError
         let mut path: Vec<usize> = Vec::new();
         while let Some((index, finishing)) = stack.pop() {
             if finishing {
-                let expanded = if let Some(definition) = style.macros.get(index) {
-                    expanded_elements(&definition.children, &indices, &cost)
-                } else {
-                    let citation =
-                        expanded_elements(&style.citation.layout.elements, &indices, &cost)
-                            .saturating_add(expanded_sort(
-                                style.citation.sort.as_ref(),
-                                &indices,
-                                &cost,
-                            ));
-                    style
-                        .bibliography
-                        .as_ref()
-                        .map_or(citation, |bibliography| {
-                            citation
-                                .saturating_add(expanded_elements(
-                                    &bibliography.layout.elements,
-                                    &indices,
-                                    &cost,
-                                ))
-                                .saturating_add(expanded_sort(
-                                    bibliography.sort.as_ref(),
-                                    &indices,
-                                    &cost,
-                                ))
-                        })
-                };
-                let mut longest = graphs[index].depth;
-                for &(child, nesting) in &edges[index] {
-                    longest = longest.max(depth[child] + nesting);
-                }
-                if longest > MAX_STYLE_DEPTH || expanded > MAX_STYLE_NODES {
-                    return Err(StyleError::InvalidMacro(format!(
-                        "expansion exceeds 64 nested elements or 100000 elements (depth {longest}, elements {expanded})"
-                    )));
-                }
-                cost[index] = expanded;
-                depth[index] = longest;
+                finish_expansion(
+                    style, &indices, &graphs, &edges, index, &mut depth, &mut cost,
+                )?;
                 state[index] = 2;
                 path.pop();
-            } else {
-                match state[index] {
-                    2 => continue,
-                    1 => {
-                        let mut cycle = path
-                            .iter()
-                            .skip_while(|&&node| node != index)
-                            .map(|&node| quoted(&style.macros[node].name))
-                            .collect::<Vec<_>>();
-                        cycle.push(quoted(&style.macros[index].name));
-                        return Err(StyleError::InvalidMacro(format!(
-                            "cycle: {}",
-                            cycle.join(" -> ")
-                        )));
-                    }
-                    _ => {}
+                continue;
+            }
+            match state[index] {
+                2 => continue,
+                1 => {
+                    return Err(cycle_error(style, &path, index));
                 }
-                state[index] = 1;
-                path.push(index);
-                stack.push((index, true));
-                for &(child, _) in edges[index].iter().rev() {
-                    stack.push((child, false));
-                }
+                _ => {}
+            }
+            state[index] = 1;
+            path.push(index);
+            stack.push((index, true));
+            for &(child, _) in edges[index].iter().rev() {
+                stack.push((child, false));
             }
         }
     }
     Ok(())
 }
 
+#[expect(
+    clippy::indexing_slicing,
+    reason = "The traversal passes indices from the validated macro-name graph. Graph, edge, depth, and cost vectors share one enumeration, including the synthetic document root."
+)]
+fn finish_expansion(
+    style: &IndependentStyle,
+    indices: &HashMap<&str, usize>,
+    graphs: &[MacroUsage<'_>],
+    edges: &[Vec<(usize, usize)>],
+    index: usize,
+    depth: &mut [usize],
+    cost: &mut [usize],
+) -> Result<(), StyleError> {
+    let expanded = if let Some(definition) = style.macros.get(index) {
+        expanded_elements(&definition.children, indices, cost)
+    } else {
+        let citation = expanded_elements(&style.citation.layout.elements, indices, cost)
+            .saturating_add(expanded_sort(style.citation.sort.as_ref(), indices, cost));
+        style
+            .bibliography
+            .as_ref()
+            .map_or(citation, |bibliography| {
+                citation
+                    .saturating_add(expanded_elements(
+                        &bibliography.layout.elements,
+                        indices,
+                        cost,
+                    ))
+                    .saturating_add(expanded_sort(bibliography.sort.as_ref(), indices, cost))
+            })
+    };
+    let mut longest = graphs[index].depth;
+    for &(child, nesting) in &edges[index] {
+        longest = longest.max(depth[child] + nesting);
+    }
+    if longest > MAX_STYLE_DEPTH || expanded > MAX_STYLE_NODES {
+        return Err(StyleError::InvalidMacro(format!(
+            "expansion exceeds 64 nested elements or 100000 elements (depth {longest}, elements {expanded})"
+        )));
+    }
+    cost[index] = expanded;
+    depth[index] = longest;
+    Ok(())
+}
+
+#[expect(
+    clippy::indexing_slicing,
+    reason = "Every layout macro reference is resolved against the name map before expansion, and costs use that same validated enumeration."
+)]
 fn expanded_elements(
     elements: &[LayoutRenderingElement],
     indices: &HashMap<&str, usize>,
@@ -230,6 +232,10 @@ fn expanded_elements(
         .fold(0, usize::saturating_add)
 }
 
+#[expect(
+    clippy::indexing_slicing,
+    reason = "Sort macro references are included in the resolved dependency graph before this function reads their computed costs."
+)]
 fn expanded_sort(sort: Option<&Sort>, indices: &HashMap<&str, usize>, costs: &[usize]) -> usize {
     sort.map_or(0, |sort| {
         sort.keys
@@ -297,4 +303,32 @@ fn add_sort_macros<'a>(sort: Option<&'a Sort>, references: &mut Vec<(&'a str, us
             }
         }
     }
+}
+
+fn validate_attributes(element: &quick_xml::events::BytesStart<'_>) -> Result<(), StyleError> {
+    for (index, attribute) in element.attributes().with_checks(false).enumerate() {
+        if index >= MAX_STYLE_ATTRIBUTES {
+            return Err(StyleError::InvalidXml(
+                "element exceeds 256 attributes".to_string(),
+            ));
+        }
+        attribute.map_err(|error| StyleError::InvalidXml(error.to_string()))?;
+    }
+    Ok(())
+}
+
+fn cycle_error(style: &IndependentStyle, path: &[usize], index: usize) -> StyleError {
+    let name = |node: usize| {
+        style.macros.get(node).map_or_else(
+            || "document layout".to_string(),
+            |definition| quoted(&definition.name),
+        )
+    };
+    let mut cycle = path
+        .iter()
+        .skip_while(|&&node| node != index)
+        .map(|&node| name(node))
+        .collect::<Vec<_>>();
+    cycle.push(name(index));
+    StyleError::InvalidMacro(format!("cycle: {}", cycle.join(" -> ")))
 }

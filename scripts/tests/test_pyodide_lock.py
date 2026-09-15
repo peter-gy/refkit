@@ -46,15 +46,15 @@ def test_pyodide_lock_rejects_rust_plugin_abi_drift(
     cargo_lock = tmp_path / "Cargo.lock"
     cargo_lock.write_text(
         pyodide_lock.POLARS_CARGO_LOCK_PATH.read_text().replace(
-            'name = "pyo3-polars"\nversion = "0.24.0"',
-            'name = "pyo3-polars"\nversion = "0.23.1"',
+            f'name = "pyo3-polars"\nversion = "{pyodide_lock.POLARS_PLUGIN_ABI["pyo3-polars"]}"',
+            'name = "pyo3-polars"\nversion = "0.0.0"',
         )
     )
     monkeypatch.setattr(pyodide_lock, "POLARS_CARGO_LOCK_PATH", cargo_lock)
 
     errors = pyodide_lock.validate_lock(LOCK_PATH)
 
-    assert "pyo3-polars must resolve to 0.24.0 for the Polars plugin ABI" in errors
+    assert any(error.startswith("pyo3-polars must resolve to ") for error in errors)
 
 
 @pytest.mark.parametrize(

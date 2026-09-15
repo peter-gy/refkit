@@ -1,3 +1,5 @@
+//! WebAssembly host conversion and lifetime management over the portable RefKit core.
+
 mod codec;
 mod conversion;
 mod document;
@@ -16,11 +18,15 @@ use serde_json::json;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
+#[must_use]
+/// Check whether the locale code is present in the bundled archive.
 pub fn is_bundled_locale(code: &str) -> bool {
     refkit_core::is_bundled_locale(code)
 }
 
 #[wasm_bindgen]
+#[must_use]
+/// Decode bibliography bytes and return text plus an optional encoding diagnostic as JSON.
 pub fn decode_bibliography(bytes: &[u8]) -> String {
     let decoded = refkit_core::decode_bibliography(bytes);
     let diagnostic = (decoded.encoding == refkit_core::TextEncoding::Windows1252).then(|| json!({
@@ -32,6 +38,8 @@ pub fn decode_bibliography(bytes: &[u8]) -> String {
 }
 
 #[wasm_bindgen]
+#[must_use]
+/// Return the package version, build mode, and WebAssembly target as JSON.
 pub fn build_info() -> String {
     json!({
         "version": env!("CARGO_PKG_VERSION"),

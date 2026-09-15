@@ -54,6 +54,10 @@ pub(super) fn render_sorted_document(
     }
 }
 
+#[expect(
+    clippy::indexing_slicing,
+    reason = "Pending metadata indices are recorded immediately before pushing their blocks. The vector only grows until those indices are drained and assigned sort metadata."
+)]
 fn sorted_blocks<'a>(
     doc: &'a RawSyntaxDocument,
     duplicate_plan: &'a DuplicatePlan,
@@ -104,9 +108,9 @@ fn sorted_blocks<'a>(
             sort_index: sort_index.clone(),
         });
         for meta_index in preceding_meta.drain(..) {
-            blocks[meta_index].sort_index = sort_index.clone();
+            blocks[meta_index].sort_index.clone_from(&sort_index);
         }
-        if entry.is_none() && blocks[index].sort_index.is_empty() {
+        if entry.is_none() && sort_index.is_empty() {
             preceding_meta.push(index);
         }
     }
@@ -182,14 +186,12 @@ fn sort_value(entry: &RawSyntaxEntry, key: &str) -> String {
             .fields
             .iter()
             .find(|field| field.name.eq_ignore_ascii_case("month"))
-            .map(|field| month_sort_value(&field.value))
-            .unwrap_or_else(missing_sort_value),
+            .map_or_else(missing_sort_value, |field| month_sort_value(&field.value)),
         field_name => entry
             .fields
             .iter()
             .find(|field| field.name.eq_ignore_ascii_case(field_name))
-            .map(|field| scalar_sort_value(&field.value))
-            .unwrap_or_else(missing_sort_value),
+            .map_or_else(missing_sort_value, |field| scalar_sort_value(&field.value)),
     }
 }
 
@@ -200,9 +202,7 @@ fn month_sort_value(value: &str) -> String {
     ]
     .iter()
     .position(|candidate| *candidate == month);
-    month_index
-        .map(|index| format!("0:{index:02}"))
-        .unwrap_or_else(|| scalar_sort_value(value))
+    month_index.map_or_else(|| scalar_sort_value(value), |index| format!("0:{index:02}"))
 }
 
 fn scalar_sort_value(value: &str) -> String {

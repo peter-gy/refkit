@@ -1,15 +1,23 @@
-use super::*;
+use super::{
+    BTreeMap, BibEntryMapping, BibFieldMapping, BibPatchChange, BibPatchError, BibPatchErrorCode,
+    BibPatchKind, BibPatchResult, BibPatchWarning, HashSet, Plan, RawDocument, RawEntryId,
+    RawFieldId,
+};
 
 impl Plan<'_> {
     pub(super) fn finish(mut self) -> Result<BibPatchResult, BibPatchError> {
-        self.replacements.sort_by_key(|edit| {
-            (
-                edit.span.start,
-                !edit.span.is_empty(),
-                edit.kind != BibPatchKind::RenameEntry,
-                edit.operations.first().copied(),
-            )
-        });
+        let applied = self.apply_replacements()?;
+        let entries = self.map_entries(&applied.document, &applied.offsets)?;
+        let warnings = warnings(&applied.document);
+        Ok(BibPatchResult {
+            document: applied.document,
+            changes: applied.changes,
+            entries,
+            warnings,
+        })
+    }
+
+    fn output_size(&self) -> Result<usize, BibPatchError> {
         let mut cursor = 0;
         let mut size = self.source.len();
         for edit in &self.replacements {
@@ -39,12 +47,25 @@ impl Plan<'_> {
                 "Patched bibliography exceeds 16 MiB",
             ));
         }
+        Ok(size)
+    }
+
+    fn apply_replacements(&mut self) -> Result<AppliedReplacements, BibPatchError> {
+        self.replacements.sort_by_key(|edit| {
+            (
+                edit.span.start,
+                !edit.span.is_empty(),
+                edit.kind != BibPatchKind::RenameEntry,
+                edit.operations.first().copied(),
+            )
+        });
+        let size = self.output_size()?;
         let mut output = String::with_capacity(size);
         let mut changes = Vec::new();
         let mut offsets = Vec::new();
         let mut cursor = 0;
         let mut delta = 0isize;
-        for edit in self.replacements {
+        for edit in std::mem::take(&mut self.replacements) {
             output.push_str(&self.source[cursor..edit.span.start]);
             let start = output.len();
             output.push_str(&edit.text);
@@ -55,7 +76,8 @@ impl Plan<'_> {
                 after: start..output.len(),
             });
             cursor = edit.span.end;
-            delta += edit.text.len() as isize - edit.span.len() as isize;
+            delta += isize::try_from(edit.text.len()).map_err(|_| invalid_mapping())?
+                - isize::try_from(edit.span.len()).map_err(|_| invalid_mapping())?;
             offsets.push((edit.span.end, delta));
         }
         output.push_str(&self.source[cursor..]);
@@ -69,6 +91,23 @@ impl Plan<'_> {
                 "Patch changed entry boundaries unexpectedly",
             ));
         }
+        Ok(AppliedReplacements {
+            document,
+            changes,
+            offsets,
+        })
+    }
+
+    fn map_entries(
+        &self,
+        document: &RawDocument,
+        offsets: &[(usize, isize)],
+    ) -> Result<Vec<BibEntryMapping>, BibPatchError> {
+        #[expect(
+            clippy::indexing_slicing,
+            clippy::expect_used,
+            reason = "partition_point bounds the predecessor lookup. Validated nonoverlapping edits cannot remove more bytes than precede a surviving position, and the output-size check bounds every translated offset."
+        )]
         let shift = |position: usize| {
             let index = offsets.partition_point(|(end, _)| *end <= position);
             position
@@ -108,62 +147,17 @@ impl Plan<'_> {
                 .copied()
                 .ok_or_else(invalid_mapping)?;
             mapped_entries.insert(new_id);
-            let after = &document.data.entry_blocks[new_id];
+            let after = document
+                .data
+                .entry_blocks
+                .get(new_id)
+                .ok_or_else(invalid_mapping)?;
             if after.key != *self.renamed.get(&id).unwrap_or(&entry.key)
                 || after.kind != *self.types.get(&id).unwrap_or(&entry.kind)
             {
                 return Err(invalid_mapping());
             }
-            let field_positions: BTreeMap<_, _> = after
-                .field_blocks
-                .iter()
-                .enumerate()
-                .map(|(id, field)| (field.assignment_span.start, id))
-                .collect();
-            let mut fields = Vec::new();
-            let mut mapped_fields = HashSet::new();
-            for (field_id, field) in entry.field_blocks.iter().enumerate() {
-                let before = self
-                    .document
-                    .field_info(RawEntryId(id), RawFieldId(field_id));
-                if self.removed_fields.contains(&(id, field_id)) {
-                    fields.push(BibFieldMapping {
-                        before,
-                        after: None,
-                    });
-                    continue;
-                }
-                let new_field_id = field_positions
-                    .get(&shift(field.assignment_span.start))
-                    .copied()
-                    .ok_or_else(invalid_mapping)?;
-                mapped_fields.insert(new_field_id);
-                let new_field = &after.field_blocks[new_field_id];
-                if field.name != new_field.name
-                    || self
-                        .values
-                        .get(&(id, field_id))
-                        .is_some_and(|value| *value != new_field.value)
-                {
-                    return Err(invalid_mapping());
-                }
-                fields.push(BibFieldMapping {
-                    before,
-                    after: document.field_info(RawEntryId(new_id), RawFieldId(new_field_id)),
-                });
-            }
-            let added = after.field_blocks.len() - mapped_fields.len();
-            if added != self.added_fields.get(&id).map_or(0, Vec::len) {
-                return Err(invalid_mapping());
-            }
-            for field_id in 0..after.field_blocks.len() {
-                if !mapped_fields.contains(&field_id) {
-                    fields.push(BibFieldMapping {
-                        before: None,
-                        after: document.field_info(RawEntryId(new_id), RawFieldId(field_id)),
-                    });
-                }
-            }
+            let fields = self.map_fields(id, new_id, document, &shift)?;
             entries.push(BibEntryMapping {
                 before,
                 after: document.entry_info(RawEntryId(new_id)),
@@ -187,14 +181,88 @@ impl Plan<'_> {
                 });
             }
         }
-        let warnings = warnings(&document);
-        Ok(BibPatchResult {
-            document,
-            changes,
-            entries,
-            warnings,
-        })
+        Ok(entries)
     }
+
+    fn map_fields(
+        &self,
+        id: usize,
+        new_id: usize,
+        document: &RawDocument,
+        shift: &impl Fn(usize) -> usize,
+    ) -> Result<Vec<BibFieldMapping>, BibPatchError> {
+        let entry = self
+            .document
+            .data
+            .entry_blocks
+            .get(id)
+            .ok_or_else(invalid_mapping)?;
+        let after = document
+            .data
+            .entry_blocks
+            .get(new_id)
+            .ok_or_else(invalid_mapping)?;
+        let field_positions: BTreeMap<_, _> = after
+            .field_blocks
+            .iter()
+            .enumerate()
+            .map(|(id, field)| (field.assignment_span.start, id))
+            .collect();
+        let mut fields = Vec::new();
+        let mut mapped_fields = HashSet::new();
+        for (field_id, field) in entry.field_blocks.iter().enumerate() {
+            let before = self
+                .document
+                .field_info(RawEntryId(id), RawFieldId(field_id));
+            if self.removed_fields.contains(&(id, field_id)) {
+                fields.push(BibFieldMapping {
+                    before,
+                    after: None,
+                });
+                continue;
+            }
+            let new_field_id = field_positions
+                .get(&shift(field.assignment_span.start))
+                .copied()
+                .ok_or_else(invalid_mapping)?;
+            mapped_fields.insert(new_field_id);
+            let new_field = after
+                .field_blocks
+                .get(new_field_id)
+                .ok_or_else(invalid_mapping)?;
+            if field.name != new_field.name
+                || self
+                    .values
+                    .get(&(id, field_id))
+                    .is_some_and(|value| *value != new_field.value)
+            {
+                return Err(invalid_mapping());
+            }
+            fields.push(BibFieldMapping {
+                before,
+                after: document.field_info(RawEntryId(new_id), RawFieldId(new_field_id)),
+            });
+        }
+        let added = after.field_blocks.len() - mapped_fields.len();
+        if added != self.added_fields.get(&id).map_or(0, Vec::len) {
+            return Err(invalid_mapping());
+        }
+        for field_id in 0..after.field_blocks.len() {
+            if !mapped_fields.contains(&field_id) {
+                fields.push(BibFieldMapping {
+                    before: None,
+                    after: document.field_info(RawEntryId(new_id), RawFieldId(field_id)),
+                });
+            }
+        }
+        Ok(fields)
+    }
+}
+
+struct AppliedReplacements {
+    document: RawDocument,
+    changes: Vec<BibPatchChange>,
+    offsets: Vec<(usize, isize)>,
 }
 
 fn invalid_mapping() -> BibPatchError {

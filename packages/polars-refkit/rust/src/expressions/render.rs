@@ -8,7 +8,9 @@ use refkit_core::{
 };
 
 use super::RenderKwargs;
-use super::broadcast::{broadcast_get, broadcast_len, load_style, parse_value_library_source};
+use super::broadcast::{
+    broadcast_get, broadcast_len, input, load_style, parse_value_library_source,
+};
 use super::dtypes::{
     each_rendered_output, each_string_output, group_rendered_output, group_string_output,
     render_report_output, rendered_output, rendered_struct_dtype, string_output,
@@ -106,7 +108,7 @@ fn render_report(inputs: &[Series], kwargs: RenderKwargs) -> PolarsResult<Series
     } else {
         Operation::Each
     };
-    let rows = render_rows(inputs, &kwargs, operation)?;
+    let rows = render_rows(inputs, kwargs, operation)?;
     let ok = BooleanChunked::from_iter_options(
         "ok".into(),
         rows.iter()
@@ -152,7 +154,7 @@ fn render_values(
     operation: Operation,
     projection: Projection,
 ) -> PolarsResult<Series> {
-    let rows = render_rows(inputs, &kwargs, operation)?;
+    let rows = render_rows(inputs, kwargs, operation)?;
     if matches!(operation, Operation::Each) {
         if matches!(projection, Projection::Rendered) {
             return rendered_lists(&rows);
@@ -189,37 +191,43 @@ fn render_values(
 
 fn render_rows(
     inputs: &[Series],
-    kwargs: &RenderKwargs,
+    kwargs: RenderKwargs,
     operation: Operation,
 ) -> PolarsResult<Vec<Option<RenderRow>>> {
-    let sources = inputs[0].str()?;
+    let RenderKwargs {
+        style,
+        locale,
+        recovery,
+        ..
+    } = kwargs;
+    let sources = input(inputs, 0)?.str()?;
     let is_list = matches!(operation, Operation::Each | Operation::Group);
     let key_lists = if is_list {
-        let lists = inputs[1].list()?;
+        let lists = input(inputs, 1)?.list()?;
         if lists.inner_dtype() != &DataType::String {
-            polars_bail!(InvalidOperation: "citation keys must have dtype List[String], got {}", inputs[1].dtype());
+            polars_bail!(InvalidOperation: "citation keys must have dtype List[String], got {}", input(inputs, 1)?.dtype());
         }
         Some(lists)
     } else {
         None
     };
     let keys = if matches!(operation, Operation::Single) {
-        Some(inputs[1].str()?)
+        Some(input(inputs, 1)?.str()?)
     } else {
         None
     };
     let len = if matches!(operation, Operation::Bibliography) {
         sources.len()
     } else {
-        broadcast_len(sources.len(), inputs[1].len(), "render")?
+        broadcast_len(sources.len(), input(inputs, 1)?.len(), "render")?
     };
-    let style = load_style(&kwargs.style)?;
-    let locale = Some(kwargs.locale.as_str()).filter(|value| !value.is_empty());
+    let style = load_style(&style)?;
+    let locale = Some(locale.as_str()).filter(|value| !value.is_empty());
     // Cache both success and failure for a literal source broadcast across rows.
     let cached = if sources.len() == 1 {
         sources
             .get(0)
-            .map(|source| parse_value_library_source(source, kwargs.recovery.policy()))
+            .map(|source| parse_value_library_source(source, recovery.policy()))
     } else {
         None
     };
@@ -242,7 +250,7 @@ fn render_rows(
             };
             let Some(keys) = keys
                 .str()?
-                .into_iter()
+                .iter()
                 .map(|key| key.map(str::to_owned))
                 .collect::<Option<Vec<_>>>()
             else {
@@ -254,12 +262,11 @@ fn render_rows(
             Vec::new()
         };
         let parsed;
-        let library = match cached.as_ref() {
-            Some(parsed) => parsed,
-            None => {
-                parsed = parse_value_library_source(source, kwargs.recovery.policy());
-                &parsed
-            }
+        let library = if let Some(parsed) = cached.as_ref() {
+            parsed
+        } else {
+            parsed = parse_value_library_source(source, recovery.policy());
+            &parsed
         };
         let row = match library {
             Ok(library) => RenderRow {
@@ -297,9 +304,13 @@ fn render_library(
 ) -> Result<Vec<RenderedOutput>, DocumentError> {
     let keys = keys.iter().map(String::as_str).collect::<Vec<_>>();
     match operation {
-        Operation::Single => {
-            render_library_citation(library, keys[0], style, locale).map(|value| vec![value])
-        }
+        Operation::Single => render_library_citation(
+            library,
+            keys.first().ok_or(DocumentError::EmptyCitation)?,
+            style,
+            locale,
+        )
+        .map(|value| vec![value]),
         Operation::Each => render_library_citation_each(library, &keys, style, locale),
         Operation::Group => {
             render_library_citation_group(library, &keys, style, locale).map(|value| vec![value])

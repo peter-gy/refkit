@@ -1,3 +1,7 @@
+//! Atomic source patches, occurrence mappings, and byte-preservation contracts.
+
+#![cfg(test)]
+
 use refkit_core::{BibEdit, BibFieldValue, BibPatchErrorCode as Code, BibPatchKind, RawDocument};
 
 #[test]

@@ -14,6 +14,7 @@ use crate::conversion::rendered;
 use crate::errors::{document_error, error, style_error};
 
 #[wasm_bindgen]
+/// A prepared style shared by WebAssembly rendering documents.
 pub struct NativeStyle {
     id: String,
     inner: Arc<PreparedStyle>,
@@ -21,6 +22,8 @@ pub struct NativeStyle {
 
 #[wasm_bindgen]
 impl NativeStyle {
+    #[must_use]
+    /// Return the bundled style catalog and aliases as JSON.
     pub fn list() -> String {
         let styles: Vec<_> = style_catalog()
             .into_iter()
@@ -34,6 +37,10 @@ impl NativeStyle {
         json!(styles).to_string()
     }
 
+    /// Load a bundled style by name or alias.
+    ///
+    /// # Errors
+    /// Rejects unknown style names and unavailable prepared-style cache state.
     pub fn load(name: &str) -> Result<NativeStyle, JsValue> {
         Ok(Self {
             id: name.to_string(),
@@ -41,6 +48,14 @@ impl NativeStyle {
         })
     }
 
+    /// Prepare supplied CSL XML and an optional parent style.
+    ///
+    /// # Errors
+    /// Rejects invalid XML, unresolved or mismatched parents, invalid macros, and resource limits.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "wasm-bindgen transfers optional JavaScript strings as owned Option<String> values at this exported boundary."
+    )]
     pub fn from_xml(xml: &str, parent_xml: Option<String>) -> Result<NativeStyle, JsValue> {
         Ok(Self {
             id: "xml".to_string(),
@@ -51,22 +66,29 @@ impl NativeStyle {
     }
 
     #[wasm_bindgen(getter)]
+    #[must_use]
+    /// Return the supplied bundled name, or `xml` for a custom style.
     pub fn id(&self) -> String {
         self.id.clone()
     }
 
     #[wasm_bindgen(getter)]
+    #[must_use]
+    /// Return the prepared style title.
     pub fn title(&self) -> String {
         self.inner.title().to_string()
     }
 
     #[wasm_bindgen(getter)]
+    #[must_use]
+    /// Return the style's CSL identifier.
     pub fn csl_id(&self) -> String {
         self.inner.csl_id().to_string()
     }
 }
 
 #[wasm_bindgen]
+/// Prepared rendering inputs with fresh citation processor state for each operation.
 pub struct NativeDocument {
     inner: Document,
 }
@@ -124,6 +146,8 @@ fn requests(source: &str) -> Result<(Vec<String>, Vec<CitationRequest>), JsValue
 #[wasm_bindgen]
 impl NativeDocument {
     #[wasm_bindgen(constructor)]
+    #[must_use]
+    /// Prepare a document from shared library and style handles and an optional locale.
     pub fn new(
         library: &NativeLibrary,
         style: &NativeStyle,
@@ -134,6 +158,10 @@ impl NativeDocument {
         }
     }
 
+    /// Render an ordered JSON citation sequence and its bibliography to a JSON result.
+    ///
+    /// # Errors
+    /// Rejects malformed requests, duplicate citation IDs, invalid items, missing keys, and rendering failures.
     pub fn render(&self, citations: &str) -> Result<String, JsValue> {
         let (ids, requests) = requests(citations)?;
         let output = self.inner.render(requests).map_err(document_error)?;
@@ -145,6 +173,10 @@ impl NativeDocument {
         Ok(json!({"citationOrder": ids, "citations": citations, "bibliography": rendered(&output.bibliography)}).to_string())
     }
 
+    /// Render the bibliography for an ordered JSON citation sequence.
+    ///
+    /// # Errors
+    /// Rejects malformed requests, duplicate citation IDs, invalid items, missing keys, and rendering failures.
     pub fn cited_bibliography(&self, citations: &str) -> Result<String, JsValue> {
         let (_, requests) = requests(citations)?;
         self.inner
@@ -153,6 +185,10 @@ impl NativeDocument {
             .map_err(document_error)
     }
 
+    /// Render a bibliography containing every library record.
+    ///
+    /// # Errors
+    /// Returns the core rendering failure when the prepared inputs cannot be rendered.
     pub fn full_bibliography(&self) -> Result<String, JsValue> {
         self.inner
             .full_bibliography()

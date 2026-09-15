@@ -2,7 +2,7 @@
 name = "polars_refkit"
 version = "0.3.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.95"
 license = "Apache-2.0"
 description = "Polars expression plugin for refkit citation and BibTeX workflows"
 repository = "https://github.com/peter-gy/refkit"
@@ -20,15 +20,53 @@ crate-type = ["cdylib"]
 
 [features]
 default = []
-extension-module = ["pyo3/extension-module", "pyo3/abi3-py310"]
+abi3 = ["pyo3/abi3-py310"]
 
 [dependencies]
-polars = { version = "=0.51.0", default-features = false }
-polars-core = { version = "=0.51.0", default-features = false, features = ["dtype-array", "dtype-struct"] }
-pyo3 = "0.25.1"
-pyo3-polars = { version = "=0.24.0", features = ["derive"] }
-refkit-core = { path = "../../../crates/refkit-core" }
+polars = { version = "=0.55.2", default-features = false }
+polars-core = { version = "=0.55.2", default-features = false, features = ["dtype-array", "dtype-struct"] }
+pyo3 = "0.29.0"
+pyo3-polars = { version = "=0.28.0", features = ["derive"] }
+refkit-core = { version = "0.3.0", path = "../../../crates/refkit-core" }
 serde = { version = "1.0.228", features = ["derive"] }
 
 [patch.crates-io]
 citationberg = {git = "https://github.com/typst/citationberg", rev = "06a591e2f237d25e1dfdedac3f3d1494c496c52d"}
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
+dead_code = "deny"
+unfulfilled_lint_expectations = "deny"
+missing_docs = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+wildcard_imports = "deny"
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+excessive_nesting = "deny"
+indexing_slicing = "deny"
+clone_on_ref_ptr = "deny"
+redundant_clone = "deny"
+needless_pass_by_value = "deny"
+large_stack_arrays = "deny"
+large_futures = "deny"
+missing_errors_doc = "deny"
+missing_panics_doc = "deny"
+
+[lints]
+workspace = true

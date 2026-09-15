@@ -8,7 +8,10 @@ PYTHON := uv run $(UV_RESOLVER_FLAGS) --isolated --locked --only-group build pyt
 UV_LINT := uv run $(UV_RESOLVER_FLAGS) --isolated --locked --only-group lint
 PNPM_DOCS := pnpm --dir docs
 DOCS_PAGES_BASE_PATH := /refkit
-RUST_FLOOR := 1.88
+RUST_FLOOR := 1.95
+CARGO_SHEAR_VERSION := 1.13.4
+CARGO_DENY_VERSION := 0.20.2
+CARGO_SEMVER_VERSION := 0.50.0
 RUST_SYSROOT := $(shell rustc --print sysroot)
 RUST_CARGO_HOME := $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)
 RUST_TOOLCHAIN_HOME := $(if $(RUSTUP_HOME),$(RUSTUP_HOME),$(HOME)/.rustup)
@@ -32,13 +35,41 @@ python-lint:
 	$(UV_LINT) ruff format --check .
 
 .PHONY: rust-lint
-rust-lint:
+rust-lint: rust-quality-contract
 	cargo fmt --all --check
 	cargo fmt --manifest-path $(POLARS_REFKIT_RUST) --all --check
 	cargo fmt --manifest-path $(JS_REFKIT_RUST) --all --check
 	cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 	cargo clippy --locked --manifest-path $(JS_REFKIT_RUST) --all-targets --all-features -- -D warnings
 	cargo clippy --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features -- -D warnings
+
+.PHONY: rust-quality-contract rust-tools rust-tools-check rust-audit rust-semver-tools rust-semver
+rust-quality-contract:
+	$(PYTHON) -m scripts.rust_quality_contract
+
+rust-tools:
+	cargo install --locked cargo-shear --version $(CARGO_SHEAR_VERSION)
+	cargo install --locked cargo-deny --version $(CARGO_DENY_VERSION)
+
+rust-tools-check:
+	@quality_version="$$(cargo shear --version)" && test "$$quality_version" = "Version: $(CARGO_SHEAR_VERSION)" || (echo "Install pinned Rust audit tools with make rust-tools." >&2; exit 1)
+	@quality_version="$$(cargo deny --version)" && test "$$quality_version" = "cargo-deny $(CARGO_DENY_VERSION)" || (echo "Install pinned Rust audit tools with make rust-tools." >&2; exit 1)
+
+rust-audit: rust-quality-contract rust-tools-check
+	cargo shear --deny-warnings
+	cd packages/refkit-js/rust && cargo shear --deny-warnings
+	cd packages/polars-refkit/rust && cargo shear --deny-warnings
+	cargo deny --config deny.toml check
+	cargo deny --manifest-path $(JS_REFKIT_RUST) --config packages/refkit-js/rust/deny.toml check
+	cargo deny --manifest-path $(POLARS_REFKIT_RUST) --config packages/polars-refkit/rust/deny.toml check
+
+rust-semver-tools:
+	cargo install --locked cargo-semver-checks --version $(CARGO_SEMVER_VERSION)
+
+rust-semver:
+	@test -n "$(BASE_REV)" || (echo "Set BASE_REV to the approved Rust API comparison baseline." >&2; exit 2)
+	@quality_version="$$(cargo semver-checks --version)" && test "$$quality_version" = "cargo-semver-checks $(CARGO_SEMVER_VERSION)" || (echo "Install the pinned API checker with make rust-semver-tools." >&2; exit 1)
+	cargo semver-checks check-release --manifest-path crates/refkit-core/Cargo.toml --baseline-rev "$(BASE_REV)"
 
 .PHONY: lint
 lint: python-lint rust-lint
@@ -78,13 +109,13 @@ rust:
 	cargo check --locked --workspace --all-targets --all-features
 	cargo check --locked --manifest-path $(JS_REFKIT_RUST) --all-targets --all-features
 	cargo check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
-	cargo test --locked --workspace
-	cargo test --locked --manifest-path $(JS_REFKIT_RUST)
-	cargo test --locked --manifest-path $(POLARS_REFKIT_RUST)
+	cargo test --locked --workspace --all-features
+	cargo test --locked --manifest-path $(JS_REFKIT_RUST) --all-features
+	cargo test --locked --manifest-path $(POLARS_REFKIT_RUST) --all-features
 
 .PHONY: rust-floor
 rust-floor:
-	@if ! rustup toolchain list | grep -Eq '^$(RUST_FLOOR)(\.|-|$$)'; then \
+	@if ! rustup which --toolchain $(RUST_FLOOR) rustc >/dev/null 2>&1; then \
 		echo "Network access: installing Rust $(RUST_FLOOR) with rustup."; \
 		rustup toolchain install $(RUST_FLOOR) --profile minimal; \
 	fi
@@ -197,7 +228,7 @@ docs-build:
 docs-check: docs-source-check docs-site-check
 
 .PHONY: check
-check: js-check lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test benchmark-test docs-examples-check rust rust-floor build
+check: js-check lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test benchmark-test docs-examples-check rust rust-floor rust-audit build
 
 .PHONY: js-build js-check
 js-build:

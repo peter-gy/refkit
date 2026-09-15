@@ -80,7 +80,8 @@ pub(super) fn decode(
     source: &str,
     issues: &mut Vec<ConversionIssue>,
 ) -> Result<Vec<EntryRecord>, CodecError> {
-    let value = crate::record::parse_json(source).map_err(CodecError::new)?;
+    let value =
+        crate::record::parse_json(source).map_err(|error| CodecError::new(error.to_string()))?;
     let rows = value
         .as_array()
         .ok_or_else(|| CodecError::new("CSL-JSON must be an array of items"))?;
@@ -98,6 +99,48 @@ fn decode_entry(
     index: usize,
     issues: &mut Vec<ConversionIssue>,
 ) -> Result<EntryRecord, CodecError> {
+    let (mut record, mut fields) = prepare_record(value, index, issues)?;
+    decode_names(&mut record, &mut fields, issues)?;
+    decode_dates(&mut record, &mut fields, value, issues)?;
+    decode_publication(&mut record, &mut fields)?;
+    decode_container(&mut record, &mut fields, issues)?;
+    let key = &record.key;
+    if let Some(value) = take_string(&mut fields, "keyword")? {
+        record.keywords = value
+            .split(',')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .map(str::to_string)
+            .collect();
+    }
+    for (field, value) in fields {
+        issue(
+            issues,
+            "retained_extension",
+            "decode",
+            key,
+            &format!("extensions.csl-json.{field}"),
+            false,
+            "CSL field is retained as source-specific data",
+        );
+        record
+            .extensions
+            .entry("csl-json".to_string())
+            .or_default()
+            .insert(
+                field,
+                serde_json::from_value(value)
+                    .map_err(|error| CodecError::new(error.to_string()))?,
+            );
+    }
+    Ok(record)
+}
+
+fn prepare_record(
+    value: &Value,
+    index: usize,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<(EntryRecord, Map<String, Value>), CodecError> {
     let mut fields = value
         .as_object()
         .ok_or_else(|| CodecError::new(format!("CSL-JSON item {index} must be an object")))?
@@ -123,20 +166,29 @@ fn decode_entry(
             ("@type".into(), ExtensionValue::String(source_type)),
             (
                 "@id".into(),
-                serde_json::from_value(id).map_err(CodecError::new)?,
+                serde_json::from_value(id).map_err(|error| CodecError::new(error.to_string()))?,
             ),
             ("@source".into(), ExtensionValue::String(value.to_string())),
         ]),
     );
     if let Some(kind) = parent {
         record.parents.push(EntryRecord {
-            key: key.clone(),
+            key,
             entry_type: kind.into(),
             ..EntryRecord::default()
         });
     }
-    record.title = take_text(&mut fields, "title")?;
-    if let Some(short) = take_string(&mut fields, "title-short")? {
+    Ok((record, fields))
+}
+
+fn decode_names(
+    record: &mut EntryRecord,
+    fields: &mut Map<String, Value>,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<(), CodecError> {
+    let key = &record.key;
+    record.title = take_text(fields, "title")?;
+    if let Some(short) = take_string(fields, "title-short")? {
         if let Some(title) = &mut record.title {
             title.short = Some(Text::plain(short).chunks);
         } else {
@@ -146,8 +198,8 @@ fn decode_entry(
             });
         }
     }
-    record.authors = take_names(&mut fields, "author", &key, issues)?;
-    record.editors = take_names(&mut fields, "editor", &key, issues)?;
+    record.authors = take_names(fields, "author", key, issues)?;
+    record.editors = take_names(fields, "editor", key, issues)?;
     for (field, role) in [
         ("translator", "translator"),
         ("composer", "composer"),
@@ -157,7 +209,7 @@ fn decode_entry(
         ("producer", "producer"),
         ("executive-producer", "executive-producer"),
     ] {
-        let names = take_names(&mut fields, field, &key, issues)?;
+        let names = take_names(fields, field, key, issues)?;
         if !names.is_empty() {
             record.affiliated.push(Contributors {
                 role: role.into(),
@@ -165,31 +217,49 @@ fn decode_entry(
             });
         }
     }
-    record.date = take_date(&mut fields, "issued", &key, issues)?;
-    record.event_date = take_date(&mut fields, "event-date", &key, issues)?;
-    record.original_date = take_date(&mut fields, "original-date", &key, issues)?;
-    let accessed = take_date(&mut fields, "accessed", &key, issues)?;
-    if let Some(value) = take_string(&mut fields, "URL")? {
+    Ok(())
+}
+
+fn decode_dates(
+    record: &mut EntryRecord,
+    fields: &mut Map<String, Value>,
+    source: &Value,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<(), CodecError> {
+    let key = &record.key;
+    record.date = take_date(fields, "issued", key, issues)?;
+    record.event_date = take_date(fields, "event-date", key, issues)?;
+    record.original_date = take_date(fields, "original-date", key, issues)?;
+    let accessed = take_date(fields, "accessed", key, issues)?;
+    if let Some(value) = take_string(fields, "URL")? {
         record.url = Some(Url { value, accessed });
     } else if accessed.is_some() {
         record
             .extensions
-            .get_mut("csl-json")
-            .expect("namespace exists")
+            .entry("csl-json".to_string())
+            .or_default()
             .insert(
                 "accessed".into(),
-                serde_json::from_value(value["accessed"].clone()).map_err(CodecError::new)?,
+                serde_json::from_value(source["accessed"].clone())
+                    .map_err(|error| CodecError::new(error.to_string()))?,
             );
         issue(
             issues,
             "retained_extension",
             "decode",
-            &key,
+            key,
             "extensions.csl-json.accessed",
             false,
             "access date without a URL is retained as source-specific data",
         );
     }
+    Ok(())
+}
+
+fn decode_publication(
+    record: &mut EntryRecord,
+    fields: &mut Map<String, Value>,
+) -> Result<(), CodecError> {
     for (field, scheme) in [
         ("DOI", "doi"),
         ("ISBN", "isbn"),
@@ -203,30 +273,39 @@ fn decode_entry(
                 .insert(scheme.into(), scalar(&value, field)?);
         }
     }
-    let publisher = take_text(&mut fields, "publisher")?;
-    let location = take_text(&mut fields, "publisher-place")?;
+    let publisher = take_text(fields, "publisher")?;
+    let location = take_text(fields, "publisher-place")?;
     if publisher.is_some() || location.is_some() {
         record.publisher = Some(Publisher {
             name: publisher,
             location,
         });
     }
-    record.archive = take_text(&mut fields, "archive")?;
-    record.archive_location = take_text(&mut fields, "archive_location")?;
-    record.call_number = take_text(&mut fields, "call-number")?;
-    record.abstract_text = take_text(&mut fields, "abstract")?;
-    record.note = take_text(&mut fields, "note")?;
-    record.genre = take_text(&mut fields, "genre")?;
-    record.language = take_string(&mut fields, "language")?;
-    record.edition = take_scalar(&mut fields, "edition")?;
-    record.chapter = take_scalar(&mut fields, "chapter-number")?;
-    record.page_range = take_scalar(&mut fields, "page")?;
-    record.page_total = take_scalar(&mut fields, "number-of-pages")?;
-    record.volume_total = take_scalar(&mut fields, "number-of-volumes")?;
-    let volume = take_scalar(&mut fields, "volume")?;
-    let issue_value = take_scalar(&mut fields, "issue")?;
-    let container = take_text(&mut fields, "container-title")?;
-    let container_authors = take_names(&mut fields, "container-author", &key, issues)?;
+    record.archive = take_text(fields, "archive")?;
+    record.archive_location = take_text(fields, "archive_location")?;
+    record.call_number = take_text(fields, "call-number")?;
+    record.abstract_text = take_text(fields, "abstract")?;
+    record.note = take_text(fields, "note")?;
+    record.genre = take_text(fields, "genre")?;
+    record.language = take_string(fields, "language")?;
+    record.edition = take_scalar(fields, "edition")?;
+    record.chapter = take_scalar(fields, "chapter-number")?;
+    record.page_range = take_scalar(fields, "page")?;
+    record.page_total = take_scalar(fields, "number-of-pages")?;
+    record.volume_total = take_scalar(fields, "number-of-volumes")?;
+    Ok(())
+}
+
+fn decode_container(
+    record: &mut EntryRecord,
+    fields: &mut Map<String, Value>,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<(), CodecError> {
+    let key = &record.key;
+    let volume = take_scalar(fields, "volume")?;
+    let issue_value = take_scalar(fields, "issue")?;
+    let container = take_text(fields, "container-title")?;
+    let container_authors = take_names(fields, "container-author", key, issues)?;
     if (container.is_some() || !container_authors.is_empty()) && record.parents.is_empty() {
         record.parents.push(EntryRecord {
             key: key.clone(),
@@ -239,7 +318,7 @@ fn decode_entry(
         parent.authors = container_authors;
         parent.editors = std::mem::take(&mut record.editors);
         parent.publisher = record.publisher.take();
-        if let Some(short) = take_string(&mut fields, "container-title-short")? {
+        if let Some(short) = take_string(fields, "container-title-short")? {
             parent.title.get_or_insert_with(Text::default).short = Some(Text::plain(short).chunks);
         }
         if parent.entry_type == "Periodical" || parent.entry_type == "Newspaper" {
@@ -253,34 +332,7 @@ fn decode_entry(
         record.volume = volume;
         record.issue = issue_value;
     }
-    if let Some(value) = take_string(&mut fields, "keyword")? {
-        record.keywords = value
-            .split(',')
-            .map(str::trim)
-            .filter(|part| !part.is_empty())
-            .map(str::to_string)
-            .collect();
-    }
-    for (field, value) in fields {
-        issue(
-            issues,
-            "retained_extension",
-            "decode",
-            &key,
-            &format!("extensions.csl-json.{field}"),
-            false,
-            "CSL field is retained as source-specific data",
-        );
-        record
-            .extensions
-            .get_mut("csl-json")
-            .expect("namespace exists")
-            .insert(
-                field,
-                serde_json::from_value(value).map_err(CodecError::new)?,
-            );
-    }
-    Ok(record)
+    Ok(())
 }
 
 fn scalar(value: &Value, field: &str) -> Result<String, CodecError> {
@@ -412,6 +464,10 @@ fn flag(value: &Value, field: &str) -> Result<bool, CodecError> {
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "The range and fractional-part checks admit only exactly representable i32 values, including JSON numbers spelled with a decimal point."
+)]
 fn integer(value: &Value) -> Option<i32> {
     let number = value.as_f64()?;
     (number.fract() == 0.0 && number >= f64::from(i32::MIN) && number <= f64::from(i32::MAX))
@@ -439,67 +495,30 @@ fn take_date(
     let literal = take_string(&mut value, "literal")?;
     let raw = take_string(&mut value, "raw")?;
     let parts = value.remove("date-parts");
-    let season = value
-        .remove("season")
-        .map(|value| {
-            if value.is_number() {
-                integer(&value)
-                    .and_then(|value| u8::try_from(value).ok())
-                    .ok_or_else(|| CodecError::new("CSL season must be an integer"))
-            } else {
-                scalar(&value, "season")?
-                    .parse::<u8>()
-                    .map_err(CodecError::new)
-            }
-        })
-        .transpose()?;
+    let season = take_season(&mut value)?;
     let mut date = if let Some(parts) = parts {
-        let parts = parts
-            .as_array()
-            .ok_or_else(|| CodecError::new("CSL date-parts must be an array"))?;
-        if parts.is_empty() || parts.len() > 2 {
-            return Err(CodecError::new(
-                "CSL date-parts requires one date or two range endpoints",
-            ));
-        }
-        let dates = parts
-            .iter()
-            .map(date_parts)
-            .collect::<Result<Vec<_>, _>>()?;
         Date {
-            value: if dates.len() == 1 {
-                DateValue::Point {
-                    date: dates[0].clone(),
-                }
-            } else {
-                DateValue::Range {
-                    start: Some(dates[0].clone()),
-                    end: Some(dates[1].clone()),
-                }
-            },
+            value: date_value_from_parts(&parts)?,
             uncertain: false,
             approximate,
         }
     } else if let Some(raw) = raw {
-        match ::biblatex::Date::parse(&[::biblatex::Spanned::detached(::biblatex::Chunk::Normal(
-            raw.clone(),
-        ))]) {
-            Ok(date) => Date::from_biblatex(::biblatex::PermissiveType::Typed(date)),
-            Err(_) => {
-                issue(
-                    issues,
-                    "date_literalized",
-                    "decode",
-                    key,
-                    field,
-                    true,
-                    "raw date could not be interpreted and was retained as literal text",
-                );
-                Date {
-                    value: DateValue::Literal { text: raw },
-                    uncertain: false,
-                    approximate,
-                }
+        if let Ok(date) = Date::parse_biblatex(&raw) {
+            date
+        } else {
+            issue(
+                issues,
+                "date_literalized",
+                "decode",
+                key,
+                field,
+                true,
+                "raw date could not be interpreted and was retained as literal text",
+            );
+            Date {
+                value: DateValue::Literal { text: raw },
+                uncertain: false,
+                approximate,
             }
         }
     } else if let Some(literal) = literal.clone() {
@@ -516,8 +535,8 @@ fn take_date(
     date.approximate |= approximate;
     if let Some(season) = season {
         match &mut date.value {
-            DateValue::Point { date } => date.season = Some(season),
-            DateValue::Range {
+            DateValue::Point { date }
+            | DateValue::Range {
                 start: Some(date), ..
             } => date.season = Some(season),
             _ => issue(
@@ -556,6 +575,24 @@ fn take_date(
     Ok(Some(date))
 }
 
+fn date_value_from_parts(value: &Value) -> Result<DateValue, CodecError> {
+    let parts = value
+        .as_array()
+        .ok_or_else(|| CodecError::new("CSL date-parts must be an array"))?;
+    match parts.as_slice() {
+        [date] => Ok(DateValue::Point {
+            date: date_parts(date)?,
+        }),
+        [start, end] => Ok(DateValue::Range {
+            start: Some(date_parts(start)?),
+            end: Some(date_parts(end)?),
+        }),
+        _ => Err(CodecError::new(
+            "CSL date-parts requires one date or two range endpoints",
+        )),
+    }
+}
+
 fn date_parts(value: &Value) -> Result<DateParts, CodecError> {
     let values = value
         .as_array()
@@ -565,8 +602,10 @@ fn date_parts(value: &Value) -> Result<DateParts, CodecError> {
             "CSL date endpoint requires year and optional month/day",
         ));
     }
-    let year =
-        integer(&values[0]).ok_or_else(|| CodecError::new("CSL year must be a 32-bit integer"))?;
+    let year = values
+        .first()
+        .and_then(integer)
+        .ok_or_else(|| CodecError::new("CSL year must be a 32-bit integer"))?;
     let part = |index: usize| {
         values
             .get(index)
@@ -594,18 +633,48 @@ pub(super) fn encode(
         .iter()
         .map(|record| encode_entry(record, issues))
         .collect::<Result<Vec<_>, _>>()?;
-    serde_json::to_string_pretty(&values).map_err(CodecError::new)
+    serde_json::to_string_pretty(&values).map_err(|error| CodecError::new(error.to_string()))
 }
 
 fn encode_entry(
     record: &EntryRecord,
     issues: &mut Vec<ConversionIssue>,
 ) -> Result<Value, CodecError> {
-    let mut fields = Map::new();
     let parent = record
         .parents
         .iter()
         .find(|parent| !["Original", "Conference"].contains(&parent.entry_type.as_str()));
+    let mut fields = encode_identity(record, parent, issues)?;
+    put_text(&mut fields, "title", record.title.as_ref());
+    if let Some(short) = record.title.as_ref().and_then(|title| title.short.as_ref()) {
+        fields.insert(
+            "title-short".into(),
+            Text {
+                chunks: short.clone(),
+                short: None,
+            }
+            .plain_text()
+            .into(),
+        );
+    }
+    encode_creators(&mut fields, record, parent);
+    encode_dates(&mut fields, record, issues);
+    encode_publication(&mut fields, record, parent);
+    encode_numbers(&mut fields, record, parent);
+    encode_container(&mut fields, parent);
+    if !record.keywords.is_empty() {
+        fields.insert("keyword".into(), record.keywords.join(", ").into());
+    }
+    encode_extensions(&mut fields, record, issues)?;
+    Ok(Value::Object(fields))
+}
+
+fn encode_identity(
+    record: &EntryRecord,
+    parent: Option<&EntryRecord>,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<Map<String, Value>, CodecError> {
+    let mut fields = Map::new();
     let mut kind = canonical_type(record).to_string();
     if let Some(ExtensionValue::String(original)) = record
         .extensions
@@ -616,9 +685,9 @@ fn encode_entry(
             kind == record.entry_type
                 && expected_parent == parent.map(|parent| parent.entry_type.as_str())
         }) {
-            kind = original.clone();
+            kind.clone_from(original);
         } else if record_type(original).is_none() && record.entry_type == "Misc" {
-            kind = original.clone();
+            kind.clone_from(original);
             issue(
                 issues,
                 "type_uninterpreted",
@@ -649,7 +718,7 @@ fn encode_entry(
                     "entry_type",
                     true,
                     "source BibLaTeX type specialization is not retained by the CSL-JSON output",
-                )
+                );
             }
             _ => {}
         }
@@ -660,27 +729,24 @@ fn encode_entry(
         .get("csl-json")
         .and_then(|fields| fields.get("@id"))
     {
-        let value = serde_json::to_value(original).map_err(CodecError::new)?;
+        let value =
+            serde_json::to_value(original).map_err(|error| CodecError::new(error.to_string()))?;
         if identifier(&value)? == record.key {
             fields.insert("id".into(), value);
         }
     }
     fields.insert("type".into(), kind.into());
-    put_text(&mut fields, "title", record.title.as_ref());
-    if let Some(short) = record.title.as_ref().and_then(|title| title.short.as_ref()) {
-        fields.insert(
-            "title-short".into(),
-            Text {
-                chunks: short.clone(),
-                short: None,
-            }
-            .plain_text()
-            .into(),
-        );
-    }
-    put_names(&mut fields, "author", &record.authors);
+    Ok(fields)
+}
+
+fn encode_creators(
+    fields: &mut Map<String, Value>,
+    record: &EntryRecord,
+    parent: Option<&EntryRecord>,
+) {
+    put_names(fields, "author", &record.authors);
     put_names(
-        &mut fields,
+        fields,
         "editor",
         if record.editors.is_empty() {
             parent
@@ -702,9 +768,16 @@ fn encode_entry(
         ]
         .contains(&group.role.as_str())
         {
-            put_names(&mut fields, &group.role, &group.names);
+            put_names(fields, &group.role, &group.names);
         }
     }
+}
+
+fn encode_dates(
+    fields: &mut Map<String, Value>,
+    record: &EntryRecord,
+    issues: &mut Vec<ConversionIssue>,
+) {
     for (field, date) in [
         ("issued", record.date.as_ref()),
         (
@@ -741,6 +814,13 @@ fn encode_entry(
             );
         }
     }
+}
+
+fn encode_publication(
+    fields: &mut Map<String, Value>,
+    record: &EntryRecord,
+    parent: Option<&EntryRecord>,
+) {
     for (scheme, field) in [
         ("doi", "DOI"),
         ("isbn", "ISBN"),
@@ -757,8 +837,8 @@ fn encode_entry(
         .as_ref()
         .or_else(|| parent.and_then(|parent| parent.publisher.as_ref()))
     {
-        put_text(&mut fields, "publisher", publisher.name.as_ref());
-        put_text(&mut fields, "publisher-place", publisher.location.as_ref());
+        put_text(fields, "publisher", publisher.name.as_ref());
+        put_text(fields, "publisher-place", publisher.location.as_ref());
     }
     for (field, text) in [
         ("archive", record.archive.as_ref()),
@@ -768,11 +848,18 @@ fn encode_entry(
         ("note", record.note.as_ref()),
         ("genre", record.genre.as_ref()),
     ] {
-        put_text(&mut fields, field, text);
+        put_text(fields, field, text);
     }
     if let Some(language) = &record.language {
         fields.insert("language".into(), language.clone().into());
     }
+}
+
+fn encode_numbers(
+    fields: &mut Map<String, Value>,
+    record: &EntryRecord,
+    parent: Option<&EntryRecord>,
+) {
     for (field, scalar) in [
         ("edition", record.edition.as_ref()),
         ("chapter-number", record.chapter.as_ref()),
@@ -804,9 +891,12 @@ fn encode_entry(
             fields.insert(field.into(), value.value().into());
         }
     }
+}
+
+fn encode_container(fields: &mut Map<String, Value>, parent: Option<&EntryRecord>) {
     if let Some(parent) = parent {
-        put_text(&mut fields, "container-title", parent.title.as_ref());
-        put_names(&mut fields, "container-author", &parent.authors);
+        put_text(fields, "container-title", parent.title.as_ref());
+        put_names(fields, "container-author", &parent.authors);
         if let Some(short) = parent.title.as_ref().and_then(|title| title.short.as_ref()) {
             fields.insert(
                 "container-title-short".into(),
@@ -819,9 +909,13 @@ fn encode_entry(
             );
         }
     }
-    if !record.keywords.is_empty() {
-        fields.insert("keyword".into(), record.keywords.join(", ").into());
-    }
+}
+
+fn encode_extensions(
+    fields: &mut Map<String, Value>,
+    record: &EntryRecord,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<(), CodecError> {
     if let Some(extra) = record.extensions.get("csl-json") {
         for (field, value) in extra.iter().filter(|(field, _)| !field.starts_with('@')) {
             if fields.contains_key(field) {
@@ -837,12 +931,13 @@ fn encode_entry(
             } else {
                 fields.insert(
                     field.clone(),
-                    serde_json::to_value(value).map_err(CodecError::new)?,
+                    serde_json::to_value(value)
+                        .map_err(|error| CodecError::new(error.to_string()))?,
                 );
             }
         }
     }
-    Ok(Value::Object(fields))
+    Ok(())
 }
 
 fn put_text(fields: &mut Map<String, Value>, field: &str, text: Option<&Text>) {
@@ -892,6 +987,10 @@ fn put_names(fields: &mut Map<String, Value>, field: &str, names: &[Name]) {
     );
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "Library construction rejects date ranges with no endpoints before these retained dates reach any encoder."
+)]
 fn encode_date(
     date: &Date,
     record: &EntryRecord,
@@ -946,4 +1045,21 @@ fn encode_date(
         value.insert("circa".into(), true.into());
     }
     Value::Object(value)
+}
+
+fn take_season(value: &mut Map<String, Value>) -> Result<Option<u8>, CodecError> {
+    value
+        .remove("season")
+        .map(|value| {
+            if value.is_number() {
+                integer(&value)
+                    .and_then(|value| u8::try_from(value).ok())
+                    .ok_or_else(|| CodecError::new("CSL season must be an integer"))
+            } else {
+                scalar(&value, "season")?
+                    .parse::<u8>()
+                    .map_err(|error| CodecError::new(error.to_string()))
+            }
+        })
+        .transpose()
 }

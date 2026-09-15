@@ -1,8 +1,15 @@
-use super::*;
-use crate::{DuplicateRule, RawDocument, raw::RawSyntaxEntry};
+use super::{
+    DuplicateConflict, DuplicateConflictKind, DuplicateEvidence, DuplicateGroup, DuplicateMember,
+    DuplicateReport, DuplicateValue, MergeError, MergeErrorCode, signature,
+};
+use crate::{DuplicateRule, RawDocument, RawEntryId, raw::RawSyntaxEntry};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 impl RawDocument {
+    /// Inspect deterministic duplicate groups using selected rules or all default rules.
+    ///
+    /// # Errors
+    /// Rejects source rendering failures or input exceeding the review resource budget.
     pub fn find_duplicates(
         &self,
         rules: Option<&[DuplicateRule]>,
@@ -28,28 +35,7 @@ impl RawDocument {
         let mut components = (0..syntax.entries.len()).collect::<Vec<_>>();
         let mut evidence = Vec::new();
         for rule in &rules {
-            let mut buckets: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-            for entry in &syntax.entries {
-                if let Some(value) = signature(entry, *rule) {
-                    buckets.entry(value).or_default().push(entry.id.index());
-                }
-            }
-            for (signature, members) in buckets.into_iter().filter(|(_, members)| members.len() > 1)
-            {
-                for member in &members[1..] {
-                    let left = root(&mut components, members[0]);
-                    let right = root(&mut components, *member);
-                    components[left.max(right)] = left.min(right);
-                }
-                evidence.push(DuplicateEvidence {
-                    rule: *rule,
-                    signature,
-                    members: members
-                        .into_iter()
-                        .map(|id| syntax.entries[id].id)
-                        .collect(),
-                });
-            }
+            add_rule_evidence(&syntax.entries, *rule, &mut components, &mut evidence);
         }
         let mut groups: BTreeMap<usize, Vec<&RawSyntaxEntry>> = BTreeMap::new();
         for entry in &syntax.entries {
@@ -60,37 +46,85 @@ impl RawDocument {
         }
         let mut grouped_evidence: BTreeMap<usize, Vec<DuplicateEvidence>> = BTreeMap::new();
         for evidence in evidence {
+            let Some(first) = evidence.members.first() else {
+                continue;
+            };
             grouped_evidence
-                .entry(root(&mut components, evidence.members[0].index()))
+                .entry(root(&mut components, first.index()))
                 .or_default()
                 .push(evidence);
         }
         let groups = groups
             .into_iter()
-            .filter(|(_, entries)| entries.len() > 1)
-            .map(|(id, entries)| DuplicateGroup {
-                id: syntax.entries[id].id,
-                members: entries
-                    .iter()
-                    .map(|entry| DuplicateMember {
-                        entry_id: entry.id,
-                        key: entry.key.clone(),
-                    })
-                    .collect(),
-                evidence: grouped_evidence.remove(&id).unwrap_or_default(),
-                conflicts: conflicts(&entries, &source),
+            .filter_map(|(id, entries)| {
+                let [first, _, ..] = entries.as_slice() else {
+                    return None;
+                };
+                Some(DuplicateGroup {
+                    id: first.id,
+                    members: entries
+                        .iter()
+                        .map(|entry| DuplicateMember {
+                            entry_id: entry.id,
+                            key: entry.key.clone(),
+                        })
+                        .collect(),
+                    evidence: grouped_evidence.remove(&id).unwrap_or_default(),
+                    conflicts: conflicts(&entries, &source),
+                })
             })
             .collect();
         Ok(DuplicateReport { rules, groups })
     }
 }
 
+fn add_rule_evidence(
+    entries: &[RawSyntaxEntry],
+    rule: DuplicateRule,
+    components: &mut [usize],
+    evidence: &mut Vec<DuplicateEvidence>,
+) {
+    let mut buckets: BTreeMap<String, Vec<RawEntryId>> = BTreeMap::new();
+    for entry in entries {
+        if let Some(value) = signature(entry, rule) {
+            buckets.entry(value).or_default().push(entry.id);
+        }
+    }
+    for (signature, members) in buckets {
+        let [first, _, ..] = members.as_slice() else {
+            continue;
+        };
+        for member in members.iter().skip(1) {
+            join(components, first.index(), member.index());
+        }
+        evidence.push(DuplicateEvidence {
+            rule,
+            signature,
+            members,
+        });
+    }
+}
+
+#[expect(
+    clippy::indexing_slicing,
+    reason = "Components are initialized from source-order entry indices. Union only stores roots from that same slice, so parent and grandparent indices remain in bounds."
+)]
 fn root(parents: &mut [usize], mut id: usize) -> usize {
     while parents[id] != id {
         parents[id] = parents[parents[id]];
         id = parents[id];
     }
     id
+}
+
+#[expect(
+    clippy::indexing_slicing,
+    reason = "Both operands are roots returned from the same component slice. Linking the larger root to the smaller preserves valid, acyclic parent indices."
+)]
+fn join(parents: &mut [usize], left: usize, right: usize) {
+    let left = root(parents, left);
+    let right = root(parents, right);
+    parents[left.max(right)] = left.min(right);
 }
 
 pub(super) fn values(

@@ -1,8 +1,21 @@
 use biblatex::{Chunk, ChunksExt};
+use std::fmt::Write as _;
 
-use super::*;
+use super::{
+    BTreeMap, Date, DateParts, DateValue, EntryRecord, ExtensionValue, Name, ScalarValue, Text,
+    TextChunk, TextKind, Url,
+};
 
 impl Date {
+    pub(crate) fn parse_biblatex(source: &str) -> Result<Self, String> {
+        crate::library::validate_date_parser_input("date", source)?;
+        let date = biblatex::Date::parse(&[biblatex::Spanned::detached(biblatex::Chunk::Normal(
+            source.to_string(),
+        ))])
+        .map_err(|error| error.to_string())?;
+        Ok(Self::from_biblatex(biblatex::PermissiveType::Typed(date)))
+    }
+
     pub(crate) fn from_biblatex(value: biblatex::PermissiveType<biblatex::Date>) -> Self {
         let date = match value {
             biblatex::PermissiveType::Typed(date) => date,
@@ -16,47 +29,22 @@ impl Date {
                 };
             }
         };
-        fn parts(date: biblatex::Datetime) -> DateParts {
-            DateParts {
-                year: date.year,
-                month: date.month.map(|month| month + 1),
-                day: date.day.map(|day| day + 1),
-                season: None,
-                time: date.time.map(|time| {
-                    let mut value =
-                        format!("{:02}:{:02}:{:02}", time.hour, time.minute, time.second);
-                    match time.offset {
-                        Some(biblatex::TimeOffset::Utc) => value.push('Z'),
-                        Some(biblatex::TimeOffset::Offset {
-                            positive,
-                            hours,
-                            minutes,
-                        }) => value.push_str(&format!(
-                            "{}{:02}:{:02}",
-                            if positive { '+' } else { '-' },
-                            hours,
-                            minutes
-                        )),
-                        None => {}
-                    }
-                    value
-                }),
-            }
-        }
         Self {
             value: match date.value {
-                biblatex::DateValue::At(date) => DateValue::Point { date: parts(date) },
+                biblatex::DateValue::At(date) => DateValue::Point {
+                    date: date_parts_from_biblatex(date),
+                },
                 biblatex::DateValue::After(date) => DateValue::Range {
-                    start: Some(parts(date)),
+                    start: Some(date_parts_from_biblatex(date)),
                     end: None,
                 },
                 biblatex::DateValue::Before(date) => DateValue::Range {
                     start: None,
-                    end: Some(parts(date)),
+                    end: Some(date_parts_from_biblatex(date)),
                 },
                 biblatex::DateValue::Between(start, end) => DateValue::Range {
-                    start: Some(parts(start)),
-                    end: Some(parts(end)),
+                    start: Some(date_parts_from_biblatex(start)),
+                    end: Some(date_parts_from_biblatex(end)),
                 },
             },
             uncertain: date.uncertain,
@@ -121,6 +109,10 @@ fn is_literal_name(person: &biblatex::Person, chunks: biblatex::ChunksRef<'_>) -
 }
 
 impl EntryRecord {
+    #[expect(
+        clippy::expect_used,
+        reason = "The fallback serializes a bounded, parsed serde_yaml Value using its built-in serialization."
+    )]
     pub(crate) fn capture_yaml_extensions(&mut self, value: &serde_yaml::Value) {
         let Some(fields) = value.as_mapping() else {
             return;
@@ -157,59 +149,38 @@ impl EntryRecord {
             "parent",
         ];
         for (key, value) in fields {
-            if let Some(key) = key.as_str()
-                && !known.contains(&key)
-            {
-                let extension = serde_yaml::from_value::<ExtensionValue>(value.clone())
-                    .unwrap_or_else(|_| {
-                        ExtensionValue::Object(BTreeMap::from([(
-                            "yaml".into(),
-                            ExtensionValue::String(
-                                serde_yaml::to_string(value).expect("parsed YAML serializes"),
-                            ),
-                        )]))
-                    });
-                self.extensions
-                    .entry("hayagriva".into())
-                    .or_default()
-                    .insert(key.to_string(), extension);
-            }
+            let Some(key) = key.as_str().filter(|key| !known.contains(key)) else {
+                continue;
+            };
+            let extension =
+                serde_yaml::from_value::<ExtensionValue>(value.clone()).unwrap_or_else(|_| {
+                    ExtensionValue::Object(BTreeMap::from([(
+                        "yaml".into(),
+                        ExtensionValue::String(
+                            serde_yaml::to_string(value).expect("parsed YAML serializes"),
+                        ),
+                    )]))
+                });
+            self.extensions
+                .entry("hayagriva".into())
+                .or_default()
+                .insert(key.to_string(), extension);
         }
-        if let Some(parent) = value.get("parent") {
-            match parent {
-                serde_yaml::Value::Sequence(parents) => {
-                    for (record, value) in self.parents.iter_mut().zip(parents) {
-                        record.capture_yaml_extensions(value);
-                    }
-                }
-                value => {
-                    if let Some(record) = self.parents.first_mut() {
-                        record.capture_yaml_extensions(value);
-                    }
-                }
-            }
+        let Some(parent) = value.get("parent") else {
+            return;
+        };
+        let parents = match parent {
+            serde_yaml::Value::Sequence(parents) => parents.as_slice(),
+            value => std::slice::from_ref(value),
+        };
+        for (record, value) in self.parents.iter_mut().zip(parents) {
+            record.capture_yaml_extensions(value);
         }
     }
 
     pub(crate) fn from_biblatex(entry: &biblatex::Entry, prepared: &hayagriva::Entry) -> Self {
         let mut record = Self::from_engine(prepared);
-        for (field, value) in [
-            ("volume", entry.volume().ok()),
-            ("edition", entry.edition().ok()),
-        ] {
-            if let Some(biblatex::PermissiveType::Typed(value)) = value
-                && (value < 0 || value > i64::from(i32::MAX))
-            {
-                let value = ScalarValue::Literal(value.to_string());
-                if !replace_scalar(&mut record, field, &value) {
-                    if field == "volume" {
-                        record.volume = Some(value);
-                    } else {
-                        record.edition = Some(value);
-                    }
-                }
-            }
-        }
+        restore_scalar_ranges(&mut record, entry);
         record.date = entry.date().ok().map(Date::from_biblatex).or(record.date);
         record.event_date = entry.event_date().ok().map(Date::from_biblatex);
         record.original_date = entry.orig_date().ok().map(Date::from_biblatex);
@@ -219,151 +190,180 @@ impl EntryRecord {
                 accessed: entry.url_date().ok().map(Date::from_biblatex),
             });
         }
-        if let Ok(authors) = entry.author() {
-            let chunks = entry.get("author").unwrap_or_default();
-            record.authors = authors
-                .iter()
-                .map(|person| {
-                    if is_literal_name(person, chunks) {
-                        Name::Organization {
-                            name: person.name.clone(),
-                        }
-                    } else {
-                        Name::from_biblatex(person)
-                    }
-                })
-                .collect();
-        }
-        if let Ok(groups) = entry.editors() {
-            for person in groups.iter().flat_map(|(people, _)| people) {
-                for name in record.editors.iter_mut().chain(
-                    record
-                        .affiliated
-                        .iter_mut()
-                        .flat_map(|group| &mut group.names),
-                ) {
-                    if let Name::Person {
-                        family,
-                        given,
-                        prefix,
-                        suffix,
-                        ..
-                    } = name
-                        && *family == person.name
-                        && given.as_deref().unwrap_or_default() == person.given_name
-                        && prefix.as_deref().unwrap_or_default() == person.prefix
-                        && suffix.as_deref().unwrap_or_default() == person.suffix
-                    {
-                        *name = if ["editor", "editora", "editorb", "editorc"]
-                            .iter()
-                            .filter_map(|field| entry.get(field))
-                            .any(|chunks| is_literal_name(person, chunks))
-                        {
-                            Name::Organization {
-                                name: person.name.clone(),
-                            }
-                        } else {
-                            Name::from_biblatex(person)
-                        };
-                    }
-                }
-            }
-        }
+        restore_names(&mut record, entry);
         if let Ok(keywords) = entry.get_as::<Vec<String>>("keywords") {
             record.keywords = keywords;
         }
-        let mapped = [
-            "title",
-            "shorttitle",
-            "author",
-            "editor",
-            "date",
-            "year",
-            "month",
-            "day",
-            "endyear",
-            "endmonth",
-            "endday",
-            "eventdate",
-            "origdate",
-            "urldate",
-            "keywords",
-            "doi",
-            "isbn",
-            "issn",
-            "url",
-            "volume",
-            "edition",
-            "pages",
-            "abstract",
-            "note",
-            "language",
-        ];
-        let fields: BTreeMap<_, _> = entry
-            .fields
-            .iter()
-            .filter(|(field, _)| !mapped.contains(&field.as_str()))
-            .map(|(field, chunks)| {
-                let text = Text::from_biblatex(chunks);
-                let value = ExtensionValue::Object(BTreeMap::from([(
-                    "chunks".into(),
-                    ExtensionValue::Array(
-                        text.chunks
-                            .iter()
-                            .map(|chunk| {
-                                ExtensionValue::Object(BTreeMap::from([
-                                    (
-                                        "kind".into(),
-                                        ExtensionValue::String(
-                                            match chunk.kind {
-                                                TextKind::Normal => "normal",
-                                                TextKind::Protected => "protected",
-                                                TextKind::Math => "math",
-                                            }
-                                            .into(),
-                                        ),
-                                    ),
-                                    ("text".into(), ExtensionValue::String(chunk.text.clone())),
-                                ]))
-                            })
-                            .collect(),
-                    ),
-                )]));
-                (field.clone(), value)
-            })
-            .collect();
-        record.extensions.insert("biblatex".into(), fields);
-        let source_fields = record
-            .extensions
-            .get_mut("biblatex")
-            .expect("source extension namespace exists");
-        source_fields.insert(
-            "@type".into(),
-            ExtensionValue::String(entry.entry_type.to_string()),
-        );
-        for field in [
-            "date",
-            "eventdate",
-            "origdate",
-            "urldate",
-            "volume",
-            "edition",
-            "pagetotal",
-            "volumes",
-        ] {
-            if let Some(chunks) = entry.get(field) {
-                source_fields.insert(
-                    format!("@{field}"),
-                    ExtensionValue::String(chunks.format_verbatim()),
-                );
-            }
-        }
+        capture_biblatex_fields(&mut record, entry);
         if let Some(chunks) = entry.get("shorttitle")
             && let Some(title) = &mut record.title
         {
             title.short = Some(Text::from_biblatex(chunks).chunks);
         }
         record
+    }
+}
+
+fn restore_scalar_ranges(record: &mut EntryRecord, entry: &biblatex::Entry) {
+    for (field, value) in [
+        ("volume", entry.volume().ok()),
+        ("edition", entry.edition().ok()),
+    ] {
+        if let Some(biblatex::PermissiveType::Typed(value)) = value
+            && (value < 0 || value > i64::from(i32::MAX))
+        {
+            let value = ScalarValue::Literal(value.to_string());
+            if replace_scalar(record, field, &value) {
+                continue;
+            }
+            if field == "volume" {
+                record.volume = Some(value);
+            } else {
+                record.edition = Some(value);
+            }
+        }
+    }
+}
+
+fn restore_names(record: &mut EntryRecord, entry: &biblatex::Entry) {
+    if let Ok(authors) = entry.author() {
+        let chunks = entry.get("author").unwrap_or_default();
+        record.authors = authors
+            .iter()
+            .map(|person| {
+                if is_literal_name(person, chunks) {
+                    Name::Organization {
+                        name: person.name.clone(),
+                    }
+                } else {
+                    Name::from_biblatex(person)
+                }
+            })
+            .collect();
+    }
+    let Ok(groups) = entry.editors() else {
+        return;
+    };
+    for person in groups.iter().flat_map(|(people, _)| people) {
+        let replacement = if ["editor", "editora", "editorb", "editorc"]
+            .iter()
+            .filter_map(|field| entry.get(field))
+            .any(|chunks| is_literal_name(person, chunks))
+        {
+            Name::Organization {
+                name: person.name.clone(),
+            }
+        } else {
+            Name::from_biblatex(person)
+        };
+
+        for name in record.editors.iter_mut().chain(
+            record
+                .affiliated
+                .iter_mut()
+                .flat_map(|group| &mut group.names),
+        ) {
+            if let Name::Person {
+                family,
+                given,
+                prefix,
+                suffix,
+                ..
+            } = name
+                && *family == person.name
+                && given.as_deref().unwrap_or_default() == person.given_name
+                && prefix.as_deref().unwrap_or_default() == person.prefix
+                && suffix.as_deref().unwrap_or_default() == person.suffix
+            {
+                name.clone_from(&replacement);
+            }
+        }
+    }
+}
+
+fn capture_biblatex_fields(record: &mut EntryRecord, entry: &biblatex::Entry) {
+    let mapped = [
+        "title",
+        "shorttitle",
+        "author",
+        "editor",
+        "date",
+        "year",
+        "month",
+        "day",
+        "endyear",
+        "endmonth",
+        "endday",
+        "eventdate",
+        "origdate",
+        "urldate",
+        "keywords",
+        "doi",
+        "isbn",
+        "issn",
+        "url",
+        "volume",
+        "edition",
+        "pages",
+        "abstract",
+        "note",
+        "language",
+    ];
+    let fields: BTreeMap<_, _> = entry
+        .fields
+        .iter()
+        .filter(|(field, _)| !mapped.contains(&field.as_str()))
+        .map(|(field, chunks)| {
+            let text = Text::from_biblatex(chunks);
+            let value = ExtensionValue::Object(BTreeMap::from([(
+                "chunks".into(),
+                ExtensionValue::Array(
+                    text.chunks
+                        .iter()
+                        .map(|chunk| {
+                            ExtensionValue::Object(BTreeMap::from([
+                                (
+                                    "kind".into(),
+                                    ExtensionValue::String(
+                                        match chunk.kind {
+                                            TextKind::Normal => "normal",
+                                            TextKind::Protected => "protected",
+                                            TextKind::Math => "math",
+                                        }
+                                        .into(),
+                                    ),
+                                ),
+                                ("text".into(), ExtensionValue::String(chunk.text.clone())),
+                            ]))
+                        })
+                        .collect(),
+                ),
+            )]));
+            (field.clone(), value)
+        })
+        .collect();
+    record.extensions.insert("biblatex".into(), fields);
+    let source_fields = record.extensions.entry("biblatex".to_string()).or_default();
+    source_fields.insert(
+        "@type".into(),
+        ExtensionValue::String(entry.entry_type.to_string()),
+    );
+    for field in [
+        "date",
+        "eventdate",
+        "origdate",
+        "urldate",
+        "volume",
+        "edition",
+        "pagetotal",
+        "volumes",
+    ] {
+        if let Some(chunks) = entry.get(field) {
+            source_fields.insert(
+                format!("@{field}"),
+                ExtensionValue::String(chunks.format_verbatim()),
+            );
+        }
     }
 }
 
@@ -381,4 +381,39 @@ fn replace_scalar(record: &mut EntryRecord, field: &str, value: &ScalarValue) ->
         .parents
         .iter_mut()
         .any(|parent| replace_scalar(parent, field, value))
+}
+
+#[expect(
+    clippy::expect_used,
+    reason = "Only standard integer and character formatting is written into String, whose fmt::Write implementation cannot fail."
+)]
+fn date_parts_from_biblatex(date: biblatex::Datetime) -> DateParts {
+    DateParts {
+        year: date.year,
+        month: date.month.map(|month| month + 1),
+        day: date.day.map(|day| day + 1),
+        season: None,
+        time: date.time.map(|time| {
+            let mut value = format!("{:02}:{:02}:{:02}", time.hour, time.minute, time.second);
+            match time.offset {
+                Some(biblatex::TimeOffset::Utc) => value.push('Z'),
+                Some(biblatex::TimeOffset::Offset {
+                    positive,
+                    hours,
+                    minutes,
+                }) => {
+                    write!(
+                        value,
+                        "{}{:02}:{:02}",
+                        if positive { '+' } else { '-' },
+                        hours,
+                        minutes
+                    )
+                    .expect("String formatting is infallible");
+                }
+                None => {}
+            }
+            value
+        }),
+    }
 }

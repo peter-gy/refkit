@@ -1,8 +1,80 @@
+//! Interchange roundtrips, explicit loss reporting, and malformed input.
+
+#![cfg(test)]
+
 use refkit_core::{
     BibliographyFormat as Format, DateValue, LossPolicy, RecoveryPolicy, convert, decode, encode,
 };
 
 const BOOK: &str = r#"[{"id":"book","type":"book","title":"A Book","author":[{"family":"Doe","given":"Jane"}],"issued":{"date-parts":[[2024]]},"publisher":"Press","language":"en-US","DOI":"10.1234/book"}]"#;
+
+#[test]
+fn source_type_annotations_cannot_turn_records_into_comment_blocks() {
+    let library = refkit_core::Library::from_json(
+        r#"{"schema_version":1,"records":[{"key":"a","entry_type":"Book","extensions":{"biblatex":{"@type":"comment"}}}]}"#,
+    ).unwrap();
+    for format in [Format::Biblatex, Format::CslJson] {
+        let encoded = encode(&library, format, LossPolicy::Error).unwrap();
+        let restored = decode(
+            &encoded.text,
+            format,
+            LossPolicy::Error,
+            RecoveryPolicy::Error,
+        )
+        .unwrap();
+        assert_eq!(restored.library.get_record("a").unwrap().entry_type, "Book");
+    }
+}
+
+#[test]
+fn unchecked_raw_dates_are_retained_as_literals_or_refused_by_loss_policy() {
+    let source = r#"[{"id":"a","type":"book","issued":{"raw":"123456X"}}]"#;
+    let report = decode(
+        source,
+        Format::CslJson,
+        LossPolicy::Report,
+        RecoveryPolicy::Error,
+    )
+    .unwrap();
+    assert!(
+        report
+            .issues
+            .iter()
+            .any(|issue| issue.code == "date_literalized")
+    );
+    assert!(
+        matches!(&report.library.get_record("a").unwrap().date.as_ref().unwrap().value,
+        DateValue::Literal { text } if text == "123456X")
+    );
+    assert!(
+        decode(
+            source,
+            Format::CslJson,
+            LossPolicy::Error,
+            RecoveryPolicy::Error
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn malformed_date_annotations_do_not_override_structured_dates() {
+    let library = refkit_core::Library::from_json(
+        r#"{"schema_version":1,"records":[{"key":"a","entry_type":"Book","date":{"value":{"kind":"point","date":{"year":2024}}},"extensions":{"biblatex":{"@date":"123456X"}}}]}"#,
+    ).unwrap();
+    let report = encode(&library, Format::Biblatex, LossPolicy::Error).unwrap();
+    let restored = decode(
+        &report.text,
+        Format::Biblatex,
+        LossPolicy::Error,
+        RecoveryPolicy::Error,
+    )
+    .unwrap();
+    assert_eq!(
+        restored.library.get_record("a").unwrap().date,
+        library.get_record("a").unwrap().date
+    );
+}
 
 #[test]
 fn common_book_fields_roundtrip_through_every_codec() {

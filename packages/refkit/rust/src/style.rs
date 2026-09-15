@@ -6,8 +6,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict};
 
 use refkit_core::{
-    PreparedStyle, StyleError, is_bundled_locale, load_prepared_style, prepare_style_from_xml,
-    style_catalog,
+    PreparedStyle, is_bundled_locale, load_prepared_style, prepare_style_from_xml, style_catalog,
 };
 
 use crate::errors::{RefkitError, style_error_to_py};
@@ -109,9 +108,14 @@ impl Locale {
             let code = code.clone();
             move || is_bundled_locale(&code)
         });
-        exists.then(|| Self { code: code.clone() }).ok_or_else(|| {
-            PyValueError::new_err(format!("unknown bundled locale {}", quoted(&code)))
-        })
+        if exists {
+            Ok(Self { code })
+        } else {
+            Err(PyValueError::new_err(format!(
+                "unknown bundled locale {}",
+                quoted(&code)
+            )))
+        }
     }
 
     #[getter]
@@ -141,6 +145,3 @@ pub(crate) fn extract_locale(locale: Option<&Bound<'_, PyAny>>) -> PyResult<Opti
         "locale must be a string, Locale, or None",
     ))
 }
-
-#[allow(dead_code)]
-fn _style_error_type(_: StyleError) {}

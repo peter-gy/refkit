@@ -12,32 +12,6 @@ pub(super) fn redundant_extension(
     else {
         return false;
     };
-    fn find_text<'a>(record: &'a EntryRecord, field: &str) -> Option<&'a Text> {
-        let own = match field {
-            "publisher" => record
-                .publisher
-                .as_ref()
-                .and_then(|value| value.name.as_ref()),
-            "location" | "address" => record
-                .publisher
-                .as_ref()
-                .and_then(|value| value.location.as_ref())
-                .or(record.location.as_ref()),
-            "organization" | "institution" | "school" => record.organization.as_ref(),
-            "journal" | "journaltitle" | "booktitle" | "maintitle" | "issuetitle" => {
-                record.title.as_ref()
-            }
-            "type" => record.genre.as_ref(),
-            "howpublished" | "annotation" | "annote" | "addendum" => record.note.as_ref(),
-            _ => None,
-        };
-        own.or_else(|| {
-            record
-                .parents
-                .iter()
-                .find_map(|parent| find_text(parent, field))
-        })
-    }
     let actual_text = match field {
         "journal" | "journaltitle" | "booktitle" | "maintitle" | "issuetitle" => record
             .parents
@@ -50,9 +24,18 @@ pub(super) fn redundant_extension(
     }
     let scalar = match field {
         "langid" => record.language.as_deref().and_then(language_name),
-        "volumes" => record.volume_total.as_ref().map(|value| value.value()),
-        "pagetotal" => record.page_total.as_ref().map(|value| value.value()),
-        "chapter" => record.chapter.as_ref().map(|value| value.value()),
+        "volumes" => record
+            .volume_total
+            .as_ref()
+            .map(super::super::record::ScalarValue::value),
+        "pagetotal" => record
+            .page_total
+            .as_ref()
+            .map(super::super::record::ScalarValue::value),
+        "chapter" => record
+            .chapter
+            .as_ref()
+            .map(super::super::record::ScalarValue::value),
         "number" | "issue" => record
             .issue
             .as_ref()
@@ -62,7 +45,7 @@ pub(super) fn redundant_extension(
                     .first()
                     .and_then(|parent| parent.issue.as_ref())
             })
-            .map(|value| value.value()),
+            .map(super::super::record::ScalarValue::value),
         "isan" | "ismn" | "iswc" | "version" => record.identifiers.get(field).map(String::as_str),
         _ => None,
     };
@@ -132,101 +115,101 @@ pub(super) fn source_type_matches(record: &EntryRecord, original: &str) -> bool 
         return false;
     }
     let probe = format!("@{original}{{probe,title={{Probe}}}}");
-    crate::Library::parse_biblatex(&probe, RecoveryPolicy::Error)
-        .ok()
-        .is_some_and(|library| {
-            library.records()[0].entry_type == record.entry_type
-                && library.records()[0]
-                    .parents
-                    .first()
-                    .map(|parent| &parent.entry_type)
+    crate::Library::parse_biblatex(&probe, RecoveryPolicy::Error).is_ok_and(|library| {
+        library.get_record("probe").is_some_and(|candidate| {
+            candidate.entry_type == record.entry_type
+                && candidate.parents.first().map(|parent| &parent.entry_type)
                     == record.parents.first().map(|parent| &parent.entry_type)
         })
+    })
 }
 
 pub(super) fn decode_issues(records: &[EntryRecord], issues: &mut Vec<ConversionIssue>) {
     for record in records {
-        if let Some(fields) = record.extensions.get("biblatex") {
-            for (field, path, actual) in [
-                (
-                    "@volume",
-                    "volume",
-                    record
-                        .field(crate::EntryField::Volume)
-                        .map(|value| value.into_owned()),
-                ),
-                (
-                    "@edition",
-                    "edition",
-                    record
-                        .edition
-                        .as_ref()
-                        .map(|value| value.value().to_string()),
-                ),
-                (
-                    "@pagetotal",
-                    "page_total",
-                    record
-                        .page_total
-                        .as_ref()
-                        .map(|value| value.value().to_string()),
-                ),
-                (
-                    "@volumes",
-                    "volume_total",
-                    record
-                        .volume_total
-                        .as_ref()
-                        .map(|value| value.value().to_string()),
-                ),
-            ] {
-                if let Some(ExtensionValue::String(original)) = fields.get(field)
-                    && let Ok(expected) = original.trim().parse::<i128>()
-                {
-                    if ["volume", "edition"].contains(&path)
-                        && (expected < 0 || expected > i128::from(i32::MAX))
-                    {
-                        issue(
-                            issues,
-                            "numeric_literalized",
-                            "decode",
-                            &record.key,
-                            path,
-                            true,
-                            "numeric value is preserved as literal text because it exceeds the engine's supported numeric representation",
-                        );
-                    }
-                    if actual
-                        .as_deref()
-                        .and_then(|value| value.parse::<i128>().ok())
-                        != Some(expected)
-                    {
-                        issue(
-                            issues,
-                            "numeric_approximated",
-                            "decode",
-                            &record.key,
-                            path,
-                            true,
-                            "source numeric value is not retained by the normalized engine representation; the original is retained in source annotations",
-                        );
-                    }
-                }
+        let Some(fields) = record.extensions.get("biblatex") else {
+            continue;
+        };
+        for (field, path, actual) in [
+            (
+                "@volume",
+                "volume",
+                record
+                    .field(crate::EntryField::Volume)
+                    .map(std::borrow::Cow::into_owned),
+            ),
+            (
+                "@edition",
+                "edition",
+                record
+                    .edition
+                    .as_ref()
+                    .map(|value| value.value().to_string()),
+            ),
+            (
+                "@pagetotal",
+                "page_total",
+                record
+                    .page_total
+                    .as_ref()
+                    .map(|value| value.value().to_string()),
+            ),
+            (
+                "@volumes",
+                "volume_total",
+                record
+                    .volume_total
+                    .as_ref()
+                    .map(|value| value.value().to_string()),
+            ),
+        ] {
+            let Some(ExtensionValue::String(original)) = fields.get(field) else {
+                continue;
+            };
+            let Ok(expected) = original.trim().parse::<i128>() else {
+                continue;
+            };
+            if ["volume", "edition"].contains(&path)
+                && (expected < 0 || expected > i128::from(i32::MAX))
+            {
+                issue(
+                    issues,
+                    "numeric_literalized",
+                    "decode",
+                    &record.key,
+                    path,
+                    true,
+                    "numeric value is preserved as literal text because it exceeds the engine's supported numeric representation",
+                );
             }
-            for field in ["@date", "@eventdate", "@origdate", "@urldate"] {
-                if let Some(ExtensionValue::String(value)) = fields.get(field)
-                    && value.contains(['X', 'x'])
-                {
-                    issue(
-                        issues,
-                        "date_precision_approximated",
-                        "decode",
-                        &record.key,
-                        field.trim_start_matches('@'),
-                        true,
-                        "masked date precision is approximated in structured date parts; the original form is retained in source annotations",
-                    );
-                }
+            if actual
+                .as_deref()
+                .and_then(|value| value.parse::<i128>().ok())
+                != Some(expected)
+            {
+                issue(
+                    issues,
+                    "numeric_approximated",
+                    "decode",
+                    &record.key,
+                    path,
+                    true,
+                    "source numeric value is not retained by the normalized engine representation; the original is retained in source annotations",
+                );
+            }
+        }
+        for field in ["@date", "@eventdate", "@origdate", "@urldate"] {
+            if let Some(ExtensionValue::String(value)) = fields.get(field)
+                && value.contains(['X', 'x'])
+            {
+                issue(
+                    issues,
+                    "date_precision_approximated",
+                    "decode",
+                    &record.key,
+                    field.trim_start_matches('@'),
+                    true,
+                    "masked date precision is approximated in structured date parts; the original form is retained in source annotations",
+                );
             }
         }
     }
@@ -244,6 +227,38 @@ pub(super) fn encode(
 }
 
 fn encode_entry(
+    record: &EntryRecord,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<Entry, CodecError> {
+    let mut entry = prepare_entry(record, issues)?;
+    put_extensions(&mut entry, record, issues)?;
+    put_text(&mut entry, "title", record.title.as_ref());
+    if let Some(short) = record.title.as_ref().and_then(|title| title.short.as_ref()) {
+        entry.set(
+            "shorttitle",
+            chunks(&Text {
+                chunks: short.clone(),
+                short: None,
+            }),
+        );
+    }
+    let parent = record
+        .parents
+        .iter()
+        .find(|parent| !["Original", "Conference"].contains(&parent.entry_type.as_str()));
+    put_creators(&mut entry, record, parent);
+    put_dates(&mut entry, record);
+    put_identifiers(&mut entry, record);
+    put_publication(&mut entry, record, parent, issues);
+    put_numbers(&mut entry, record, parent);
+    if !record.keywords.is_empty() {
+        put_scalar(&mut entry, "keywords", Some(&record.keywords.join(", ")));
+    }
+    put_container(&mut entry, parent);
+    Ok(entry)
+}
+
+fn prepare_entry(
     record: &EntryRecord,
     issues: &mut Vec<ConversionIssue>,
 ) -> Result<Entry, CodecError> {
@@ -278,8 +293,9 @@ fn encode_entry(
             ),
             _ if original != super::csl::canonical_type(record)
                 && super::csl::record_type(original)
-                    .map(|(kind, _)| kind == record.entry_type)
-                    .unwrap_or(record.entry_type == "Misc") =>
+                    .map_or(record.entry_type == "Misc", |(kind, _)| {
+                        kind == record.entry_type
+                    }) =>
             {
                 issue(
                     issues,
@@ -289,7 +305,7 @@ fn encode_entry(
                     "entry_type",
                     true,
                     "source CSL type specialization is not retained by the BibLaTeX output",
-                )
+                );
             }
             _ => {}
         }
@@ -301,7 +317,7 @@ fn encode_entry(
         && original != &kind
         && source_type_matches(record, original)
     {
-        kind = original.clone();
+        kind.clone_from(original);
     }
     if EntryType::new(&kind).to_biblatex().to_string() != kind {
         issue(
@@ -314,7 +330,14 @@ fn encode_entry(
             "BibLaTeX serializer normalizes the source entry type",
         );
     }
-    let mut entry = Entry::new(record.key.clone(), EntryType::new(&kind));
+    Ok(Entry::new(record.key.clone(), EntryType::new(&kind)))
+}
+
+fn put_extensions(
+    entry: &mut Entry,
+    record: &EntryRecord,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<(), CodecError> {
     if let Some(extra) = record.extensions.get("biblatex") {
         for (field, value) in extra.iter().filter(|(field, value)| {
             !field.starts_with('@') && !redundant_extension(record, field, value)
@@ -341,7 +364,8 @@ fn encode_entry(
             let text = match value {
                 ExtensionValue::String(value) => Some(Text::plain(value.clone())),
                 value => serde_json::from_value::<Text>(
-                    serde_json::to_value(value).map_err(CodecError::new)?,
+                    serde_json::to_value(value)
+                        .map_err(|error| CodecError::new(error.to_string()))?,
                 )
                 .ok(),
             };
@@ -367,23 +391,13 @@ fn encode_entry(
             }
         }
     }
-    put_text(&mut entry, "title", record.title.as_ref());
-    if let Some(short) = record.title.as_ref().and_then(|title| title.short.as_ref()) {
-        entry.set(
-            "shorttitle",
-            chunks(&Text {
-                chunks: short.clone(),
-                short: None,
-            }),
-        );
-    }
+    Ok(())
+}
+
+fn put_creators(entry: &mut Entry, record: &EntryRecord, parent: Option<&EntryRecord>) {
     if !record.authors.is_empty() {
         entry.set("author", names(&record.authors));
     }
-    let parent = record
-        .parents
-        .iter()
-        .find(|parent| !["Original", "Conference"].contains(&parent.entry_type.as_str()));
     let editors = if record.editors.is_empty() {
         parent
             .map(|parent| parent.editors.as_slice())
@@ -398,14 +412,13 @@ fn encode_entry(
         .affiliated
         .iter()
         .chain(parent.into_iter().flat_map(|parent| &parent.affiliated));
-    for (index, group) in groups.enumerate() {
-        if index >= 3 {
-            break;
-        }
-        let field = ["editora", "editorb", "editorc"][index];
+    for (field, group) in ["editora", "editorb", "editorc"].into_iter().zip(groups) {
         entry.set(field, names(&group.names));
-        put_scalar(&mut entry, &format!("{field}type"), Some(&group.role));
+        put_scalar(entry, &format!("{field}type"), Some(&group.role));
     }
+}
+
+fn put_dates(entry: &mut Entry, record: &EntryRecord) {
     for (field, date) in [
         ("date", record.date.as_ref()),
         (
@@ -430,47 +443,58 @@ fn encode_entry(
         ),
     ] {
         if let Some(date) = date {
-            put_date(&mut entry, field, date, record);
+            put_date(entry, field, date, record);
         }
     }
     if let Some(url) = &record.url {
-        put_scalar(&mut entry, "url", Some(&url.value));
+        put_scalar(entry, "url", Some(&url.value));
         if let Some(date) = &url.accessed {
-            put_date(&mut entry, "urldate", date, record);
+            put_date(entry, "urldate", date, record);
         }
     }
+}
+
+fn put_identifiers(entry: &mut Entry, record: &EntryRecord) {
     for field in ["doi", "isbn", "issn", "isan", "ismn", "iswc"] {
         put_scalar(
-            &mut entry,
+            entry,
             field,
             record.identifiers.get(field).map(String::as_str),
         );
     }
     for (scheme, name) in [("arxiv", "arxiv"), ("pmid", "pubmed"), ("pmcid", "pmcid")] {
         if let Some(value) = record.identifiers.get(scheme) {
-            put_scalar(&mut entry, "eprint", Some(value));
-            put_scalar(&mut entry, "eprinttype", Some(name));
+            put_scalar(entry, "eprint", Some(value));
+            put_scalar(entry, "eprinttype", Some(name));
             break;
         }
     }
+}
+
+fn put_publication(
+    entry: &mut Entry,
+    record: &EntryRecord,
+    parent: Option<&EntryRecord>,
+    issues: &mut Vec<ConversionIssue>,
+) {
     let publisher = record
         .publisher
         .as_ref()
         .or_else(|| parent.and_then(|parent| parent.publisher.as_ref()));
     if let Some(publisher) = publisher {
-        put_text(&mut entry, "publisher", publisher.name.as_ref());
-        put_text(&mut entry, "location", publisher.location.as_ref());
+        put_text(entry, "publisher", publisher.name.as_ref());
+        put_text(entry, "location", publisher.location.as_ref());
     }
     if entry.get("location").is_none() {
-        put_text(&mut entry, "location", record.location.as_ref());
+        put_text(entry, "location", record.location.as_ref());
     }
-    put_text(&mut entry, "organization", record.organization.as_ref());
-    put_text(&mut entry, "note", record.note.as_ref());
-    put_text(&mut entry, "abstract", record.abstract_text.as_ref());
-    put_text(&mut entry, "type", record.genre.as_ref());
+    put_text(entry, "organization", record.organization.as_ref());
+    put_text(entry, "note", record.note.as_ref());
+    put_text(entry, "abstract", record.abstract_text.as_ref());
+    put_text(entry, "type", record.genre.as_ref());
     if let Some(language) = &record.language {
         if let Some(langid) = language_name(language) {
-            put_scalar(&mut entry, "langid", Some(langid));
+            put_scalar(entry, "langid", Some(langid));
         } else {
             issue(
                 issues,
@@ -483,6 +507,9 @@ fn encode_entry(
             );
         }
     }
+}
+
+fn put_numbers(entry: &mut Entry, record: &EntryRecord, parent: Option<&EntryRecord>) {
     for (field, value) in [
         (
             "volume",
@@ -504,21 +531,25 @@ fn encode_entry(
                 .or_else(|| parent.and_then(|parent| parent.issue.as_ref())),
         ),
     ] {
-        put_scalar(&mut entry, field, value.map(|value| value.value()));
+        put_scalar(
+            entry,
+            field,
+            value.map(super::super::record::ScalarValue::value),
+        );
     }
-    if !record.keywords.is_empty() {
-        put_scalar(&mut entry, "keywords", Some(&record.keywords.join(", ")));
-    }
+}
+
+fn put_container(entry: &mut Entry, parent: Option<&EntryRecord>) {
     if let Some(parent) = parent {
         let field = if ["Periodical", "Newspaper"].contains(&parent.entry_type.as_str()) {
             "journaltitle"
         } else {
             "booktitle"
         };
-        put_text(&mut entry, field, parent.title.as_ref());
+        put_text(entry, field, parent.title.as_ref());
         if let Some(short) = parent.title.as_ref().and_then(|title| title.short.as_ref()) {
             put_text(
-                &mut entry,
+                entry,
                 if field == "journaltitle" {
                     "shortjournal"
                 } else {
@@ -534,10 +565,9 @@ fn encode_entry(
             entry.set("bookauthor", names(&parent.authors));
         }
         if let Some(grandparent) = parent.parents.first() {
-            put_text(&mut entry, "maintitle", grandparent.title.as_ref());
+            put_text(entry, "maintitle", grandparent.title.as_ref());
         }
     }
-    Ok(entry)
 }
 
 fn language_name(language: &str) -> Option<&'static str> {
@@ -592,13 +622,9 @@ fn put_date(entry: &mut Entry, field: &str, date: &Date, record: &EntryRecord) {
         .extensions
         .get("biblatex")
         .and_then(|fields| fields.get(&format!("@{field}")))
-        && ::biblatex::Date::parse(&[Spanned::detached(Chunk::Normal(original.clone()))])
-            .ok()
-            .map(|value| Date::from_biblatex(::biblatex::PermissiveType::Typed(value)))
-            .as_ref()
-            == Some(date)
+        && Date::parse_biblatex(original).ok().as_ref() == Some(date)
     {
-        value = original.clone();
+        value.clone_from(original);
     }
     put_scalar(entry, field, Some(&value));
 }
@@ -634,7 +660,7 @@ fn names(names: &[Name]) -> Chunks {
         }
         match name {
             Name::Organization { name } => {
-                result.push(Spanned::detached(Chunk::Verbatim(name.clone())))
+                result.push(Spanned::detached(Chunk::Verbatim(name.clone())));
             }
             Name::Person {
                 family,
@@ -650,8 +676,7 @@ fn names(names: &[Name]) -> Chunks {
             } => {
                 let family = non_dropping_particle
                     .as_ref()
-                    .map(|particle| format!("{particle} {family}"))
-                    .unwrap_or_else(|| family.clone());
+                    .map_or_else(|| family.clone(), |particle| format!("{particle} {family}"));
                 let use_prefix = use_prefix.map(|value| value.to_string());
                 let fields = [
                     ("family", Some(family.as_str())),
@@ -663,19 +688,50 @@ fn names(names: &[Name]) -> Chunks {
                     ("prefix-i", prefix_initials.as_deref()),
                     ("useprefix", use_prefix.as_deref()),
                 ];
-                let mut first = true;
-                for (field, value) in fields {
-                    if let Some(value) = value {
-                        result.push(Spanned::detached(Chunk::Normal(format!(
-                            "{}{field}=",
-                            if first { "" } else { ", " }
-                        ))));
-                        result.push(Spanned::detached(Chunk::Verbatim(value.into())));
-                        first = false;
-                    }
-                }
+                append_name_fields(&mut result, &fields);
             }
         }
     }
     result
+}
+
+fn find_text<'a>(record: &'a EntryRecord, field: &str) -> Option<&'a Text> {
+    let own = match field {
+        "publisher" => record
+            .publisher
+            .as_ref()
+            .and_then(|value| value.name.as_ref()),
+        "location" | "address" => record
+            .publisher
+            .as_ref()
+            .and_then(|value| value.location.as_ref())
+            .or(record.location.as_ref()),
+        "organization" | "institution" | "school" => record.organization.as_ref(),
+        "journal" | "journaltitle" | "booktitle" | "maintitle" | "issuetitle" => {
+            record.title.as_ref()
+        }
+        "type" => record.genre.as_ref(),
+        "howpublished" | "annotation" | "annote" | "addendum" => record.note.as_ref(),
+        _ => None,
+    };
+    own.or_else(|| {
+        record
+            .parents
+            .iter()
+            .find_map(|parent| find_text(parent, field))
+    })
+}
+
+fn append_name_fields(result: &mut Chunks, fields: &[(&str, Option<&str>)]) {
+    for (index, (field, value)) in fields
+        .iter()
+        .filter_map(|(field, value)| value.map(|value| (*field, value)))
+        .enumerate()
+    {
+        result.push(Spanned::detached(Chunk::Normal(format!(
+            "{}{field}=",
+            if index == 0 { "" } else { ", " }
+        ))));
+        result.push(Spanned::detached(Chunk::Verbatim(value.into())));
+    }
 }

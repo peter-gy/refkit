@@ -29,8 +29,7 @@ fn flatten_until(
     preserve_current_block: bool,
 ) -> String {
     let mut output = String::new();
-    while *index < chars.len() {
-        let ch = chars[*index];
+    while let Some(&ch) = chars.get(*index) {
         if Some(ch) == closing {
             *index += 1;
             break;
@@ -74,8 +73,7 @@ fn read_command(chars: &[char], index: &mut usize) -> String {
             return output;
         }
     } else {
-        while *index < chars.len() {
-            let ch = chars[*index];
+        while let Some(&ch) = chars.get(*index) {
             if ch == '{' || ch == '[' || ch == '}' || ch == ']' || ch.is_whitespace() {
                 break;
             }
@@ -83,11 +81,8 @@ fn read_command(chars: &[char], index: &mut usize) -> String {
             *index += 1;
         }
     }
-    loop {
-        if *index >= chars.len() {
-            break;
-        }
-        match chars[*index] {
+    while let Some(&ch) = chars.get(*index) {
+        match ch {
             '{' => {
                 *index += 1;
                 output.push('{');

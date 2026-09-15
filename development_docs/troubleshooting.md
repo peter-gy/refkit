@@ -56,7 +56,7 @@ The first command reports Markdown or audience-boundary problems. TypeScript rep
 
 ## The Minimum Rust Check Installs A Toolchain
 
-`make rust-floor` installs Rust 1.88 through rustup when the toolchain is absent. This command uses the network and changes the local rustup toolchain set. Install the toolchain explicitly before a disconnected validation run.
+`make rust-floor` installs Rust 1.95 through rustup when the toolchain is absent. This command uses the network and changes the local rustup toolchain set. Install the toolchain explicitly before a disconnected validation run.
 
 ## Cleaning Invalidates Local Artifacts
 

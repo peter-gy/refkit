@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::raw::{RawEntryId, RawSyntaxDocument, RawSyntaxEntry};
 
-use super::{DuplicateRule, MergeStrategy, TidyOptions, TidyWarning};
+use super::{DuplicateRule, MergeStrategy, TidyError, TidyOptions, TidyWarning};
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct DuplicatePlan {
@@ -17,10 +17,14 @@ impl DuplicatePlan {
         self.skip_entries.contains(&id)
     }
 
-    pub fn apply(&mut self, doc: &mut RawSyntaxDocument) {
+    pub fn apply(&mut self, doc: &mut RawSyntaxDocument) -> Result<(), TidyError> {
         for (id, entry) in self.merged_entries.drain() {
-            doc.entries[id.index()] = entry;
+            let target = doc.entries.get_mut(id.index()).ok_or_else(|| {
+                TidyError::Reference("duplicate plan refers to a missing entry".to_string())
+            })?;
+            *target = entry;
         }
+        Ok(())
     }
 
     pub fn retained_id(&self, id: RawEntryId) -> RawEntryId {
@@ -41,9 +45,12 @@ struct DuplicateCheckRule {
     do_merge: bool,
 }
 
-pub(crate) fn duplicate_plan(doc: &RawSyntaxDocument, options: &TidyOptions) -> DuplicatePlan {
+pub(crate) fn duplicate_plan(
+    doc: &RawSyntaxDocument,
+    options: &TidyOptions,
+) -> Result<DuplicatePlan, TidyError> {
     let Some(rules) = duplicate_rules(options) else {
-        return DuplicatePlan::default();
+        return Ok(DuplicatePlan::default());
     };
     let mut keys = BTreeMap::new();
     let mut dois = BTreeMap::new();
@@ -59,43 +66,47 @@ pub(crate) fn duplicate_plan(doc: &RawSyntaxDocument, options: &TidyOptions) -> 
                 DuplicateRule::Abstract => duplicate_match(entry, check.rule, &mut abstracts),
                 DuplicateRule::Citation => duplicate_match(entry, check.rule, &mut citations),
             };
-            if let Some(existing) = duplicate {
-                plan.warnings.push(TidyWarning::DuplicateEntry {
-                    rule: check.rule,
-                    message: duplicate_message(check.rule, check.do_merge, entry, existing),
-                });
-                if check.do_merge && options.merge.is_some() {
-                    let left = plan.retained_id(existing.id);
-                    let right = plan.retained_id(entry.id);
-                    if left != right {
-                        let (target, source) = if left.index() < right.index() {
-                            (left, right)
-                        } else {
-                            (right, left)
-                        };
-                        plan.merge_targets.insert(source, target);
-                    }
-                }
+            let Some(existing) = duplicate else {
+                continue;
+            };
+            plan.warnings.push(TidyWarning::DuplicateEntry {
+                rule: check.rule,
+                message: duplicate_message(check.rule, check.do_merge, entry, existing),
+            });
+            if !check.do_merge || options.merge.is_none() {
+                continue;
             }
+            let left = plan.retained_id(existing.id);
+            let right = plan.retained_id(entry.id);
+            if left == right {
+                continue;
+            }
+            let (target, source) = if left.index() < right.index() {
+                (left, right)
+            } else {
+                (right, left)
+            };
+            plan.merge_targets.insert(source, target);
         }
     }
 
-    if let Some(strategy) = options.merge {
-        for entry in &doc.entries {
-            let target_id = plan.retained_id(entry.id);
-            if entry.id != target_id {
-                plan.skip_entries.insert(entry.id);
-                merge_entry(
-                    strategy,
-                    &mut plan.merged_entries,
-                    &doc.entries[target_id.index()],
-                    entry,
-                );
-            }
+    let Some(strategy) = options.merge else {
+        return Ok(plan);
+    };
+    for entry in &doc.entries {
+        let target_id = plan.retained_id(entry.id);
+        if entry.id != target_id {
+            plan.skip_entries.insert(entry.id);
+            let target = doc.entries.get(target_id.index()).ok_or_else(|| {
+                TidyError::Reference(
+                    "duplicate plan refers to a missing retained entry".to_string(),
+                )
+            })?;
+            merge_entry(strategy, &mut plan.merged_entries, target, entry);
         }
     }
 
-    plan
+    Ok(plan)
 }
 
 fn duplicate_rules(options: &TidyOptions) -> Option<Vec<DuplicateCheckRule>> {
@@ -158,12 +169,12 @@ fn merge_entry(
             for field in &duplicate.fields {
                 let existing = target
                     .fields
-                    .iter()
-                    .position(|candidate| candidate.name.eq_ignore_ascii_case(&field.name));
+                    .iter_mut()
+                    .find(|candidate| candidate.name.eq_ignore_ascii_case(&field.name));
                 match (strategy, existing) {
                     (_, None) => target.fields.push(field.clone()),
-                    (MergeStrategy::Overwrite, Some(index)) => {
-                        target.fields[index].clone_from(field);
+                    (MergeStrategy::Overwrite, Some(existing)) => {
+                        existing.clone_from(field);
                     }
                     _ => {}
                 }

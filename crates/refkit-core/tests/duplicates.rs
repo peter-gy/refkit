@@ -1,3 +1,7 @@
+//! Reviewable duplicate evidence and explicit source-preserving merge plans.
+
+#![cfg(test)]
+
 use refkit_core::{
     DuplicateConflictKind, DuplicateRule, MergeErrorCode, MergeFieldChoice, MergeRequest,
     RawDocument,

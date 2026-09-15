@@ -17,3 +17,5 @@
 Rebuild with `make refkit-develop` from the repository root so the editable native module and Agent Plugin marker come from the same backend. Run `make python-lint typecheck test rust` after the rebuild.
 
 Wheel changes need CPython and PyEmscripten installation evidence. Package metadata keeps the extension at `refkit._native`.
+
+The `abi3` Cargo feature selects Python 3.10 stable-ABI support. Maturin owns extension linking through `PYO3_BUILD_EXTENSION_MODULE`. Keep Cargo all-feature tests linked against the selected Python development library.

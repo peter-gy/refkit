@@ -5,11 +5,19 @@ use wasm_bindgen::prelude::*;
 use crate::errors::error;
 
 #[wasm_bindgen]
+/// Validate a JSON tidy-options object without formatting source.
+///
+/// # Errors
+/// Rejects unknown option names and invalid option values.
 pub fn validate_tidy_options(options: &str) -> Result<(), JsValue> {
     parse_options(options).map(|_| ())
 }
 
 #[wasm_bindgen]
+/// Format source and return BibTeX, warnings, renames, and entry count as JSON.
+///
+/// # Errors
+/// Rejects invalid options, malformed source, ambiguous references, and resource-limit violations.
 pub fn tidy_bibtex(source: &str, options: &str) -> Result<String, JsValue> {
     let result = refkit_core::tidy_bibtex(source, parse_options(options)?).map_err(tidy_error)?;
     let warnings = result
@@ -53,7 +61,7 @@ fn parse_options(source: &str) -> Result<TidyOptions, JsValue> {
                     value,
                     name,
                     TidyOptions::default().with_sort().sort.unwrap_or_default(),
-                )?
+                )?;
             }
             "duplicates" => options.duplicates = duplicates(value)?,
             "merge" => options.merge = merge(value)?,
@@ -68,7 +76,7 @@ fn parse_options(source: &str) -> Result<TidyOptions, JsValue> {
                         .with_sort_fields()
                         .sort_fields
                         .unwrap_or_default(),
-                )?
+                )?;
             }
             "stripComments" => options.strip_comments = boolean(value, name)?,
             "trailingCommas" => options.trailing_commas = boolean(value, name)?,
@@ -98,14 +106,14 @@ fn parse_options(source: &str) -> Result<TidyOptions, JsValue> {
             }
             "lowercase" => options.lowercase = boolean(value, name)?,
             "enclosingBraces" => {
-                options.enclosing_braces = default_strings(value, name, vec!["title".to_string()])?
+                options.enclosing_braces = default_strings(value, name, vec!["title".to_string()])?;
             }
             "removeBraces" => {
-                options.remove_braces = default_strings(value, name, vec!["title".to_string()])?
+                options.remove_braces = default_strings(value, name, vec!["title".to_string()])?;
             }
             "wrap" => {
                 options.wrap =
-                    default_integer(value, name, TidyOptions::default().with_wrap().wrap)?
+                    default_integer(value, name, TidyOptions::default().with_wrap().wrap)?;
             }
             _ => return Err(error("RangeError", format!("unknown tidy option {name:?}"))),
         }

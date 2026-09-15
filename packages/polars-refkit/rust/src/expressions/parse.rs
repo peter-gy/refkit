@@ -4,7 +4,7 @@ use pyo3_polars::derive::polars_expr;
 use refkit_core::{Diagnostic, parse_bibtex_report};
 
 use super::ParseKwargs;
-use super::broadcast::parse_value_library_source;
+use super::broadcast::{input, parse_value_library_source};
 use super::dtypes::{
     boolean_output, diagnostic_struct_dtype, diagnostics_output, keys_output, parse_report_output,
     uint32_output, with_struct_validity,
@@ -12,7 +12,7 @@ use super::dtypes::{
 
 #[polars_expr(output_type_func=uint32_output)]
 fn entry_count(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
+    let bibtex = input(inputs, 0)?.str()?;
     let output = bibtex
         .iter()
         .map(|value| {
@@ -28,7 +28,7 @@ fn entry_count(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
 
 #[polars_expr(output_type_func=keys_output)]
 fn keys(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
+    let bibtex = input(inputs, 0)?.str()?;
     let mut builder = ListStringChunkedBuilder::new("keys".into(), bibtex.len(), bibtex.len() * 2);
 
     for value in bibtex.iter() {
@@ -49,7 +49,7 @@ fn keys(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
 
 #[polars_expr(output_type_func=diagnostics_output)]
 fn diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
+    let bibtex = input(inputs, 0)?.str()?;
     let reports = bibtex
         .iter()
         .map(|source| source.map(|source| parse_bibtex_report(source, kwargs.recovery.policy())))
@@ -64,7 +64,7 @@ fn diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
 
 #[polars_expr(output_type_func=parse_report_output)]
 fn parse_report(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
+    let bibtex = input(inputs, 0)?.str()?;
     let reports = bibtex
         .iter()
         .map(|source| source.map(|source| parse_bibtex_report(source, kwargs.recovery.policy())))
@@ -174,7 +174,7 @@ pub(super) fn diagnostic_lists_to_series<'a>(
 
 #[polars_expr(output_type_func=boolean_output)]
 fn can_parse(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
+    let bibtex = input(inputs, 0)?.str()?;
     let output = bibtex
         .iter()
         .map(|value| {
@@ -186,7 +186,7 @@ fn can_parse(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
 
 #[polars_expr(output_type_func=boolean_output)]
 fn has_diagnostics(inputs: &[Series], kwargs: ParseKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
+    let bibtex = input(inputs, 0)?.str()?;
     let output = bibtex
         .iter()
         .map(|value| {

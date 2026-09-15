@@ -76,10 +76,8 @@ impl Rendered {
         }
 
         let record = Arc::clone(&self.record);
-        let payload = py.detach(move || {
-            serde_json::to_string(&rendered_nodes_to_json(record.tree_nodes()))
-                .expect("rendered tree should serialize to Python JSON payload")
-        });
+        let payload = py
+            .detach(move || Value::Array(rendered_nodes_to_json(record.tree_nodes())).to_string());
         self.tree_json.get_or_init(|| payload).clone()
     }
 }
@@ -103,7 +101,7 @@ fn rendered_node_to_json(node: &RenderedNode) -> Value {
         RenderedNode::Text { text, formatting } => json!({
             "kind": "Text",
             "text": text,
-            "formatting": formatting_to_json(formatting),
+            "formatting": formatting_to_json(*formatting),
         }),
         RenderedNode::Element {
             display,
@@ -127,7 +125,7 @@ fn rendered_node_to_json(node: &RenderedNode) -> Value {
             "kind": "Link",
             "text": text,
             "url": url,
-            "formatting": formatting_to_json(formatting),
+            "formatting": formatting_to_json(*formatting),
         }),
         RenderedNode::Transparent {
             cite_idx,
@@ -135,7 +133,7 @@ fn rendered_node_to_json(node: &RenderedNode) -> Value {
         } => json!({
             "kind": "Transparent",
             "cite_idx": cite_idx,
-            "formatting": formatting_to_json(formatting),
+            "formatting": formatting_to_json(*formatting),
         }),
         RenderedNode::BibliographyEntry {
             key,
@@ -150,7 +148,7 @@ fn rendered_node_to_json(node: &RenderedNode) -> Value {
     }
 }
 
-fn formatting_to_json(formatting: &RenderedFormatting) -> Value {
+fn formatting_to_json(formatting: RenderedFormatting) -> Value {
     json!({
         "font_style": formatting.font_style.as_str(),
         "font_variant": formatting.font_variant.as_str(),

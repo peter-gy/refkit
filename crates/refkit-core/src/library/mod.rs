@@ -18,8 +18,8 @@ use crate::{EntryRecord, RecordError};
 
 pub use self::diagnostic::{Diagnostic, DiagnosticAction, DiagnosticSeverity, ParseFailure};
 pub(crate) use self::guard::{
-    FieldResolver, normalize_reference, validate_literal, validate_raw, validate_source,
-    validate_source_size,
+    FieldResolver, normalize_reference, validate_date_parser_input, validate_literal, validate_raw,
+    validate_source, validate_source_size,
 };
 pub use self::parse::parse_bibtex_report;
 pub(crate) use self::parse::parse_error;
@@ -30,6 +30,7 @@ pub(crate) struct ParsedLibrary {
     pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
+/// Immutable normalized records and their derived rendering/selection state.
 pub struct Library {
     inner: HayLibrary,
     diagnostics: Vec<Diagnostic>,
@@ -61,18 +62,28 @@ impl Write for RecordSize {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Structured parse outcome for consumers that do not need a library instance.
 pub struct ParseReport {
+    /// Whether normalized records were produced.
     pub ok: bool,
+    /// Normalized top-level entry count on success.
     pub entry_count: Option<usize>,
+    /// Normalized keys in source order on success.
     pub keys: Option<Vec<String>>,
+    /// Parser failures and recovery actions with original source coordinates.
     pub diagnostics: Vec<Diagnostic>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Parsing, structured construction, or selector failure.
 pub enum LibraryError {
+    /// BibTeX/BibLaTeX could not be normalized under the requested recovery policy.
     Biblatex(ParseFailure),
+    /// Hayagriva YAML could not be normalized.
     HayagrivaYaml(ParseFailure),
+    /// Selector syntax is invalid.
     Selector(String),
+    /// A structured record violates the owned record contract.
     Record(RecordError),
 }
 
@@ -89,22 +100,33 @@ impl fmt::Display for LibraryError {
 impl std::error::Error for LibraryError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Treatment of recoverable BibTeX source errors.
 pub enum RecoveryPolicy {
+    /// Reject source errors instead of changing affected content.
     Error,
+    /// Recover locally where supported and retain structured diagnostics.
     Report,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+/// Scalar projection of a complete structured record.
 pub enum EntryField {
+    /// Top-level record key.
     Key,
+    /// Normalized entry-type name.
     EntryType,
+    /// Flattened full title text.
     Title,
+    /// Retained date formatted with its precision and qualifiers.
     Date,
+    /// DOI identifier value.
     Doi,
+    /// Volume of the entry or its first container.
     Volume,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Unsupported scalar projection field name.
 pub struct EntryFieldError(String);
 
 impl fmt::Display for EntryFieldError {
@@ -132,6 +154,8 @@ impl FromStr for EntryField {
 }
 
 impl EntryRecord {
+    #[must_use]
+    /// Project one scalar field, borrowing retained text when possible.
     pub fn field(&self, field: EntryField) -> Option<Cow<'_, str>> {
         match field {
             EntryField::Key => Some(Cow::Borrowed(&self.key)),
@@ -159,6 +183,11 @@ impl EntryRecord {
 }
 
 impl Library {
+    /// Validate and own complete records, then derive the private engine view.
+    ///
+    /// # Errors
+    /// Rejects duplicate keys, invalid field shapes, resource-budget violations,
+    /// or values that cannot prepare the supported rendering representation.
     pub fn from_records(records: Vec<EntryRecord>) -> Result<Self, LibraryError> {
         if records.len() > 100_000 {
             return Err(LibraryError::Record(RecordError::new(
@@ -179,7 +208,7 @@ impl Library {
                 records: &records,
             },
         )
-        .map_err(|error| LibraryError::Record(RecordError::new("records", error)))?;
+        .map_err(|error| LibraryError::Record(RecordError::new("records", error.to_string())))?;
         let mut keys = std::collections::HashSet::new();
         let mut engine = HayLibrary::new();
         for record in &records {
@@ -205,18 +234,38 @@ impl Library {
         })
     }
 
+    /// Reconstruct a library from a versioned canonical record snapshot.
+    ///
+    /// # Errors
+    /// Rejects invalid JSON, duplicate properties, unknown versions or fields,
+    /// excessive size/nesting, and record-construction failures.
     pub fn from_json(source: &str) -> Result<Self, LibraryError> {
         Self::from_records(
             crate::record::decode_records(source, true).map_err(LibraryError::Record)?,
         )
     }
 
+    /// Construct a library from a canonical JSON array of complete records.
+    ///
+    /// # Errors
+    /// Rejects invalid JSON, duplicate properties, excessive size/nesting,
+    /// invalid record shapes, and record-construction failures.
     pub fn from_records_json(source: &str) -> Result<Self, LibraryError> {
         Self::from_records(
             crate::record::decode_records(source, false).map_err(LibraryError::Record)?,
         )
     }
 
+    /// Serialize the retained records as a versioned canonical snapshot.
+    ///
+    /// # Panics
+    /// Panics if serialization violates the finite-value and size invariants
+    /// checked during construction. Callers cannot mutate the retained records.
+    #[must_use]
+    #[expect(
+        clippy::expect_used,
+        reason = "Construction pre-serializes and bounds these immutable records, including every finite extension number."
+    )]
     pub fn to_json(&self) -> String {
         serde_json::to_string(&RecordArchive {
             schema_version: 1,
@@ -225,12 +274,20 @@ impl Library {
         .expect("validated records serialize")
     }
 
+    /// Parse BibTeX/BibLaTeX while capturing data before engine normalization.
+    ///
+    /// # Errors
+    /// Returns structured source failures or record-contract errors after recovery.
     pub fn parse_biblatex(source: &str, recovery: RecoveryPolicy) -> Result<Self, LibraryError> {
         parse_biblatex_library(source, recovery)
             .map_err(LibraryError::Biblatex)
             .and_then(Self::from_parsed)
     }
 
+    /// Parse Hayagriva YAML and retain namespaced source extensions.
+    ///
+    /// # Errors
+    /// Rejects invalid YAML, oversized source, or invalid normalized records.
     pub fn parse_hayagriva_yaml(source: &str) -> Result<Self, LibraryError> {
         parse_hayagriva_yaml(source)
             .map_err(LibraryError::HayagrivaYaml)
@@ -247,22 +304,32 @@ impl Library {
         &self.inner
     }
 
+    /// Borrow the parser and recovery findings retained with this library.
+    #[must_use]
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
 
+    /// Return the number of top-level records.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.records.len()
     }
 
+    /// Return whether the library contains no top-level records.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.records.is_empty()
     }
 
+    /// Test an exact, case-sensitive record key.
+    #[must_use]
     pub fn contains_key(&self, key: &str) -> bool {
         self.index.contains_key(key)
     }
 
+    /// Borrow unique top-level keys in retained source order.
+    #[must_use]
     pub fn keys(&self) -> &[String] {
         self.keys.get_or_init(|| {
             self.records
@@ -272,27 +339,39 @@ impl Library {
         })
     }
 
+    /// Borrow the complete immutable records in source order.
+    #[must_use]
     pub fn records(&self) -> &[EntryRecord] {
         &self.records
     }
 
+    /// Borrow one complete record by exact key, or return `None` when absent.
+    #[must_use]
     pub fn get_record(&self, key: &str) -> Option<&EntryRecord> {
-        self.index.get(key).map(|index| &self.records[*index])
+        self.index
+            .get(key)
+            .and_then(|index| self.records.get(*index))
     }
 
+    /// Select complete records using the derived engine's selector semantics.
+    ///
+    /// # Errors
+    /// Rejects invalid selectors or an inconsistent prepared-record lookup.
     pub fn select_records(&self, selector: &str) -> Result<Vec<EntryRecord>, LibraryError> {
         let selector =
             Selector::parse(selector).map_err(|err| LibraryError::Selector(err.to_string()))?;
-        Ok(self
-            .inner()
+        self.inner()
             .iter()
             .filter(|entry| selector.matches(entry))
             .map(|entry| {
-                self.get_record(entry.key())
-                    .expect("prepared entries retain keys")
-                    .clone()
+                self.get_record(entry.key()).cloned().ok_or_else(|| {
+                    LibraryError::Record(RecordError::new(
+                        entry.key(),
+                        "prepared entry is absent from retained records",
+                    ))
+                })
             })
-            .collect())
+            .collect()
     }
 }
 
@@ -324,9 +403,8 @@ mod tests {
 
     #[test]
     fn bibtex_value_parse_treats_recovered_empty_source_as_failure() {
-        let err = match parse_biblatex_library("@broken{missing", RecoveryPolicy::Report) {
-            Ok(_) => panic!("expected recovered empty source to fail"),
-            Err(err) => err,
+        let Err(err) = parse_biblatex_library("@broken{missing", RecoveryPolicy::Report) else {
+            panic!("expected recovered empty source to fail");
         };
         let report = parse_bibtex_report("@broken{missing", RecoveryPolicy::Report);
 
@@ -345,6 +423,7 @@ mod tests {
 #[cfg(test)]
 mod recovery_contracts {
     use super::*;
+    use std::fmt::Write as _;
 
     #[test]
     fn recovery_preserves_resolved_fields_and_original_diagnostic_spans() {
@@ -397,9 +476,8 @@ mod recovery_contracts {
     #[test]
     fn yaml_failure_has_a_structured_source_diagnostic() {
         let source = "broken:\n  title: Broken\n";
-        let error = match Library::parse_hayagriva_yaml(source) {
-            Ok(_) => panic!("expected a missing entry type error"),
-            Err(error) => error,
+        let Err(error) = Library::parse_hayagriva_yaml(source) else {
+            panic!("expected a missing entry type error");
         };
         let LibraryError::HayagrivaYaml(failure) = error else {
             panic!("expected a YAML failure");
@@ -610,11 +688,13 @@ mod recovery_contracts {
     fn empty_macro_expansion_has_a_work_budget() {
         let mut source = "@string{a0={}}\n".to_string();
         for index in 1..19 {
-            source.push_str(&format!(
-                "@string{{a{index}=a{} # a{}}}\n",
+            writeln!(
+                source,
+                "@string{{a{index}=a{} # a{}}}",
                 index - 1,
                 index - 1
-            ));
+            )
+            .unwrap();
         }
         source.push_str("@book{a,title=a18}");
         let report = parse_bibtex_report(&source, RecoveryPolicy::Error);

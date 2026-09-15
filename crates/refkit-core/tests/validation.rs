@@ -1,3 +1,7 @@
+//! Inspect-only bibliographic quality and source-profile validation.
+
+#![cfg(test)]
+
 use refkit_core::{
     Date, DateParts, DateValue, EntryRecord, Library, RawDocument, Text, ValidationCode as Code,
     ValidationProfile,

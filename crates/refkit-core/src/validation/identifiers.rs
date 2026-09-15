@@ -96,7 +96,7 @@ fn isbn(value: &str) -> Result<String, ()> {
         13 => {
             let digits = digits(&value, 13)?;
             if !(value.starts_with("978") || value.starts_with("979"))
-                || digits[12] == 10
+                || digits.last() == Some(&10)
                 || digits
                     .iter()
                     .enumerate()
@@ -135,10 +135,11 @@ fn orcid(value: &str) -> Result<String, ()> {
         &["https://orcid.org/", "http://orcid.org/", "orcid:"],
     ));
     let digits = digits(&value, 16)?;
-    let total = digits[..15]
-        .iter()
-        .fold(0, |total, digit| (total + digit) * 2);
-    if (12 - total % 11) % 11 != digits[15] {
+    let Some((check_digit, payload)) = digits.split_last() else {
+        return Err(());
+    };
+    let total = payload.iter().fold(0, |total, digit| (total + digit) * 2);
+    if (12 - total % 11) % 11 != *check_digit {
         return Err(());
     }
     Ok(format!(

@@ -1,4 +1,9 @@
+//! Formatter transformations, key allocation, and reference rewrites.
+
+#![cfg(test)]
+
 use refkit_core::{DuplicateRule, MergeStrategy, RawDocument, TidyError, TidyOptions, tidy_bibtex};
+use std::fmt::Write as _;
 
 #[test]
 fn generated_keys_reserve_final_bases_and_retained_original_keys() {
@@ -30,9 +35,10 @@ fn generated_keys_reserve_final_bases_and_retained_original_keys() {
 
 #[test]
 fn generated_letter_suffixes_extend_past_one_letter() {
-    let source = (0..28)
-        .map(|index| format!("@misc{{k{index},title={{Shared}}}}\n"))
-        .collect::<String>();
+    let mut source = String::new();
+    for index in 0..28 {
+        writeln!(source, "@misc{{k{index},title={{Shared}}}}").unwrap();
+    }
     let result = tidy_bibtex(
         &source,
         TidyOptions {

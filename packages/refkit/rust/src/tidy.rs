@@ -205,7 +205,6 @@ fn tidy_bibtex_py(
     options: Option<PyRef<'_, TidyOptions>>,
 ) -> PyResult<TidyResult> {
     let options = options
-        .as_ref()
         .map(|options| options.inner.clone())
         .unwrap_or_default();
     let result = py
@@ -473,7 +472,5 @@ fn default_field_sort() -> Vec<String> {
 }
 
 fn option_usize(value: Option<usize>) -> String {
-    value
-        .map(|value| value.to_string())
-        .unwrap_or_else(|| "None".to_string())
+    value.map_or_else(|| "None".to_string(), |value| value.to_string())
 }

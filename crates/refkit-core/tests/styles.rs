@@ -1,3 +1,9 @@
+//! Style resource validation, dependent-parent identity, and rendering limits.
+
+#![cfg(test)]
+
+use std::fmt::Write as _;
+
 use refkit_core::{StyleError, prepare_style_from_xml};
 
 const CHILD_STYLE: &str = r#"<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" default-locale="de-DE">
@@ -105,9 +111,10 @@ fn custom_style_checks_xml_limits_in_subprocess() {
 fn custom_style_limits_attributes_on_start_and_empty_elements() {
     for empty in [false, true] {
         for count in [256, 257] {
-            let namespaces = (0..count - usize::from(empty))
-                .map(|index| format!(r#" xmlns:p{index}="urn:refkit:{index}""#))
-                .collect::<String>();
+            let mut namespaces = String::new();
+            for index in 0..count - usize::from(empty) {
+                write!(namespaces, r#" xmlns:p{index}="urn:refkit:{index}""#).unwrap();
+            }
             let citation = if empty {
                 format!(r#"<text value="bounded"{namespaces}/>"#)
             } else {

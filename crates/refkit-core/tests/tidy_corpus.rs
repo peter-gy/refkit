@@ -1,3 +1,7 @@
+//! Corpus-wide formatter stability and malformed-input behavior.
+
+#![cfg(test)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 

@@ -45,7 +45,7 @@ pub(crate) fn process_citations(
                     .map(|value| {
                         let label = cite.label.as_deref().unwrap_or("page");
                         let label = Locator::from_str(label)
-                            .map_err(|_| DocumentError::UnknownLocatorLabel(label.to_string()))?;
+                            .map_err(|()| DocumentError::UnknownLocatorLabel(label.to_string()))?;
                         Ok(SpecificLocator(label, LocatorPayload::Str(value)))
                     })
                     .transpose()?;

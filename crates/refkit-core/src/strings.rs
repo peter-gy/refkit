@@ -18,7 +18,7 @@ pub(crate) fn quoted(value: &str) -> String {
     output
 }
 
-pub(crate) fn entry_type_name(entry_type: &EntryType) -> &'static str {
+pub(crate) fn entry_type_name(entry_type: EntryType) -> &'static str {
     match entry_type {
         EntryType::Article => "Article",
         EntryType::Chapter => "Chapter",
@@ -60,9 +60,9 @@ mod tests {
 
     #[test]
     fn entry_type_names_cover_public_hayagriva_types() {
-        assert_eq!(entry_type_name(&EntryType::Article), "Article");
-        assert_eq!(entry_type_name(&EntryType::Periodical), "Periodical");
-        assert_eq!(entry_type_name(&EntryType::Original), "Original");
+        assert_eq!(entry_type_name(EntryType::Article), "Article");
+        assert_eq!(entry_type_name(EntryType::Periodical), "Periodical");
+        assert_eq!(entry_type_name(EntryType::Original), "Original");
     }
 
     #[test]

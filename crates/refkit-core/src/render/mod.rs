@@ -18,8 +18,11 @@ pub(crate) use self::html::{elem_children_to_html, safe_href};
 pub(crate) use self::text::elem_children_to_string;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Equivalent plain-text and escaped HTML representations of rendered content.
 pub struct RenderedOutput {
+    /// Plain text suitable for non-HTML consumers.
     pub text: String,
+    /// HTML with escaped content and permitted links.
     pub html: String,
 }
 
@@ -35,12 +38,18 @@ pub(crate) fn bundled_locales() -> &'static [CslLocale] {
         .as_slice()
 }
 
+#[must_use]
+/// Check whether the archived locale resources contain this exact language code.
 pub fn is_bundled_locale(code: &str) -> bool {
     bundled_locales()
         .iter()
         .any(|locale| locale.lang.as_ref().is_some_and(|lang| lang.0 == code))
 }
 
+/// Render one library entry as an ordinary citation.
+///
+/// # Errors
+/// Returns missing-reference or renderer output errors.
 pub fn render_library_citation(
     library: &Library,
     key: &str,
@@ -50,6 +59,10 @@ pub fn render_library_citation(
     render_library_citation_group(library, &[key], style, locale)
 }
 
+/// Render keys as separate citations within one fresh ordered processor sequence.
+///
+/// # Errors
+/// Returns missing-reference or renderer output errors.
 pub fn render_library_citation_each(
     library: &Library,
     keys: &[&str],
@@ -64,6 +77,10 @@ pub fn render_library_citation_each(
     rendered.citations.iter().map(citation_output).collect()
 }
 
+/// Render an ordered, nonempty key list as one citation group.
+///
+/// # Errors
+/// Rejects empty groups, missing keys, or failures to materialize output.
 pub fn render_library_citation_group(
     library: &Library,
     keys: &[&str],
@@ -71,9 +88,16 @@ pub fn render_library_citation_group(
     locale: Option<&str>,
 ) -> Result<RenderedOutput, DocumentError> {
     let rendered = process_citations(library, style, locale, &[request_for_keys(keys)])?;
-    citation_output(&rendered.citations[0])
+    let citation = rendered.citations.first().ok_or_else(|| {
+        DocumentError::Render("citation renderer returned no citation".to_string())
+    })?;
+    citation_output(citation)
 }
 
+/// Render all entries in the style's bibliography order using fresh citation state.
+///
+/// # Errors
+/// Returns renderer output errors.
 pub fn render_library_bibliography(
     library: &Library,
     style: &PreparedStyle,

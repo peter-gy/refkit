@@ -5,8 +5,8 @@
   "polars-wheel-tag": "cp314-cp314-pyemscripten_2026_0_wasm32",
   "polars-plugin-abi": {
     "python-polars": "1.33.1",
-    "rust-polars": "0.51.0",
-    "pyo3": "0.25.1",
-    "pyo3-polars": "0.24.0"
+    "rust-polars": "0.55.2",
+    "pyo3": "0.29.2",
+    "pyo3-polars": "0.28.0"
   }
 }

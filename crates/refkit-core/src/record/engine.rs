@@ -2,7 +2,10 @@ use std::str::FromStr;
 
 use hayagriva::types as h;
 
-use super::*;
+use super::{
+    Contributors, Date, DateParts, DateValue, EntryRecord, ExtensionValue, Name, Publisher,
+    RecordError, ScalarValue, Text, TextChunk, TextKind, Url, fmt,
+};
 
 impl Text {
     pub(crate) fn from_engine(text: &h::FormatString) -> Self {
@@ -86,8 +89,7 @@ impl Name {
             } => h::Person {
                 name: non_dropping_particle
                     .as_ref()
-                    .map(|particle| format!("{particle} {family}"))
-                    .unwrap_or_else(|| family.clone()),
+                    .map_or_else(|| family.clone(), |particle| format!("{particle} {family}")),
                 given_name: given.clone(),
                 prefix: prefix.clone(),
                 suffix: suffix.clone(),
@@ -114,7 +116,9 @@ impl Date {
                     year: date.year,
                     month: date.month.map(|month| month + 1),
                     day: date.day.map(|day| day + 1),
-                    season: date.season.map(|season| season.to_csl_number()),
+                    season: date
+                        .season
+                        .map(hayagriva::citationberg::taxonomy::Season::to_csl_number),
                     time: None,
                 },
             },
@@ -196,8 +200,7 @@ fn validate_date_parts(date: &DateParts, path: &str) -> Result<(), RecordError> 
             ));
         };
         let value = format!("{}-{month:02}-{day:02}T{time}", date.year_text());
-        biblatex::Date::parse(&[biblatex::Spanned::detached(biblatex::Chunk::Normal(value))])
-            .map_err(|error| RecordError::new(path, error))?;
+        Date::parse_biblatex(&value).map_err(|error| RecordError::new(path, error))?;
     }
     Ok(())
 }
@@ -216,9 +219,9 @@ impl ScalarValue {
     {
         match self {
             Self::Typed(value) => value
-                .parse()
+                .parse::<T>()
                 .map(h::MaybeTyped::Typed)
-                .map_err(|error| RecordError::new(path, error)),
+                .map_err(|error| RecordError::new(path, error.to_string())),
             Self::Literal(value) => Ok(h::MaybeTyped::String(value.clone())),
         }
     }
@@ -267,7 +270,7 @@ impl EntryRecord {
     pub(crate) fn from_engine(entry: &hayagriva::Entry) -> Self {
         Self {
             key: entry.key().to_string(),
-            entry_type: crate::strings::entry_type_name(entry.entry_type()).to_string(),
+            entry_type: crate::strings::entry_type_name(*entry.entry_type()).to_string(),
             title: entry.title().map(Text::from_engine),
             authors: entry
                 .authors()
@@ -346,148 +349,186 @@ impl EntryRecord {
                 "record graph exceeds resource limits",
             ));
         }
-        let mut extension_nodes = 0;
-        for (namespace, fields) in &self.extensions {
-            for (field, value) in fields {
-                validate_extension(
-                    value,
-                    0,
-                    &mut extension_nodes,
-                    &format!("{}.extensions.{namespace}.{field}", self.key),
-                )?;
-            }
-        }
-        let kind = serde_json::from_value::<h::EntryType>(serde_json::Value::String(
-            self.entry_type.clone(),
-        ))
-        .map_err(|_| RecordError::new(format!("{}.entry_type", self.key), "unknown entry type"))?;
-        if crate::strings::entry_type_name(&kind) != self.entry_type {
-            return Err(RecordError::new(
-                format!("{}.entry_type", self.key),
-                "entry type must use its canonical TitleCase name",
-            ));
-        }
-        if self.key.is_empty() {
-            return Err(RecordError::new("key", "entry key must not be empty"));
-        }
-        let mut entry = hayagriva::Entry::new(&self.key, kind);
-        macro_rules! text_fields {
-            ($($field:ident => $setter:ident),* $(,)?) => { $(if let Some(value) = &self.$field { entry.$setter(value.to_engine()); })* };
-        }
-        text_fields!(title => set_title, location => set_location, organization => set_organization, archive => set_archive, archive_location => set_archive_location, call_number => set_call_number, note => set_note, abstract_text => set_abstract_, genre => set_genre);
-        if !self.authors.is_empty() {
-            entry.set_authors(self.authors.iter().map(Name::to_engine).collect());
-        }
-        if !self.editors.is_empty() {
-            entry.set_editors(self.editors.iter().map(Name::to_engine).collect());
-        }
-        if !self.affiliated.is_empty() {
-            entry.set_affiliated(
-                self.affiliated
-                    .iter()
-                    .map(|group| {
-                        h::PersonsWithRoles::new(
-                            group.names.iter().map(Name::to_engine).collect(),
-                            serde_json::from_value(serde_json::Value::String(group.role.clone()))
-                                .unwrap_or_else(|_| h::PersonRole::Unknown(group.role.clone())),
-                        )
-                    })
-                    .collect(),
-            );
-        }
-        for (field, date) in [
-            ("date", &self.date),
-            ("event_date", &self.event_date),
-            ("original_date", &self.original_date),
-        ] {
-            if let Some(date) = date {
-                let prepared = date.to_engine(&format!("{}.{field}", self.key))?;
-                if field == "date"
-                    && let Some(date) = prepared
-                {
-                    entry.set_date(date);
-                }
-            }
-        }
+        let mut entry = prepare_identity(self)?;
+        prepare_text_fields(self, &mut entry);
+        prepare_creators(self, &mut entry);
+        prepare_dates(self, &mut entry)?;
         if let Some(publisher) = &self.publisher {
             entry.set_publisher(h::Publisher::new(
                 publisher.name.as_ref().map(Text::to_engine),
                 publisher.location.as_ref().map(Text::to_engine),
             ));
         }
-        macro_rules! scalar_fields {
-            ($($field:ident => $setter:ident),* $(,)?) => { $(if let Some(value) = &self.$field { entry.$setter(value.to_engine(&format!("{}.{}", self.key, stringify!($field)))?); })* };
-        }
-        scalar_fields!(issue => set_issue, chapter => set_chapter, volume => set_volume, edition => set_edition, page_range => set_page_range, time_range => set_time_range, runtime => set_runtime);
-        for (field, value) in [
-            ("volume_total", &self.volume_total),
-            ("page_total", &self.page_total),
-        ] {
-            if let Some(value) = value {
-                let h::MaybeTyped::Typed(number) =
-                    value.to_engine::<h::Numeric>(&format!("{}.{field}", self.key))?
-                else {
-                    return Err(RecordError::new(
-                        format!("{}.{field}", self.key),
-                        "total requires a typed number",
-                    ));
-                };
-                if field == "volume_total" {
-                    entry.set_volume_total(number);
-                } else {
-                    entry.set_page_total(number);
-                }
-            }
-        }
-        if let Some(url) = &self.url {
-            let accessed = url
-                .accessed
-                .as_ref()
-                .map(|date| date.to_engine(&format!("{}.url.accessed", self.key)))
-                .transpose()?
-                .flatten();
-            if let Ok(mut prepared) = url.value.parse::<h::QualifiedUrl>() {
-                prepared.visit_date = accessed;
-                entry.set_url(prepared);
-            }
-        }
-        if !self.identifiers.is_empty() {
-            entry.set_serial_number(h::SerialNumber(self.identifiers.clone()));
-        }
-        if let Some(language) = &self.language {
-            entry.set_language(
-                language
-                    .parse()
-                    .map_err(|error| RecordError::new(format!("{}.language", self.key), error))?,
-            );
-        }
-        let mut parents: Vec<_> = self
-            .parents
-            .iter()
-            .map(|parent| parent.prepare_engine(depth + 1, visited))
-            .collect::<Result<_, _>>()?;
-        for (kind, date, field) in [
-            (h::EntryType::Original, &self.original_date, "original_date"),
-            (h::EntryType::Conference, &self.event_date, "event_date"),
-        ] {
-            if let Some(date) = date
-                && let Some(date) = date.to_engine(&format!("{}.{field}", self.key))?
-            {
-                if let Some(parent) = parents
-                    .iter_mut()
-                    .find(|parent| parent.entry_type() == &kind)
-                {
-                    parent.set_date(date);
-                } else {
-                    let mut parent = hayagriva::Entry::new(&self.key, kind);
-                    parent.set_date(date);
-                    parents.push(parent);
-                }
-            }
-        }
-        entry.set_parents(parents);
+        prepare_numbers(self, &mut entry)?;
+        prepare_links(self, &mut entry)?;
+        entry.set_parents(prepare_parents(self, depth, visited)?);
         Ok(entry)
     }
+}
+
+fn prepare_identity(record: &EntryRecord) -> Result<hayagriva::Entry, RecordError> {
+    let mut extension_nodes = 0;
+    for (namespace, fields) in &record.extensions {
+        for (field, value) in fields {
+            validate_extension(
+                value,
+                0,
+                &mut extension_nodes,
+                &format!("{}.extensions.{namespace}.{field}", record.key),
+            )?;
+        }
+    }
+    let kind = serde_json::from_value::<h::EntryType>(serde_json::Value::String(
+        record.entry_type.clone(),
+    ))
+    .map_err(|_| RecordError::new(format!("{}.entry_type", record.key), "unknown entry type"))?;
+    if crate::strings::entry_type_name(kind) != record.entry_type {
+        return Err(RecordError::new(
+            format!("{}.entry_type", record.key),
+            "entry type must use its canonical TitleCase name",
+        ));
+    }
+    if record.key.is_empty() {
+        return Err(RecordError::new("key", "entry key must not be empty"));
+    }
+    Ok(hayagriva::Entry::new(&record.key, kind))
+}
+
+fn prepare_text_fields(record: &EntryRecord, entry: &mut hayagriva::Entry) {
+    macro_rules! text_fields {
+        ($($field:ident => $setter:ident),* $(,)?) => { $(if let Some(value) = &record.$field { entry.$setter(value.to_engine()); })* };
+    }
+    text_fields!(title => set_title, location => set_location, organization => set_organization, archive => set_archive, archive_location => set_archive_location, call_number => set_call_number, note => set_note, abstract_text => set_abstract_, genre => set_genre);
+}
+
+fn prepare_creators(record: &EntryRecord, entry: &mut hayagriva::Entry) {
+    if !record.authors.is_empty() {
+        entry.set_authors(record.authors.iter().map(Name::to_engine).collect());
+    }
+    if !record.editors.is_empty() {
+        entry.set_editors(record.editors.iter().map(Name::to_engine).collect());
+    }
+    if !record.affiliated.is_empty() {
+        entry.set_affiliated(
+            record
+                .affiliated
+                .iter()
+                .map(|group| {
+                    h::PersonsWithRoles::new(
+                        group.names.iter().map(Name::to_engine).collect(),
+                        serde_json::from_value(serde_json::Value::String(group.role.clone()))
+                            .unwrap_or_else(|_| h::PersonRole::Unknown(group.role.clone())),
+                    )
+                })
+                .collect(),
+        );
+    }
+}
+
+fn prepare_dates(record: &EntryRecord, entry: &mut hayagriva::Entry) -> Result<(), RecordError> {
+    for (field, date) in [
+        ("date", &record.date),
+        ("event_date", &record.event_date),
+        ("original_date", &record.original_date),
+    ] {
+        if let Some(date) = date {
+            let prepared = date.to_engine(&format!("{}.{field}", record.key))?;
+            if field == "date"
+                && let Some(date) = prepared
+            {
+                entry.set_date(date);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn prepare_numbers(record: &EntryRecord, entry: &mut hayagriva::Entry) -> Result<(), RecordError> {
+    macro_rules! scalar_fields {
+        ($($field:ident => $setter:ident),* $(,)?) => { $(if let Some(value) = &record.$field { entry.$setter(value.to_engine(&format!("{}.{}", record.key, stringify!($field)))?); })* };
+    }
+    scalar_fields!(issue => set_issue, chapter => set_chapter, volume => set_volume, edition => set_edition, page_range => set_page_range, time_range => set_time_range, runtime => set_runtime);
+    for (field, value) in [
+        ("volume_total", &record.volume_total),
+        ("page_total", &record.page_total),
+    ] {
+        if let Some(value) = value {
+            let h::MaybeTyped::Typed(number) =
+                value.to_engine::<h::Numeric>(&format!("{}.{field}", record.key))?
+            else {
+                return Err(RecordError::new(
+                    format!("{}.{field}", record.key),
+                    "total requires a typed number",
+                ));
+            };
+            if field == "volume_total" {
+                entry.set_volume_total(number);
+            } else {
+                entry.set_page_total(number);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn prepare_links(record: &EntryRecord, entry: &mut hayagriva::Entry) -> Result<(), RecordError> {
+    if let Some(url) = &record.url {
+        let accessed = url
+            .accessed
+            .as_ref()
+            .map(|date| date.to_engine(&format!("{}.url.accessed", record.key)))
+            .transpose()?
+            .flatten();
+        if let Ok(mut prepared) = url.value.parse::<h::QualifiedUrl>() {
+            prepared.visit_date = accessed;
+            entry.set_url(prepared);
+        }
+    }
+    if !record.identifiers.is_empty() {
+        entry.set_serial_number(h::SerialNumber(record.identifiers.clone()));
+    }
+    if let Some(language) = &record.language {
+        entry.set_language(language.parse().map_err(|error| {
+            RecordError::new(format!("{}.language", record.key), format!("{error}"))
+        })?);
+    }
+    Ok(())
+}
+
+fn prepare_parents(
+    record: &EntryRecord,
+    depth: usize,
+    visited: &mut usize,
+) -> Result<Vec<hayagriva::Entry>, RecordError> {
+    let mut parents: Vec<_> = record
+        .parents
+        .iter()
+        .map(|parent| parent.prepare_engine(depth + 1, visited))
+        .collect::<Result<_, _>>()?;
+    for (kind, date, field) in [
+        (
+            h::EntryType::Original,
+            &record.original_date,
+            "original_date",
+        ),
+        (h::EntryType::Conference, &record.event_date, "event_date"),
+    ] {
+        if let Some(date) = date
+            && let Some(date) = date.to_engine(&format!("{}.{field}", record.key))?
+        {
+            if let Some(parent) = parents
+                .iter_mut()
+                .find(|parent| parent.entry_type() == &kind)
+            {
+                parent.set_date(date);
+            } else {
+                let mut parent = hayagriva::Entry::new(&record.key, kind);
+                parent.set_date(date);
+                parents.push(parent);
+            }
+        }
+    }
+    Ok(parents)
 }
 
 fn validate_extension(

@@ -11,50 +11,16 @@ pub(super) fn encode(
     for record in records {
         library.insert(Value::String(record.key.clone()), entry(record, issues)?);
     }
-    serde_yaml::to_string(&library).map_err(CodecError::new)
+    serde_yaml::to_string(&library).map_err(|error| CodecError::new(error.to_string()))
 }
 
 fn entry(record: &EntryRecord, issues: &mut Vec<ConversionIssue>) -> Result<Value, CodecError> {
-    if let Some(ExtensionValue::String(original)) = record
-        .extensions
-        .get("csl-json")
-        .and_then(|fields| fields.get("@type"))
-    {
-        let compatible = super::csl::record_type(original)
-            .map(|(kind, _)| kind == record.entry_type)
-            .unwrap_or(record.entry_type == "Misc");
-        if original != super::csl::canonical_type(record) && compatible {
-            issue(
-                issues,
-                "type_approximated",
-                "encode",
-                &record.key,
-                "entry_type",
-                true,
-                "source type specialization is not retained by the Hayagriva type vocabulary",
-            );
-        }
-    }
-    if let Some(ExtensionValue::String(original)) = record
-        .extensions
-        .get("biblatex")
-        .and_then(|fields| fields.get("@type"))
-        && ((record.entry_type == "Repository" && original == "dataset")
-            || (record.entry_type == "Misc"
-                && ["software", "booklet"].contains(&original.as_str())))
-    {
-        issue(
-            issues,
-            "type_approximated",
-            "encode",
-            &record.key,
-            "entry_type",
-            true,
-            "source type specialization is not retained by the Hayagriva type vocabulary",
-        );
-    }
-    let prepared = record.to_engine().map_err(CodecError::new)?;
-    let mut value = serde_yaml::to_value(prepared).map_err(CodecError::new)?;
+    report_type_projection(record, issues);
+    let prepared = record
+        .to_engine()
+        .map_err(|error| CodecError::new(error.to_string()))?;
+    let mut value =
+        serde_yaml::to_value(prepared).map_err(|error| CodecError::new(error.to_string()))?;
     let fields = value
         .as_mapping_mut()
         .ok_or_else(|| CodecError::new("expected a YAML entry mapping"))?;
@@ -104,26 +70,7 @@ fn entry(record: &EntryRecord, issues: &mut Vec<ConversionIssue>) -> Result<Valu
             ),
         );
     }
-    if let Some(extra) = record.extensions.get("hayagriva") {
-        for (key, value) in extra {
-            if fields.contains_key(Value::String(key.clone())) {
-                issue(
-                    issues,
-                    "extension_conflict",
-                    "encode",
-                    &record.key,
-                    &format!("extensions.hayagriva.{key}"),
-                    true,
-                    "structured field takes precedence over the extension",
-                );
-            } else {
-                fields.insert(
-                    key.clone().into(),
-                    serde_yaml::to_value(value).map_err(CodecError::new)?,
-                );
-            }
-        }
-    }
+    put_extensions(record, fields, issues)?;
     Ok(value)
 }
 
@@ -147,4 +94,75 @@ fn date_value(date: &Date) -> Option<Value> {
         (date.approximate || date.uncertain).into(),
     );
     Some(Value::Mapping(fields))
+}
+
+fn report_type_projection(record: &EntryRecord, issues: &mut Vec<ConversionIssue>) {
+    if let Some(ExtensionValue::String(original)) = record
+        .extensions
+        .get("csl-json")
+        .and_then(|fields| fields.get("@type"))
+    {
+        let compatible = super::csl::record_type(original)
+            .map_or(record.entry_type == "Misc", |(kind, _)| {
+                kind == record.entry_type
+            });
+        if original != super::csl::canonical_type(record) && compatible {
+            issue(
+                issues,
+                "type_approximated",
+                "encode",
+                &record.key,
+                "entry_type",
+                true,
+                "source type specialization is not retained by the Hayagriva type vocabulary",
+            );
+        }
+    }
+    if let Some(ExtensionValue::String(original)) = record
+        .extensions
+        .get("biblatex")
+        .and_then(|fields| fields.get("@type"))
+        && ((record.entry_type == "Repository" && original == "dataset")
+            || (record.entry_type == "Misc"
+                && ["software", "booklet"].contains(&original.as_str())))
+    {
+        issue(
+            issues,
+            "type_approximated",
+            "encode",
+            &record.key,
+            "entry_type",
+            true,
+            "source type specialization is not retained by the Hayagriva type vocabulary",
+        );
+    }
+}
+
+fn put_extensions(
+    record: &EntryRecord,
+    fields: &mut Mapping,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<(), CodecError> {
+    if let Some(extra) = record.extensions.get("hayagriva") {
+        for (key, value) in extra {
+            if fields.contains_key(Value::String(key.clone())) {
+                issue(
+                    issues,
+                    "extension_conflict",
+                    "encode",
+                    &record.key,
+                    &format!("extensions.hayagriva.{key}"),
+                    true,
+                    "structured field takes precedence over the extension",
+                );
+            } else {
+                fields.insert(
+                    key.clone().into(),
+                    serde_yaml::to_value(value)
+                        .map_err(|error| CodecError::new(error.to_string()))?,
+                );
+            }
+        }
+    }
+    Ok(())
 }

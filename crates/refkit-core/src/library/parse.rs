@@ -52,6 +52,8 @@ pub(super) fn parse_hayagriva_yaml(source: &str) -> Result<ParsedLibrary, ParseF
         })
 }
 
+#[must_use]
+/// Parse BibTeX/BibLaTeX into a status, keys, count, and structured diagnostics.
 pub fn parse_bibtex_report(source: &str, recovery: RecoveryPolicy) -> ParseReport {
     match parse_biblatex_library(source, recovery) {
         Ok(parsed) => ParseReport {

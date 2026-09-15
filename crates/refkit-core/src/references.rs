@@ -7,10 +7,12 @@ pub(crate) fn decode_expression(
 ) -> Result<Vec<String>, String> {
     let document =
         crate::RawDocument::parse(&format!("@misc{{reference,value={expression}}}")).into_syntax();
-    if document.entries.len() != 1 || document.entries[0].fields.len() != 1 {
+    let [entry] = document.entries.as_slice() else {
         return Err("Expected one reference value expression".into());
-    }
-    let field = &document.entries[0].fields[0];
+    };
+    let [field] = entry.fields.as_slice() else {
+        return Err("Expected one reference value expression".into());
+    };
     crate::library::normalize_reference(
         &field_chunks(&field.value_atoms, &field.span),
         abbreviations,
@@ -19,7 +21,14 @@ pub(crate) fn decode_expression(
     .map_err(|error| error.message)
 }
 
+#[expect(
+    clippy::indexing_slicing,
+    reason = "Graph/key lengths and every edge target are checked before traversal. The state vector has the same length and only checked vertices enter the stack."
+)]
 pub(crate) fn validate_graph(keys: &[&str], graph: &[Vec<usize>]) -> Result<(), String> {
+    if keys.len() != graph.len() || graph.iter().flatten().any(|target| *target >= graph.len()) {
+        return Err("reference graph contains an invalid vertex".into());
+    }
     let mut state = vec![0u8; graph.len()];
     for start in 0..graph.len() {
         if state[start] != 0 {
@@ -97,4 +106,13 @@ pub(crate) fn field_chunks<'a>(
             Spanned::new(value, span.clone())
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn malformed_graphs_fail_before_traversal() {
+        assert!(super::validate_graph(&[], &[vec![]]).is_err());
+        assert!(super::validate_graph(&["a"], &[vec![1]]).is_err());
+    }
 }

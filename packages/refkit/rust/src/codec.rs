@@ -56,9 +56,10 @@ fn encode(
     let loss = loss
         .parse()
         .map_err(|error: refkit_core::CodecError| PyValueError::new_err(error.to_string()))?;
-    let library = library.inner.clone();
+    let prepared = std::sync::Arc::clone(&library.inner);
+    drop(library);
     let report = py
-        .detach(move || refkit_core::encode(&library, format, loss))
+        .detach(move || refkit_core::encode(&prepared, format, loss))
         .map_err(|error| codec_error_to_py(py, error))?;
     json_to_py(
         py,

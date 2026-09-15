@@ -13,6 +13,10 @@ impl RecoverySource {
         }
     }
 
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "The origin table has one slot per current source byte plus its terminal boundary, and both queried endpoints are clamped to the current source length."
+    )]
     pub fn original_span(&self, span: Range<usize>) -> Range<usize> {
         match &self.origins {
             Some(origins) => {
@@ -22,6 +26,10 @@ impl RecoverySource {
         }
     }
 
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "Recovery passes current-parser spans to this method. The origin table includes the terminal boundary and each replacement preserves its source-length-plus-one invariant."
+    )]
     pub fn literalize(&mut self, span: Range<usize>) {
         let origins = self
             .origins

@@ -33,7 +33,8 @@ pub(crate) fn validation_to_py(
         "profile",
         json_to_py(
             py,
-            &serde_json::to_string(&report.profile).expect("owned enum serializes"),
+            &serde_json::to_string(&report.profile)
+                .map_err(|error| crate::errors::RefkitError::new_err(error.to_string()))?,
         )?,
     )?;
     result.set_item("valid", report.is_valid())?;
@@ -44,14 +45,16 @@ pub(crate) fn validation_to_py(
             "code",
             json_to_py(
                 py,
-                &serde_json::to_string(&issue.code).expect("owned enum serializes"),
+                &serde_json::to_string(&issue.code)
+                    .map_err(|error| crate::errors::RefkitError::new_err(error.to_string()))?,
             )?,
         )?;
         value.set_item(
             "severity",
             json_to_py(
                 py,
-                &serde_json::to_string(&issue.severity).expect("owned enum serializes"),
+                &serde_json::to_string(&issue.severity)
+                    .map_err(|error| crate::errors::RefkitError::new_err(error.to_string()))?,
             )?,
         )?;
         value.set_item("target", target(py, &issue.target)?)?;
@@ -108,14 +111,13 @@ fn parse_projection_field(field: &str) -> PyResult<ProjectionField> {
     let parsed = field
         .parse()
         .map_err(|error: refkit_core::EntryFieldError| PyValueError::new_err(error.to_string()))?;
-    let name = match field {
-        "key" => "key",
-        "entry_type" => "entry_type",
-        "title" => "title",
-        "date" => "date",
-        "doi" => "doi",
-        "volume" => "volume",
-        _ => unreachable!("EntryField accepted an unknown name"),
+    let name = match parsed {
+        EntryField::Key => "key",
+        EntryField::EntryType => "entry_type",
+        EntryField::Title => "title",
+        EntryField::Date => "date",
+        EntryField::Doi => "doi",
+        EntryField::Volume => "volume",
     };
     Ok(ProjectionField {
         name,

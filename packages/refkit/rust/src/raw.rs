@@ -65,7 +65,8 @@ impl BibDocument {
             .map_err(|error| crate::errors::merge_error_to_py(py, error))?;
         crate::conversion::json_to_py(
             py,
-            &serde_json::to_string(&report).expect("owned report serializes"),
+            &serde_json::to_string(&report)
+                .map_err(|error| crate::errors::RefkitError::new_err(error.to_string()))?,
         )
     }
 
@@ -120,7 +121,8 @@ impl BibDocument {
             .map_err(|error| crate::errors::merge_error_to_py(py, error))?;
         crate::conversion::json_to_py(
             py,
-            &serde_json::to_string(&plan).expect("owned merge plan serializes"),
+            &serde_json::to_string(&plan)
+                .map_err(|error| crate::errors::RefkitError::new_err(error.to_string()))?,
         )
     }
 
@@ -259,10 +261,7 @@ impl BibDocument {
         options: Option<PyRef<'_, TidyOptions>>,
     ) -> PyResult<TidyResult> {
         let data = Arc::clone(&self.doc);
-        let options = options
-            .as_ref()
-            .map(|options| options.inner())
-            .unwrap_or_default();
+        let options = options.map(|options| options.inner()).unwrap_or_default();
         let rendered = py
             .detach(move || render_document_text(&data))
             .map_err(RefkitError::new_err)?;
@@ -310,7 +309,7 @@ impl BibEntryMap {
             .map(|entry| BibEntry {
                 doc: Arc::clone(&self.doc),
                 entry_id: entry.id,
-                key: entry.key.clone(),
+                key: entry.key,
             })
             .collect()
     }
@@ -392,7 +391,7 @@ impl BibEntry {
 
     #[getter]
     fn kind(&self) -> PyResult<String> {
-        self.with_entry(|entry| entry.kind.clone())
+        self.with_entry(|entry| entry.kind)
     }
 
     #[getter]
@@ -456,7 +455,7 @@ impl BibFieldMap {
                         doc: Arc::clone(&self.doc),
                         entry_id: self.entry_id,
                         field_id: field.id,
-                        field_key: field.name.clone(),
+                        field_key: field.name,
                     })
                     .collect()
             })
@@ -472,7 +471,7 @@ impl BibFieldMap {
                         doc: Arc::clone(&self.doc),
                         entry_id: self.entry_id,
                         field_id: field.id,
-                        field_key: field.name.clone(),
+                        field_key: field.name,
                     })
                     .collect()
             })
@@ -560,12 +559,12 @@ impl BibField {
     }
     #[getter]
     fn name(&self) -> PyResult<String> {
-        self.with_field(|field| field.name.clone())
+        self.with_field(|field| field.name)
     }
 
     #[getter]
     fn value(&self) -> PyResult<String> {
-        self.with_field(|field| field.value.clone())
+        self.with_field(|field| field.value)
     }
 
     #[getter]
@@ -656,7 +655,8 @@ fn patch_result_to_py(py: Python<'_>, result: refkit_core::BibPatchResult) -> Py
             "kind",
             crate::conversion::json_to_py(
                 py,
-                &serde_json::to_string(&change.kind).expect("owned enum serializes"),
+                &serde_json::to_string(&change.kind)
+                    .map_err(|error| crate::errors::RefkitError::new_err(error.to_string()))?,
             )?,
         )?;
         value.set_item("before", (change.before.start, change.before.end))?;
@@ -684,7 +684,8 @@ fn patch_result_to_py(py: Python<'_>, result: refkit_core::BibPatchResult) -> Py
         "warnings",
         crate::conversion::json_to_py(
             py,
-            &serde_json::to_string(&result.warnings).expect("owned warnings serialize"),
+            &serde_json::to_string(&result.warnings)
+                .map_err(|error| crate::errors::RefkitError::new_err(error.to_string()))?,
         )?,
     )?;
     Ok(output.into_any().unbind())

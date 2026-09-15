@@ -1,14 +1,18 @@
 use ::biblatex::{Bibliography, ChunksExt, RawBibliography};
 
 use super::{
-    Identifiers, ValidationCode, ValidationProfile, ValidationReport, ValidationTarget,
-    check_identifier, check_url, issue, shared_identifiers,
+    Identifiers, ValidationCode, ValidationIssue, ValidationProfile, ValidationReport,
+    ValidationTarget, check_identifier, check_url, issue, shared_identifiers,
 };
 use crate::library::{normalize_reference, parse_error, validate_raw, validate_source};
 use crate::{Diagnostic, ParseFailure, RawDocument};
 
 impl RawDocument {
     /// Inspect the current source snapshot using the pinned BibLaTeX field profile.
+    /// Check source-field requirements and references without changing the snapshot.
+    ///
+    /// # Errors
+    /// Returns parser diagnostics when the source cannot be interpreted for validation.
     pub fn validate(&self) -> Result<ValidationReport, ParseFailure> {
         let source = self
             .render()
@@ -48,84 +52,22 @@ impl RawDocument {
                     ),
                 }
             };
-            let verified = entry.verify();
-            for field in verified.missing {
-                issues.push(issue(
-                    ValidationCode::MissingRequiredField,
-                    target(field),
-                    format!("BibLaTeX profile requires {field} for {}", occurrence.kind),
-                ));
-            }
-            for field in verified.superfluous {
-                issues.push(issue(
-                    ValidationCode::SuperfluousField,
-                    target(field),
-                    format!(
-                        "BibLaTeX profile does not allow {field} for {}",
-                        occurrence.kind
-                    ),
-                ));
-            }
-            for (field, error) in verified.malformed {
-                issues.push(issue(
-                    ValidationCode::MalformedField,
-                    target(&field),
-                    error.to_string(),
-                ));
-            }
-            for field in ["doi", "isbn", "issn"] {
-                if let Some(value) = entry.fields.get(field)
-                    && let Some(canonical) = check_identifier(
-                        field,
-                        &value.format_verbatim(),
-                        target(field),
-                        &mut issues,
-                    )
-                {
-                    identifiers
-                        .entry((field.into(), canonical))
-                        .or_default()
-                        .push(target(field));
-                }
-            }
-            if let Some(value) = entry.fields.get("url") {
-                check_url(&value.format_verbatim(), target("url"), &mut issues);
-            }
-            if entry
-                .fields
-                .get("title")
-                .is_some_and(|title| title.format_verbatim().trim().is_empty())
-            {
-                issues.push(issue(
-                    ValidationCode::EmptyTitle,
-                    target("title"),
-                    "Title is present but empty",
-                ));
-            }
+            validate_entry(
+                entry,
+                &occurrence.kind,
+                &target,
+                &mut issues,
+                &mut identifiers,
+            );
             // xdata is consumed by upstream inheritance, so inspect source references.
             if let Some(raw_entry) = raw_entries.get(occurrence.key.as_str()) {
-                for field in &raw_entry.v.fields {
-                    let name = field.key.v.to_ascii_lowercase();
-                    if !["crossref", "xdata", "xref"].contains(&name.as_str()) {
-                        continue;
-                    }
-                    let keys = normalize_reference(
-                        &field.value.v,
-                        &raw.abbreviations,
-                        name != "crossref",
-                    )?;
-                    for key in keys {
-                        if bibliography.get(&key).is_none() {
-                            let mut finding = issue(
-                                ValidationCode::UnresolvedReference,
-                                target(&name),
-                                format!("Reference target {key:?} does not exist"),
-                            );
-                            finding.related.push(ValidationTarget::record(&key, ""));
-                            issues.push(finding);
-                        }
-                    }
-                }
+                validate_references(
+                    &raw_entry.v,
+                    &raw.abbreviations,
+                    &bibliography,
+                    &target,
+                    &mut issues,
+                )?;
             }
         }
         shared_identifiers(identifiers, &mut issues);
@@ -134,4 +76,88 @@ impl RawDocument {
             issues,
         })
     }
+}
+
+fn validate_entry(
+    entry: &biblatex::Entry,
+    entry_type: &str,
+    target: &impl Fn(&str) -> ValidationTarget,
+    issues: &mut Vec<ValidationIssue>,
+    identifiers: &mut Identifiers,
+) {
+    let verified = entry.verify();
+    for field in verified.missing {
+        issues.push(issue(
+            ValidationCode::MissingRequiredField,
+            target(field),
+            format!("BibLaTeX profile requires {field} for {entry_type}"),
+        ));
+    }
+    for field in verified.superfluous {
+        issues.push(issue(
+            ValidationCode::SuperfluousField,
+            target(field),
+            format!("BibLaTeX profile does not allow {field} for {entry_type}"),
+        ));
+    }
+    for (field, error) in verified.malformed {
+        issues.push(issue(
+            ValidationCode::MalformedField,
+            target(&field),
+            error.to_string(),
+        ));
+    }
+    for field in ["doi", "isbn", "issn"] {
+        if let Some(value) = entry.fields.get(field)
+            && let Some(canonical) =
+                check_identifier(field, &value.format_verbatim(), target(field), issues)
+        {
+            identifiers
+                .entry((field.into(), canonical))
+                .or_default()
+                .push(target(field));
+        }
+    }
+    if let Some(value) = entry.fields.get("url") {
+        check_url(&value.format_verbatim(), target("url"), issues);
+    }
+    if entry
+        .fields
+        .get("title")
+        .is_some_and(|title| title.format_verbatim().trim().is_empty())
+    {
+        issues.push(issue(
+            ValidationCode::EmptyTitle,
+            target("title"),
+            "Title is present but empty",
+        ));
+    }
+}
+
+fn validate_references(
+    entry: &biblatex::RawEntry<'_>,
+    abbreviations: &[biblatex::Pair<'_>],
+    bibliography: &Bibliography,
+    target: &impl Fn(&str) -> ValidationTarget,
+    issues: &mut Vec<ValidationIssue>,
+) -> Result<(), ParseFailure> {
+    for field in &entry.fields {
+        let name = field.key.v.to_ascii_lowercase();
+        if !["crossref", "xdata", "xref"].contains(&name.as_str()) {
+            continue;
+        }
+        let keys = normalize_reference(&field.value.v, abbreviations, name != "crossref")?;
+        for key in keys {
+            if bibliography.get(&key).is_none() {
+                let mut finding = issue(
+                    ValidationCode::UnresolvedReference,
+                    target(&name),
+                    format!("Reference target {key:?} does not exist"),
+                );
+                finding.related.push(ValidationTarget::record(&key, ""));
+                issues.push(finding);
+            }
+        }
+    }
+    Ok(())
 }

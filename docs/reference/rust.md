@@ -6,7 +6,7 @@ description: Inspect the source-workspace Rust API that supplies RefKit's portab
 
 The `refkit-core` crate is RefKit's portable, adapter-facing Rust API inside the source workspace. It accepts in-memory values and returns RefKit-owned records. Host paths, Python and JavaScript objects, and Polars values stay in their adapters.
 
-Use the crate from a matching RefKit source or Git revision with Rust 1.88 or newer. The versioned bindings install through the `refkit` and `polars-refkit` Python distributions and the `refkit-js` npm package.
+Use the crate from a matching RefKit source or Git revision with Rust 1.95 or newer. The versioned bindings install through the `refkit` and `polars-refkit` Python distributions and the `refkit-js` npm package.
 
 ## Public capability groups
 

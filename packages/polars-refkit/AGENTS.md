@@ -15,3 +15,5 @@
 - Reuse core semantic inputs and expected results. Keep broadcasting, lazy execution, row failures, dtypes, and plugin loading in Polars boundary tests.
 
 Rebuild with `make polars-refkit-develop` from the repository root so the native plugin and Agent Plugin marker come from the same backend. Run `make typecheck test rust` from the repository root.
+
+Use the shared Rust build floor and lint policy. The `abi3` feature selects Python 3.10 stable-ABI support, and Maturin selects extension linking. Verify every plugin ABI-family upgrade through installed CPython and Pyodide runtimes.

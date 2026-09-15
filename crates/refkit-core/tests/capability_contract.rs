@@ -1,3 +1,7 @@
+//! Portable capability boundaries and normalized record projections.
+
+#![cfg(test)]
+
 use refkit_core::{EntryField, Library, RecoveryPolicy};
 
 const BIBLATEX: &str = include_str!("../../../testdata/contracts/biblatex-input.bib");

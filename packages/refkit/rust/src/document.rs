@@ -40,7 +40,7 @@ impl Document {
             .collect::<Vec<_>>();
         let groups = parsed
             .into_iter()
-            .map(|citation| citation.into_core_request())
+            .map(super::citation::Citation::into_core_request)
             .collect();
         let rendered = py.detach(|| self.inner.render(groups));
         rendered
@@ -55,7 +55,7 @@ impl Document {
     ) -> PyResult<Rendered> {
         let groups = parse_document_citations(citations)?
             .into_iter()
-            .map(|citation| citation.into_core_request())
+            .map(super::citation::Citation::into_core_request)
             .collect();
         let rendered = py.detach(|| self.inner.cited_bibliography(groups));
         rendered
@@ -107,7 +107,7 @@ impl RenderedDocument {
     fn __getitem__(&self, id: &str) -> PyResult<Rendered> {
         self.citation_index
             .get(id)
-            .map(|&index| self.citations[index].clone())
+            .and_then(|&index| self.citations.get(index).cloned())
             .ok_or_else(|| PyKeyError::new_err(id.to_string()))
     }
 

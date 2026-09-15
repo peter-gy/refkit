@@ -11,64 +11,98 @@ use crate::{Date, DateParts, DateValue, EntryRecord, Library, Name};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+/// Rules used to interpret a validation report.
 pub enum ValidationProfile {
+    /// Format-neutral quality and identifier checks on normalized records.
     Records,
+    /// Source-field requirements from the pinned BibLaTeX engine.
     Biblatex,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+/// Whether a finding makes its validation report invalid.
 pub enum ValidationSeverity {
+    /// A malformed or incoherent value that invalidates the report.
     Error,
+    /// A condition requiring review without invalidating the report.
     Warning,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
+/// Deterministic source or bibliographic quality finding.
 pub enum ValidationCode {
+    /// The source profile requires an absent field.
     MissingRequiredField,
+    /// The source profile does not expect this field for the entry kind.
     SuperfluousField,
+    /// A source field cannot be interpreted according to its field type.
     MalformedField,
+    /// A recognized identifier fails syntax or checksum validation.
     InvalidIdentifier,
+    /// An identifier has a valid but noncanonical representation.
     IdentifierForm,
+    /// Multiple top-level records share a canonical identifier.
     SharedIdentifier,
+    /// URL text is not a supported absolute URL.
     InvalidUrl,
+    /// An explicitly supplied title contains no text.
     EmptyTitle,
+    /// A supplied creator has no identifying name content.
     EmptyName,
+    /// A date interval's lower bound follows its upper bound.
     ReversedDateRange,
+    /// A source reference does not resolve to an entry.
     UnresolvedReference,
+    /// A nested container lacks descriptive metadata.
     IncompleteContainer,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Record or source occurrence to which a finding applies.
 pub struct ValidationTarget {
+    /// Top-level record or source entry key.
     pub entry: String,
     /// Record-relative canonical field path, or a BibLaTeX source field name.
     pub path: String,
+    /// Source entry occurrence index when validating a raw snapshot.
     pub entry_id: Option<usize>,
+    /// Source field occurrence index when available.
     pub field_id: Option<usize>,
     /// UTF-8 byte offsets in the validated source snapshot.
     pub span: Option<Range<usize>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// An inspect-only finding with optional related records and advice.
 pub struct ValidationIssue {
+    /// Machine-readable finding category.
     pub code: ValidationCode,
+    /// Whether this finding invalidates the report.
     pub severity: ValidationSeverity,
+    /// Primary affected record or source occurrence.
     pub target: ValidationTarget,
+    /// Other occurrences contributing to the same finding.
     pub related: Vec<ValidationTarget>,
+    /// Description of the bibliographic or source inconsistency.
     pub message: String,
     /// Inspect-only advice. This is never applied automatically.
     pub suggestion: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Deterministically ordered findings from one inspect-only validation pass.
 pub struct ValidationReport {
+    /// Vocabulary and requirements used for this report.
     pub profile: ValidationProfile,
+    /// Findings in traversal order.
     pub issues: Vec<ValidationIssue>,
 }
 
 impl ValidationReport {
+    #[must_use]
+    /// Return true when no finding has error severity.
     pub fn is_valid(&self) -> bool {
         !self
             .issues
@@ -190,17 +224,7 @@ impl Library {
                 &ValidationTarget::record(&record.key, ""),
                 &mut issues,
             );
-            for (kind, value) in &record.identifiers {
-                if let Some(Ok(canonical)) = identifiers::canonical(kind, value) {
-                    identifiers
-                        .entry((kind.to_ascii_lowercase(), canonical))
-                        .or_default()
-                        .push(ValidationTarget::record(
-                            &record.key,
-                            format!("identifiers.{kind}"),
-                        ));
-                }
-            }
+            collect_identifiers(record, &mut identifiers);
         }
         shared_identifiers(identifiers, &mut issues);
         ValidationReport {
@@ -334,5 +358,20 @@ fn check_date(date: &Date, target: ValidationTarget, issues: &mut Vec<Validation
                 "Date range ends before it starts",
             ));
         }
+    }
+}
+
+fn collect_identifiers(record: &EntryRecord, identifiers: &mut Identifiers) {
+    for (kind, value) in &record.identifiers {
+        let Some(Ok(canonical)) = identifiers::canonical(kind, value) else {
+            continue;
+        };
+        identifiers
+            .entry((kind.to_ascii_lowercase(), canonical))
+            .or_default()
+            .push(ValidationTarget::record(
+                &record.key,
+                format!("identifiers.{kind}"),
+            ));
     }
 }

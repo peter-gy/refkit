@@ -27,7 +27,7 @@ make docs-check
 make build
 ```
 
-`make test` runs the Python, Polars, installed-runtime, and script contract suites with strict warnings and the configured coverage gate. `make benchmark-test` installs the locked Node formatter and runs the benchmark package's tests with subprocess coverage. `make rust` checks and tests the root and Polars Cargo workspaces. `make build` validates the contents of both Python distributions.
+`make test` runs the Python, Polars, installed-runtime, and script contract suites with strict warnings and the configured coverage gate. `make benchmark-test` installs the locked Node formatter and runs the benchmark package's tests with subprocess coverage. `make rust` checks all targets and runs all-feature tests in the root, JavaScript, and Polars Cargo workspaces. `make build` validates the contents of both Python distributions.
 
 The runtime Python suite keeps its 100% coverage gate. Benchmark tooling has a package-local 90% combined statement and branch coverage gate, including its Python subprocesses. Its tests protect timing boundaries, complete output checks, artifact identity, process cleanup, and result compatibility.
 

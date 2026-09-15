@@ -27,6 +27,7 @@ fn recovery(value: &str) -> Result<RecoveryPolicy, JsValue> {
 }
 
 #[wasm_bindgen]
+/// A decoded immutable library with its input format and conversion issues.
 pub struct NativeDecodeReport {
     library: Arc<Library>,
     format: BibliographyFormat,
@@ -36,21 +37,31 @@ pub struct NativeDecodeReport {
 #[wasm_bindgen]
 impl NativeDecodeReport {
     #[wasm_bindgen(getter)]
+    #[must_use]
+    /// Clone the handle to the decoded library.
     pub fn library(&self) -> NativeLibrary {
         NativeLibrary {
             inner: Arc::clone(&self.library),
         }
     }
     #[wasm_bindgen(getter)]
+    #[must_use]
+    /// Return the canonical input format name.
     pub fn format(&self) -> String {
         self.format.as_str().into()
     }
+    #[must_use]
+    /// Return conversion issues as a JSON array.
     pub fn issues(&self) -> String {
-        serde_json::to_string(&self.issues).expect("owned issues serialize")
+        serde_json::json!(self.issues).to_string()
     }
 }
 
 #[wasm_bindgen]
+/// Decode bibliography source into a library and loss report.
+///
+/// # Errors
+/// Rejects unknown options, invalid source, resource limits, and losses forbidden by the policy.
 pub fn decode_format(
     source: &str,
     source_format: &str,
@@ -72,6 +83,10 @@ pub fn decode_format(
 }
 
 #[wasm_bindgen]
+/// Encode a library and return the text and conversion issues as JSON.
+///
+/// # Errors
+/// Rejects unknown options, unrepresentable records, and losses forbidden by the policy.
 pub fn encode_format(
     library: &NativeLibrary,
     target_format: &str,
@@ -83,6 +98,10 @@ pub fn encode_format(
 }
 
 #[wasm_bindgen]
+/// Convert source formats and return output text, issues, and parser diagnostics as JSON.
+///
+/// # Errors
+/// Rejects unknown options, invalid source, resource limits, and losses forbidden by the policy.
 pub fn convert_format(
     source: &str,
     source_format: &str,

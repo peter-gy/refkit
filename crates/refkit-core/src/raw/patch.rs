@@ -33,6 +33,10 @@ struct Plan<'a> {
 
 impl RawDocument {
     /// Apply snapshot-relative edits atomically and return a new document.
+    ///
+    /// # Errors
+    /// Rejects missing targets, overlapping edits, invalid authored values, ambiguous
+    /// references, resource-budget violations, and failed output verification.
     pub fn apply_patch(&self, operations: &[BibEdit]) -> Result<BibPatchResult, BibPatchError> {
         if operations.len() > 100_000 {
             return Err(BibPatchError::new(
@@ -43,26 +47,7 @@ impl RawDocument {
         }
         let mut input_bytes = 0usize;
         for (index, operation) in operations.iter().enumerate() {
-            let bytes = match operation {
-                BibEdit::SetField { value, .. } => value.len(),
-                BibEdit::AddField { name, value, .. } => name.len().saturating_add(value.len()),
-                BibEdit::AddEntry {
-                    key,
-                    entry_type,
-                    fields,
-                    ..
-                } => {
-                    fields
-                        .iter()
-                        .fold(key.len().saturating_add(entry_type.len()), |size, field| {
-                            size.saturating_add(field.name.len())
-                                .saturating_add(field.value.len())
-                        })
-                }
-                BibEdit::RenameEntry { key, .. } => key.len(),
-                BibEdit::SetEntryType { entry_type, .. } => entry_type.len(),
-                _ => 0,
-            };
+            let bytes = authored_bytes(operation);
             input_bytes = input_bytes.saturating_add(bytes);
             if input_bytes > 16 * 1024 * 1024 {
                 return Err(BibPatchError::new(
@@ -92,8 +77,29 @@ impl RawDocument {
         for (index, operation) in operations.iter().enumerate() {
             plan.operation(index, operation)?;
         }
-        plan.append_fields()?;
+        plan.append_fields();
         plan.rewrite_references()?;
         plan.finish()
+    }
+}
+
+fn authored_bytes(operation: &BibEdit) -> usize {
+    match operation {
+        BibEdit::SetField { value, .. } => value.len(),
+        BibEdit::AddField { name, value, .. } => name.len().saturating_add(value.len()),
+        BibEdit::AddEntry {
+            key,
+            entry_type,
+            fields,
+            ..
+        } => fields
+            .iter()
+            .fold(key.len().saturating_add(entry_type.len()), |size, field| {
+                size.saturating_add(field.name.len())
+                    .saturating_add(field.value.len())
+            }),
+        BibEdit::RenameEntry { key, .. } => key.len(),
+        BibEdit::SetEntryType { entry_type, .. } => entry_type.len(),
+        _ => 0,
     }
 }

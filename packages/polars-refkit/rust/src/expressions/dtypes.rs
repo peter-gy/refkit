@@ -1,9 +1,10 @@
+use super::broadcast::input;
 use polars::prelude::*;
 
 use super::EntriesKwargs;
 
 pub(super) fn keys_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
+    let field = input(input_fields, 0)?.clone();
     Ok(Field::new(
         field.name,
         DataType::List(Box::new(DataType::String)),
@@ -23,8 +24,9 @@ pub(super) fn uint32_output(input_fields: &[Field]) -> PolarsResult<Field> {
 }
 
 pub(super) fn entries_output(input_fields: &[Field], kwargs: EntriesKwargs) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
-    let field_names = kwargs.fields.iter().map(String::as_str).collect::<Vec<_>>();
+    let field = input(input_fields, 0)?.clone();
+    let EntriesKwargs { fields, .. } = kwargs;
+    let field_names = fields.iter().map(String::as_str).collect::<Vec<_>>();
     Ok(Field::new(
         field.name,
         DataType::List(Box::new(entry_struct_dtype(&field_names))),
@@ -57,12 +59,12 @@ pub(super) fn resolved_entry_struct_dtype() -> DataType {
 }
 
 pub(super) fn rendered_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
+    let field = input(input_fields, 0)?.clone();
     Ok(Field::new(field.name, rendered_struct_dtype()))
 }
 
 pub(super) fn rendered_list_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
+    let field = input(input_fields, 0)?.clone();
     Ok(Field::new(
         field.name,
         DataType::List(Box::new(rendered_struct_dtype())),
@@ -70,12 +72,12 @@ pub(super) fn rendered_list_output(input_fields: &[Field]) -> PolarsResult<Field
 }
 
 pub(super) fn parse_report_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
+    let field = input(input_fields, 0)?.clone();
     Ok(Field::new(field.name, parse_report_struct_dtype()))
 }
 
 pub(super) fn tidy_report_output(input_fields: &[Field]) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
+    let field = input(input_fields, 0)?.clone();
     Ok(Field::new(field.name, tidy_report_struct_dtype()))
 }
 
@@ -133,7 +135,7 @@ fn tidy_report_struct_dtype() -> DataType {
 }
 
 fn fixed_output(input_fields: &[Field], dtype: DataType) -> PolarsResult<Field> {
-    let field = input_fields[0].clone();
+    let field = input(input_fields, 0)?.clone();
     Ok(Field::new(field.name, dtype))
 }
 
@@ -196,16 +198,20 @@ pub(super) fn with_struct_validity(
 ) -> PolarsResult<Series> {
     use pyo3_polars::export::polars_arrow::bitmap::Bitmap;
     let valid = Bitmap::from_iter(valid);
-    Ok(chunked
-        .rechunk()
-        .into_owned()
-        .with_outer_validity(Some(valid))
-        .into_series())
+    if valid.len() != chunked.len() {
+        polars_bail!(ShapeMismatch: "struct validity length {} does not match row count {}", valid.len(), chunked.len());
+    }
+    let chunked = if chunked.chunks().len() == 1 {
+        chunked
+    } else {
+        chunked.rechunk().into_owned()
+    };
+    Ok(chunked.with_outer_validity(Some(valid)).into_series())
 }
 
 fn validate_key_lists(input_fields: &[Field]) -> PolarsResult<()> {
-    if input_fields[1].dtype != DataType::List(Box::new(DataType::String)) {
-        polars_bail!(InvalidOperation: "citation keys must have dtype List[String], got {}", input_fields[1].dtype);
+    if input(input_fields, 1)?.dtype != DataType::List(Box::new(DataType::String)) {
+        polars_bail!(InvalidOperation: "citation keys must have dtype List[String], got {}", input(input_fields, 1)?.dtype);
     }
     Ok(())
 }
@@ -228,4 +234,30 @@ pub(super) fn group_string_output(input_fields: &[Field]) -> PolarsResult<Field>
 pub(super) fn group_rendered_output(input_fields: &[Field]) -> PolarsResult<Field> {
     validate_key_lists(input_fields)?;
     rendered_output(input_fields)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_dtypes_reject_missing_plugin_inputs() {
+        assert!(keys_output(&[]).is_err());
+        assert!(render_report_output(&[Field::new("bibtex".into(), DataType::String)]).is_err());
+    }
+
+    #[test]
+    fn outer_validity_requires_one_bit_per_row() {
+        for length in [0, 1] {
+            let fields = [Series::new("value".into(), vec![1_i32; length])];
+            let chunked = StructChunked::from_series("row".into(), length, fields.iter()).unwrap();
+            assert!(
+                with_struct_validity(chunked.clone(), std::iter::repeat_n(true, length + 1))
+                    .is_err()
+            );
+            let series = with_struct_validity(chunked, std::iter::repeat_n(false, length)).unwrap();
+            assert_eq!(series.len(), length);
+            assert_eq!(series.null_count(), length);
+        }
+    }
 }

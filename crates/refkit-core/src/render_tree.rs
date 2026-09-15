@@ -18,9 +18,13 @@ enum RenderedTree {
 }
 
 #[derive(Debug, Clone)]
+/// Equivalent rendered outputs with lazily materialized, owned tree nodes.
 pub struct RenderedRecord {
+    /// Plain-text rendition of the complete record.
     pub text: String,
+    /// Escaped HTML rendition with permitted link targets.
     pub html: String,
+    /// Bibliography layout, absent for ordinary citation records.
     pub layout: Option<BibliographyLayout>,
     tree: RenderedTree,
     nodes: OnceLock<Vec<RenderedNode>>,
@@ -42,6 +46,8 @@ impl RenderedRecord {
         }
     }
 
+    /// Copy text and HTML into the scalar rendering result shape.
+    #[must_use]
     pub fn output(&self) -> RenderedOutput {
         RenderedOutput {
             text: self.text.clone(),
@@ -49,6 +55,8 @@ impl RenderedRecord {
         }
     }
 
+    /// Borrow owned tree nodes, materializing them on first access.
+    #[must_use]
     pub fn tree_nodes(&self) -> &[RenderedNode] {
         self.nodes.get_or_init(|| match &self.tree {
             RenderedTree::Empty => Vec::new(),
@@ -104,72 +112,132 @@ pub(crate) fn rendered_record_from_bibliography(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// CSL layout properties for a rendered bibliography.
 pub struct BibliographyLayout {
+    /// Indent continuation lines relative to each entry's first line.
     pub hanging_indent: bool,
+    /// Alignment of entry content following a label.
     pub second_field_align: Option<SecondFieldAlign>,
+    /// Line-spacing multiplier within bibliography entries.
     pub line_spacing: i16,
+    /// Additional spacing between bibliography entries.
     pub entry_spacing: i16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Owned rendering tree with formatting and source-entry metadata.
 pub enum RenderedNode {
+    /// Text carrying an effective formatting state.
     Text {
+        /// Unicode text content.
         text: String,
+        /// Effective formatting of this text.
         formatting: RenderedFormatting,
     },
+    /// Semantic or display grouping of child nodes.
     Element {
+        /// Optional CSL display treatment.
         display: Option<RenderedDisplay>,
+        /// Semantic role or source identity of the group.
         meta: Option<RenderedMeta>,
+        /// Nodes in reading order.
         children: Vec<RenderedNode>,
     },
+    /// An engine markup token. Use rendered HTML for direct HTML insertion.
     Markup {
+        /// Retained markup token text.
         value: String,
     },
+    /// Linked text whose target passed the renderer's URL policy.
     Link {
+        /// Visible link text.
         text: String,
+        /// Permitted target URL.
         url: String,
+        /// Effective formatting of the link text.
         formatting: RenderedFormatting,
     },
+    /// Placeholder retaining an originating citation-item index.
     Transparent {
+        /// Zero-based item index reported by the renderer.
         cite_idx: usize,
+        /// Formatting state at the placeholder.
         formatting: RenderedFormatting,
     },
+    /// One bibliography entry with its label separated from its body.
     BibliographyEntry {
+        /// Source library key.
         key: String,
+        /// Optional style-generated entry label.
         label: Option<Box<RenderedNode>>,
+        /// Entry body nodes in reading order.
         content: Vec<RenderedNode>,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Semantic attribution attached to a rendered element.
 pub enum RenderedMeta {
-    Names { roles: Vec<String> },
+    /// A rendered list of creators.
+    Names {
+        /// Creator roles represented by the list.
+        roles: Vec<String>,
+    },
+    /// Date content.
     Date,
+    /// A style text element.
     Text,
+    /// A style number element.
     Number,
+    /// A localized label.
     Label,
+    /// The generated numeric citation position.
     CitationNumber,
-    Name { role: String, index: usize },
-    Entry { key: String, item_index: usize },
+    /// One creator within a name list.
+    Name {
+        /// Creator role reported by the renderer.
+        role: String,
+        /// Zero-based creator index reported by the renderer.
+        index: usize,
+    },
+    /// Source attribution for a citation item.
+    Entry {
+        /// Original library key.
+        key: String,
+        /// Zero-based index in the originating citation request.
+        item_index: usize,
+    },
+    /// A style-generated citation label.
     CitationLabel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Effective typography carried by a rendered leaf node.
 pub struct RenderedFormatting {
+    /// Upright or italic font treatment.
     pub font_style: FontStyle,
+    /// Ordinary or small-cap glyph treatment.
     pub font_variant: FontVariant,
+    /// Relative font weight.
     pub font_weight: FontWeight,
+    /// Underlining treatment.
     pub text_decoration: TextDecoration,
+    /// Baseline, superscript, or subscript treatment.
     pub vertical_align: VerticalAlign,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Font slant supported by the rendering engine.
 pub enum FontStyle {
+    /// Upright glyphs.
     Normal,
+    /// Italic glyphs.
     Italic,
 }
 
 impl FontStyle {
+    #[must_use]
+    /// Return the stable variant name used by rendered-tree adapters.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Normal => "Normal",
@@ -188,12 +256,17 @@ impl FontStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Glyph variant supported by the rendering engine.
 pub enum FontVariant {
+    /// Ordinary glyph shapes.
     Normal,
+    /// Small-cap letter forms.
     SmallCaps,
 }
 
 impl FontVariant {
+    #[must_use]
+    /// Return the stable variant name used by rendered-tree adapters.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Normal => "Normal",
@@ -212,13 +285,19 @@ impl FontVariant {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Relative rendered font weight.
 pub enum FontWeight {
+    /// Ordinary weight.
     Normal,
+    /// Bold weight.
     Bold,
+    /// Light weight.
     Light,
 }
 
 impl FontWeight {
+    #[must_use]
+    /// Return the stable variant name used by rendered-tree adapters.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Normal => "Normal",
@@ -239,12 +318,17 @@ impl FontWeight {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Rendered text decoration.
 pub enum TextDecoration {
+    /// No text decoration.
     None,
+    /// Underlined text.
     Underline,
 }
 
 impl TextDecoration {
+    #[must_use]
+    /// Return the stable variant name used by rendered-tree adapters.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "None",
@@ -263,14 +347,21 @@ impl TextDecoration {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Vertical text placement relative to the line baseline.
 pub enum VerticalAlign {
+    /// No explicit vertical placement.
     None,
+    /// Explicit normal baseline placement.
     Baseline,
+    /// Superscript placement.
     Sup,
+    /// Subscript placement.
     Sub,
 }
 
 impl VerticalAlign {
+    #[must_use]
+    /// Return the stable variant name used by rendered-tree adapters.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "None",
@@ -293,14 +384,21 @@ impl VerticalAlign {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// CSL display grouping for rendered elements.
 pub enum RenderedDisplay {
+    /// Separate block layout.
     Block,
+    /// Content positioned in the left margin.
     LeftMargin,
+    /// Inline content following a left-margin element.
     RightInline,
+    /// Indented block content.
     Indent,
 }
 
 impl RenderedDisplay {
+    #[must_use]
+    /// Return the stable variant name used by rendered-tree adapters.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Block => "Block",
@@ -323,12 +421,17 @@ impl RenderedDisplay {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Alignment of bibliography body content relative to an entry label.
 pub enum SecondFieldAlign {
+    /// Put the label in the margin outside the aligned body.
     Margin,
+    /// Keep the label flush with the left edge of the bibliography.
     Flush,
 }
 
 impl SecondFieldAlign {
+    #[must_use]
+    /// Return the stable variant name used by rendered-tree adapters.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Margin => "Margin",

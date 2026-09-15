@@ -1,3 +1,9 @@
+//! Portable bibliography records, source-preserving edits, validation, and CSL rendering.
+//!
+//! [`Library`] owns normalized data. [`RawDocument`] owns immutable BibTeX snapshots.
+//! [`Document`] combines a library with prepared style and locale inputs, creating
+//! fresh citation-processing state for each operation. Host I/O belongs in adapters.
+
 mod codec;
 mod document;
 mod duplicates;
@@ -10,6 +16,7 @@ mod render_tree;
 mod source;
 mod strings;
 mod style;
+/// Deterministic BibTeX normalization, duplicate handling, and key allocation.
 pub mod tidy;
 mod validation;
 
