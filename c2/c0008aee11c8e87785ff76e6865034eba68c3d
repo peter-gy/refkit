@@ -1,0 +1,122 @@
+crates/refkit-core/src/codec.rs
+  s_93f4d1359a0be2::t_d8bea9df4cbcf2 444-445
+  s_93f4d1359a0be2::t_b6cd83a54e24c4 446,450
+crates/refkit-core/src/raw.rs
+  s_93f4d1359a0be2::t_f99a0a7a5020a3 591-594,628-631,640-643
+  s_93f4d1359a0be2::t_b6cd83a54e24c4 495-499
+  s_93f4d1359a0be2::t_b6a99935bb97d9 249-261,343-348,493-494,500-509
+packages/refkit/rust/src/rendered.rs
+  s_93f4d1359a0be2::t_f586b87ba1e9d4 16,52-57,69
+crates/refkit-core/AGENTS.md
+  s_93f4d1359a0be2::t_d05eaf18728c0d 26-27
+  s_93f4d1359a0be2::t_544ef1b86364cf 28-29
+packages/refkit-js/rust/src/library.rs
+  s_93f4d1359a0be2::t_fdcf55c4485f19 98-102
+packages/refkit-js/tests/lifetime.test.mjs
+  s_93f4d1359a0be2::t_18e141fffa95dd 5,33-37
+crates/refkit-core/src/duplicates/merge.rs
+  s_93f4d1359a0be2::t_dee9862a3497a2 263,316-321,330
+  s_93f4d1359a0be2::t_6b192a69057896 27,95-131
+  s_93f4d1359a0be2::t_6b0f9a0e9ab6c8 3,5,20-22,24-25,30,56,207-209,221,225,234,240,250,268-270,272,301,387,393,397,403,407-408,411,415,421
+packages/refkit/rust/src/raw.rs
+  s_93f4d1359a0be2::t_b6a99935bb97d9 15,562,567,579-580,587,589
+crates/refkit-core/tests/codecs.rs
+  s_93f4d1359a0be2::t_d4d5efc8dd5c71 12-20,34,42-47,58,66-67,74-77
+  s_93f4d1359a0be2::t_b6cd83a54e24c4 21-33,35-41,48-57,59-65,68-73,90-93,97-99,109-114,122-123,126-140,163-169,176-192
+  s_93f4d1359a0be2::t_b0ce309e16043c 78-89,95-96,100-108,115-121,124-125,141-162,170-175,193-204
+  s_93f4d1359a0be2::t_6ad9f80eba1bdc 94
+packages/refkit/rust/src/library.rs
+  s_93f4d1359a0be2::t_fdcf55c4485f19 147,154-156,158,160-163
+  s_93f4d1359a0be2::t_942c95d6cb5b38 7
+crates/refkit-core/src/lib.rs
+  s_93f4d1359a0be2::t_b6a99935bb97d9 40
+packages/refkit-js/src/raw.ts
+  s_93f4d1359a0be2::t_fdcf55c4485f19 101,104,107,110,113,116,171,246-248,257,260,266,269,272,275
+  s_93f4d1359a0be2::t_9de85174143389 43,225
+  s_93f4d1359a0be2::t_631655dc9e2420 231,237,258,263
+crates/refkit-core/src/codec/csl/decode.rs
+  s_93f4d1359a0be2::t_6e3279265097bd 1-553
+crates/refkit-core/src/codec/biblatex.rs
+  s_93f4d1359a0be2::t_d8bea9df4cbcf2 2,111-129,134,137-140,145,244,246,254,256,287,342
+  s_93f4d1359a0be2::t_b6cd83a54e24c4 141-144
+packages/refkit-js/tests/sdk.test.mjs
+  s_93f4d1359a0be2::t_18e141fffa95dd 286,319-369,484-485,491-492,506
+crates/refkit-core/src/duplicates.rs
+  s_93f4d1359a0be2::t_a45a3ed977aa41 1,8
+  s_93f4d1359a0be2::t_179a49d25aa767 6,11
+crates/refkit-core/tests/raw_views.rs
+  s_93f4d1359a0be2::t_4f30cce98da407 44
+  s_93f4d1359a0be2::t_b6cd83a54e24c4 49-56
+  s_93f4d1359a0be2::t_bbf4de83d59cb3 1-43,45-48,57
+packages/refkit-tests/src/refkit_tests/test_refkit_runtime.py
+  s_93f4d1359a0be2::t_f586b87ba1e9d4 30-43,48-52
+  s_93f4d1359a0be2::t_18e141fffa95dd 67-78
+  s_93f4d1359a0be2::t_9b5c2f0dc828cc 44-47
+  s_93f4d1359a0be2::t_bbf4de83d59cb3 126-128
+packages/refkit-js/rust/src/raw.rs
+  s_93f4d1359a0be2::t_631655dc9e2420 135-148,287-289,292-295,299-300,307-324
+  s_93f4d1359a0be2::t_907ee9195cb771 1
+  s_93f4d1359a0be2::t_8d140fbb807114 286,298
+  s_93f4d1359a0be2::t_b6a99935bb97d9 359-360
+crates/refkit-core/src/duplicates/review.rs
+  s_93f4d1359a0be2::t_a45a3ed977aa41 53,59,88,102
+  s_93f4d1359a0be2::t_b6cd83a54e24c4 2
+  s_93f4d1359a0be2::t_179a49d25aa767 3-4,6,29-35,42,45,57-58,73,77,86,93,113,118,124,133-136,153-154,159,172,182-183
+packages/refkit/rust/src/document.rs
+  s_93f4d1359a0be2::t_95ab2351f7378d 61,66,125
+  s_93f4d1359a0be2::t_bac04bb17a5471 126
+packages/polars-refkit/rust/src/expressions/render.rs
+  s_93f4d1359a0be2::t_2d46222c9362d1 34,39-64,137-144,191-211,214-215,218-237,239-252,254-261,264-273,277-278,301,314,319,325,334,350-352,356-357,359,362,364,400
+crates/refkit-core/src/codec/csl.rs
+  s_93f4d1359a0be2::t_6e3279265097bd 1-3,5,7,9-11
+packages/refkit-tests/src/refkit_tests/test_polars_refkit_runtime.py
+  s_93f4d1359a0be2::t_35dce5a24ca9dd 55-99
+crates/refkit-core/src/codec/csl/types.rs
+  s_93f4d1359a0be2::t_6e3279265097bd 1-69
+crates/refkit-core/src/duplicates/components.rs
+  s_93f4d1359a0be2::t_b6cd83a54e24c4 9-11
+  s_93f4d1359a0be2::t_a45a3ed977aa41 1-8,12-52
+crates/refkit-core/src/tidy/duplicates.rs
+  s_93f4d1359a0be2::t_a45a3ed977aa41 3,12,31,53,73,80
+  s_93f4d1359a0be2::t_179a49d25aa767 175-185
+  s_93f4d1359a0be2::t_02964afe94bd15 17
+crates/refkit-core/src/codec/csl/encode.rs
+  s_93f4d1359a0be2::t_6e3279265097bd 1-430
+crates/refkit-core/tests/duplicates.rs
+  s_93f4d1359a0be2::t_b6cd83a54e24c4 44-48,51-56,67-73,75-83
+  s_93f4d1359a0be2::t_2a20c428b4498b 22-24,27-34
+  s_93f4d1359a0be2::t_0a9ac4a8dd9907 85-89
+  s_93f4d1359a0be2::t_63dd29c0010d63 174-176,201,218-220,232-233
+  s_93f4d1359a0be2::t_c9979bbc98283c 9-11,40-43,49-50,57-66,74,84,90-96
+  s_93f4d1359a0be2::t_df152bf8992b5a 12-21,25-26,35-39,177-200,202-217,221-231
+crates/refkit-core/src/codec/yaml.rs
+  s_93f4d1359a0be2::t_d4d5efc8dd5c71 4,37,56-72,76-100,102-106
+  s_93f4d1359a0be2::t_b6cd83a54e24c4 73-75,136
+  s_93f4d1359a0be2::t_596ad335e60f17 23-33,38-39,53-55,107-134,138-141,145,147-165
+packages/refkit-js/src/library.ts
+  s_93f4d1359a0be2::t_fdcf55c4485f19 119-121
+crates/refkit-core/src/duplicates/signature.rs
+  s_93f4d1359a0be2::t_179a49d25aa767 1,3-7,9
+  s_93f4d1359a0be2::t_2a20c428b4498b 11-13
+  s_93f4d1359a0be2::t_df152bf8992b5a 38-41
+packages/refkit-js/AGENTS.md
+  s_93f4d1359a0be2::t_437dbf2bbd93b0 11
+crates/refkit-core/src/duplicates/view.rs
+  s_93f4d1359a0be2::t_179a49d25aa767 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c2c0008aee11c8e87785ff76e6865034eba68c3d",
+  "prompts": {},
+  "sessions": {
+    "s_93f4d1359a0be2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a4d8-3070-7811-a991-7a9913f580e6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
