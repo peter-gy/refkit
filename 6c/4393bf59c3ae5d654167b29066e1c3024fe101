@@ -1,0 +1,53 @@
+packages/polars-refkit/tests/test_polars_refkit.py
+  s_93f4d1359a0be2::t_19a31082b58a6e 745-749
+  s_93f4d1359a0be2::t_326f251c337df2 56,64,131,140,750
+scripts/tests/test_release_contract.py
+  s_93f4d1359a0be2::t_19a31082b58a6e 54-61
+  s_93f4d1359a0be2::t_3b17001b0b810a 53,62-66
+development_docs/testing.md
+  s_93f4d1359a0be2::t_3df0df56ce834e 34-37
+packages/refkit/tests/test_tidy_options.py
+  s_93f4d1359a0be2::t_a9b0af1f22a529 88-125
+  s_93f4d1359a0be2::t_a1be2e65756691 48
+scripts/tests/test_docs_contract.py
+  s_93f4d1359a0be2::t_468589ff6a216c 6-8,38-55
+packages/refkit/tests/test_public_api.py
+  s_93f4d1359a0be2::t_a1be2e65756691 243-244,1091,1105,1113-1114
+packages/refkit-bench/tests/test_measurement.py
+  s_93f4d1359a0be2::t_3b17001b0b810a 52,385-386,392-394
+packages/refkit-bench/tests/test_stress.py
+  s_93f4d1359a0be2::t_19a31082b58a6e 3
+  s_93f4d1359a0be2::t_3b17001b0b810a 9-11,22-28
+packages/refkit/tests/typing_samples.py
+  s_93f4d1359a0be2::t_a1be2e65756691 1,6-7,22-37
+  s_93f4d1359a0be2::t_7178ea033e8a58 5,8,10,38-44
+docs/scripts/verify-build.mjs
+  s_93f4d1359a0be2::t_f4d76588d9655d 75
+  s_93f4d1359a0be2::t_3b17001b0b810a 155,157,214,216,224
+development_docs/documentation.md
+  s_93f4d1359a0be2::t_78851086dd2092 35
+packages/refkit/tests/test_patches.py
+  s_93f4d1359a0be2::t_a1be2e65756691 67-72
+packages/refkit/tests/test_agent.py
+  s_93f4d1359a0be2::t_7178ea033e8a58 93
+crates/refkit-core/tests/recovery_stress.rs
+  s_93f4d1359a0be2::t_7178ea033e8a58 10,44,296,328
+packages/refkit/AGENTS.md
+  s_93f4d1359a0be2::t_3df0df56ce834e 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6c4393bf59c3ae5d654167b29066e1c3024fe101",
+  "prompts": {},
+  "sessions": {
+    "s_93f4d1359a0be2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a4d8-3070-7811-a991-7a9913f580e6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
