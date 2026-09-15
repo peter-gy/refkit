@@ -32,7 +32,7 @@ Build and verify the static output:
 pnpm --dir docs build
 ```
 
-The build runs a strict TypeScript check, VitePress, the llms.txt generator, and `docs/scripts/verify-build.mjs`. The verifier checks routes, public assets, social metadata, theme-specific brand references, internal links, heading fragments, raw Markdown twins, `llms.txt`, and `llms-full.txt`.
+The build runs a strict TypeScript check, VitePress, the llms.txt generator, and `docs/scripts/verify-build.mjs`. The verifier checks routes, copied public assets, social metadata, referenced page assets, internal links, heading fragments, raw Markdown twins, `llms.txt`, and `llms-full.txt`.
 
 The published site is `https://peter-gy.github.io/refkit/`. GitHub Pages serves it under `/refkit/`, while local VitePress and Portless development use `/`.
 

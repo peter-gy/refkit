@@ -33,10 +33,6 @@ fn cursor() {}
     assert quality.suppression_errors(source) == []
 
 
-def test_live_workspaces_inherit_the_same_policy() -> None:
-    assert quality.validate() == []
-
-
 @pytest.mark.parametrize(
     "section, field, exception",
     [

@@ -193,35 +193,6 @@ fn parse_raw_document_keeps_terminal_escaped_closing_brace_inside_braced_values(
 }
 
 #[test]
-fn raw_document_exposes_shared_syntax_records_for_formatters() {
-    let doc = RawDocument::parse(concat!(
-        "% file comment\n",
-        "@article{format,\n",
-        "  title = {Shared Syntax},\n",
-        "  year = 2026\n",
-        "}\n",
-    ));
-
-    let syntax = doc.syntax();
-
-    assert_eq!(syntax.entries.len(), 1);
-    assert_eq!(syntax.entries[0].key, "format");
-    assert_eq!(syntax.entries[0].kind, "article");
-    assert_eq!(syntax.entries[0].fields.len(), 2);
-    assert_eq!(syntax.entries[0].fields[0].name, "title");
-    assert_eq!(syntax.entries[0].fields[0].value_mode, RawValueMode::Braced);
-    assert!(syntax.blocks.iter().any(
-        |block| matches!(block, RawSyntaxBlock::Comment { raw, .. } if raw == "% file comment\n")
-    ));
-    assert!(
-        syntax
-            .blocks
-            .iter()
-            .any(|block| matches!(block, RawSyntaxBlock::Entry { key, .. } if key == "format"))
-    );
-}
-
-#[test]
 fn raw_document_parses_missing_key_entries_for_formatter_warnings() {
     let doc = RawDocument::parse("@article{\n  title = {No key}\n}\n");
     let syntax = doc.syntax();

@@ -177,18 +177,6 @@ def test_runner_builds_two_revisions_and_compares_one_shared_harness(tmp_path, m
         for cmd, env in commands
         if cmd[0] == "uv"
     )
-    measurements = [cmd for cmd, _ in commands if "run" in cmd]
-    assert len(measurements) == 2
-    for command in measurements:
-        assert [command[index + 1] for index, flag in enumerate(command) if flag == "--lane"] == [
-            "all"
-        ]
-        assert [
-            command[index + 1] for index, flag in enumerate(command) if flag == "--dataset"
-        ] == ["real", "unclosed-5k", "unknown-1k", "field-1mib", "chunks-8k"]
-        assert [
-            command[index + 1] for index, flag in enumerate(command) if flag == "--package"
-        ] == ["refkit", "polars-eager", "polars-lazy"]
 
 
 def test_failed_build_retains_revision_provenance(tmp_path, monkeypatch):

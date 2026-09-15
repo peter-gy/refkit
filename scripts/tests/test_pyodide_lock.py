@@ -10,10 +10,6 @@ ROOT = Path(__file__).parents[2]
 LOCK_PATH = ROOT / ".github" / "pyodide" / "pylock.314.toml"
 
 
-def test_pyodide_lock_matches_the_runtime_contract() -> None:
-    assert pyodide_lock.validate_lock(LOCK_PATH) == []
-
-
 def test_pyodide_compiler_matches_the_shared_rust_floor(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(pyodide_lock.RUNTIME, "rust-toolchain", "1.93.0")
     assert any(

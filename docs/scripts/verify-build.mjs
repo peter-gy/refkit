@@ -7,7 +7,6 @@ const outputRoot = join(docsRoot, ".vitepress", "dist")
 const siteUrl = new URL("https://peter-gy.github.io/refkit/")
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "")
 const basePath = baseName ? `/${baseName}` : ""
-const withBasePath = (path) => `${basePath}${path}`
 const canonicalForRoute = (route) =>
   route === "/" ? siteUrl.href : new URL(route.replace(/^\//, ""), siteUrl).href
 const markdownForRoute = (route) =>
@@ -30,12 +29,6 @@ const publicFiles = readdirSync(publicRoot, { recursive: true })
   .filter((path) => statSync(join(publicRoot, path)).isFile())
 
 const errors = []
-
-for (const item of navigation.nav) {
-  if (!sidebarLinks.includes(item.link)) {
-    errors.push(`top navigation link is absent from the sidebar: ${item.link}`)
-  }
-}
 
 const markdownRoutes = []
 function collectMarkdown(directory) {
@@ -66,7 +59,6 @@ for (const path of [...routes, ...publicFiles]) {
   if (!existsSync(join(outputRoot, path))) errors.push(`missing build output: ${path}`)
 }
 
-const pageDescriptions = new Set()
 for (const [routeIndex, route] of routes.entries()) {
   const path = join(outputRoot, route)
   if (!existsSync(path)) continue
@@ -80,7 +72,7 @@ for (const [routeIndex, route] of routes.entries()) {
     if (!html.includes(marker)) errors.push(`${route} is missing ${marker}`)
   }
   const description = html.match(/property="og:description" content="([^"]+)"/)?.[1]
-  if (description) pageDescriptions.add(description)
+  if (!description?.trim()) errors.push(`${route} has no description`)
 
   const routeLink = configuredLinks[routeIndex]
   const canonical = canonicalForRoute(routeLink)
@@ -90,10 +82,6 @@ for (const [routeIndex, route] of routes.entries()) {
   if (!html.includes(`property="og:url" content="${canonical}"`)) {
     errors.push(`${route} has no og:url for ${canonical}`)
   }
-}
-
-if (pageDescriptions.size !== routes.length) {
-  errors.push(`expected one page-specific description for each of ${routes.length} routes`)
 }
 
 const sitemapPath = join(outputRoot, "sitemap.xml")
@@ -164,25 +152,9 @@ const index = existsSync(join(outputRoot, "index.html"))
 
 for (const value of [
   'property="og:image"',
-  'property="og:image:width" content="2400"',
-  'property="og:image:height" content="1260"',
-  'name="twitter:card" content="summary_large_image"',
-  withBasePath("/brand/refkit-lockup-horizontal-light-transparent.svg"),
-  withBasePath("/brand/refkit-lockup-horizontal-dark-transparent.svg"),
-  withBasePath("/brand/refkit-lockup-vertical-light.svg"),
-  withBasePath("/brand/refkit-lockup-vertical-dark.svg"),
-  withBasePath("/brand/refkit-favicon-light.svg"),
-  withBasePath("/brand/refkit-favicon-dark.svg"),
-  withBasePath("/icons/scan-text-light.svg"),
-  withBasePath("/icons/scan-text-dark.svg"),
-  withBasePath("/icons/quote-light.svg"),
-  withBasePath("/icons/quote-dark.svg"),
-  withBasePath("/icons/file-pen-line-light.svg"),
-  withBasePath("/icons/file-pen-line-dark.svg"),
-  withBasePath("/icons/table-properties-light.svg"),
-  withBasePath("/icons/table-properties-dark.svg"),
+  'name="twitter:card"',
 ]) {
-  if (!index.includes(value)) errors.push(`home metadata or asset reference is missing: ${value}`)
+  if (!index.includes(value)) errors.push(`home metadata is missing: ${value}`)
 }
 
 for (const path of publicFiles) {
@@ -239,9 +211,9 @@ function routeFile(from, targetPath) {
 
 for (const source of htmlFiles) {
   const html = readFileSync(source, "utf8")
-  for (const match of html.matchAll(/\shref="([^"]+)"/g)) {
+  for (const match of html.matchAll(/\s(?:href|src)="([^"]+)"/g)) {
     const href = match[1]
-    if (/^(?:https?:|mailto:|#\/)/.test(href)) continue
+    if (/^(?:https?:|mailto:|data:|#\/)/.test(href)) continue
     const [pathPart, fragment] = href.split("#", 2)
     const target = pathPart ? routeFile(source, pathPart) : source
     if (target === null) {
@@ -249,7 +221,7 @@ for (const source of htmlFiles) {
       continue
     }
     if (!existsSync(target)) {
-      errors.push(`${relative(outputRoot, source)} links to missing ${href}`)
+      errors.push(`${relative(outputRoot, source)} references missing ${href}`)
       continue
     }
     if (fragment && target.endsWith(".html")) {

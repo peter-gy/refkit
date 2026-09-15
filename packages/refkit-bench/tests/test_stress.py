@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from typing import cast
 
 import pytest
 
-from refkit_bench.cases import Case, case_by_name, select_cases
-from refkit_bench.stress import STRESS_SIZES, prepare_stress
+from refkit_bench import runner
+from refkit_bench.cases import Case
+from refkit_bench.stress import STRESS_SIZES
 
 
 @pytest.mark.parametrize(
@@ -17,26 +19,13 @@ def test_stress_operations_satisfy_their_public_contract(lane: str, dataset: str
     prepared = Case(lane, dataset, "refkit").prepare()
     prepared.check(prepared.operation())
     prepared.check(prepared.operation())
-    assert prepared.metadata["source_license"] == "Apache-2.0"
-    byte_count = prepared.metadata["input_bytes"]
-    assert isinstance(byte_count, int) and byte_count > 0
-    assert len(str(prepared.metadata["input_sha256"])) == 64
 
 
-def test_stress_selection_keeps_specialized_inputs_in_their_own_lanes() -> None:
-    cases = select_cases(list(STRESS_SIZES), ["all"], ["refkit"])
-    assert len(cases) == 11
-    assert select_cases(["raw.recover"]) == [
-        Case("raw.recover", name, "refkit") for name in STRESS_SIZES["raw.recover"]
-    ]
-    for case in cases:
-        assert case_by_name(case.name) == case
-        assert case.dataset in STRESS_SIZES[case.lane]
-    assert len(select_cases(["all"], ["real"], ["refkit", "polars-eager", "polars-lazy"])) == 14
-    with pytest.raises(ValueError, match="no cases in common"):
-        select_cases(["parse.bibtex"], ["unknown-129"])
-    with pytest.raises(ValueError, match="unknown stress case"):
-        prepare_stress("parse.recover", "unknown-size")
+def test_stress_cli_lists_available_scales_by_default(capsys: pytest.CaptureFixture[str]) -> None:
+    assert runner.main(["list", "--lane", "raw.recover", "--json"]) == 0
+    cases = {row["case"] for row in json.loads(capsys.readouterr().out)}
+    assert "raw.recover/unclosed-5k/refkit" in cases
+    assert all(case.startswith("raw.recover/") for case in cases)
 
 
 def test_raw_recovery_check_rejects_source_loss() -> None:

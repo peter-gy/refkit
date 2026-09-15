@@ -31,6 +31,10 @@ make build
 
 The runtime Python suite keeps its 100% coverage gate. Benchmark tooling has a package-local 90% combined statement and branch coverage gate, including its Python subprocesses. Its tests protect timing boundaries, complete output checks, artifact identity, process cleanup, and result compatibility.
 
+`make typecheck` checks the annotation-only consumer examples in `packages/refkit/tests/typing_samples.py` with ty and pyrefly. Runtime tests exercise keyword acceptance, returned values, error mapping, and object lifetime through the public adapters.
+
+Repository checks run directly through their Make targets. Focused tests for those checks use controlled inputs to prove violation detection, artifact integrity, and command outcomes.
+
 `make docs-examples-check` invokes `python -m refkit_tests.check_examples --root .` to execute authored README and guide examples against installed adapters in source integration. The packaged agent examples run through the installed artifact probes.
 
 `make docs-check` installs the locked VitePress dependencies, runs TypeScript, builds root and `/refkit/` variants, and verifies the expected HTML, Markdown, llms, sitemap, and asset output. Browser inspection remains responsible for responsive layout, active navigation, search interaction, theme switching, and console or network failures.

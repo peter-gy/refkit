@@ -64,6 +64,12 @@ def test_patch_errors_leave_snapshot_and_handles_unchanged() -> None:
     with pytest.raises(rk.PatchError) as missing:
         original.apply_patch([{"kind": "remove_entry", "entry_id": 100}])
     assert missing.value.code == "invalid_target"
+    with pytest.raises(rk.PatchError) as invalid:
+        original.apply_patch(
+            [{"kind": "set_field", "entry_id": 0, "field_id": 0, "value": "Bad } value"}]
+        )
+    assert invalid.value.code == "invalid_value"
+    assert invalid.value.operation == 0
     assert original.to_bibtex() == "@book{a,title={Old}}"
 
 

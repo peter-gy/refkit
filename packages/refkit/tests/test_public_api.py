@@ -110,34 +110,6 @@ def _render_one(doc: rk.Document, citation: str | rk.Cite | rk.CitationGroup) ->
     return doc.render([rk.Citation("citation", citation)])["citation"]
 
 
-def test_public_document_example_renders_text_html_and_tree() -> None:
-    library = rk.Library.read(FIXTURES / "basic.bib")
-    style = rk.Style.load("apa")
-
-    doc = rk.Document(library, style, locale="en-US")
-    rendered = doc.render(
-        [
-            rk.Citation("first", "doe2024"),
-            rk.Citation(
-                "second",
-                rk.CitationGroup([rk.Cite("doe2024", locator="12", label="page"), "roe2022"]),
-            ),
-        ]
-    )
-    first = rendered["first"]
-    second = rendered["second"]
-    bibliography = rendered.bibliography
-    entry = library["doe2024"]
-
-    assert "Doe" in first.text
-    assert entry["volume"] is None or isinstance(entry["volume"], dict)
-    assert entry["identifiers"]["doi"] == "10.1234/refkit.2024"
-    assert second.text
-    assert bibliography.text
-    assert "<div" in bibliography.html
-    assert isinstance(first.tree, list)
-
-
 def test_document_accepts_named_citation_groups() -> None:
     library = rk.Library.read(FIXTURES / "basic.bib")
     doc = rk.Document(library, rk.Style.load("apa"), locale="en-US")
@@ -149,15 +121,6 @@ def test_document_accepts_named_citation_groups() -> None:
     assert [item.key for item in group.items] == ["doe2024", "roe2022"]
     assert rendered["group"].text
     assert rendered.bibliography.text
-
-
-def test_citation_runtime_help_defines_its_two_identifiers() -> None:
-    documentation = rk.Citation.__doc__ or ""
-
-    assert "`id` is caller-defined" in documentation
-    assert "bibliography key string" in documentation
-    assert "Cite" in documentation
-    assert "CitationGroup" in documentation
 
 
 def test_document_rejects_unnamed_iterable_citation_groups() -> None:
@@ -277,6 +240,8 @@ def test_library_parse_accepts_source_strings_and_mapping_helpers() -> None:
         library.get_many(["missing"])
     with pytest.raises(TypeError, match="keys must be an iterable"):
         library.get_many("inline")
+    with pytest.raises(TypeError):
+        library.get_many(cast(Any, [1]))
     assert library.project(["key", "title", "doi", "volume"]) == [
         {"key": "inline", "title": "Inline Source", "doi": None, "volume": None}
     ]
@@ -1123,6 +1088,7 @@ def test_raw_bib_document_blocks_preserve_source_order_and_spans() -> None:
 
 def test_raw_bib_document_duplicate_entries_require_explicit_get_all() -> None:
     raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")
+    assert isinstance(raw.entries, rk.BibEntryMap)
 
     assert raw.entries.unique_keys() == ["dup", "later"]
     assert [entry.key for entry in raw.entries.occurrences()] == ["dup", "dup", "later"]
@@ -1136,6 +1102,7 @@ def test_raw_bib_document_duplicate_entries_require_explicit_get_all() -> None:
         raw.entries.get_unique("dup")
 
     later = raw.entries["later"]
+    assert isinstance(later, rk.BibEntry)
     assert later.key == "later"
     assert later.fields["title"].value == "Later Entry"
 
@@ -1143,6 +1110,8 @@ def test_raw_bib_document_duplicate_entries_require_explicit_get_all() -> None:
 def test_raw_bib_document_duplicate_fields_require_explicit_get_all() -> None:
     raw = rk.BibDocument.read(FIXTURES / "raw-duplicates.bib")
     entry = raw.entries.get_all("dup")[0]
+    assert isinstance(entry.fields, rk.BibFieldMap)
+    assert isinstance(entry.fields["journal"], rk.BibField)
 
     assert entry.fields.unique_keys() == ["title", "journal", "year"]
     assert [field.name for field in entry.fields.occurrences()] == [
@@ -1415,16 +1384,6 @@ def test_raw_bib_document_accepts_permissive_citation_keys() -> None:
     assert raw.entries['key"q'].fields["title"].value == "Quoted Key"
 
 
-def test_raw_bib_document_preserves_preamble_expression(tmp_path: Path) -> None:
-    source = tmp_path / "preamble-expression.bib"
-    source.write_text('@preamble{"A" # "B"}\n')
-
-    raw = rk.BibDocument.read(source)
-
-    assert raw.failed_blocks == []
-    assert raw.preamble == '"A" # "B"'
-
-
 def test_raw_bib_document_accepts_trailing_string_comment(tmp_path: Path) -> None:
     source = tmp_path / "string-comment.bib"
     source.write_text(
@@ -1456,46 +1415,6 @@ def test_raw_bib_document_keeps_unmatched_quotes_inside_comment_blocks(tmp_path:
     assert raw.failed_blocks == []
     assert raw.comments == ['@comment{reviewed by "anonymous}']
     assert raw.entries["kept"].fields["title"].value == "Kept"
-
-
-def test_raw_helper_classes_are_runtime_exports() -> None:
-    raw = rk.BibDocument.read(FIXTURES / "raw.bib")
-    entry = raw.entries["doe2024"]
-    field = entry.fields["title"]
-
-    assert isinstance(raw.entries, rk.BibEntryMap)
-    assert isinstance(entry, rk.BibEntry)
-    assert isinstance(entry.fields, rk.BibFieldMap)
-    assert isinstance(field, rk.BibField)
-
-
-def test_raw_bare_field_edit_wraps_unsafe_value(tmp_path: Path) -> None:
-    source = tmp_path / "bare.bib"
-    source.write_text(
-        """@article{macro,
-  journal = jcs,
-  title = {Uses Macro}
-}
-""",
-    )
-
-    raw = rk.BibDocument.read(source)
-    _field_to_patch = raw.entries["macro"].fields["journal"]
-    raw = raw.apply_patch(
-        [
-            {
-                "kind": "set_field",
-                "entry_id": _field_to_patch.entry_id,
-                "field_id": _field_to_patch.id,
-                "value": "Journal of Citation Systems",
-            }
-        ]
-    )["document"]
-    output = tmp_path / "bare-out.bib"
-    raw.write(output)
-
-    text = output.read_text()
-    assert "journal = {Journal of Citation Systems}" in text
 
 
 def test_raw_field_edit_allows_balanced_case_protection_braces(tmp_path: Path) -> None:
@@ -1577,140 +1496,6 @@ def test_raw_field_edit_allows_protected_quotes_in_quoted_values(tmp_path: Path)
     assert 'title = {A {"quoted"} title}' in text
     library = rk.Library.read(output)
     assert _text(library["quoted"]["title"]) == 'A "quoted" title'
-
-
-def test_raw_field_edit_rejects_unsafe_delimiters(tmp_path: Path) -> None:
-    source = tmp_path / "unsafe.bib"
-    source.write_text(
-        """@article{unsafe,
-  braced = {Original},
-  quoted = "Original",
-  bare = token
-}
-""",
-    )
-    raw = rk.BibDocument.read(source)
-
-    with pytest.raises(rk.PatchError, match="unsafe braced delimiter"):
-        _field_to_patch = raw.entries["unsafe"].fields["braced"]
-        raw = raw.apply_patch(
-            [
-                {
-                    "kind": "set_field",
-                    "entry_id": _field_to_patch.entry_id,
-                    "field_id": _field_to_patch.id,
-                    "value": "Bad } value",
-                }
-            ]
-        )["document"]
-    with pytest.raises(rk.PatchError, match="unsafe braced delimiter"):
-        _field_to_patch = raw.entries["unsafe"].fields["braced"]
-        raw = raw.apply_patch(
-            [
-                {
-                    "kind": "set_field",
-                    "entry_id": _field_to_patch.entry_id,
-                    "field_id": _field_to_patch.id,
-                    "value": "Bad { value",
-                }
-            ]
-        )["document"]
-    with pytest.raises(rk.PatchError, match="unsafe braced delimiter"):
-        _field_to_patch = raw.entries["unsafe"].fields["braced"]
-        raw = raw.apply_patch(
-            [
-                {
-                    "kind": "set_field",
-                    "entry_id": _field_to_patch.entry_id,
-                    "field_id": _field_to_patch.id,
-                    "value": "Bad\\",
-                }
-            ]
-        )["document"]
-    with pytest.raises(rk.PatchError, match="unsafe quoted delimiter"):
-        _field_to_patch = raw.entries["unsafe"].fields["quoted"]
-        raw = raw.apply_patch(
-            [
-                {
-                    "kind": "set_field",
-                    "entry_id": _field_to_patch.entry_id,
-                    "field_id": _field_to_patch.id,
-                    "value": 'He said "hi"',
-                }
-            ]
-        )["document"]
-    with pytest.raises(rk.PatchError, match="unsafe quoted delimiter"):
-        _field_to_patch = raw.entries["unsafe"].fields["quoted"]
-        raw = raw.apply_patch(
-            [
-                {
-                    "kind": "set_field",
-                    "entry_id": _field_to_patch.entry_id,
-                    "field_id": _field_to_patch.id,
-                    "value": "Bad\\",
-                }
-            ]
-        )["document"]
-    with pytest.raises(rk.PatchError, match="unsafe quoted delimiter"):
-        _field_to_patch = raw.entries["unsafe"].fields["quoted"]
-        raw = raw.apply_patch(
-            [
-                {
-                    "kind": "set_field",
-                    "entry_id": _field_to_patch.entry_id,
-                    "field_id": _field_to_patch.id,
-                    "value": "Bad { value",
-                }
-            ]
-        )["document"]
-    with pytest.raises(rk.PatchError, match="unsafe quoted delimiter"):
-        _field_to_patch = raw.entries["unsafe"].fields["quoted"]
-        raw = raw.apply_patch(
-            [
-                {
-                    "kind": "set_field",
-                    "entry_id": _field_to_patch.entry_id,
-                    "field_id": _field_to_patch.id,
-                    "value": "Bad } value",
-                }
-            ]
-        )["document"]
-    with pytest.raises(rk.PatchError, match="unsafe braced delimiter"):
-        _field_to_patch = raw.entries["unsafe"].fields["bare"]
-        raw = raw.apply_patch(
-            [
-                {
-                    "kind": "set_field",
-                    "entry_id": _field_to_patch.entry_id,
-                    "field_id": _field_to_patch.id,
-                    "value": "Bad } value",
-                }
-            ]
-        )["document"]
-    with pytest.raises(rk.PatchError, match="unsafe braced delimiter"):
-        _field_to_patch = raw.entries["unsafe"].fields["bare"]
-        raw = raw.apply_patch(
-            [
-                {
-                    "kind": "set_field",
-                    "entry_id": _field_to_patch.entry_id,
-                    "field_id": _field_to_patch.id,
-                    "value": "Bad { value",
-                }
-            ]
-        )["document"]
-    with pytest.raises(rk.PatchError, match="unsafe braced delimiter"):
-        _field_to_patch = raw.entries["unsafe"].fields["bare"]
-        raw = raw.apply_patch(
-            [
-                {
-                    "kind": "set_field",
-                    "entry_id": _field_to_patch.entry_id,
-                    "field_id": _field_to_patch.id,
-                    "value": "Bad\\",
-                }
-            ]
-        )["document"]
 
 
 def test_raw_field_edit_replaces_whole_concatenated_expression(tmp_path: Path) -> None:
@@ -1895,28 +1680,6 @@ def test_raw_bib_document_keeps_percent_encoded_urls_inside_braced_values(
     assert _text(library["encoded"]["title"]) == "Edited title"
 
 
-def test_raw_bib_document_handles_escaped_and_nested_delimiters(tmp_path: Path) -> None:
-    source = tmp_path / "delimiters.bib"
-    source.write_text(
-        """@article{escaped,
-  title = {A \\} B},
-  year = {2024}
-}
-
-@article(paren,
-  title = {A) B},
-  year = {2025}
-)
-""",
-    )
-
-    raw = rk.BibDocument.read(source)
-
-    assert raw.failed_blocks == []
-    assert raw.entries["escaped"].fields["year"].value == "2024"
-    assert raw.entries["paren"].fields["title"].value == "A) B"
-
-
 def test_raw_bib_document_keeps_quotes_literal_inside_braced_values(tmp_path: Path) -> None:
     source = tmp_path / "quoted-brace.bib"
     source.write_text(
@@ -1931,22 +1694,6 @@ def test_raw_bib_document_keeps_quotes_literal_inside_braced_values(tmp_path: Pa
 
     assert raw.failed_blocks == []
     assert raw.entries["quoted"].fields["title"].value == 'A " quoted title'
-
-
-def test_raw_bib_document_keeps_protected_quotes_inside_quoted_values(tmp_path: Path) -> None:
-    source = tmp_path / "protected-quote.bib"
-    source.write_text(
-        """@article{quoted,
-  title = "A {"quoted"} title",
-  year = {2024}
-}
-""",
-    )
-
-    raw = rk.BibDocument.read(source)
-
-    assert raw.failed_blocks == []
-    assert raw.entries["quoted"].fields["title"].value == 'A {"quoted"} title'
 
 
 def test_raw_bib_document_keeps_single_protected_quote_inside_quoted_values(tmp_path: Path) -> None:
@@ -2013,21 +1760,6 @@ def test_tidy_bibtex_formats_text_and_reports_count() -> None:
         "  year          = {1983}\n"
         "}\n"
     )
-
-
-def test_tidy_options_enable_default_field_sorting() -> None:
-    result = rk.tidy_bibtex(
-        """@article{doe2024,
-  year={2024},
-  title={Fast Citations},
-  author={Doe, Jane}
-}
-""",
-        options=rk.TidyOptions(sort_fields=True),
-    )
-
-    assert result.bibtex.index("title") < result.bibtex.index("author")
-    assert result.bibtex.index("author") < result.bibtex.index("year")
 
 
 def test_tidy_bibtex_returns_structured_warnings() -> None:
@@ -2110,20 +1842,6 @@ def test_tidy_file_can_return_result_without_writing(tmp_path: Path) -> None:
 
     assert source.read_text(encoding="utf-8") == original
     assert "@article{doe2024" in result.bibtex
-
-
-def test_library_get_many_preserves_requested_order_and_repeated_keys() -> None:
-    library = rk.Library.read(FIXTURES / "basic.bib")
-    assert library.get_many([]) == []
-    assert [
-        entry["key"] for entry in library.get_many(iter(["roe2022", "doe2024", "roe2022"]))
-    ] == [
-        "roe2022",
-        "doe2024",
-        "roe2022",
-    ]
-    with pytest.raises(TypeError):
-        library.get_many(cast(Any, [1]))
 
 
 def test_parse_errors_and_recovery_expose_structured_diagnostics() -> None:

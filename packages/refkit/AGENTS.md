@@ -13,6 +13,7 @@
 - Update `_native.pyi`, package exports, public docs, and boundary tests with every public change.
 - Keep `refkit.agent` lazy and limited to dynamic help plus packaged-resource access over the public Python API.
 - Keep each packaged task example independently executable. Validate installed resources with `python -m refkit_tests.agent_examples` through editable and built-wheel boundaries.
+- Keep annotation-only consumer examples in `tests/typing_samples.py`, covered by both type checkers. Test formatter keyword acceptance through actual transformations.
 
 Rebuild with `make refkit-develop` from the repository root so the editable native module and Agent Plugin marker come from the same backend. Run `make python-lint typecheck test rust` after the rebuild.
 
