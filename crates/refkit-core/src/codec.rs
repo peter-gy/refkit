@@ -441,20 +441,14 @@ fn merge_text_chunks(chunks: &mut Vec<Value>) {
         let previous = merged
             .last_mut()
             .filter(|previous| previous.get("kind") == chunk.get("kind"))
-            .and_then(Value::as_object_mut);
-        if let Some(previous) = previous {
-            let text = format!(
-                "{}{}",
-                previous
-                    .get("text")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default(),
+            .and_then(|previous| previous.get_mut("text"));
+        if let Some(Value::String(previous)) = previous {
+            previous.push_str(
                 chunk
                     .get("text")
                     .and_then(Value::as_str)
-                    .unwrap_or_default()
+                    .unwrap_or_default(),
             );
-            previous.insert("text".into(), Value::String(text));
         } else {
             merged.push(chunk);
         }

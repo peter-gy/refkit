@@ -8,6 +8,7 @@
 - Preserve Python capability and result parity with camelCase names, options objects, nullable values, and typed records. Update shared parity checks when changing a contract.
 - Keep raw entry and field wrappers attached to their original document and occurrence IDs. Native allocations follow garbage collection, and dependent wrappers retain the state they need.
 - Raw snapshots are immutable. `applyPatch` returns a new document and complete change report. Original handles retain their values and spans, including across garbage collection.
+- Field wrappers retain their immutable field information and return detached spans. Metadata and membership queries request their own result shapes from the native boundary.
 - Generate `src/wasm` and `dist` with `npm run build`. Pin the binding generator to the Rust dependency version. Ship the WebAssembly binary, declarations, and project license in the npm tarball.
 - Keep npm package and lock versions aligned with the Rust workspace. Publish the tested tarball through `publish.yml` with the `npm` environment.
 

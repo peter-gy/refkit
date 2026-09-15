@@ -4,7 +4,7 @@ use std::sync::Arc;
 use pyo3::exceptions::{PyKeyError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::{PyAny, PyList, PyListMethods};
+use pyo3::types::{PyAny, PyList};
 
 use refkit_core::Library as CoreLibrary;
 
@@ -144,19 +144,23 @@ impl Library {
                 "keys must be an iterable of entry keys",
             ));
         }
-        let rows = PyList::empty(py);
+        let mut records = Vec::new();
         let iter = keys
             .try_iter()
             .map_err(|_| PyTypeError::new_err("keys must be an iterable of entry keys"))?;
         for key in iter {
             let key = key?;
             let key = key.extract::<&str>()?;
-            let entry = self
-                .entry_for_key(py, key)?
+            let record = self
+                .inner
+                .get_record(key)
                 .ok_or_else(|| PyKeyError::new_err(key.to_string()))?;
-            rows.append(entry)?;
+            records.push(record);
         }
-        Ok(rows.into_any().unbind())
+        let json = py
+            .detach(|| serde_json::to_string(&records))
+            .map_err(|error| RefkitError::new_err(error.to_string()))?;
+        json_to_py(py, &json)
     }
 
     fn values(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {

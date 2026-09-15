@@ -12,7 +12,7 @@ use crate::filesystem::{read_bibtex, write_bibtex};
 use crate::repr::quoted;
 use crate::tidy::{TidyOptions, TidyResult, tidy_error_to_py};
 use refkit_core::{
-    RawBlockInfo, RawDocument, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo,
+    RawBlockInfo, RawDocument, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo, RawFieldView,
     tidy_bibtex as core_tidy_bibtex,
 };
 
@@ -559,12 +559,12 @@ impl BibField {
     }
     #[getter]
     fn name(&self) -> PyResult<String> {
-        self.with_field(|field| field.name)
+        self.with_field(|field| field.name.to_owned())
     }
 
     #[getter]
     fn value(&self) -> PyResult<String> {
-        self.with_field(|field| field.value)
+        self.with_field(|field| field.value.to_owned())
     }
 
     #[getter]
@@ -576,17 +576,17 @@ impl BibField {
         self.with_field(|field| {
             format!(
                 "BibField(name={}, value={})",
-                quoted(&field.name),
-                quoted(&field.value)
+                quoted(field.name),
+                quoted(field.value)
             )
         })
     }
 }
 
 impl BibField {
-    fn with_field<T>(&self, f: impl FnOnce(RawFieldInfo) -> T) -> PyResult<T> {
+    fn with_field<T>(&self, f: impl FnOnce(RawFieldView<'_>) -> T) -> PyResult<T> {
         let doc = self.doc.as_ref();
-        doc.field_info(self.entry_id, self.field_id)
+        doc.field_view(self.entry_id, self.field_id)
             .map(f)
             .ok_or_else(|| PyKeyError::new_err(self.field_key.clone()))
     }

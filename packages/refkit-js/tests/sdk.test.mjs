@@ -283,6 +283,7 @@ test("Node import initializes the portable API", () => {
   assert.deepEqual(library.keys(), ["doe", "roe"]);
   assert.equal(library.get("missing"), null);
   assert.equal(library.has("doe"), true);
+  assert.equal(library.has("missing"), false);
   assert.equal(library.isEmpty(), false);
   assert.deepEqual(
     [...library].map((entry) => entry.key),
@@ -313,6 +314,57 @@ test("returned entries cannot mutate the library", () => {
   const record = library.get("doe");
   record.title.chunks[0].text = "Changed";
   assert.equal(library.get("doe").title.chunks[0].text, "A Book");
+});
+
+test("bulk lookup preserves generator order and detached duplicate records", () => {
+  const library = rk.Library.parseBibtex(source);
+  function* keys() {
+    yield "roe";
+    yield "doe";
+    yield "roe";
+  }
+  const records = library.getMany(keys());
+  assert.deepEqual(
+    records.map((record) => record.key),
+    ["roe", "doe", "roe"],
+  );
+  records[0].title.chunks[0].text = "Changed";
+  assert.equal(records[2].title.chunks[0].text, "Other");
+  assert.equal(library.get("roe").title.chunks[0].text, "Other");
+  assert.deepEqual(library.getMany([]), []);
+  assert.throws(
+    () => library.getMany(["doe", "missing"]),
+    rk.MissingReferenceError,
+  );
+});
+
+test("raw metadata returns detached source-ordered values", () => {
+  const input =
+    "% Café\n@string{press={First}}\n@string{press={Last}}\n" +
+    '@preamble{"Prefix"}\n@book{a,title={Book}}\n@book{broken,title={unclosed';
+  const document = rk.BibDocument.parse(input);
+  assert.deepEqual(document.diagnostics, []);
+  assert.equal(document.preamble, "Prefix");
+  assert.deepEqual(document.strings, { press: "Last" });
+  assert.equal(
+    document.comments.some((comment) => comment.includes("Café")),
+    true,
+  );
+  assert.equal(document.failedBlocks.length, 1);
+  for (const property of ["comments", "strings", "failedBlocks", "blocks"]) {
+    const expected = document[property];
+    const detached = document[property];
+    if (Array.isArray(detached)) {
+      if (property === "blocks" || property === "failedBlocks") {
+        detached[0].span[0] = -1;
+      }
+      detached.length = 0;
+    } else {
+      detached.press = "Changed";
+    }
+    assert.deepEqual(document[property], expected);
+  }
+  assert.equal(document.toBibtex(), input);
 });
 
 test("parse errors and recovery expose UTF-8 diagnostic spans", () => {
@@ -429,11 +481,15 @@ test("raw edits preserve duplicate occurrence identity and original spans", () =
     "% Café\n@book{same, TITLE={First}, title={Second}}\n@book{same,title={Third}}";
   const document = rk.BibDocument.parse(input);
   assert.equal(document.entries.size, 2);
+  assert.equal(document.entries.has("same"), true);
+  assert.equal(document.entries.has("missing"), false);
   assert.deepEqual(document.entries.uniqueKeys(), ["same"]);
   assert.deepEqual(document.entries.occurrenceKeys(), ["same", "same"]);
   assert.throws(() => document.entries.getUnique("same"), rk.RefkitError);
   const [first, second] = document.entries.getAll("same");
   assert.equal(first.fields.size, 2);
+  assert.equal(first.fields.has("TITLE"), true);
+  assert.equal(first.fields.has("missing"), false);
   assert.throws(() => first.fields.getUnique("title"), rk.RefkitError);
   const field = first.fields.getAll("TITLE")[1];
   const span = field.span;
@@ -446,6 +502,8 @@ test("raw edits preserve duplicate occurrence identity and original spans", () =
     },
   ]);
   assert.equal(field.value, "Second");
+  assert.deepEqual(field.span, span);
+  field.span[0] = -1;
   assert.deepEqual(field.span, span);
   assert.match(
     patched.document.toBibtex(),

@@ -9,6 +9,200 @@ use refkit_core::{
 const BOOK: &str = r#"[{"id":"book","type":"book","title":"A Book","author":[{"family":"Doe","given":"Jane"}],"issued":{"date-parts":[[2024]]},"publisher":"Press","language":"en-US","DOI":"10.1234/book"}]"#;
 
 #[test]
+fn yaml_creator_mappings_preserve_commas_suffixes_and_roles() {
+    let author = serde_json::json!({
+        "kind": "person", "family": "Research, Alpha, Beta, Gamma",
+        "given": "Jane, Ann", "suffix": "Jr.", "comma_suffix": true
+    });
+    let editor = serde_json::json!({
+        "kind": "person", "family": "Editor", "given": "Lee", "suffix": "III",
+        "prefix": "van", "alias": "EL", "comma_suffix": true
+    });
+    let library = refkit_core::Library::from_json(
+        &serde_json::json!({
+            "schema_version": 1,
+            "records": [{
+                "key": "names", "entry_type": "Book",
+                "authors": [author], "editors": [editor],
+                "affiliated": [{"role":"translator", "names":[author]}],
+                "parents": [{"key":"names", "entry_type":"Book", "authors":[author]}]
+            }]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let encoded = encode(&library, Format::Hayagriva, LossPolicy::Error).unwrap();
+    let decoded = decode(
+        &encoded.text,
+        Format::Hayagriva,
+        LossPolicy::Error,
+        RecoveryPolicy::Error,
+    )
+    .unwrap();
+    assert_eq!(decoded.library.records(), library.records());
+}
+
+#[test]
+fn yaml_organization_names_keep_literal_commas_and_report_name_kind_loss() {
+    let literal = "Research, Standards, Science, and Education Council";
+    let library = refkit_core::Library::from_json(
+        &serde_json::json!({
+            "schema_version":1,
+            "records":[{"key":"organization", "entry_type":"Book", "authors":[{
+                "kind":"organization", "name":literal
+            }]}]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let encoded = encode(&library, Format::Hayagriva, LossPolicy::Report).unwrap();
+    let decoded = decode(
+        &encoded.text,
+        Format::Hayagriva,
+        LossPolicy::Error,
+        RecoveryPolicy::Error,
+    )
+    .unwrap();
+    assert!(matches!(&decoded.library.records()[0].authors[0],
+        refkit_core::Name::Person { family, given: None, .. } if family == literal));
+    assert!(
+        encoded
+            .issues
+            .iter()
+            .any(|issue| issue.lossy && issue.path.starts_with("authors"))
+    );
+    assert!(encode(&library, Format::Hayagriva, LossPolicy::Error).is_err());
+}
+
+#[test]
+fn source_type_annotations_follow_each_records_current_type() {
+    let parsed = refkit_core::Library::parse_biblatex(
+        "@mastersthesis{a,title={Alpha}}@mastersthesis{b,title={Beta}}@mastersthesis{c,title={Gamma}}",
+        RecoveryPolicy::Error,
+    ).unwrap();
+    let mut records = parsed.records().to_vec();
+    records[1].entry_type = "Book".into();
+    records[1].parents.clear();
+    let library = refkit_core::Library::from_records(records).unwrap();
+    let encoded = encode(&library, Format::Biblatex, LossPolicy::Report).unwrap();
+    let entries = refkit_core::RawDocument::parse(&encoded.text).entry_occurrences();
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.kind.as_str())
+            .collect::<Vec<_>>(),
+        ["thesis", "book", "thesis"]
+    );
+    let encoded = encode(&library, Format::CslJson, LossPolicy::Report).unwrap();
+    let omitted = encoded
+        .issues
+        .iter()
+        .filter(|issue| issue.code == "source_type_omitted")
+        .map(|issue| issue.entry.as_deref().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(omitted, ["a", "c"]);
+}
+
+#[test]
+fn adjacent_text_chunks_retain_their_complete_content_through_readback() {
+    let title = refkit_core::Text {
+        chunks: (0..8192)
+            .map(|_| refkit_core::TextChunk {
+                kind: refkit_core::TextKind::Normal,
+                text: "x".into(),
+            })
+            .collect(),
+        short: None,
+    };
+    let library = refkit_core::Library::from_records(vec![refkit_core::EntryRecord {
+        key: "chunks".into(),
+        entry_type: "Book".into(),
+        title: Some(title),
+        ..refkit_core::EntryRecord::default()
+    }])
+    .unwrap();
+    for format in [Format::CslJson, Format::Hayagriva] {
+        let encoded = encode(&library, format, LossPolicy::Error).unwrap();
+        let decoded = decode(
+            &encoded.text,
+            format,
+            LossPolicy::Error,
+            RecoveryPolicy::Error,
+        )
+        .unwrap();
+        assert_eq!(
+            decoded.library.records()[0]
+                .title
+                .as_ref()
+                .unwrap()
+                .plain_text(),
+            "x".repeat(8192)
+        );
+    }
+}
+
+#[test]
+fn nested_yaml_parents_preserve_every_record() {
+    let mut record = refkit_core::EntryRecord {
+        key: "chain".into(),
+        entry_type: "Book".into(),
+        title: Some(refkit_core::Text::plain("leaf")),
+        ..refkit_core::EntryRecord::default()
+    };
+    for depth in 0..24 {
+        record = refkit_core::EntryRecord {
+            key: "chain".into(),
+            entry_type: "Book".into(),
+            title: Some(refkit_core::Text::plain(format!("level {depth}"))),
+            parents: vec![record],
+            ..refkit_core::EntryRecord::default()
+        };
+    }
+    let library = refkit_core::Library::from_records(vec![record]).unwrap();
+    let encoded = encode(&library, Format::Hayagriva, LossPolicy::Error).unwrap();
+    let decoded = decode(
+        &encoded.text,
+        Format::Hayagriva,
+        LossPolicy::Error,
+        RecoveryPolicy::Error,
+    )
+    .unwrap();
+    assert_eq!(decoded.library.records(), library.records());
+}
+
+#[test]
+fn yaml_date_roles_override_first_matching_parents_and_preserve_extensions() {
+    let date = |year| serde_json::json!({"value":{"kind":"point","date":{"year":year}}});
+    let library = refkit_core::Library::from_json(
+        &serde_json::json!({
+            "schema_version": 1,
+            "records": [{
+                "key": "dates", "entry_type": "Book",
+                "original_date": {"value":{"kind":"literal","text":"undated"}},
+                "event_date": date(2024),
+                "parents": [
+                    {"key":"dates", "entry_type":"Original", "date":date(1900),
+                     "extensions":{"hayagriva":{"custom":"kept"}}},
+                    {"key":"dates", "entry_type":"Original", "date":date(1950)}
+                ]
+            }]
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let encoded = encode(&library, Format::Hayagriva, LossPolicy::Report).unwrap();
+    let yaml: serde_yaml::Value = serde_yaml::from_str(&encoded.text).unwrap();
+    let parents = yaml["dates"]["parent"].as_sequence().unwrap();
+    assert_eq!(parents.len(), 3);
+    assert!(parents[0].get("date").is_none());
+    assert_eq!(parents[0]["custom"].as_str(), Some("kept"));
+    assert_eq!(parents[1]["date"]["year"].as_i64(), Some(1950));
+    assert_eq!(parents[2]["type"].as_str(), Some("Conference"));
+    assert_eq!(parents[2]["date"]["year"].as_i64(), Some(2024));
+    assert!(encode(&library, Format::Hayagriva, LossPolicy::Error).is_err());
+}
+
+#[test]
 fn source_type_annotations_cannot_turn_records_into_comment_blocks() {
     let library = refkit_core::Library::from_json(
         r#"{"schema_version":1,"records":[{"key":"a","entry_type":"Book","extensions":{"biblatex":{"@type":"comment"}}}]}"#,

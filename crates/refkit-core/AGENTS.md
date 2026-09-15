@@ -23,6 +23,10 @@ Validation is inspect-only. Keep format-neutral record checks separate from the 
 
 Validate bibliography macro and inheritance dependencies before upstream normalization. Keep recovery diagnostics structured and map every span to the original UTF-8 source. Recover a failing value locally while preserving valid macro definitions and unrelated entries.
 
+Batch independent recovery edits before normalization. Bound residual work by traversed atoms and reparsed source bytes. Raw field metadata access borrows the immutable snapshot. Copy field values only when the caller requests an owned value or detached report.
+
+Capture field-level recovery spans from effective raw fields before macro expansion. Omit the span when an inherited field's source occurrence is unknown.
+
 Rendering uses one citation-request processor for scalar, ordered-list, grouped, and document operations. Keep one fresh driver per operation and preserve request-local note context. Map rendered item indices to the original request items and reference keys. Preserve bibliography layout and keep each label separate from entry content. Formatting and display states use RefKit-owned enums. Bound custom XML size, nodes, nesting, and per-element attributes before deserialization. Validate macro dependencies and combined rendering-element expansion limits before preparing a style.
 
 Tidy computes duplicate groups before allocating final keys. Preserve source occurrence identity in rename reports, rewrite `crossref`, `xdata`, and `xref` with final keys, and sort emitted keys. Only `crossref` and `xdata` add inheritance edges. Reference values preserve key case and punctuation through text formatting options. `RawEntryId.index()` addresses source-order syntax entries, so retain that vector order through planning.

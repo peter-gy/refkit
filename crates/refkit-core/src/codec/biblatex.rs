@@ -1,4 +1,5 @@
 use ::biblatex::{Chunk, Chunks, Entry, EntryType, Spanned};
+use std::collections::BTreeMap;
 
 use super::{CodecError, ConversionIssue, issue};
 use crate::{Date, EntryRecord, ExtensionValue, Name, RecoveryPolicy, Text, TextKind};
@@ -107,21 +108,41 @@ pub(super) fn canonical_type(record: &EntryRecord) -> &'static str {
     }
 }
 
-pub(super) fn source_type_matches(record: &EntryRecord, original: &str) -> bool {
+#[derive(Default)]
+pub(super) struct SourceTypes {
+    projections: BTreeMap<String, Option<(String, Option<String>)>>,
+}
+
+impl SourceTypes {
+    pub(super) fn matches(&mut self, record: &EntryRecord, original: &str) -> bool {
+        let projection = self
+            .projections
+            .entry(original.to_string())
+            .or_insert_with(|| source_type_projection(original));
+        projection.as_ref().is_some_and(|(kind, parent)| {
+            *kind == record.entry_type
+                && parent.as_ref() == record.parents.first().map(|parent| &parent.entry_type)
+        })
+    }
+}
+
+fn source_type_projection(original: &str) -> Option<(String, Option<String>)> {
     if !original
         .chars()
         .all(|character| character.is_ascii_alphanumeric() || character == '-' || character == '_')
     {
-        return false;
+        return None;
     }
     let probe = format!("@{original}{{probe,title={{Probe}}}}");
-    crate::Library::parse_biblatex(&probe, RecoveryPolicy::Error).is_ok_and(|library| {
-        library.get_record("probe").is_some_and(|candidate| {
-            candidate.entry_type == record.entry_type
-                && candidate.parents.first().map(|parent| &parent.entry_type)
-                    == record.parents.first().map(|parent| &parent.entry_type)
-        })
-    })
+    let library = crate::Library::parse_biblatex(&probe, RecoveryPolicy::Error).ok()?;
+    let candidate = library.get_record("probe")?;
+    Some((
+        candidate.entry_type.clone(),
+        candidate
+            .parents
+            .first()
+            .map(|parent| parent.entry_type.clone()),
+    ))
 }
 
 pub(super) fn decode_issues(records: &[EntryRecord], issues: &mut Vec<ConversionIssue>) {
@@ -220,8 +241,9 @@ pub(super) fn encode(
     issues: &mut Vec<ConversionIssue>,
 ) -> Result<String, CodecError> {
     let mut bibliography = ::biblatex::Bibliography::new();
+    let mut source_types = SourceTypes::default();
     for record in records {
-        bibliography.insert(encode_entry(record, issues)?);
+        bibliography.insert(encode_entry(record, issues, &mut source_types)?);
     }
     Ok(bibliography.to_biblatex_string())
 }
@@ -229,8 +251,9 @@ pub(super) fn encode(
 fn encode_entry(
     record: &EntryRecord,
     issues: &mut Vec<ConversionIssue>,
+    source_types: &mut SourceTypes,
 ) -> Result<Entry, CodecError> {
-    let mut entry = prepare_entry(record, issues)?;
+    let mut entry = prepare_entry(record, issues, source_types)?;
     put_extensions(&mut entry, record, issues)?;
     put_text(&mut entry, "title", record.title.as_ref());
     if let Some(short) = record.title.as_ref().and_then(|title| title.short.as_ref()) {
@@ -261,6 +284,7 @@ fn encode_entry(
 fn prepare_entry(
     record: &EntryRecord,
     issues: &mut Vec<ConversionIssue>,
+    source_types: &mut SourceTypes,
 ) -> Result<Entry, CodecError> {
     if record
         .key
@@ -315,7 +339,7 @@ fn prepare_entry(
         .get("biblatex")
         .and_then(|fields| fields.get("@type"))
         && original != &kind
-        && source_type_matches(record, original)
+        && source_types.matches(record, original)
     {
         kind.clone_from(original);
     }

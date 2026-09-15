@@ -1,8 +1,9 @@
 use super::{
-    DuplicateConflict, DuplicateConflictKind, DuplicateEvidence, DuplicateGroup, DuplicateMember,
-    DuplicateReport, DuplicateValue, MergeError, MergeErrorCode, signature,
+    Components, DuplicateConflict, DuplicateConflictKind, DuplicateEvidence, DuplicateGroup,
+    DuplicateMember, DuplicateReport, DuplicateValue, EntryView, MergeError, MergeErrorCode,
+    signature,
 };
-use crate::{DuplicateRule, RawDocument, RawEntryId, raw::RawSyntaxEntry};
+use crate::{DuplicateRule, RawDocument, RawEntryId};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 impl RawDocument {
@@ -25,24 +26,23 @@ impl RawDocument {
             .map_err(|message| MergeError::new(MergeErrorCode::InvalidSelection, message))?;
         crate::library::validate_source(&source)
             .map_err(|error| MergeError::new(MergeErrorCode::ResourceLimit, error.message))?;
-        let syntax = self.clone().into_syntax();
+        let entries = self
+            .syntax_data()
+            .entry_blocks
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| EntryView::new(index, entry))
+            .collect::<Vec<_>>();
         let mut seen = HashSet::new();
         let rules = rules
             .iter()
             .copied()
             .filter(|rule| seen.insert(*rule))
             .collect::<Vec<_>>();
-        let mut components = (0..syntax.entries.len()).collect::<Vec<_>>();
+        let mut components = Components::new(entries.iter().map(|entry| entry.id));
         let mut evidence = Vec::new();
         for rule in &rules {
-            add_rule_evidence(&syntax.entries, *rule, &mut components, &mut evidence);
-        }
-        let mut groups: BTreeMap<usize, Vec<&RawSyntaxEntry>> = BTreeMap::new();
-        for entry in &syntax.entries {
-            groups
-                .entry(root(&mut components, entry.id.index()))
-                .or_default()
-                .push(entry);
+            add_rule_evidence(&entries, *rule, &mut components, &mut evidence);
         }
         let mut grouped_evidence: BTreeMap<usize, Vec<DuplicateEvidence>> = BTreeMap::new();
         for evidence in evidence {
@@ -50,9 +50,13 @@ impl RawDocument {
                 continue;
             };
             grouped_evidence
-                .entry(root(&mut components, first.index()))
+                .entry(components.root(*first).index())
                 .or_default()
                 .push(evidence);
+        }
+        let mut groups: BTreeMap<usize, Vec<&EntryView<'_>>> = BTreeMap::new();
+        for (entry, root) in entries.iter().zip(components.freeze()) {
+            groups.entry(root.index()).or_default().push(entry);
         }
         let groups = groups
             .into_iter()
@@ -66,11 +70,11 @@ impl RawDocument {
                         .iter()
                         .map(|entry| DuplicateMember {
                             entry_id: entry.id,
-                            key: entry.key.clone(),
+                            key: entry.key.to_string(),
                         })
                         .collect(),
                     evidence: grouped_evidence.remove(&id).unwrap_or_default(),
-                    conflicts: conflicts(&entries, &source),
+                    conflicts: conflicts(&entries, &values(&entries, &source)),
                 })
             })
             .collect();
@@ -79,14 +83,14 @@ impl RawDocument {
 }
 
 fn add_rule_evidence(
-    entries: &[RawSyntaxEntry],
+    entries: &[EntryView<'_>],
     rule: DuplicateRule,
-    components: &mut [usize],
+    components: &mut Components,
     evidence: &mut Vec<DuplicateEvidence>,
 ) {
     let mut buckets: BTreeMap<String, Vec<RawEntryId>> = BTreeMap::new();
     for entry in entries {
-        if let Some(value) = signature(entry, rule) {
+        if let Some(value) = signature(entry.key, |name| entry.field(name), rule) {
             buckets.entry(value).or_default().push(entry.id);
         }
     }
@@ -95,7 +99,7 @@ fn add_rule_evidence(
             continue;
         };
         for member in members.iter().skip(1) {
-            join(components, first.index(), member.index());
+            components.join(*first, *member);
         }
         evidence.push(DuplicateEvidence {
             rule,
@@ -105,41 +109,19 @@ fn add_rule_evidence(
     }
 }
 
-#[expect(
-    clippy::indexing_slicing,
-    reason = "Components are initialized from source-order entry indices. Union only stores roots from that same slice, so parent and grandparent indices remain in bounds."
-)]
-fn root(parents: &mut [usize], mut id: usize) -> usize {
-    while parents[id] != id {
-        parents[id] = parents[parents[id]];
-        id = parents[id];
-    }
-    id
-}
-
-#[expect(
-    clippy::indexing_slicing,
-    reason = "Both operands are roots returned from the same component slice. Linking the larger root to the smaller preserves valid, acyclic parent indices."
-)]
-fn join(parents: &mut [usize], left: usize, right: usize) {
-    let left = root(parents, left);
-    let right = root(parents, right);
-    parents[left.max(right)] = left.min(right);
-}
-
 pub(super) fn values(
-    entries: &[&RawSyntaxEntry],
+    entries: &[&EntryView<'_>],
     source: &str,
 ) -> BTreeMap<String, Vec<DuplicateValue>> {
     let mut values: BTreeMap<String, Vec<DuplicateValue>> = BTreeMap::new();
     for entry in entries {
-        for field in &entry.fields {
+        for (field_id, field) in entry.fields() {
             values
                 .entry(field.name.to_ascii_lowercase())
                 .or_default()
                 .push(DuplicateValue {
                     entry_id: entry.id,
-                    field_id: Some(field.id),
+                    field_id: Some(field_id),
                     value: field.value.clone(),
                     expression: source[field.patch_span.clone()].into(),
                 });
@@ -148,7 +130,10 @@ pub(super) fn values(
     values
 }
 
-pub(super) fn conflicts(entries: &[&RawSyntaxEntry], source: &str) -> Vec<DuplicateConflict> {
+pub(super) fn conflicts(
+    entries: &[&EntryView<'_>],
+    fields: &BTreeMap<String, Vec<DuplicateValue>>,
+) -> Vec<DuplicateConflict> {
     let mut conflicts = Vec::new();
     if entries
         .iter()
@@ -165,13 +150,13 @@ pub(super) fn conflicts(entries: &[&RawSyntaxEntry], source: &str) -> Vec<Duplic
                 .map(|entry| DuplicateValue {
                     entry_id: entry.id,
                     field_id: None,
-                    value: entry.kind.clone(),
-                    expression: entry.kind.clone(),
+                    value: entry.kind.to_string(),
+                    expression: entry.kind.to_string(),
                 })
                 .collect(),
         });
     }
-    for (field, values) in values(entries, source) {
+    for (field, values) in fields {
         if values
             .iter()
             .map(|value| &value.expression)
@@ -184,7 +169,7 @@ pub(super) fn conflicts(entries: &[&RawSyntaxEntry], source: &str) -> Vec<Duplic
         let identifiers = values
             .iter()
             .filter_map(|value| {
-                crate::validation::canonical_identifier(&field, &value.value).and_then(Result::ok)
+                crate::validation::canonical_identifier(field, &value.value).and_then(Result::ok)
             })
             .collect::<BTreeSet<_>>();
         let kind = if identifiers.len() > 1 {
@@ -194,8 +179,8 @@ pub(super) fn conflicts(entries: &[&RawSyntaxEntry], source: &str) -> Vec<Duplic
         };
         conflicts.push(DuplicateConflict {
             kind,
-            field,
-            values,
+            field: field.clone(),
+            values: values.clone(),
         });
     }
     conflicts

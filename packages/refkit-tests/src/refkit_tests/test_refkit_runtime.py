@@ -27,6 +27,29 @@ def test_refkit_parse_tidy_and_render_contracts() -> None:
     assert tidied.count == 1
 
 
+def test_rendered_wrappers_return_detached_trees() -> None:
+    library = rk.Library.parse_bibtex(BIBTEX)
+    rendered = rk.Document(library, rk.Style.load("apa")).render([rk.Citation("a", "doe2024")])
+    citation = rendered["a"]
+    expected_citation = citation.tree
+    detached_citation = rendered.citations["a"].tree
+    assert detached_citation == expected_citation
+    detached_citation.clear()
+    assert rendered["a"].tree == expected_citation
+
+    bibliography = rendered.bibliography
+    expected_bibliography = bibliography.tree
+    detached_bibliography = rendered.bibliography.tree
+    assert detached_bibliography == expected_bibliography
+    entry = detached_bibliography[0]
+    assert entry["kind"] == "bibliography-entry"
+    entry["key"] = "changed"
+    entry["content"].clear()
+    del rendered
+    assert bibliography.tree == expected_bibliography
+    assert citation.tree == expected_citation
+
+
 def test_refkit_validation_uses_owned_reports() -> None:
     library = rk.Library.from_records(
         [{"key": "a", "entry_type": "Misc", "identifiers": {"isbn": "bad"}}]
@@ -39,6 +62,18 @@ def test_refkit_validation_uses_owned_reports() -> None:
     with pytest.raises(rk.ParseError) as failure:
         rk.BibDocument.parse("@misc{a,date={123456X}}").validate()
     assert failure.value.diagnostics[0]["code"] == "invalid_field"
+
+
+def test_refkit_bulk_lookup_preserves_order_and_detached_records() -> None:
+    library = rk.Library.parse_bibtex(BIBTEX + "@book{other,title={Café}}")
+    records = library.get_many(key for key in ["other", "doe2024", "other"])
+    assert [record["key"] for record in records] == ["other", "doe2024", "other"]
+    records[0]["identifiers"]["custom"] = "changed"
+    assert "custom" not in records[2]["identifiers"]
+    assert "custom" not in library["other"]["identifiers"]
+    assert library.get_many([]) == []
+    with pytest.raises(KeyError, match="missing"):
+        library.get_many(key for key in ["other", "missing"])
 
 
 def test_refkit_codecs_preserve_records_and_report_loss() -> None:
@@ -88,6 +123,9 @@ def test_refkit_raw_edit_and_error_contracts() -> None:
 
     assert "Browser Citations" in updated.to_bibtex()
     assert field.value == "Fast Citations"
+    assert field.name == "title"
+    assert field.span == raw.entries["doe2024"].fields["title"].span
+    assert "Fast Citations" in repr(field)
 
     library = rk.Library.parse_bibtex(BIBTEX)
     document = rk.Document(library, rk.Style.load("apa"), locale="en-US")

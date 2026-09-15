@@ -6,6 +6,94 @@ use refkit_core::{
     DuplicateConflictKind, DuplicateRule, MergeErrorCode, MergeFieldChoice, MergeRequest,
     RawDocument,
 };
+use std::fmt::Write as _;
+
+#[test]
+fn abstract_signatures_limit_normalized_unicode_characters_before_the_suffix() {
+    let mut source = String::new();
+    for (key, prefix, suffix) in [
+        ("a", "İ, ".repeat(50), "x".repeat(100_000)),
+        ("b", "İ-".repeat(50), "y".repeat(100_000)),
+        ("c", "i".repeat(100), String::new()),
+    ] {
+        writeln!(source, "@misc{{{key},abstract={{{prefix}{suffix}}}}}").unwrap();
+    }
+    let document = RawDocument::parse(&source);
+    let report = document
+        .find_duplicates(Some(&[DuplicateRule::Abstract]))
+        .unwrap();
+    assert_eq!(report.groups.len(), 1);
+    let group = &report.groups[0];
+    assert_eq!(
+        group
+            .members
+            .iter()
+            .map(|member| member.key.as_str())
+            .collect::<Vec<_>>(),
+        ["a", "b"]
+    );
+    assert_eq!(group.evidence[0].signature, "i\u{307}".repeat(50));
+    assert_eq!(group.evidence[0].signature.chars().count(), 100);
+}
+
+#[test]
+fn reverse_bridge_groups_retain_the_first_occurrence_across_review_and_tidy() {
+    let count = 256;
+    let mut source = String::new();
+    for index in 0..count {
+        writeln!(
+            source,
+            "@misc{{n{index},doi={{10.1000/{index}}},abstract={{abstract{index}}}}}"
+        )
+        .unwrap();
+    }
+    for index in (1..count).rev() {
+        writeln!(
+            source,
+            "@misc{{bridge{index},doi={{10.1000/{index}}},abstract={{abstract{}}}}}",
+            index - 1
+        )
+        .unwrap();
+    }
+    writeln!(source, "@misc{{child,crossref={{n{}}}}}", count - 1).unwrap();
+    let rules = [DuplicateRule::Doi, DuplicateRule::Abstract];
+    let document = RawDocument::parse(&source);
+    let report = document.find_duplicates(Some(&rules)).unwrap();
+    assert_eq!(report.groups.len(), 1);
+    let group = &report.groups[0];
+    assert_eq!(group.id.index(), 0);
+    assert_eq!(group.members.len(), 2 * count - 1);
+    assert_eq!(group.evidence.len(), 2 * (count - 1));
+    assert!(
+        group
+            .members
+            .iter()
+            .enumerate()
+            .all(|(index, member)| member.entry_id.index() == index)
+    );
+
+    let tidy = refkit_core::tidy_bibtex(
+        &source,
+        refkit_core::TidyOptions {
+            duplicates: Some(rules.to_vec()),
+            merge: Some(refkit_core::MergeStrategy::First),
+            ..refkit_core::TidyOptions::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(tidy.warnings.len(), 2 * (count - 1));
+    let (warning_pairs, remainder) = tidy.warnings.as_chunks::<2>();
+    assert!(remainder.is_empty());
+    for [doi, abstract_match] in warning_pairs {
+        assert_eq!(doi.rule(), Some(DuplicateRule::Doi));
+        assert_eq!(abstract_match.rule(), Some(DuplicateRule::Abstract));
+    }
+    let output = RawDocument::parse(&tidy.bibtex);
+    assert_eq!(output.entry_keys(), ["n0", "child"]);
+    let child = output.unique_entry("child").unwrap().unwrap();
+    let reference = output.unique_field(child, "crossref").unwrap().unwrap();
+    assert_eq!(output.field_info(child, reference).unwrap().value, "n0");
+}
 
 #[test]
 fn review_groups_expose_rule_signatures_and_identifier_conflicts() {
@@ -79,6 +167,67 @@ fn reviewed_field_choices_compile_to_expression_preserving_patches() {
             .render()
             .unwrap()
             .contains("publisher = press")
+    );
+}
+
+#[test]
+fn review_and_merge_preserve_duplicate_field_occurrences_and_expressions() {
+    let source = "@string{prefix={Selected}}\n@book{a,title={First},TITLE=prefix # { tail},doi={10.1234/work}}\n@book{b,title={Other},doi={10.1234/work}}";
+    let document = RawDocument::parse(source);
+    let report = document
+        .find_duplicates(Some(&[DuplicateRule::Doi]))
+        .unwrap();
+    let title = report.groups[0]
+        .conflicts
+        .iter()
+        .find(|conflict| conflict.field == "title")
+        .unwrap();
+    assert_eq!(
+        title
+            .values
+            .iter()
+            .map(|value| (
+                value.entry_id.index(),
+                value.field_id.unwrap().index(),
+                value.expression.as_str(),
+            ))
+            .collect::<Vec<_>>(),
+        [
+            (0, 0, "{First}"),
+            (0, 1, "prefix # { tail}"),
+            (1, 0, "{Other}"),
+        ]
+    );
+    let chosen = &title.values[1];
+    let plan = document
+        .plan_merge(&MergeRequest {
+            entries: report.groups[0]
+                .members
+                .iter()
+                .map(|member| member.entry_id)
+                .collect(),
+            retain: chosen.entry_id,
+            fields: vec![MergeFieldChoice::Take {
+                name: "title".into(),
+                entry_id: chosen.entry_id,
+                field_id: chosen.field_id.unwrap(),
+            }],
+            entry_type: None,
+        })
+        .unwrap();
+    let result = document.apply_patch(plan.patch.as_ref().unwrap()).unwrap();
+    assert_eq!(document.render().unwrap(), source);
+    assert_eq!(result.document.entry_keys(), ["a"]);
+    assert!(
+        result
+            .document
+            .render()
+            .unwrap()
+            .contains("TITLE=prefix # { tail}")
+    );
+    assert_eq!(
+        result.document.resolve().unwrap()[0].fields["title"],
+        "Selected tail"
     );
 }
 

@@ -95,6 +95,12 @@ impl NativeLibrary {
     }
 
     #[must_use]
+    /// Check whether a record has this exact key.
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.inner.contains_key(key)
+    }
+
+    #[must_use]
     /// Return record keys in library order as a JSON array.
     pub fn keys(&self) -> String {
         json!(self.inner.keys()).to_string()

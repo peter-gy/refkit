@@ -116,7 +116,9 @@ export class Library implements Iterable<Entry> {
     return readNative(() => nativeLibrary(this).get_many(input));
   }
   has(key: string): boolean {
-    return this.get(key) !== null;
+    return callNative(() =>
+      nativeLibrary(this).contains_key(string(key, "key")),
+    );
   }
   isEmpty(): boolean {
     return this.size === 0;

@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+use crate::duplicates::Components;
 use crate::raw::{RawEntryId, RawSyntaxDocument, RawSyntaxEntry};
 
 use super::{DuplicateRule, MergeStrategy, TidyError, TidyOptions, TidyWarning};
@@ -7,14 +8,13 @@ use super::{DuplicateRule, MergeStrategy, TidyError, TidyOptions, TidyWarning};
 #[derive(Debug, Default, Clone)]
 pub(crate) struct DuplicatePlan {
     pub warnings: Vec<TidyWarning>,
-    skip_entries: HashSet<RawEntryId>,
     merged_entries: HashMap<RawEntryId, RawSyntaxEntry>,
-    merge_targets: HashMap<RawEntryId, RawEntryId>,
+    retained: Vec<RawEntryId>,
 }
 
 impl DuplicatePlan {
     pub fn should_skip(&self, id: RawEntryId) -> bool {
-        self.skip_entries.contains(&id)
+        self.retained_id(id) != id
     }
 
     pub fn apply(&mut self, doc: &mut RawSyntaxDocument) -> Result<(), TidyError> {
@@ -28,14 +28,7 @@ impl DuplicatePlan {
     }
 
     pub fn retained_id(&self, id: RawEntryId) -> RawEntryId {
-        let mut current = id;
-        while let Some(next) = self.merge_targets.get(&current).copied() {
-            if next == current {
-                break;
-            }
-            current = next;
-        }
-        current
+        self.retained.get(id.index()).copied().unwrap_or(id)
     }
 }
 
@@ -57,6 +50,7 @@ pub(crate) fn duplicate_plan(
     let mut citations = BTreeMap::new();
     let mut abstracts = BTreeMap::new();
     let mut plan = DuplicatePlan::default();
+    let mut components = Components::new(doc.entries.iter().map(|entry| entry.id));
 
     for entry in &doc.entries {
         for check in &rules {
@@ -76,27 +70,17 @@ pub(crate) fn duplicate_plan(
             if !check.do_merge || options.merge.is_none() {
                 continue;
             }
-            let left = plan.retained_id(existing.id);
-            let right = plan.retained_id(entry.id);
-            if left == right {
-                continue;
-            }
-            let (target, source) = if left.index() < right.index() {
-                (left, right)
-            } else {
-                (right, left)
-            };
-            plan.merge_targets.insert(source, target);
+            components.join(existing.id, entry.id);
         }
     }
 
     let Some(strategy) = options.merge else {
         return Ok(plan);
     };
+    plan.retained = components.freeze();
     for entry in &doc.entries {
         let target_id = plan.retained_id(entry.id);
         if entry.id != target_id {
-            plan.skip_entries.insert(entry.id);
             let target = doc.entries.get(target_id.index()).ok_or_else(|| {
                 TidyError::Reference(
                     "duplicate plan refers to a missing retained entry".to_string(),
@@ -188,7 +172,17 @@ fn duplicate_match<'a>(
     rule: DuplicateRule,
     values: &mut BTreeMap<String, &'a RawSyntaxEntry>,
 ) -> Option<&'a RawSyntaxEntry> {
-    let signature = crate::duplicates::signature(entry, rule)?;
+    let signature = crate::duplicates::signature(
+        &entry.key,
+        |name| {
+            entry
+                .fields
+                .iter()
+                .find(|field| field.name.eq_ignore_ascii_case(name))
+                .map(|field| field.value.as_str())
+        },
+        rule,
+    )?;
     if let Some(existing) = values.get(&signature) {
         Some(*existing)
     } else {

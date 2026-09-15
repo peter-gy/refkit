@@ -1,11 +1,8 @@
 use super::{
-    DuplicateConflictKind, DuplicateValue, MergeError, MergeErrorCode, MergeFieldChoice, MergePlan,
-    MergeRequest,
+    DuplicateConflictKind, DuplicateValue, EntryView, MergeError, MergeErrorCode, MergeFieldChoice,
+    MergePlan, MergeRequest,
 };
-use crate::{
-    BibEdit, RawDocument,
-    raw::{RawSyntaxBlock, RawSyntaxEntry},
-};
+use crate::{BibEdit, RawDocument, raw::RawBlock};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 impl RawDocument {
@@ -20,38 +17,17 @@ impl RawDocument {
             .map_err(|message| MergeError::new(MergeErrorCode::InvalidSelection, message))?;
         crate::library::validate_source(&source)
             .map_err(|error| MergeError::new(MergeErrorCode::ResourceLimit, error.message))?;
-        let syntax = self.clone().into_syntax();
-        let selected: BTreeSet<_> = request.entries.iter().map(|id| id.index()).collect();
-        if selected.len() < 2
-            || selected.len() != request.entries.len()
-            || !selected.contains(&request.retain.index())
-            || selected.iter().any(|id| *id >= syntax.entries.len())
-        {
-            return Err(MergeError::new(
-                MergeErrorCode::InvalidSelection,
-                "Merge requires distinct existing entries and a retained member of that selection",
-            ));
-        }
-        let retained = syntax.entries.get(request.retain.index()).ok_or_else(|| {
-            MergeError::new(
-                MergeErrorCode::InvalidSelection,
-                "Retained entry is absent from the selection",
-            )
-        })?;
-        if retained.key.is_empty() {
-            return Err(MergeError::new(
-                MergeErrorCode::InvalidSelection,
-                "Retained entry requires a nonempty key",
-            ));
-        }
-        let entries = syntax
-            .entries
+        let syntax = self.syntax_data();
+        let all_entries = syntax
+            .entry_blocks
             .iter()
-            .filter(|entry| selected.contains(&entry.id.index()))
+            .enumerate()
+            .map(|(index, entry)| EntryView::new(index, entry))
             .collect::<Vec<_>>();
+        let Selection { retained, entries } = select_entries(&all_entries, request)?;
         let values = super::review::values(&entries, &source);
         let choices = validate_choices(request, &values)?;
-        let conflicts = super::review::conflicts(&entries, &source)
+        let conflicts = super::review::conflicts(&entries, &values)
             .into_iter()
             .filter(|conflict| {
                 if conflict.kind == DuplicateConflictKind::EntryType {
@@ -77,7 +53,7 @@ impl RawDocument {
         }
         let mut merged = merge_fields(request, &values, &choices)?;
         let mut patch = rewrite_references(
-            &syntax.entries,
+            &all_entries,
             &syntax.blocks,
             retained,
             &result.removed_ids,
@@ -114,6 +90,45 @@ impl RawDocument {
         result.patch = Some(patch);
         Ok(result)
     }
+}
+
+struct Selection<'a> {
+    retained: &'a EntryView<'a>,
+    entries: Vec<&'a EntryView<'a>>,
+}
+
+fn select_entries<'a>(
+    all_entries: &'a [EntryView<'a>],
+    request: &MergeRequest,
+) -> Result<Selection<'a>, MergeError> {
+    let selected: BTreeSet<_> = request.entries.iter().map(|id| id.index()).collect();
+    if selected.len() < 2
+        || selected.len() != request.entries.len()
+        || !selected.contains(&request.retain.index())
+        || selected.iter().any(|id| *id >= all_entries.len())
+    {
+        return Err(MergeError::new(
+            MergeErrorCode::InvalidSelection,
+            "Merge requires distinct existing entries and a retained member of that selection",
+        ));
+    }
+    let retained = all_entries.get(request.retain.index()).ok_or_else(|| {
+        MergeError::new(
+            MergeErrorCode::InvalidSelection,
+            "Retained entry is absent from the selection",
+        )
+    })?;
+    if retained.key.is_empty() {
+        return Err(MergeError::new(
+            MergeErrorCode::InvalidSelection,
+            "Retained entry requires a nonempty key",
+        ));
+    }
+    let entries = all_entries
+        .iter()
+        .filter(|entry| selected.contains(&entry.id.index()))
+        .collect();
+    Ok(Selection { retained, entries })
 }
 
 fn validate_choices<'a>(
@@ -189,9 +204,9 @@ fn merge_fields(
 }
 
 fn rewrite_references(
-    entries: &[RawSyntaxEntry],
-    blocks: &[RawSyntaxBlock],
-    retained: &RawSyntaxEntry,
+    entries: &[EntryView<'_>],
+    blocks: &[RawBlock],
+    retained: &EntryView<'_>,
     removed_ids: &[crate::RawEntryId],
     merged: &mut BTreeMap<String, String>,
     source: &str,
@@ -203,11 +218,11 @@ fn rewrite_references(
             continue;
         }
         final_keys
-            .entry(&entry.key)
+            .entry(entry.key)
             .and_modify(|id| *id = None)
             .or_insert(Some(entry.id.index()));
     }
-    if final_keys.get(retained.key.as_str()) != Some(&Some(retained.id.index())) {
+    if final_keys.get(retained.key) != Some(&Some(retained.id.index())) {
         return Err(MergeError::new(
             MergeErrorCode::AmbiguousReference,
             "Retained key would remain ambiguous after merging",
@@ -216,13 +231,13 @@ fn rewrite_references(
     let targets = entries
         .iter()
         .filter(|entry| removed.contains(&entry.id.index()))
-        .map(|entry| entry.key.as_str())
+        .map(|entry| entry.key)
         .filter(|key| !key.is_empty() && *key != retained.key)
         .collect::<HashSet<_>>();
     let definitions = blocks
         .iter()
         .filter_map(|block| match block {
-            RawSyntaxBlock::StringDef { raw, .. } => Some(raw.as_str()),
+            RawBlock::StringDef { raw, .. } => Some(raw.as_str()),
             _ => None,
         })
         .collect::<Vec<_>>()
@@ -232,7 +247,7 @@ fn rewrite_references(
     let mut patch = Vec::new();
     let mut graph = vec![Vec::new(); entries.len()];
     let mut references = MergeReferences {
-        retained_key: &retained.key,
+        retained_key: retained.key,
         targets,
         final_keys,
         abbreviations: &macros.abbreviations,
@@ -245,15 +260,16 @@ fn rewrite_references(
         let fields = if entry.id == retained.id {
             merged
                 .iter()
+                .filter(|(name, _)| is_reference_field(name))
                 .map(|(name, expression)| (None, name.clone(), expression.clone()))
                 .collect::<Vec<_>>()
         } else {
             entry
-                .fields
-                .iter()
-                .map(|field| {
+                .fields()
+                .filter(|(_, field)| is_reference_field(&field.name))
+                .map(|(field_id, field)| {
                     (
-                        Some(field.id),
+                        Some(field_id),
                         field.name.to_ascii_lowercase(),
                         source[field.patch_span.clone()].to_string(),
                     )
@@ -282,10 +298,7 @@ fn rewrite_references(
         }
     }
     crate::references::validate_graph(
-        &entries
-            .iter()
-            .map(|entry| entry.key.as_str())
-            .collect::<Vec<_>>(),
+        &entries.iter().map(|entry| entry.key).collect::<Vec<_>>(),
         &graph,
     )
     .map_err(|message| MergeError::new(MergeErrorCode::ReferenceCycle, message))?;
@@ -300,6 +313,12 @@ struct MergeReferences<'a> {
     edge_count: usize,
 }
 
+fn is_reference_field(name: &str) -> bool {
+    ["crossref", "xdata", "xref"]
+        .iter()
+        .any(|field| name.eq_ignore_ascii_case(field))
+}
+
 impl MergeReferences<'_> {
     fn rewrite(
         &mut self,
@@ -308,7 +327,7 @@ impl MergeReferences<'_> {
         entry_edges: &mut Vec<usize>,
     ) -> Result<Option<String>, MergeError> {
         let is_list = name == "xdata" || name == "xref";
-        if !is_list && name != "crossref" {
+        if !is_reference_field(name) {
             return Ok(None);
         }
         let keys = crate::references::decode_expression(expression, self.abbreviations, is_list)
@@ -365,41 +384,41 @@ impl MergeReferences<'_> {
 }
 
 fn append_field_edits(
-    retained: &RawSyntaxEntry,
+    retained: &EntryView<'_>,
     merged: &BTreeMap<String, String>,
     source: &str,
     patch: &mut Vec<BibEdit>,
 ) {
     let mut original: BTreeMap<String, Vec<_>> = BTreeMap::new();
-    for field in &retained.fields {
+    for (field_id, field) in retained.fields() {
         original
             .entry(field.name.to_ascii_lowercase())
             .or_default()
-            .push(field);
+            .push((field_id, field));
     }
     for (name, fields) in &original {
         let chosen = merged.get(name).and_then(|expression| {
             fields
                 .iter()
-                .find(|field| source[field.patch_span.clone()] == *expression)
+                .find(|(_, field)| source[field.patch_span.clone()] == *expression)
                 .or_else(|| fields.first())
                 .copied()
         });
-        for field in fields {
-            if chosen.is_none_or(|chosen| chosen.id != field.id) {
+        for (field_id, _) in fields {
+            if chosen.is_none_or(|(chosen_id, _)| chosen_id != *field_id) {
                 patch.push(BibEdit::RemoveField {
                     entry_id: retained.id,
-                    field_id: field.id,
+                    field_id: *field_id,
                 });
             }
         }
-        if let Some(chosen) = chosen
+        if let Some((chosen_id, chosen)) = chosen
             && let Some(expression) = merged.get(name)
             && source[chosen.patch_span.clone()] != *expression
         {
             patch.push(BibEdit::SetField {
                 entry_id: retained.id,
-                field_id: chosen.id,
+                field_id: chosen_id,
                 value: expression.clone(),
                 expression: true,
             });

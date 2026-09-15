@@ -1,4 +1,4 @@
-use refkit_core::{RawBlockInfo, RawDocument, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo};
+use refkit_core::{RawBlockInfo, RawDocument, RawEntryId, RawEntryInfo, RawFieldInfo};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
@@ -10,29 +10,12 @@ use crate::errors::{error, parse_error};
 /// An immutable source-preserving snapshot with document-local occurrence handles.
 pub struct NativeRawDocument {
     inner: Arc<RawDocument>,
-    ids: Arc<Vec<(RawEntryId, Vec<RawFieldId>)>>,
 }
 
 impl NativeRawDocument {
     fn from_core(inner: RawDocument) -> Self {
-        let ids = inner
-            .entry_occurrences()
-            .iter()
-            .map(|entry| {
-                (
-                    entry.id,
-                    inner
-                        .field_occurrences(entry.id)
-                        .unwrap_or_default()
-                        .iter()
-                        .map(|field| field.id)
-                        .collect(),
-                )
-            })
-            .collect();
         Self {
             inner: Arc::new(inner),
-            ids: Arc::new(ids),
         }
     }
 }
@@ -147,6 +130,20 @@ impl NativeRawDocument {
     /// Return the number of parsed entry occurrences.
     pub fn entry_count(&self) -> usize {
         self.inner.entry_count()
+    }
+
+    #[must_use]
+    /// Check whether the exact key occurs in this snapshot.
+    pub fn contains_entry(&self, key: &str) -> bool {
+        self.inner.contains_entry(key)
+    }
+
+    /// Check whether a case-insensitive field name occurs in an entry.
+    ///
+    /// # Errors
+    /// Rejects an entry index absent from this snapshot.
+    pub fn contains_field(&self, entry_id: usize, key: &str) -> Result<bool, JsValue> {
+        Ok(self.inner.contains_field(self.entry_id(entry_id)?, key))
     }
 
     /// Return inspect-only source-profile validation findings as JSON.
@@ -286,29 +283,45 @@ impl NativeRawDocument {
         .to_string())
     }
 
-    /// Return a field occurrence selected by document-local entry and field indices as JSON.
-    ///
-    /// # Errors
-    /// Rejects either index when it is absent from this snapshot.
-    pub fn field(&self, entry_id: usize, field_id: usize) -> Result<String, JsValue> {
-        let (entry_id, field_id) = self.field_ids(entry_id, field_id)?;
-        self.inner
-            .field_info(entry_id, field_id)
-            .map(|value| field(&value).to_string())
-            .ok_or_else(|| error("MissingReferenceError", "raw field is unavailable"))
+    #[must_use]
+    /// Return source-ordered comment blocks as JSON.
+    pub fn comments(&self) -> String {
+        json!(self.inner.comments()).to_string()
     }
 
-    /// Return comments, preambles, macros, raw blocks, and failed blocks as JSON.
-    pub fn metadata(&self) -> String {
+    #[must_use]
+    /// Join source-ordered preamble values with BibTeX concatenation operators.
+    pub fn preamble(&self) -> String {
+        self.inner.preamble()
+    }
+
+    #[must_use]
+    /// Return string definitions as JSON, retaining the last value for each name.
+    pub fn strings(&self) -> String {
         let strings: serde_json::Map<String, Value> = self
             .inner
             .strings()
             .into_iter()
             .map(|(key, value)| (key, json!(value)))
             .collect();
-        json!({"comments": self.inner.comments(), "preamble": self.inner.preamble(), "strings": strings,
-            "failedBlocks": self.inner.failed_blocks().iter().map(block).collect::<Vec<_>>(),
-            "blocks": self.inner.blocks().iter().map(block).collect::<Vec<_>>(), "diagnostics": []}).to_string()
+        Value::Object(strings).to_string()
+    }
+
+    /// Return malformed source blocks as JSON.
+    pub fn failed_blocks(&self) -> String {
+        json!(
+            self.inner
+                .failed_blocks()
+                .iter()
+                .map(block)
+                .collect::<Vec<_>>()
+        )
+        .to_string()
+    }
+
+    /// Return every source block in order as JSON.
+    pub fn blocks(&self) -> String {
+        json!(self.inner.blocks().iter().map(block).collect::<Vec<_>>()).to_string()
     }
 
     /// Render the source-preserving snapshot back to BibTeX.
@@ -343,21 +356,9 @@ impl NativeRawDocument {
 
 impl NativeRawDocument {
     fn entry_id(&self, index: usize) -> Result<RawEntryId, JsValue> {
-        self.ids
-            .get(index)
-            .map(|(id, _)| *id)
+        self.inner
+            .entry_id_at(index)
             .ok_or_else(|| error("MissingReferenceError", "raw entry is unavailable"))
-    }
-
-    fn field_ids(&self, entry: usize, field: usize) -> Result<(RawEntryId, RawFieldId), JsValue> {
-        let (entry_id, fields) = self
-            .ids
-            .get(entry)
-            .ok_or_else(|| error("MissingReferenceError", "raw entry is unavailable"))?;
-        fields
-            .get(field)
-            .map(|field_id| (*entry_id, *field_id))
-            .ok_or_else(|| error("MissingReferenceError", "raw field is unavailable"))
     }
 }
 

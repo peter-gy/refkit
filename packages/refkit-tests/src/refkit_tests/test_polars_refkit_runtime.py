@@ -52,3 +52,48 @@ def test_polars_row_failures_stay_local() -> None:
     assert rows[2]["count"] is None
     assert rows[2]["report"]["ok"] is False
     assert rows[2]["report"]["diagnostics"][0]["code"] == "cyclic_reference"
+
+
+def test_recovered_literal_render_values_match_reports() -> None:
+    title = "Recovery Café " * 4096
+    source = pl.lit(BIBTEX + f"@book{{bad,title={{{title}}},year={{nonsense}}}}")
+    frame = pl.DataFrame(
+        {
+            "key": ["doe2024", "missing", None, "doe2024", "doe2024"],
+            "keys": [["doe2024"], ["missing"], None, [], [None]],
+        },
+        schema={"key": pl.String, "keys": pl.List(pl.String)},
+    )
+    expressions = {
+        "single": prk.cite(source, "key", recovery="report", output="rendered"),
+        "text": prk.cite_each(source, "keys", recovery="report"),
+        "html": prk.cite_each(source, "keys", recovery="report", output="html"),
+        "rendered": prk.cite_each(source, "keys", recovery="report", output="rendered"),
+        "report": prk.render_report(source, "keys", recovery="report"),
+        "group": prk.cite_group(source, "keys", recovery="report", output="rendered"),
+        "group_report": prk.render_report(source, "keys", grouped=True, recovery="report"),
+    }
+    eager = frame.select(**expressions)
+    assert eager.equals(frame.lazy().select(**expressions).collect())
+    rows = eager.to_dicts()
+    assert rows[0]["single"] == {"text": "(Doe, 2024)", "html": "(Doe, 2024)"}
+    assert rows[1]["single"] is None
+    assert rows[2]["single"] is None
+    assert rows[0]["report"]["diagnostics"][0]["entry"] == "bad"
+    assert rows[1]["report"]["error_code"] == "missing_key"
+    assert rows[3]["rendered"] == []
+    assert rows[3]["group_report"]["error_code"] == "render_error"
+    assert rows[4]["report"] is None
+    for row in rows:
+        report = row["report"]
+        if report is not None and report["ok"]:
+            assert row["rendered"] == report["citations"]
+            assert row["text"] == [citation["text"] for citation in report["citations"]]
+            assert row["html"] == [citation["html"] for citation in report["citations"]]
+        else:
+            assert row["rendered"] is None
+            assert row["text"] is None
+            assert row["html"] is None
+        group = row["group_report"]
+        expected_group = group["citations"][0] if group is not None and group["ok"] else None
+        assert row["group"] == expected_group

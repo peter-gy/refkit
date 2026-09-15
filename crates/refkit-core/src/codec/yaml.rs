@@ -1,7 +1,7 @@
 use serde_yaml::{Mapping, Value};
 
 use super::{CodecError, ConversionIssue, issue};
-use crate::{Date, DateValue, EntryRecord, ExtensionValue};
+use crate::{Date, DateValue, EntryRecord, ExtensionValue, Name};
 
 pub(super) fn encode(
     records: &[EntryRecord],
@@ -15,19 +15,28 @@ pub(super) fn encode(
 }
 
 fn entry(record: &EntryRecord, issues: &mut Vec<ConversionIssue>) -> Result<Value, CodecError> {
-    report_type_projection(record, issues);
     let prepared = record
         .to_engine()
         .map_err(|error| CodecError::new(error.to_string()))?;
     let mut value =
         serde_yaml::to_value(prepared).map_err(|error| CodecError::new(error.to_string()))?;
+    decorate(record, &mut value, None, issues)?;
+    Ok(value)
+}
+
+fn decorate(
+    record: &EntryRecord,
+    value: &mut Value,
+    date_override: Option<&Date>,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<(), CodecError> {
+    report_type_projection(record, issues);
     let fields = value
         .as_mapping_mut()
         .ok_or_else(|| CodecError::new("expected a YAML entry mapping"))?;
-    if let Some(date) = &record.date
-        && let Some(date) = date_value(date)
-    {
-        fields.insert("date".into(), date);
+    put_creators(record, fields)?;
+    if let Some(date) = date_override.or(record.date.as_ref()) {
+        put_date(fields, date)?;
     }
     if let Some(url) = &record.url
         && let Some(accessed) = url.accessed.as_ref().and_then(date_value)
@@ -41,37 +50,119 @@ fn entry(record: &EntryRecord, issues: &mut Vec<ConversionIssue>) -> Result<Valu
             ])),
         );
     }
-    let mut parents = record.parents.clone();
-    for (kind, date) in [
-        ("Original", &record.original_date),
-        ("Conference", &record.event_date),
+    decorate_parents(record, fields, issues)?;
+    put_extensions(record, fields, issues)?;
+    Ok(())
+}
+
+fn put_creators(record: &EntryRecord, fields: &mut Mapping) -> Result<(), CodecError> {
+    for (field, names) in [("author", &record.authors), ("editor", &record.editors)] {
+        if !names.is_empty() {
+            fields.insert(field.into(), names_value(names));
+        }
+    }
+    if record.affiliated.is_empty() {
+        return Ok(());
+    }
+    let groups = match fields.get_mut(Value::String("affiliated".into())) {
+        Some(Value::Sequence(groups)) => groups.as_mut_slice(),
+        Some(group @ Value::Mapping(_)) => std::slice::from_mut(group),
+        _ => return Err(CodecError::new("expected YAML affiliated mappings")),
+    };
+    if groups.len() != record.affiliated.len() {
+        return Err(CodecError::new(
+            "prepared YAML contributor groups do not match records",
+        ));
+    }
+    for (group, contributors) in groups.iter_mut().zip(&record.affiliated) {
+        let group = group
+            .as_mapping_mut()
+            .ok_or_else(|| CodecError::new("expected a YAML affiliated mapping"))?;
+        group.insert("names".into(), names_value(&contributors.names));
+    }
+    Ok(())
+}
+
+fn names_value(names: &[Name]) -> Value {
+    Value::Sequence(names.iter().map(name_value).collect())
+}
+
+fn name_value(name: &Name) -> Value {
+    let person = name.to_engine();
+    let mut fields = Mapping::from_iter([
+        ("name".into(), person.name.into()),
+        ("comma-suffix".into(), person.comma_suffix.into()),
+    ]);
+    for (field, value) in [
+        ("given-name", person.given_name),
+        ("prefix", person.prefix),
+        ("suffix", person.suffix),
+        ("alias", person.alias),
     ] {
+        if let Some(value) = value {
+            fields.insert(field.into(), value.into());
+        }
+    }
+    Value::Mapping(fields)
+}
+
+fn decorate_parents(
+    record: &EntryRecord,
+    fields: &mut Mapping,
+    issues: &mut Vec<ConversionIssue>,
+) -> Result<(), CodecError> {
+    let prepared = match fields.remove(Value::String("parent".into())) {
+        Some(Value::Sequence(parents)) => parents,
+        Some(parent @ Value::Mapping(_)) => vec![parent],
+        None => Vec::new(),
+        Some(_) => return Err(CodecError::new("expected YAML parent mappings")),
+    };
+    let mut prepared = prepared.into_iter();
+    let mut parents = Vec::with_capacity(record.parents.len() + 2);
+    let mut original = record.original_date.as_ref();
+    let mut event = record.event_date.as_ref();
+    for parent in &record.parents {
+        let mut value = prepared
+            .next()
+            .ok_or_else(|| CodecError::new("prepared YAML parent is missing"))?;
+        let date_override = match parent.entry_type.as_str() {
+            "Original" => original.take(),
+            "Conference" => event.take(),
+            _ => None,
+        };
+        decorate(parent, &mut value, date_override, issues)?;
+        parents.push(value);
+    }
+    for (kind, date) in [("Original", original), ("Conference", event)] {
         if let Some(date) = date {
-            if let Some(parent) = parents.iter_mut().find(|parent| parent.entry_type == kind) {
-                parent.date = Some(date.clone());
-            } else {
-                parents.push(EntryRecord {
-                    key: record.key.clone(),
-                    entry_type: kind.into(),
-                    date: Some(date.clone()),
-                    ..EntryRecord::default()
-                });
-            }
+            let mut parent = Mapping::new();
+            parent.insert("type".into(), kind.into());
+            put_date(&mut parent, date)?;
+            parents.push(Value::Mapping(parent));
         }
     }
     if !parents.is_empty() {
-        fields.insert(
-            "parent".into(),
-            Value::Sequence(
-                parents
-                    .iter()
-                    .map(|parent| entry(parent, issues))
-                    .collect::<Result<_, _>>()?,
-            ),
-        );
+        fields.insert("parent".into(), Value::Sequence(parents));
     }
-    put_extensions(record, fields, issues)?;
-    Ok(value)
+    Ok(())
+}
+
+fn put_date(fields: &mut Mapping, date: &Date) -> Result<(), CodecError> {
+    let value = match date_value(date) {
+        Some(value) => Some(value),
+        None => date
+            .to_engine("date")
+            .map_err(|error| CodecError::new(error.to_string()))?
+            .map(serde_yaml::to_value)
+            .transpose()
+            .map_err(|error| CodecError::new(error.to_string()))?,
+    };
+    if let Some(value) = value {
+        fields.insert("date".into(), value);
+    } else {
+        fields.remove(Value::String("date".into()));
+    }
+    Ok(())
 }
 
 fn date_value(date: &Date) -> Option<Value> {

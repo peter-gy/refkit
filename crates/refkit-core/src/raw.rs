@@ -246,6 +246,19 @@ pub struct RawFieldInfo {
     pub span: Range<usize>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Field identity and contents borrowed from an immutable source snapshot.
+pub struct RawFieldView<'a> {
+    /// Occurrence identity relative to its owning entry.
+    pub id: RawFieldId,
+    /// Source field name.
+    pub name: &'a str,
+    /// Inspected value with outer syntax delimiters removed.
+    pub value: &'a str,
+    /// UTF-8 byte range of the field value in its source snapshot.
+    pub span: &'a Range<usize>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Source-order block inspection. Every span uses UTF-8 byte offsets.
 pub enum RawBlockInfo {
@@ -325,6 +338,12 @@ impl RawDocument {
     /// Count entry occurrences, including duplicate keys.
     pub fn entry_count(&self) -> usize {
         self.data.entry_blocks.len()
+    }
+
+    #[must_use]
+    /// Resolve a source-order occurrence index, returning `None` beyond this snapshot.
+    pub fn entry_id_at(&self, index: usize) -> Option<RawEntryId> {
+        self.data.entry_blocks.get(index).map(|_| RawEntryId(index))
     }
 
     #[must_use]
@@ -472,6 +491,25 @@ impl RawDocument {
     }
 
     #[must_use]
+    /// Borrow one field occurrence, returning `None` for invalid entry or field identities.
+    pub fn field_view(
+        &self,
+        entry_id: RawEntryId,
+        field_id: RawFieldId,
+    ) -> Option<RawFieldView<'_>> {
+        self.data
+            .entry_blocks
+            .get(entry_id.0)
+            .and_then(|entry| entry.field_blocks.get(field_id.0))
+            .map(|field| RawFieldView {
+                id: field_id,
+                name: &field.name,
+                value: &field.value,
+                span: &field.span,
+            })
+    }
+
+    #[must_use]
     /// Collect complete comment blocks in source order.
     pub fn comments(&self) -> Vec<String> {
         self.data
@@ -550,6 +588,10 @@ impl RawDocument {
         }
     }
 
+    pub(crate) fn syntax_data(&self) -> &RawDocumentData {
+        &self.data
+    }
+
     /// Write back the immutable source snapshot with unrelated syntax preserved.
     ///
     /// # Errors
@@ -583,6 +625,10 @@ pub(crate) fn normalize_raw_at_command(raw: &str) -> String {
 }
 
 impl RawEntryId {
+    pub(crate) fn from_index(index: usize) -> Self {
+        Self(index)
+    }
+
     #[must_use]
     /// Return the zero-based index within the snapshot's entry sequence.
     pub fn index(self) -> usize {
@@ -591,6 +637,10 @@ impl RawEntryId {
 }
 
 impl RawFieldId {
+    pub(crate) fn from_index(index: usize) -> Self {
+        Self(index)
+    }
+
     #[must_use]
     /// Return the zero-based index within the owning entry's field sequence.
     pub fn index(self) -> usize {

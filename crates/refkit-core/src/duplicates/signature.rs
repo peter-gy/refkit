@@ -1,17 +1,16 @@
-use crate::{DuplicateRule, raw::RawSyntaxEntry};
+use crate::DuplicateRule;
 
-pub(crate) fn signature(entry: &RawSyntaxEntry, rule: DuplicateRule) -> Option<String> {
-    let field = |name: &str| {
-        entry
-            .fields
-            .iter()
-            .find(|field| field.name.eq_ignore_ascii_case(name))
-            .map(|field| field.value.as_str())
-    };
+pub(crate) fn signature<'a>(
+    key: &str,
+    field: impl Fn(&str) -> Option<&'a str>,
+    rule: DuplicateRule,
+) -> Option<String> {
     let result = match rule {
-        DuplicateRule::Key => entry.key.to_ascii_lowercase(),
+        DuplicateRule::Key => key.to_ascii_lowercase(),
         DuplicateRule::Doi => alpha_num(field("doi")?),
-        DuplicateRule::Abstract => alpha_num(field("abstract")?).chars().take(100).collect(),
+        DuplicateRule::Abstract => normalized_characters(field("abstract")?)
+            .take(100)
+            .collect(),
         DuplicateRule::Citation => [
             alpha_num(&first_author_last(field("author")?)),
             alpha_num(field("title")?),
@@ -36,9 +35,12 @@ fn first_author_last(author: &str) -> String {
 }
 
 fn alpha_num(value: &str) -> String {
+    normalized_characters(value).collect()
+}
+
+fn normalized_characters(value: &str) -> impl Iterator<Item = char> + '_ {
     value
         .chars()
         .filter(|ch| ch.is_alphanumeric())
         .flat_map(char::to_lowercase)
-        .collect()
 }

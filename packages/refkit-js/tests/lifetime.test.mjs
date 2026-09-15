@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BibDocument, Citation, Document, Library, Style } from "refkit-js";
 
-test("documents and fields retain their native state across garbage collection", async () => {
+test("documents and fields retain snapshot values across garbage collection", async () => {
   const document = new Document(
     Library.parseBibtex("@book{a,author={Doe, Jane},title={A},year={2024}}"),
     Style.load("apa"),
@@ -30,4 +30,9 @@ test("documents and fields retain their native state across garbage collection",
   );
   assert.equal(before.value, "Original");
   assert.equal(after.value, "Updated");
+  assert.equal(before.name, "title");
+  assert.equal(after.name, "title");
+  const span = before.span;
+  before.span[0] = -1;
+  assert.deepEqual(before.span, span);
 });

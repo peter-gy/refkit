@@ -37,7 +37,7 @@ pub use library::{
 pub use raw::{
     BibEdit, BibEntryMapping, BibFieldMapping, BibFieldValue, BibPatchChange, BibPatchError,
     BibPatchErrorCode, BibPatchKind, BibPatchResult, BibPatchWarning, RawBlockInfo, RawDocument,
-    RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo, ResolvedBibEntry,
+    RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo, RawFieldView, ResolvedBibEntry,
 };
 pub use record::{
     Contributors, Date, DateParts, DateValue, EntryRecord, ExtensionValue, Name, Publisher,

@@ -58,16 +58,12 @@ impl Document {
             .map(super::citation::Citation::into_core_request)
             .collect();
         let rendered = py.detach(|| self.inner.cited_bibliography(groups));
-        rendered
-            .map(Rendered::from_record)
-            .map_err(document_error_to_py)
+        rendered.map(Rendered::new).map_err(document_error_to_py)
     }
 
     fn full_bibliography(&self, py: Python<'_>) -> PyResult<Rendered> {
         let rendered = py.detach(|| self.inner.full_bibliography());
-        rendered
-            .map(Rendered::from_record)
-            .map_err(document_error_to_py)
+        rendered.map(Rendered::new).map_err(document_error_to_py)
     }
 
     fn __repr__(&self) -> String {
@@ -126,12 +122,8 @@ impl RenderedDocument {
         Self {
             citation_ids: ids,
             citation_index,
-            citations: document
-                .citations
-                .into_iter()
-                .map(Rendered::from_record)
-                .collect(),
-            bibliography: Rendered::from_record(document.bibliography),
+            citations: document.citations.into_iter().map(Rendered::new).collect(),
+            bibliography: Rendered::new(document.bibliography),
         }
     }
 }
