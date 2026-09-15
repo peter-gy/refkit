@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use biblatex::{RawBibliography, RawChunk, Spanned};
+use biblatex::RawBibliography;
 
 use crate::raw::{
     RawEntryId, RawSyntaxBlock, RawSyntaxDocument, RawSyntaxField, RawValueAtom, RawValueMode,
@@ -43,7 +43,8 @@ pub(super) fn rewrite(
         .flat_map(|entry| &entry.fields)
         .any(|field| {
             (field.name.eq_ignore_ascii_case("crossref")
-                || field.name.eq_ignore_ascii_case("xdata"))
+                || field.name.eq_ignore_ascii_case("xdata")
+                || field.name.eq_ignore_ascii_case("xref"))
                 && matches!(
                     field.value_mode,
                     RawValueMode::Bare | RawValueMode::Expression
@@ -85,7 +86,8 @@ pub(super) fn rewrite(
             if !emitted.contains(&index) {
                 continue;
             }
-            let is_list = field.name.eq_ignore_ascii_case("xdata");
+            let is_list =
+                field.name.eq_ignore_ascii_case("xdata") || field.name.eq_ignore_ascii_case("xref");
             if !is_list && !field.name.eq_ignore_ascii_case("crossref") {
                 continue;
             }
@@ -113,7 +115,9 @@ pub(super) fn rewrite(
                     };
                     match final_keys.get(target) {
                         Some(Some(id))
-                            if effective.get(&field.name.to_ascii_lowercase()) == Some(&index) =>
+                            if !field.name.eq_ignore_ascii_case("xref")
+                                && effective.get(&field.name.to_ascii_lowercase())
+                                    == Some(&index) =>
                         {
                             graph[entry.id.index()].push(*id)
                         }
@@ -130,7 +134,8 @@ pub(super) fn rewrite(
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             if changed {
-                field.value = encode_keys(&rewritten, is_list)?;
+                field.value = crate::references::encode_keys(&rewritten, is_list)
+                    .map_err(TidyError::Reference)?;
                 field.value_mode = RawValueMode::Braced;
                 field.value_atoms = vec![RawValueAtom {
                     value: field.value.clone(),
@@ -143,82 +148,16 @@ pub(super) fn rewrite(
 }
 
 pub(super) fn field_chunks(field: &RawSyntaxField) -> biblatex::Field<'_> {
-    field
-        .value_atoms
-        .iter()
-        .map(|atom| {
-            let value = if atom.value_mode == RawValueMode::Bare
-                && !atom
-                    .value
-                    .chars()
-                    .all(|character| character.is_ascii_digit())
-            {
-                RawChunk::Abbreviation(atom.value.as_str())
-            } else {
-                RawChunk::Normal(atom.value.as_str())
-            };
-            Spanned::new(value, field.span.clone())
-        })
-        .collect()
+    crate::references::field_chunks(&field.value_atoms, &field.span)
 }
 
 fn validate_graph(doc: &RawSyntaxDocument, graph: &[Vec<usize>]) -> Result<(), TidyError> {
-    let mut state = vec![0u8; graph.len()];
-    for start in 0..graph.len() {
-        if state[start] != 0 {
-            continue;
-        }
-        state[start] = 1;
-        let mut pending = vec![(start, 0)];
-        while let Some((current, next)) = pending.last_mut() {
-            let Some(&target) = graph[*current].get(*next) else {
-                state[*current] = 2;
-                pending.pop();
-                continue;
-            };
-            *next += 1;
-            match state[target] {
-                1 => {
-                    return Err(TidyError::Reference(format!(
-                        "transformation creates a reference cycle involving citation key {:?}",
-                        doc.entries[target].key,
-                    )));
-                }
-                0 => {
-                    state[target] = 1;
-                    pending.push((target, 0));
-                }
-                _ => {}
-            }
-        }
-    }
-    Ok(())
-}
-
-fn encode_keys(keys: &[&str], is_list: bool) -> Result<String, TidyError> {
-    let plain = keys.join(", ");
-    let round_trips = |value: &str| {
-        let field = vec![Spanned::new(RawChunk::Normal(value), 0..value.len())];
-        crate::library::normalize_reference(&field, &[], is_list)
-            .is_ok_and(|actual| actual.iter().map(String::as_str).eq(keys.iter().copied()))
-    };
-    if round_trips(&plain) {
-        return Ok(plain);
-    }
-    let encoded = keys
-        .iter()
-        .map(|key| {
-            biblatex::Chunk::Verbatim((*key).to_string())
-                .to_biblatex_string(false)
-                .replace('-', "{-}")
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    if round_trips(&encoded) {
-        Ok(encoded)
-    } else {
-        Err(TidyError::Reference(format!(
-            "citation keys {keys:?} cannot be represented faithfully in a reference field"
-        )))
-    }
+    crate::references::validate_graph(
+        &doc.entries
+            .iter()
+            .map(|entry| entry.key.as_str())
+            .collect::<Vec<_>>(),
+        graph,
+    )
+    .map_err(TidyError::Reference)
 }

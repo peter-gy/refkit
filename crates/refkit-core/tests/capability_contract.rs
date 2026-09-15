@@ -8,6 +8,9 @@ fn biblatex_input_normalizes_through_the_core_port() {
     let entry = &library.records()[0];
 
     assert_eq!(library.keys(), &["extended-name"]);
-    assert_eq!(entry.field(EntryField::Date), Some("2026-02"));
-    assert_eq!(entry.title.as_deref(), Some("Typed Bibliography Ports"));
+    assert_eq!(entry.field(EntryField::Date).as_deref(), Some("2026-02"));
+    assert_eq!(
+        entry.field(refkit_core::EntryField::Title).as_deref(),
+        Some("Typed Bibliography Ports")
+    );
 }

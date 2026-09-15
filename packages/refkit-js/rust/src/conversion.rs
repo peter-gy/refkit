@@ -11,10 +11,109 @@ pub fn diagnostics(values: &[Diagnostic]) -> Value {
     })).collect::<Vec<_>>())
 }
 
+pub fn raw_keys(value: Value, to_host: bool) -> Result<Value, String> {
+    const KEYS: &[(&str, &str)] = &[
+        ("entry_id", "entryId"),
+        ("field_id", "fieldId"),
+        ("entry_type", "entryType"),
+        ("retained_id", "retainedId"),
+        ("removed_ids", "removedIds"),
+    ];
+    match value {
+        Value::Object(fields) => Ok(Value::Object(
+            fields
+                .into_iter()
+                .map(|(key, value)| {
+                    if !to_host && KEYS.iter().any(|(core, _)| key == *core) {
+                        return Err(format!("Unknown raw property {key:?}"));
+                    }
+                    let renamed = KEYS
+                        .iter()
+                        .find_map(|(core, host)| {
+                            let (from, to) = if to_host { (core, host) } else { (host, core) };
+                            (key == *from).then_some(*to)
+                        })
+                        .map(str::to_string)
+                        .unwrap_or(key);
+                    Ok((renamed, raw_keys(value, to_host)?))
+                })
+                .collect::<Result<_, _>>()?,
+        )),
+        Value::Array(values) => Ok(Value::Array(
+            values
+                .into_iter()
+                .map(|value| raw_keys(value, to_host))
+                .collect::<Result<_, _>>()?,
+        )),
+        value => Ok(value),
+    }
+}
+
+pub fn validation(report: &refkit_core::ValidationReport) -> Value {
+    fn target(value: &refkit_core::ValidationTarget) -> Value {
+        json!({"entry": value.entry, "path": value.path, "entryId": value.entry_id, "fieldId": value.field_id, "span": value.span.as_ref().map(|span| [span.start, span.end])})
+    }
+    json!({"profile": report.profile, "valid": report.is_valid(), "issues": report.issues.iter().map(|issue| json!({
+        "code": issue.code, "severity": issue.severity, "target": target(&issue.target), "related": issue.related.iter().map(target).collect::<Vec<_>>(), "message": issue.message, "suggestion": issue.suggestion
+    })).collect::<Vec<_>>()})
+}
+
 pub fn record(value: &EntryRecord) -> Value {
-    json!({"key": value.key, "entryType": value.entry_type, "title": value.title,
-        "date": value.date, "volume": value.volume, "doi": value.doi,
-        "parents": value.parents.iter().map(record).collect::<Vec<_>>()})
+    record_keys(json!(value), true).expect("core records use canonical field names")
+}
+
+pub fn record_keys(value: Value, to_host: bool) -> Result<Value, wasm_bindgen::JsValue> {
+    const KEYS: &[(&str, &str)] = &[
+        ("entry_type", "entryType"),
+        ("event_date", "eventDate"),
+        ("original_date", "originalDate"),
+        ("volume_total", "volumeTotal"),
+        ("page_range", "pageRange"),
+        ("page_total", "pageTotal"),
+        ("time_range", "timeRange"),
+        ("archive_location", "archiveLocation"),
+        ("call_number", "callNumber"),
+        ("abstract_text", "abstractText"),
+        ("comma_suffix", "commaSuffix"),
+        ("given_initials", "givenInitials"),
+        ("prefix_initials", "prefixInitials"),
+        ("use_prefix", "usePrefix"),
+        ("non_dropping_particle", "nonDroppingParticle"),
+    ];
+    match value {
+        Value::Object(fields) => Ok(Value::Object(
+            fields
+                .into_iter()
+                .map(|(key, value)| {
+                    if key == "extensions" || key == "identifiers" {
+                        return Ok((key, value));
+                    }
+                    if !to_host && KEYS.iter().any(|(core, _)| key == *core) {
+                        return Err(crate::errors::error(
+                            "RangeError",
+                            format!("unknown record property {key:?}"),
+                        ));
+                    }
+                    let renamed = KEYS
+                        .iter()
+                        .find_map(|(core, host)| {
+                            let (from, to) = if to_host { (core, host) } else { (host, core) };
+                            (key == *from).then_some(*to)
+                        })
+                        .map(str::to_string)
+                        .unwrap_or(key);
+                    Ok((renamed, record_keys(value, to_host)?))
+                })
+                .collect::<Result<_, _>>()?,
+        )),
+        Value::Array(values) => Ok(Value::Array(
+            values
+                .into_iter()
+                .map(|value| record_keys(value, to_host))
+                .collect::<Result<_, _>>()?,
+        )),
+        value => Ok(value),
+    }
 }
 
 pub fn rendered(value: &RenderedRecord) -> Value {

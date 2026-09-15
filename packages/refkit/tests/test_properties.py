@@ -36,7 +36,17 @@ def test_raw_title_edits_survive_serialization(
     year: int,
 ) -> None:
     document = rk.BibDocument.parse(_entry(key, title, year))
-    document.entries[key].fields["title"].value = replacement
+    field = document.entries[key].fields["title"]
+    document = document.apply_patch(
+        [
+            {
+                "kind": "set_field",
+                "entry_id": field.entry_id,
+                "field_id": field.id,
+                "value": replacement,
+            }
+        ]
+    )["document"]
     serialized = document.to_bibtex()
 
     assert replacement in serialized

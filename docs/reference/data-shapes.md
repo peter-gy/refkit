@@ -30,6 +30,37 @@ console.log(rows); // [{ key: "doe2024", entryType: "Book" }]
 
 Tables use language-neutral `string`, `integer`, `boolean`, `list`, and `null`. Python represents null as `None`. Property names match across bindings unless separate columns show a mapping. Polars expresses these data as scalar, list, and struct columns, with the differences named beside each shape.
 
+## Conversion reports
+
+`DecodeReport` contains `library`, `format`, and `issues`. `EncodeReport` contains `format`, `text`, and `issues`. `ConversionReport` contains source and target formats, `text`, `issues`, and parser `diagnostics`. Python uses `source_format` / `target_format`, while TypeScript uses `sourceFormat` / `targetFormat`.
+
+| Conversion issue field | Meaning |
+| --- | --- |
+| `code` | Stable category such as `field_removed`, `field_changed`, `type_approximated`, or `retained_extension`. |
+| `stage` | `decode` or `encode`. |
+| `entry` | Affected citation key, or null when unavailable. |
+| `path` | Source field or canonical record path. |
+| `lossy` | Whether the issue describes data loss or a representation change refused by strict policy. |
+| `message` | Explanation of the mapping or failure. |
+
+`ConversionError` carries the same `issues` plus available parser `diagnostics`. Read [conversion policies](/guides/convert-bibliographies#inspect-conversion-loss) before accepting lossy output.
+
+## Validation reports
+
+`Library.validate()` and `BibDocument.validate()` return `ValidationReport` with `profile` (`records` or `biblatex`), `valid`, and `issues`. `valid` means no issue has error severity.
+
+Each issue has `code`, `severity`, `target`, `related`, `message`, and nullable `suggestion`. Codes are `missing_required_field`, `superfluous_field`, `malformed_field`, `invalid_identifier`, `identifier_form`, `shared_identifier`, `invalid_url`, `empty_title`, `empty_name`, `reversed_date_range`, `unresolved_reference`, and `incomplete_container`.
+
+| Target field in Python | TypeScript | Meaning |
+| --- | --- | --- |
+| `entry` | `entry` | Affected citation key. |
+| `path` | `path` | Canonical snake_case record path, or BibLaTeX field name. |
+| `entry_id` | `entryId` | Source entry occurrence index, or null. |
+| `field_id` | `fieldId` | Field occurrence index within the entry, or null. |
+| `span` | `span` | Half-open UTF-8 byte span in the validated snapshot, or null. |
+
+`related` contains targets with the same shape. A missing reference has a related target naming its absent key. A shared identifier issue targets the first matching entry and lists the remaining entries in source order. Missing source fields target their entry span. Normalized records have null occurrence IDs and spans. Suggestions are strings for review and are never applied by validation.
+
 ## Diagnostics
 
 `Library.diagnostics`, `BibDocument.diagnostics`, and `ParseError.diagnostics` return a list of `Diagnostic` records:
@@ -56,13 +87,47 @@ Polars diagnostics use the same fields. `span` is a nullable `Struct[start: UInt
 | --- | --- | --- | --- |
 | `key` | `key` | string | Citation key. |
 | `entry_type` | `entryType` | string | Normalized entry type. |
-| `type` | `type` | string | Entry type under this requested field name. |
 | `title` | `title` | string or null | Normalized title. |
 | `date` | `date` | string or null | Normalized date. |
 | `doi` | `doi` | string or null | Digital object identifier. |
 | `volume` | `volume` | string or null | Own volume or first parent volume. |
 
 The default projection is `key`, `title`, `doi`, and `volume`. Both bindings return a list of `ProjectionRow` records. Each row contains exactly the requested fields, using the requested property names.
+
+## Bibliography records
+
+`Library.to_records()` / `toRecords()` returns complete `Entry` values accepted by `Library.from_records()` / `fromRecords()`. Returned records are detached from the library. Omitted optional fields in constructor inputs receive the defaults shown in the types.
+
+| Fields in Python | Fields in TypeScript | Value |
+| --- | --- | --- |
+| `key`, `entry_type` | `key`, `entryType` | Citation key and normalized TitleCase type. |
+| `title`, `location`, `organization`, `archive`, `note`, `genre` | Same | `Text` or null. |
+| `archive_location`, `call_number`, `abstract_text` | `archiveLocation`, `callNumber`, `abstractText` | `Text` or null. |
+| `authors`, `editors` | Same | Ordered arrays of `Name`. |
+| `affiliated` | Same | Arrays of `{role, names}` creator groups. |
+| `date`, `event_date`, `original_date` | `date`, `eventDate`, `originalDate` | `BibliographyDate` or null. |
+| `publisher` | Same | Optional `name` and `location` text. |
+| `issue`, `chapter`, `volume`, `edition`, `runtime` | Same | `ScalarValue` or null. |
+| `volume_total`, `page_range`, `page_total`, `time_range` | `volumeTotal`, `pageRange`, `pageTotal`, `timeRange` | `ScalarValue` or null. |
+| `url` | Same | `{value, accessed}` URL and optional access date. |
+| `identifiers` | Same | A scheme-to-string map such as `{"doi": "10.1234/work"}`. |
+| `language`, `keywords` | Same | Language string or null, and an array of keywords. |
+| `parents` | Same | Nested `Entry` values. Parent keys do not register separate top-level entries. |
+| `extensions` | Same | Namespace-to-field maps of JSON values. Extension keys retain their spelling. |
+
+`Text` contains `chunks` and an optional `short` array. Each chunk has `kind` (`normal`, `protected`, or `math`) and `text`. Protected chunks preserve capitalization. Math chunks retain mathematical source separately from ordinary text.
+
+A personal `Name` has `kind: "person"`, `family`, and optional given name, prefix, suffix, alias, identifier, initials, prefix-use flag, comma-before-suffix flag, and non-dropping particle. An organizational name has `kind: "organization"` and `name`. Multiword organizations remain one name.
+
+`BibliographyDate` contains `value`, `uncertain`, and `approximate`. Its value is a `point` with `date`, a `range` with nullable `start` and `end`, or a `literal` with `text`. Date parts contain an integer year, optional month (1–12), day (1–31, valid for its month), season (1–4), and ISO time. Years use astronomical numbering, with year zero representing 1 BCE. A season replaces the month. Time requires a complete calendar date.
+
+`ScalarValue` has `kind: "typed"` or `"literal"` and a string `value`. The containing field determines the typed grammar: numeric values, page ranges, or durations. Volume and page totals require typed numbers. A record's volume is its own value. Scalar projection can fall back to the first parent's volume.
+
+Record snapshots use `schema_version: 1` and snake_case fields in both bindings. Construction is bounded to 100,000 top-level records and 128 MiB of serialized record data. Nested parents and extensions are bounded to 64 levels. Bibliography source text retains its separate 16 MiB bound.
+
+The renderer uses a date range's end, or its start when the end is open. It combines uncertainty and approximation and omits time. Literal dates, manual initials, person identifiers, prefix-use flags, keyword lists, and extension fields remain in the records even when the renderer does not use them. Malformed URLs remain in the record and are omitted from the prepared rendering view. Record snapshots preserve these values. Extension numbers must be finite, and integer values must fit JavaScript's exact integer range.
+
+The `biblatex` extension namespace retains source-specific fields. Keys beginning with `@` describe original source type and date forms. These annotations preserve source information, while the structured fields control rendering. Editing an annotation does not change the structured field it describes.
 
 ## Resolved entry records
 
@@ -141,6 +206,30 @@ The entry key identifies the bibliography record. Item and name indexes retain t
 
 Apply these values to the bibliography as a whole. Line spacing applies within entries and entry spacing applies between entries. [Render Structured Output](/guides/render-output) shows a complete tree consumer.
 
+## Duplicate review and merge plans
+
+`DuplicateReport` contains the selected `rules` and candidate `groups`. Each group has `id`, `members`, `evidence`, and `conflicts`. Its ID is the first member's source entry ID. Groups and members follow source order. Evidence follows selected rule order, then signature order.
+
+Members contain `entry_id` / `entryId` and `key`. Evidence contains `rule`, `signature`, and a list of matching member IDs. Connected matches form one candidate group.
+
+Conflicts contain `kind` (`field`, `identifier`, or `entry_type`), `field`, and `values`. Each value contains `entry_id` / `entryId`, nullable `field_id` / `fieldId`, the inspected `value`, and its complete source `expression`. Type conflicts use field `@type` and null field IDs. Identifier conflicts distinguish different valid canonical identifier strings. Field conflicts also preserve expression-level differences for review.
+
+`MergePlan` contains `retained_id` / `retainedId`, `removed_ids` / `removedIds`, nullable `patch`, and unresolved `conflicts`. Apply a non-null patch to the original snapshot. Field choices are `{kind: "take", name, entry_id, field_id}` in Python, using `entryId` and `fieldId` in TypeScript, or `{kind: "drop", name}` in either binding.
+
+`MergeError.code` is `invalid_selection`, `invalid_choice`, `ambiguous_reference`, `reference_error`, `reference_cycle`, or `resource_limit`. It is distinct from an unresolved conflict report, which returns a null patch normally.
+
+## Patch reports
+
+`BibPatchResult` contains the new `document`, `changes`, `entries`, and `warnings`. The input snapshot remains unchanged.
+
+Each byte change has `kind`, `operations`, `before`, and `after`. The spans index UTF-8 bytes in the input and output snapshots respectively. `operations` lists the input operation indices responsible for that change. It is empty for automatic reference rewrites. Adjacent field additions can share one byte change. Changes are ordered by input byte position, and every byte between changes is preserved.
+
+Each entry mapping has nullable `before` and `after` `RawEntryInfo` records plus `fields`. Entry info contains `id`, `key`, `kind`, and `span`. Field mappings contain nullable `before` and `after` `RawFieldInfo` records with `id`, `name`, `value`, and `span`. A null `before` marks an addition. A null `after` marks a removal. Entry IDs are document-relative, and field IDs are relative to their entry.
+
+Mappings list original occurrences in source order, followed by added occurrences in result order. Deleted entries include mappings for their deleted fields. Use the `after` IDs when constructing a subsequent patch against the result document.
+
+Warnings have `code` (`duplicate_entry` or `duplicate_field`), result-snapshot `entry_id` / `entryId`, nullable `field_id` / `fieldId`, and `message`. `PatchError` has `code` and nullable `operation`. Error codes are `invalid_target`, `invalid_value`, `overlap`, `invalid_result`, `ambiguous_reference`, `reference_error`, and `resource_limit`.
+
 ## Raw blocks and spans
 
 `BibDocument.blocks` returns source-order `RawBlock` records. Every record contains `kind` and `span`:
@@ -155,7 +244,7 @@ Apply these values to the bibliography as a whole. Line spacing applies within e
 | `failed` | `raw`, `error`. |
 | `other` | `raw`. |
 
-A `RawSpan` is a two-item Python tuple or TypeScript array, including raw blocks, entries, fields, and diagnostic locations. They index UTF-8 bytes in the original decoded source and retain those positions after edits. Python `BibDocument.write` encodes the current text as UTF-8. JavaScript `BibDocument.toBibtex()` returns the current source string for the host application to write. For a file decoded from Windows-1252, these offsets differ from the original file-byte offsets.
+A `RawSpan` is a two-item Python tuple or TypeScript array, including raw blocks, entries, fields, and diagnostic locations. It indexes UTF-8 bytes in its document snapshot. Old handles retain old spans after a patch returns a new snapshot. Python `BibDocument.write` encodes the snapshot as UTF-8. JavaScript `BibDocument.toBibtex()` returns the source string for the host application to write. For a file decoded from Windows-1252, these offsets differ from the original file-byte offsets.
 
 ## Tidy renames
 

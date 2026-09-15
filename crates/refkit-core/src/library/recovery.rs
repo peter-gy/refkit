@@ -1,7 +1,8 @@
 use std::ops::Range;
 
+use crate::EntryRecord;
 use biblatex::{Bibliography, ChunksExt, Entry, RawBibliography};
-use hayagriva::{Entry as HayEntry, Library as HayLibrary};
+use hayagriva::Entry as HayEntry;
 
 use super::guard::validate_raw;
 use super::parse::parse_error;
@@ -42,6 +43,10 @@ pub(super) fn parse_biblatex(
         };
         if let Err(mut diagnostic) = validate_raw(&raw) {
             if policy == RecoveryPolicy::Report && diagnostic.code != "resource_limit" {
+                if diagnostic.code == "invalid_field" && drop_block(&mut source, &mut diagnostic) {
+                    diagnostics.push(diagnostic);
+                    continue;
+                }
                 let span = diagnostic
                     .span
                     .clone()
@@ -67,8 +72,11 @@ pub(super) fn parse_biblatex(
                     }
                     diagnostics.extend(found);
                 }
-                let inner = convert(&mut bibliography, &source, policy, &mut diagnostics)?;
-                return Ok(ParsedLibrary { inner, diagnostics });
+                let records = convert(&mut bibliography, &source, policy, &mut diagnostics)?;
+                return Ok(ParsedLibrary {
+                    records,
+                    diagnostics,
+                });
             }
             Err(error) => {
                 let mut diagnostic = parse_error(&error);
@@ -175,7 +183,7 @@ fn convert(
     source: &RecoverySource,
     policy: RecoveryPolicy,
     diagnostics: &mut Vec<Diagnostic>,
-) -> Result<HayLibrary, ParseFailure> {
+) -> Result<Vec<EntryRecord>, ParseFailure> {
     let mut entries = Vec::with_capacity(bibliography.len());
     for entry in bibliography.iter_mut() {
         if policy == RecoveryPolicy::Report {
@@ -204,7 +212,7 @@ fn convert(
         loop {
             match HayEntry::try_from(&*entry) {
                 Ok(converted) => {
-                    entries.push(converted);
+                    entries.push(EntryRecord::from_biblatex(entry, &converted));
                     break;
                 }
                 Err(error) => {
@@ -249,7 +257,7 @@ fn convert(
             diagnostics: std::mem::take(diagnostics),
         });
     }
-    Ok(entries.into_iter().collect())
+    Ok(entries)
 }
 
 fn field_diagnostic(

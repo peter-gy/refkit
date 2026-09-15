@@ -1,6 +1,8 @@
 # RefKit
 
-Parse bibliography data, render citations and bibliographies, and edit raw BibTeX from Python. RefKit accepts BibTeX, BibLaTeX, and [Hayagriva YAML](https://github.com/typst/hayagriva), with [Citation Style Language](https://citationstyles.org/) rendering into text, HTML, and structured trees.
+Parse bibliography data, render citations and bibliographies, and edit raw BibTeX from Python. RefKit accepts BibTeX, BibLaTeX, [Hayagriva YAML](https://github.com/typst/hayagriva), and CSL-JSON, with [Citation Style Language](https://citationstyles.org/) rendering into text, HTML, and structured trees. Construct libraries from structured records or [convert formats with loss reports](https://peter-gy.github.io/refkit/guides/convert-bibliographies).
+
+`BibDocument.apply_patch` applies atomic entry and field edits and returns a new snapshot with byte changes and occurrence mappings. Existing handles retain their original values and spans. The [raw editing guide](https://peter-gy.github.io/refkit/guides/edit-bibtex) covers patch operations and reference rewrites.
 
 [Documentation](https://peter-gy.github.io/refkit/) · [Python reference](https://peter-gy.github.io/refkit/reference/python) · [Polars](https://peter-gy.github.io/refkit/guides/polars)
 

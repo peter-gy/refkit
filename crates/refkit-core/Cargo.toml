@@ -16,8 +16,9 @@ biblatex = { version = "=0.12.0", features = ["unic-langid"] }
 hayagriva = { version = "=0.10.1", default-features = false, features = ["archive", "biblatex"], git = "https://github.com/typst/hayagriva",rev = "e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e"}
 indexmap = "2.14.0"
 quick-xml = "=0.41.0"
+serde.workspace = true
+serde_json = { workspace = true, features = ["unbounded_depth"] }
+serde_yaml = "0.9.34"
 
 [dev-dependencies]
-serde.workspace = true
-serde_yaml = "0.9.34"
 walkdir = "2.5.0"

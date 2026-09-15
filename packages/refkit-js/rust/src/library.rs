@@ -4,7 +4,7 @@ use refkit_core::{EntryField, EntryRecord, Library, RecoveryPolicy};
 use serde_json::{Map, Value, json};
 use wasm_bindgen::prelude::*;
 
-use crate::conversion::{diagnostics, record};
+use crate::conversion::{diagnostics, record, record_keys};
 use crate::errors::{error, library_error};
 
 #[wasm_bindgen]
@@ -14,6 +14,37 @@ pub struct NativeLibrary {
 
 #[wasm_bindgen]
 impl NativeLibrary {
+    pub fn from_records(source: &str) -> Result<NativeLibrary, JsValue> {
+        refkit_core::validate_record_source(source).map_err(|value| error("RangeError", value))?;
+        let mut decoder = serde_json::Deserializer::from_str(source);
+        decoder.disable_recursion_limit();
+        let input: Value = serde::Deserialize::deserialize(&mut decoder)
+            .map_err(|value| error("RangeError", value))?;
+        decoder.end().map_err(|value| error("RangeError", value))?;
+        let records = record_keys(input, false)?.to_string();
+        Library::from_records_json(&records)
+            .map(|inner| Self {
+                inner: Arc::new(inner),
+            })
+            .map_err(library_error)
+    }
+
+    pub fn from_json(source: &str) -> Result<NativeLibrary, JsValue> {
+        Library::from_json(source)
+            .map(|inner| Self {
+                inner: Arc::new(inner),
+            })
+            .map_err(library_error)
+    }
+
+    pub fn to_json(&self) -> String {
+        self.inner.to_json()
+    }
+
+    pub fn validate(&self) -> String {
+        crate::conversion::validation(&self.inner.validate()).to_string()
+    }
+
     pub fn parse_bibtex(source: &str, recovery: &str) -> Result<NativeLibrary, JsValue> {
         let policy = match recovery {
             "error" => RecoveryPolicy::Error,

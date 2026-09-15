@@ -13,9 +13,15 @@ Use the crate from a matching RefKit source or Git revision with Rust 1.88 or ne
 | Capability | Main exports |
 | --- | --- |
 | Normalized parsing | `Library`, `RecoveryPolicy`, `Diagnostic`, `ParseFailure`, `ParseReport`, `EntryRecord`, `EntryField`, `parse_bibtex_report` |
-| Raw BibTeX | `RawDocument`, `ResolvedBibEntry`, occurrence IDs, inspection records, and edit errors |
-| Rendering | `Document`, `Cite`, `CitationRequest`, `RenderedDocument`, `RenderedOutput`, render functions, and render errors |
-| Styles | `PreparedStyle`, `load_prepared_style`, `prepare_style_from_xml`, and `StyleError` |
+| Structured records | `Library::from_records`, `Library::from_json`, `Library::to_json`, `Text`, `Name`, `Date`, `ScalarValue`, `Publisher`, `Url`, `ExtensionValue`, `RecordError` |
+| Interchange | `decode`, `encode`, `convert`, `BibliographyFormat`, `LossPolicy`, conversion reports, and `CodecError` |
+| Bibliography validation | `Library::validate`, `RawDocument::validate`, `ValidationReport`, `ValidationIssue`, codes, severity, profiles, and targets |
+| Raw BibTeX | `RawDocument`, `ResolvedBibEntry`, occurrence IDs and inspection records |
+| Atomic raw editing | `RawDocument::apply_patch`, `BibEdit`, `BibPatchResult`, byte changes, occurrence mappings, and `BibPatchError` |
+| Duplicate review | `RawDocument::find_duplicates`, `DuplicateReport`, candidate groups, evidence and conflicts |
+| Merge planning | `RawDocument::plan_merge`, `MergeRequest`, `MergeFieldChoice`, `MergePlan`, and `MergeError` |
+| Rendering | `Document`, `Cite`, `CitePurpose`, `CitationRequest`, `RenderedDocument`, `RenderedOutput`, render functions, and render errors |
+| Styles | `PreparedStyle`, `StyleMetadata`, `style_catalog`, `load_prepared_style`, `prepare_style_from_xml`, and `StyleError` |
 | Render tree | `RenderedRecord`, `RenderedNode`, `RenderedFormatting`, and `BibliographyLayout` |
 | Formatting | `TidyOptions`, `TidyResult`, `TidyWarning`, `TidyRename`, duplicate rules, merge strategies, and `tidy_bibtex` |
 | Decoding | `DecodedText`, `TextEncoding`, and `decode_bibliography` |

@@ -46,7 +46,7 @@ features:
       width: "28"
       height: "28"
     title: Preserve raw BibTeX
-    details: Inspect source-order blocks, address duplicate occurrences, edit field values, and write back the surrounding source.
+    details: Inspect source-order blocks and apply atomic entry or field patches with preserved source and occurrence mappings.
     link: /guides/edit-bibtex
     linkText: Edit raw BibTeX
   - icon:

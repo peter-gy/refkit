@@ -10,7 +10,9 @@ PNPM_DOCS := pnpm --dir docs
 DOCS_PAGES_BASE_PATH := /refkit
 RUST_FLOOR := 1.88
 RUST_SYSROOT := $(shell rustc --print sysroot)
-RUST_REMAP_FLAGS := --remap-path-prefix=$(HOME)=home --remap-path-prefix=$(HOME)/.cargo/registry/src=cargo-registry --remap-path-prefix=$(HOME)/.cargo/git/checkouts=cargo-git --remap-path-prefix=$(HOME)/.rustup=rustup --remap-path-prefix=$(RUST_SYSROOT)=rust-toolchain --remap-path-prefix=$(CURDIR)=refkit
+RUST_CARGO_HOME := $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)
+RUST_TOOLCHAIN_HOME := $(if $(RUSTUP_HOME),$(RUSTUP_HOME),$(HOME)/.rustup)
+RUST_REMAP_FLAGS := --remap-path-prefix=$(HOME)=home --remap-path-prefix=$(RUST_CARGO_HOME)=cargo --remap-path-prefix=$(RUST_CARGO_HOME)/registry/src=cargo-registry --remap-path-prefix=$(RUST_CARGO_HOME)/git/checkouts=cargo-git --remap-path-prefix=$(RUST_TOOLCHAIN_HOME)=rustup --remap-path-prefix=$(RUST_SYSROOT)=rust-toolchain --remap-path-prefix=$(CURDIR)=refkit
 
 .PHONY: sync
 sync:

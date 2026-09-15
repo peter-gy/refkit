@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { homedir } from "node:os";
 import { fingerprint, packageRoot } from "./source.mjs";
 
 const root = resolve(packageRoot, "../..");
@@ -40,12 +41,21 @@ const sysroot = execFileSync(
   ["run", "stable", "rustc", "--print", "sysroot"],
   { encoding: "utf8" },
 ).trim();
+const cargoHome = resolve(
+  process.env.CARGO_HOME || resolve(homedir(), ".cargo"),
+);
+const rustupHome = resolve(
+  process.env.RUSTUP_HOME || resolve(homedir(), ".rustup"),
+);
 const remaps = [
-  `--remap-path-prefix=${root}=refkit`,
+  `--remap-path-prefix=${homedir()}=home`,
+  `--remap-path-prefix=${cargoHome}=cargo`,
+  `--remap-path-prefix=${resolve(cargoHome, "registry/src")}=cargo-registry`,
+  `--remap-path-prefix=${resolve(cargoHome, "git/checkouts")}=cargo-git`,
+  `--remap-path-prefix=${rustupHome}=rustup`,
   `--remap-path-prefix=${sysroot}=rust-toolchain`,
+  `--remap-path-prefix=${root}=refkit`,
 ];
-if (process.env.HOME)
-  remaps.push(`--remap-path-prefix=${process.env.HOME}=home`);
 run(
   "rustup",
   [

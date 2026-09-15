@@ -7,8 +7,9 @@
 - Register native objects through `refkit._native`, then expose the supported Python API from `src/refkit/__init__.py` and `src/refkit/__init__.pyi`.
 - When the core lacks an operation, add a typed core capability and call it. Keep bibliography semantics out of PyO3 code and Python helpers.
 - Release the GIL around parsing, rendering, formatting, and filesystem work that stays independent of Python objects.
-- Keep unsendable raw document state on the GIL-bound path.
+- Raw handles retain immutable snapshots through `Arc`. Keep them readable across Python threads and release the GIL for patch planning and application.
 - Keep public dictionary and tree contracts in `refkit.types`. Native conversion, stubs, and consumer annotation tests must use the same field names and finite vocabularies.
+- Normalized entries are detached `refkit.types.Entry` dictionaries. Construction and extraction share this schema. Canonical JSON snapshots use the core's versioned field names across languages.
 - Update `_native.pyi`, package exports, public docs, and boundary tests with every public change.
 - Keep `refkit.agent` lazy and limited to dynamic help plus packaged-resource access over the public Python API.
 - Keep each packaged task example independently executable. Validate installed resources with `python -m refkit_tests.agent_examples` through editable and built-wheel boundaries.

@@ -31,12 +31,18 @@ Citation = _core.Citation
 CitationGroup = _core.CitationGroup
 Cite = _core.Cite
 Document = _core.Document
-Entry = _core.Entry
+Entry = types.Entry
 Library = _core.Library
 Locale = _core.Locale
 MissingReferenceError = _core.MissingReferenceError
 RefkitError = _core.RefkitError
 ParseError = _core.ParseError
+ConversionError = _core.ConversionError
+PatchError = _core.PatchError
+MergeError = _core.MergeError
+decode = _core.decode
+encode = _core.encode
+convert = _core.convert
 Rendered = _core.Rendered
 RenderedDocument = _core.RenderedDocument
 Style = _core.Style
@@ -59,6 +65,12 @@ __all__ = [
     "CitationGroup",
     "RefkitError",
     "ParseError",
+    "ConversionError",
+    "PatchError",
+    "MergeError",
+    "decode",
+    "encode",
+    "convert",
     "Document",
     "Entry",
     "Library",

@@ -14,16 +14,16 @@ description: Choose Library for normalized behavior or BibDocument for source-pr
 import refkit as rk
 
 library = rk.Library.parse_bibtex("@article{doe2024, title={Fast Citations}, year={2024}}")
-entry = library["doe2024"]
-print(entry.key, entry.entry_type, entry.title)
+row = library.project(["key", "entry_type", "title"])[0]
+print(row["key"], row["entry_type"], row["title"])
 ```
 
 ```ts [TypeScript]
 import * as rk from "refkit-js";
 
 const library = rk.Library.parseBibtex("@article{doe2024, title={Fast Citations}, year={2024}}");
-const entry = library.get("doe2024")!;
-console.log(entry.key, entry.entryType, entry.title);
+const row = library.project(["key", "entryType", "title"])[0]!;
+console.log(row.key, row.entryType, row.title);
 ```
 
 :::
@@ -47,7 +47,17 @@ source = """% reviewed by Jane
 """
 
 document = rk.BibDocument.parse(source)
-document.entries["doe2024"].fields["title"].value = "Corrected title"
+title_field = document.entries["doe2024"].fields["title"]
+document = document.apply_patch(
+    [
+        {
+            "kind": "set_field",
+            "entry_id": title_field.entry_id,
+            "field_id": title_field.id,
+            "value": "Corrected title",
+        }
+    ]
+)["document"]
 print(document.to_bibtex())
 ```
 
@@ -59,14 +69,18 @@ const source = `% reviewed by Jane
 }
 `;
 
-const document = rk.BibDocument.parse(source);
-document.entries.getUnique("doe2024")!.fields.getUnique("title")!.value = "Corrected title";
+let document = rk.BibDocument.parse(source);
+const titleField = document.entries.getUnique("doe2024")!.fields.getUnique("title")!;
+document = document.applyPatch([{
+  kind: "set_field", entryId: titleField.entryId,
+  fieldId: titleField.id, value: "Corrected title",
+}]).document;
 console.log(document.toBibtex());
 ```
 
 :::
 
-The output contains `title = {Corrected title}` and retains the comment, spacing, and year field. `BibDocument` keeps source-order blocks, entry and field occurrences, and byte spans. Field assignments validate the replacement against the original delimiter mode before changing the document.
+The output contains `title = {Corrected title}` and retains the comment, spacing, and year field. A patch returns a new snapshot with source-order blocks, occurrence mappings, and byte changes. The original field handle still contains `Old title`. Invalid or overlapping edits leave the input snapshot unchanged.
 
 ## Address duplicates by occurrence
 
@@ -80,8 +94,18 @@ duplicates = rk.BibDocument.parse("""
 @article{same, title={Second}}
 """)
 second = duplicates.entries.get_all("same")[1]
-second.fields["title"].value = "Updated second title"
-print(duplicates.to_bibtex())
+second_field = second.fields["title"]
+duplicate_result = duplicates.apply_patch(
+    [
+        {
+            "kind": "set_field",
+            "entry_id": second.id,
+            "field_id": second_field.id,
+            "value": "Updated second title",
+        }
+    ]
+)
+print(duplicate_result["document"].to_bibtex())
 ```
 
 ```ts [TypeScript]
@@ -90,8 +114,12 @@ const duplicates = rk.BibDocument.parse(`
 @article{same, title={Second}}
 `);
 const second = duplicates.entries.getAll("same")[1]!;
-second.fields.getUnique("title")!.value = "Updated second title";
-console.log(duplicates.toBibtex());
+const secondField = second.fields.getUnique("title")!;
+const duplicateResult = duplicates.applyPatch([{
+  kind: "set_field", entryId: second.id,
+  fieldId: secondField.id, value: "Updated second title",
+}]);
+console.log(duplicateResult.document.toBibtex());
 ```
 
 :::
@@ -106,12 +134,12 @@ The models own separate state. Parse the edited document's writeback into a new 
 
 ```python [Python]
 updated = rk.Library.parse_bibtex(document.to_bibtex())
-print(updated["doe2024"].title)
+print(updated.project(["title"])[0]["title"])
 ```
 
 ```ts [TypeScript]
 const updated = rk.Library.parseBibtex(document.toBibtex());
-console.log(updated.get("doe2024")!.title);
+console.log(updated.project(["title"])[0]!.title);
 ```
 
 :::

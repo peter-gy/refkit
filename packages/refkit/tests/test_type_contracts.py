@@ -3,7 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import refkit as rk
-from refkit.types import Diagnostic, RawBlock, RenderedTree, ResolvedBibEntry, TidyRename
+from refkit.types import (
+    CitePurpose,
+    Diagnostic,
+    RawBlock,
+    RenderedTree,
+    ResolvedBibEntry,
+    StyleMetadata,
+    TidyRename,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -66,6 +74,10 @@ def resolved_fields(entries: list[ResolvedBibEntry]) -> list[dict[str, str]]:
 
 
 def test_public_record_types_support_consumer_annotations() -> None:
+    catalog: list[StyleMetadata] = rk.Style.list()
+    purpose: CitePurpose = rk.Cite("old", purpose="author").purpose
+    assert purpose == "author"
+    assert catalog[0]["name"]
     source = "@article{old,author={Doe, Jane},title={Work},year={2024}}"
     library = rk.Library.parse_bibtex(source)
     result = rk.tidy_bibtex(source, options=rk.TidyOptions(generate_keys="[auth:lower][year]"))

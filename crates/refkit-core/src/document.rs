@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::render::{full_bibliography_requests, process_citations};
@@ -10,14 +11,58 @@ pub struct Cite {
     pub key: String,
     pub locator: Option<String>,
     pub label: Option<String>,
+    pub purpose: CitePurpose,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CitePurpose {
+    #[default]
+    Normal,
+    Author,
+    Year,
+    Full,
+    Prose,
+}
+
+impl CitePurpose {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Author => "author",
+            Self::Year => "year",
+            Self::Full => "full",
+            Self::Prose => "prose",
+        }
+    }
+}
+
+impl FromStr for CitePurpose {
+    type Err = DocumentError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "normal" => Ok(Self::Normal),
+            "author" => Ok(Self::Author),
+            "year" => Ok(Self::Year),
+            "full" => Ok(Self::Full),
+            "prose" => Ok(Self::Prose),
+            _ => Err(DocumentError::UnknownCitationPurpose(value.to_string())),
+        }
+    }
 }
 
 impl Cite {
-    pub fn new(key: String, locator: Option<String>, label: Option<String>) -> Self {
+    pub fn new(
+        key: String,
+        locator: Option<String>,
+        label: Option<String>,
+        purpose: CitePurpose,
+    ) -> Self {
         Self {
             key,
             locator,
             label,
+            purpose,
         }
     }
 }
@@ -38,6 +83,7 @@ impl CitationRequest {
 pub enum DocumentError {
     MissingReference(String),
     UnknownLocatorLabel(String),
+    UnknownCitationPurpose(String),
     EmptyCitation,
     InvalidNoteNumber,
     Render(String),
@@ -49,6 +95,9 @@ impl fmt::Display for DocumentError {
             Self::MissingReference(key) => write!(f, "missing reference {}", crate::quoted(key)),
             Self::UnknownLocatorLabel(label) => {
                 write!(f, "unknown locator label {}", crate::quoted(label))
+            }
+            Self::UnknownCitationPurpose(purpose) => {
+                write!(f, "unknown citation purpose {}", crate::quoted(purpose))
             }
             Self::EmptyCitation => f.write_str("citation requires at least one item"),
             Self::InvalidNoteNumber => f.write_str("note number must be between 1 and 4294967295"),
@@ -140,6 +189,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn citation_purposes_render_author_year_and_prose() {
+        let document = test_document(
+            "apa",
+            "@book{a,author={Doe, Jane},title={A Book},year={2024}}",
+        );
+        for (purpose, expected) in [
+            (CitePurpose::Normal, "(Doe, 2024)"),
+            (CitePurpose::Author, "Doe"),
+            (CitePurpose::Year, "2024"),
+            (CitePurpose::Prose, "Doe (2024)"),
+        ] {
+            let rendered = document
+                .render(vec![CitationRequest::new(
+                    vec![Cite::new("a".into(), None, None, purpose)],
+                    None,
+                )])
+                .unwrap();
+            assert_eq!(rendered.citations[0].text, expected);
+            assert!(rendered.citations[0].html.contains("Doe") || purpose == CitePurpose::Year);
+            assert!(rendered.bibliography.text.contains("A Book"));
+        }
+        let full = document
+            .render(vec![CitationRequest::new(
+                vec![Cite::new("a".into(), None, None, CitePurpose::Full)],
+                None,
+            )])
+            .unwrap();
+        assert!(full.citations[0].text.contains("A Book"));
+        assert!(full.citations[0].html.contains("<i>"));
+    }
+
+    #[test]
     fn missing_reference_fails_whole_document_render() {
         let document = test_document(
             "apa",
@@ -166,6 +247,7 @@ mod tests {
                     "valid".to_string(),
                     Some("12".to_string()),
                     Some("nonsense".to_string()),
+                    CitePurpose::Normal,
                 )],
                 note_number: None,
             }])
@@ -207,6 +289,9 @@ mod tests {
     }
 
     fn test_request(key: &str) -> CitationRequest {
-        CitationRequest::new(vec![Cite::new(key.to_string(), None, None)], None)
+        CitationRequest::new(
+            vec![Cite::new(key.to_string(), None, None, CitePurpose::Normal)],
+            None,
+        )
     }
 }

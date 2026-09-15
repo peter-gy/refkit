@@ -1,7 +1,7 @@
 mod citation;
+mod codec;
 mod conversion;
 mod document;
-mod entry;
 mod errors;
 mod filesystem;
 mod library;

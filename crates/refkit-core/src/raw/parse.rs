@@ -230,6 +230,7 @@ fn parse_entry(
             break;
         }
 
+        let assignment_start = cursor;
         let (name, next_cursor) = parse_field_name(body, cursor)?;
         cursor = next_cursor;
         if name.is_empty() {
@@ -275,7 +276,8 @@ fn parse_entry(
             value_atoms,
             span: inner_span.unwrap_or((body_start + value_start)..(body_start + value_end)),
             patch_span: (body_start + value_start)..(body_start + value_end),
-            changed: false,
+            assignment_span: (body_start + assignment_start)..(body_start + value_end),
+            comma: None,
         });
 
         skip_field_trivia(body, &mut cursor);
@@ -284,11 +286,17 @@ fn parse_entry(
             if ch != ',' {
                 return Err(format!("field {name} is missing a separator"));
             }
+            field_blocks[field_id].comma = Some(body_start + cursor);
             cursor += ch.len_utf8();
         }
     }
 
+    let key_start = body_start + body.len() - body.trim_start().len();
+    let kind_start = start + 1 + source[start + 1..body_start - 1].len()
+        - source[start + 1..body_start - 1].trim_start().len();
     Ok(RawEntryData {
+        key_span: key_start..key_start + key.len(),
+        kind_span: kind_start..kind_start + kind.len(),
         key,
         kind: kind.to_string(),
         fields,

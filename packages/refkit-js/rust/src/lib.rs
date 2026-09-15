@@ -1,3 +1,4 @@
+mod codec;
 mod conversion;
 mod document;
 mod errors;
@@ -5,6 +6,7 @@ mod library;
 mod raw;
 mod tidy;
 
+pub use codec::{NativeDecodeReport, convert_format, decode_format, encode_format};
 pub use document::{NativeDocument, NativeStyle};
 pub use library::NativeLibrary;
 pub use raw::NativeRawDocument;

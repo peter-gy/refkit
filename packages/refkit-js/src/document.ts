@@ -1,12 +1,15 @@
 import type { NativeDocument, NativeStyle } from "./wasm/refkit_js_native.js";
 import { getNative } from "./runtime.js";
 import { callNative, readNative, MissingReferenceError } from "./errors.js";
-import { object, string } from "./inputs.js";
+import { object, optionalString, string } from "./inputs.js";
 import { Library, nativeLibrary } from "./library.js";
 import { Citation, citationsJson, type CitationInput } from "./citation.js";
-import type { Rendered } from "./types.js";
+import type { Rendered, StyleMetadata } from "./types.js";
 
 const styles = new WeakMap<Style, NativeStyle>();
+export interface StyleOptions {
+  parentXml?: string | null;
+}
 const styleSources = new WeakMap<Style, string>();
 export function setStyleSource(style: Style, source: string): void {
   styleSources.set(style, source);
@@ -18,6 +21,11 @@ function nativeStyle(style: Style): NativeStyle {
 }
 
 export class Style {
+  static list(): StyleMetadata[] {
+    const { NativeStyle } = getNative();
+    return readNative(() => NativeStyle.list());
+  }
+
   private constructor(native: NativeStyle) {
     styles.set(this, native);
   }
@@ -25,10 +33,12 @@ export class Style {
     const { NativeStyle } = getNative();
     return new Style(callNative(() => NativeStyle.load(string(name, "name"))));
   }
-  static fromXml(xml: string): Style {
+  static fromXml(xml: string, options: StyleOptions = {}): Style {
     const { NativeStyle } = getNative();
+    object(options, "options", ["parentXml"]);
+    const parent = optionalString(options.parentXml, "parentXml") ?? undefined;
     return new Style(
-      callNative(() => NativeStyle.from_xml(string(xml, "xml"))),
+      callNative(() => NativeStyle.from_xml(string(xml, "xml"), parent)),
     );
   }
   get id(): string {
@@ -37,6 +47,9 @@ export class Style {
   }
   get title(): string {
     return callNative(() => nativeStyle(this).title);
+  }
+  get cslId(): string {
+    return callNative(() => nativeStyle(this).csl_id);
   }
 }
 

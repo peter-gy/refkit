@@ -1,4 +1,9 @@
-import type { Diagnostic } from "./types.js";
+import type {
+  ConversionIssue,
+  Diagnostic,
+  BibPatchErrorCode,
+  MergeErrorCode,
+} from "./types.js";
 
 export class RefkitError extends Error {
   override readonly name: string = "RefkitError";
@@ -13,6 +18,35 @@ export class ParseError extends RefkitError {
 }
 export class MissingReferenceError extends RefkitError {
   override readonly name: string = "MissingReferenceError";
+}
+export class PatchError extends RefkitError {
+  override readonly name: string = "PatchError";
+  constructor(
+    message: string,
+    readonly code: BibPatchErrorCode,
+    readonly operation: number | null = null,
+  ) {
+    super(message);
+  }
+}
+export class ConversionError extends RefkitError {
+  override readonly name: string = "ConversionError";
+  constructor(
+    message: string,
+    readonly issues: readonly ConversionIssue[] = [],
+    readonly diagnostics: readonly Diagnostic[] = [],
+  ) {
+    super(message);
+  }
+}
+export class MergeError extends RefkitError {
+  override readonly name: string = "MergeError";
+  constructor(
+    message: string,
+    readonly code: MergeErrorCode,
+  ) {
+    super(message);
+  }
 }
 export class TidyError extends RefkitError {
   override readonly name: string = "TidyError";
@@ -44,6 +78,9 @@ interface NativeError {
   name: string;
   message: string;
   diagnostics?: Diagnostic[];
+  issues?: ConversionIssue[];
+  code?: BibPatchErrorCode | MergeErrorCode;
+  operation?: number | null;
   syntax?: {
     line: number;
     column: number;
@@ -63,6 +100,23 @@ function convertError(error: unknown): Error {
     return new RefkitError(String(error));
   }
   switch (value.name) {
+    case "PatchError":
+      return new PatchError(
+        value.message,
+        (value.code as BibPatchErrorCode | undefined) ?? "invalid_value",
+        value.operation ?? null,
+      );
+    case "MergeError":
+      return new MergeError(
+        value.message,
+        (value.code as MergeErrorCode | undefined) ?? "invalid_selection",
+      );
+    case "ConversionError":
+      return new ConversionError(
+        value.message,
+        value.issues,
+        value.diagnostics,
+      );
     case "ParseError":
       return new ParseError(value.message, value.diagnostics);
     case "MissingReferenceError":

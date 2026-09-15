@@ -9,10 +9,9 @@ use pyo3::types::{PyAny, PyList, PyListMethods};
 use refkit_core::Library as CoreLibrary;
 
 use crate::conversion::{
-    diagnostics_to_py, parse_project_fields_arg, parse_projection_keys, parse_recovery_policy,
-    project_rows_to_py,
+    diagnostics_to_py, json_to_py, parse_project_fields_arg, parse_projection_keys,
+    parse_recovery_policy, project_rows_to_py,
 };
-use crate::entry::Entry;
 use crate::errors::{RefkitError, library_error_to_py};
 use crate::filesystem::{LibraryFormat, read_library};
 
@@ -25,7 +24,10 @@ pub struct Library {
 }
 
 impl Library {
-    fn from_core(inner: CoreLibrary, diagnostic: Option<refkit_core::Diagnostic>) -> Self {
+    pub(crate) fn from_core(
+        inner: CoreLibrary,
+        diagnostic: Option<refkit_core::Diagnostic>,
+    ) -> Self {
         let diagnostics = diagnostic
             .into_iter()
             .chain(inner.diagnostics().iter().cloned())
@@ -37,13 +39,59 @@ impl Library {
         }
     }
 
-    fn entry_for_key(&self, key: &str) -> Option<Entry> {
-        self.inner.get_record(key).cloned().map(Entry::from_record)
+    fn entry_for_key(&self, py: Python<'_>, key: &str) -> PyResult<Option<Py<PyAny>>> {
+        self.inner
+            .get_record(key)
+            .map(|record| {
+                let json = serde_json::to_string(record)
+                    .map_err(|error| RefkitError::new_err(error.to_string()))?;
+                json_to_py(py, &json)
+            })
+            .transpose()
     }
 }
 
 #[pymethods]
 impl Library {
+    #[staticmethod]
+    fn from_records(py: Python<'_>, records: &Bound<'_, PyAny>) -> PyResult<Self> {
+        if records.extract::<String>().is_ok() {
+            return Err(PyTypeError::new_err(
+                "records must be an iterable of entry records",
+            ));
+        }
+        let records = PyList::new(py, records.try_iter()?.collect::<PyResult<Vec<_>>>()?)?;
+        let json = pyo3::types::PyModule::import(py, "json")?
+            .call_method1("dumps", (records,))?
+            .extract::<String>()?;
+        py.detach(move || CoreLibrary::from_records_json(&json))
+            .map(|library| Self::from_core(library, None))
+            .map_err(|error| library_error_to_py(py, error))
+    }
+
+    #[staticmethod]
+    fn from_json(py: Python<'_>, source: String) -> PyResult<Self> {
+        py.detach(move || CoreLibrary::from_json(&source))
+            .map(|library| Self::from_core(library, None))
+            .map_err(|error| library_error_to_py(py, error))
+    }
+
+    fn to_json(&self, py: Python<'_>) -> String {
+        py.detach(|| self.inner.to_json())
+    }
+
+    fn to_records(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let json = py
+            .detach(|| serde_json::to_string(self.inner.records()))
+            .map_err(|error| RefkitError::new_err(error.to_string()))?;
+        json_to_py(py, &json)
+    }
+
+    fn validate(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let report = py.detach(|| self.inner.validate());
+        crate::conversion::validation_to_py(py, &report)
+    }
+
     #[staticmethod]
     #[pyo3(signature = (path, *, recovery = "error"))]
     fn read(py: Python<'_>, path: PathBuf, recovery: &str) -> PyResult<Self> {
@@ -104,38 +152,32 @@ impl Library {
             let key = key?;
             let key = key.extract::<&str>()?;
             let entry = self
-                .entry_for_key(key)
+                .entry_for_key(py, key)?
                 .ok_or_else(|| PyKeyError::new_err(key.to_string()))?;
-            rows.append(Py::new(py, entry)?)?;
+            rows.append(entry)?;
         }
         Ok(rows.into_any().unbind())
     }
 
-    fn values(&self) -> Vec<Entry> {
-        self.inner
-            .records()
-            .iter()
-            .cloned()
-            .map(Entry::from_record)
-            .collect()
+    fn values(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.to_records(py)
     }
 
-    fn get(&self, key: &str) -> Option<Entry> {
-        self.entry_for_key(key)
+    fn get(&self, py: Python<'_>, key: &str) -> PyResult<Option<Py<PyAny>>> {
+        self.entry_for_key(py, key)
     }
 
     fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
 
-    fn select(&self, selector: &str) -> PyResult<Vec<Entry>> {
-        Ok(self
-            .inner
-            .select_records(selector)
-            .map_err(|error| PyValueError::new_err(error.to_string()))?
-            .into_iter()
-            .map(Entry::from_record)
-            .collect())
+    fn select(&self, py: Python<'_>, selector: &str) -> PyResult<Py<PyAny>> {
+        let records = py
+            .detach(|| self.inner.select_records(selector))
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let json = serde_json::to_string(&records)
+            .map_err(|error| RefkitError::new_err(error.to_string()))?;
+        json_to_py(py, &json)
     }
 
     #[pyo3(signature = (fields = None, *, keys = None))]
@@ -169,8 +211,8 @@ impl Library {
         self.inner.contains_key(key)
     }
 
-    fn __getitem__(&self, key: &str) -> PyResult<Entry> {
-        self.entry_for_key(key)
+    fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
+        self.entry_for_key(py, key)?
             .ok_or_else(|| PyKeyError::new_err(key.to_string()))
     }
 

@@ -39,6 +39,9 @@ The RefKit hierarchy is shared. `RefkitError` derives from Python `Exception` or
 ```text
 RefkitError
 ├── ParseError
+├── ConversionError
+├── PatchError
+├── MergeError
 ├── MissingReferenceError
 └── TidyError
     └── TidySyntaxError
@@ -67,7 +70,7 @@ Report recovery keeps recoverable entries and `Diagnostic` records. Each diagnos
 | Failure | Python | TypeScript |
 | --- | --- | --- |
 | Unknown bundled style or locale | `Style.load` and `Locale.load` raise `ValueError`. | Same methods raise `RangeError`. |
-| Invalid or dependent CSL XML, missing/duplicate/cyclic macros, or excessive macro expansion | `Style.from_xml` raises `ValueError`. | `Style.fromXml` raises `RangeError`. |
+| Invalid CSL XML, missing or mismatched parent XML, missing/duplicate/cyclic macros, or excessive macro expansion | `Style.from_xml` raises `ValueError`. | `Style.fromXml` raises `RangeError`. |
 | Style file read failure | `Style.from_path` raises `RefkitError`. Invalid XML raises `ValueError`. | `readStyle` from `refkit-js/node` raises `RefkitError`. Invalid XML raises `RangeError`. |
 | Invalid citation items or an empty group | `CitationGroup` raises `TypeError` for invalid items, `ValueError` for an empty group. | `CitationGroup` raises `TypeError` or `RangeError`, respectively. |
 | Unnamed or invalid citation input | `Document.render` and `Document.cited_bibliography` raise `TypeError`. | `Document.render` and `Document.citedBibliography` raise `TypeError`. |
@@ -81,7 +84,8 @@ Report recovery keeps recoverable entries and `Diagnostic` records. Each diagnos
 | --- | --- | --- |
 | Missing raw entry or field | Direct indexing raises `KeyError`. `get_unique` returns `None`. | `getUnique` returns `null`. |
 | Ambiguous raw entry or field | Direct indexing and `get_unique` raise `RefkitError`. | `getUnique` raises `RefkitError`. |
-| Unsafe field replacement | Assigning `BibField.value` raises `ValueError`. | Assigning `BibField.value` raises `RangeError`. |
+| Invalid or conflicting raw patch | `apply_patch` raises `PatchError` with `code` and nullable `operation`. | `applyPatch` throws `PatchError` with `code` and nullable `operation`. |
+| Invalid merge choice or unsafe reference transformation | `plan_merge` raises `MergeError` with `code`. | `planMerge` throws `MergeError` with `code`. |
 | Malformed raw block during formatting | `BibDocument.tidy` raises `TidySyntaxError`. | Same exception. |
 
 Python `BibDocument.write` raises `RefkitError` when the destination cannot be written. JavaScript `BibDocument.toBibtex()` returns a string for the host application's file API. Node `tidyFile` wraps destination write failures in `RefkitError`.

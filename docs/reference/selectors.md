@@ -13,7 +13,7 @@ import refkit as rk
 
 library = rk.Library.parse_bibtex("@book{doe2024, title={Example}, year={2024}}")
 selected = library.select("book[title,date]")
-print([entry.key for entry in selected])  # ['doe2024']
+print([entry["key"] for entry in selected])  # ['doe2024']
 ```
 
 ```ts [TypeScript]

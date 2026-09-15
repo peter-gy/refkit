@@ -17,7 +17,7 @@ RefKit moves bibliography data through three flows. Python and JavaScript expose
   </div>
   <div>
     <strong>Edit</strong>
-    <p>Raw BibTeX becomes a <code>BibDocument</code> whose field edits write back into source-order blocks.</p>
+    <p>A raw <code>BibDocument</code> and an atomic patch become a new snapshot with byte changes and occurrence mappings.</p>
   </div>
 </div>
 
@@ -31,7 +31,7 @@ Normalization resolves bibliography syntax into records suited to selection, pro
 
 `BibDocument` scans the original source into ordered blocks. An occurrence is one entry or field at one source position. Occurrence identity keeps duplicate entry keys and duplicate field names individually addressable.
 
-Assigning `BibField.value` changes the document state shared by its entry and field handles. Serializing the document produces updated BibTeX text with unrelated raw blocks retained. Write that text through the host's filesystem or browser download API when the workflow needs a file.
+`apply_patch` / `applyPatch` returns a new snapshot after validating structural edits and reference rewrites. Original entry and field handles retain their values and spans. The result maps old occurrences to new ones and records byte changes. Write the result document through the host's filesystem or browser download API when the workflow needs a file.
 
 ## Render an ordered citation document
 

@@ -34,7 +34,8 @@ pub const DEFAULT_FIELD_SORT: &[&str] = &[
 
 pub const DEFAULT_SORT: &[&str] = &["key"];
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DuplicateRule {
     Doi,
     Key,

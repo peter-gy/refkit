@@ -1,20 +1,24 @@
 use std::collections::BTreeMap;
-use std::fmt;
 use std::ops::Range;
 
 use indexmap::IndexMap;
 
 mod edit;
 mod parse;
+mod patch;
 mod resolve;
 mod sanitize;
 #[cfg(test)]
 mod tests;
 
-use self::edit::{render_raw_document, set_raw_field_value};
+use self::edit::render_raw_document;
 use self::parse::parse_raw_document;
 pub(crate) use self::sanitize::sanitize_biblatex_for_library;
 use crate::quoted;
+pub use patch::{
+    BibEdit, BibEntryMapping, BibFieldMapping, BibFieldValue, BibPatchChange, BibPatchError,
+    BibPatchErrorCode, BibPatchKind, BibPatchResult, BibPatchWarning,
+};
 
 #[derive(Debug, Clone)]
 pub struct RawFieldData {
@@ -24,7 +28,8 @@ pub struct RawFieldData {
     pub value_atoms: Vec<RawValueAtom>,
     pub span: Range<usize>,
     pub patch_span: Range<usize>,
-    pub changed: bool,
+    pub assignment_span: Range<usize>,
+    pub comma: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +55,8 @@ pub struct RawEntryData {
     pub field_blocks: Vec<RawFieldData>,
     pub span: Range<usize>,
     pub raw: String,
+    pub key_span: Range<usize>,
+    pub kind_span: Range<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -122,11 +129,25 @@ pub struct ResolvedBibEntry {
     pub fields: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct RawEntryId(usize);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct RawFieldId(usize);
+
+impl<'de> serde::Deserialize<'de> for RawEntryId {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
+        <u32 as serde::Deserialize>::deserialize(decoder).map(|id| Self(id as usize))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for RawFieldId {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
+        <u32 as serde::Deserialize>::deserialize(decoder).map(|id| Self(id as usize))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RawSyntaxDocument {
@@ -240,25 +261,6 @@ pub enum RawBlockInfo {
         raw: String,
         span: Range<usize>,
     },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RawEditError {
-    MissingField { entry_id: usize, field_id: usize },
-    InvalidValue(String),
-}
-
-impl fmt::Display for RawEditError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::MissingField { entry_id, field_id } => write!(
-                f,
-                "raw BibTeX field {} in entry {} is no longer available",
-                field_id, entry_id
-            ),
-            Self::InvalidValue(message) => f.write_str(message),
-        }
-    }
 }
 
 impl RawDocument {
@@ -386,15 +388,6 @@ impl RawDocument {
             .get(entry_id.0)
             .and_then(|entry| entry.field_blocks.get(field_id.0))
             .map(|field| field_info(field_id, field))
-    }
-
-    pub fn set_field_value(
-        &mut self,
-        entry_id: RawEntryId,
-        field_id: RawFieldId,
-        value: String,
-    ) -> Result<(), RawEditError> {
-        set_raw_field_value(&mut self.data, entry_id.0, field_id.0, value)
     }
 
     pub fn comments(&self) -> Vec<String> {

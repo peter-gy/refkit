@@ -7,9 +7,13 @@ A capability is one user behavior owned by the portable core and projected throu
 | Decode bibliography bytes | `source` | Path readers attach decode diagnostics | Host supplies strings | Core decode tests and Python path tests |
 | Parse normalized BibTeX or BibLaTeX | `library` | `Library.read`, `Library.parse_bibtex` | Parse, inspect, and render expressions | Core recovery tests plus Python and Polars boundary tests |
 | Parse Hayagriva YAML | `library` | `Library.read`, `Library.parse_yaml` | Not exposed | Core and Python public tests |
+| Construct complete records | `record` and `library` | `Library.from_records`, `to_records`, JSON snapshots | Scalar projection | Core record tests, Python/TypeScript parity and installed packages |
+| Convert bibliography formats | `codec` | `decode`, `encode`, `convert`, reports and `ConversionError` | Not exposed | Core mapping/loss tests, paired snippets and Python/TypeScript parity |
+| Validate bibliography data | `validation` | `Library.validate`, `BibDocument.validate` | Not exposed | Core profile/checksum tests and Python/TypeScript report parity |
 | Inspect normalized entries | `library` | `Entry`, lookup, selection, projection | `keys`, `entries`, `entry_count` | Shared contract fixture plus adapter shape tests |
 | Preserve raw BibTeX | `raw` | `BibDocument`, raw entries, raw fields, blocks, spans | Not exposed | Core raw tests and Python occurrence tests |
-| Edit an existing raw field value | `raw` | `BibField.value`, `BibDocument.write` | Not exposed | Core delimiter tests and Python writeback tests |
+| Apply atomic raw edits | `raw::patch` | `BibDocument.apply_patch`, snapshot handles and change reports | Not exposed | Core preservation/overlap tests, Python/TypeScript parity and installed artifacts |
+| Review duplicates and plan merges | `duplicates` | `BibDocument.find_duplicates`, `plan_merge`, explicit choices and patch plans | Not exposed | Core signature/conflict/reference tests and Python/TypeScript parity |
 | Format BibTeX | `tidy` | `tidy_bibtex`, `tidy_file`, `BibDocument.tidy` | `tidy_bibtex`, `tidy_bibtex_report` | Vendored tidy specs, corpus tests, and adapter option tests |
 | Prepare a style | `style` | Bundled, path, and XML `Style` constructors | Bundled style name argument | Core style tests and adapter render tests |
 | Validate a locale code | `render` archive | `Locale.load` | Not exposed as validation | Python locale tests |

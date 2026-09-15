@@ -9,6 +9,65 @@ pub(crate) struct ProjectionField {
     field: EntryField,
 }
 
+pub(crate) fn validation_to_py(
+    py: Python<'_>,
+    report: &refkit_core::ValidationReport,
+) -> PyResult<Py<PyAny>> {
+    fn target<'py>(
+        py: Python<'py>,
+        value: &refkit_core::ValidationTarget,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let result = PyDict::new(py);
+        result.set_item("entry", &value.entry)?;
+        result.set_item("path", &value.path)?;
+        result.set_item("entry_id", value.entry_id)?;
+        result.set_item("field_id", value.field_id)?;
+        result.set_item(
+            "span",
+            value.span.as_ref().map(|span| (span.start, span.end)),
+        )?;
+        Ok(result)
+    }
+    let result = PyDict::new(py);
+    result.set_item(
+        "profile",
+        json_to_py(
+            py,
+            &serde_json::to_string(&report.profile).expect("owned enum serializes"),
+        )?,
+    )?;
+    result.set_item("valid", report.is_valid())?;
+    let issues = PyList::empty(py);
+    for issue in &report.issues {
+        let value = PyDict::new(py);
+        value.set_item(
+            "code",
+            json_to_py(
+                py,
+                &serde_json::to_string(&issue.code).expect("owned enum serializes"),
+            )?,
+        )?;
+        value.set_item(
+            "severity",
+            json_to_py(
+                py,
+                &serde_json::to_string(&issue.severity).expect("owned enum serializes"),
+            )?,
+        )?;
+        value.set_item("target", target(py, &issue.target)?)?;
+        let related = PyList::empty(py);
+        for item in &issue.related {
+            related.append(target(py, item)?)?;
+        }
+        value.set_item("related", related)?;
+        value.set_item("message", &issue.message)?;
+        value.set_item("suggestion", &issue.suggestion)?;
+        issues.append(value)?;
+    }
+    result.set_item("issues", issues)?;
+    Ok(result.into_any().unbind())
+}
+
 pub(crate) fn parse_recovery_policy(recovery: &str) -> PyResult<RecoveryPolicy> {
     match recovery {
         "error" => Ok(RecoveryPolicy::Error),
@@ -52,7 +111,6 @@ fn parse_projection_field(field: &str) -> PyResult<ProjectionField> {
     let name = match field {
         "key" => "key",
         "entry_type" => "entry_type",
-        "type" => "type",
         "title" => "title",
         "date" => "date",
         "doi" => "doi",

@@ -1,21 +1,19 @@
-use refkit_core::{
-    RawBlockInfo, RawDocument, RawEditError, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo,
-};
+use refkit_core::{RawBlockInfo, RawDocument, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo};
 use serde_json::{Value, json};
+use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 use crate::errors::{error, parse_error};
 
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct NativeRawDocument {
-    inner: RawDocument,
-    ids: Vec<(RawEntryId, Vec<RawFieldId>)>,
+    inner: Arc<RawDocument>,
+    ids: Arc<Vec<(RawEntryId, Vec<RawFieldId>)>>,
 }
 
-#[wasm_bindgen]
 impl NativeRawDocument {
-    pub fn parse(source: &str) -> NativeRawDocument {
-        let inner = RawDocument::parse(source);
+    fn from_core(inner: RawDocument) -> Self {
         let ids = inner
             .entry_occurrences()
             .iter()
@@ -31,11 +29,109 @@ impl NativeRawDocument {
                 )
             })
             .collect();
-        Self { inner, ids }
+        Self {
+            inner: Arc::new(inner),
+            ids: Arc::new(ids),
+        }
+    }
+}
+
+#[wasm_bindgen]
+pub struct NativePatchResult {
+    document: NativeRawDocument,
+    report: String,
+}
+
+#[wasm_bindgen]
+impl NativePatchResult {
+    #[wasm_bindgen(getter)]
+    pub fn document(&self) -> NativeRawDocument {
+        self.document.clone()
+    }
+    pub fn report(&self) -> String {
+        self.report.clone()
+    }
+}
+
+#[wasm_bindgen]
+impl NativeRawDocument {
+    pub fn parse(source: &str) -> NativeRawDocument {
+        Self::from_core(RawDocument::parse(source))
+    }
+
+    pub fn find_duplicates(&self, source: &str) -> Result<String, JsValue> {
+        let rules: Option<Vec<refkit_core::DuplicateRule>> =
+            serde_json::from_str(source).map_err(|error| {
+                crate::errors::merge_error(refkit_core::MergeError {
+                    code: refkit_core::MergeErrorCode::InvalidSelection,
+                    message: format!("Invalid duplicate rules: {error}"),
+                })
+            })?;
+        let report = self
+            .inner
+            .find_duplicates(rules.as_deref())
+            .map_err(crate::errors::merge_error)?;
+        Ok(crate::conversion::raw_keys(json!(report), true)
+            .expect("owned report keys")
+            .to_string())
+    }
+
+    pub fn plan_merge(&self, source: &str) -> Result<String, JsValue> {
+        let invalid = |message| {
+            crate::errors::merge_error(refkit_core::MergeError {
+                code: refkit_core::MergeErrorCode::InvalidSelection,
+                message,
+            })
+        };
+        let value: Value = serde_json::from_str(source)
+            .map_err(|error| invalid(format!("Invalid merge request: {error}")))?;
+        let value = crate::conversion::raw_keys(value, false).map_err(invalid)?;
+        let request: refkit_core::MergeRequest = serde_json::from_value(value)
+            .map_err(|error| invalid(format!("Invalid merge request: {error}")))?;
+        let plan = self
+            .inner
+            .plan_merge(&request)
+            .map_err(crate::errors::merge_error)?;
+        Ok(crate::conversion::raw_keys(json!(plan), true)
+            .expect("owned plan keys")
+            .to_string())
+    }
+
+    pub fn apply_patch(&self, source: &str) -> Result<NativePatchResult, JsValue> {
+        let invalid = |message: String| {
+            crate::errors::patch_error(refkit_core::BibPatchError {
+                code: refkit_core::BibPatchErrorCode::InvalidValue,
+                operation: None,
+                message,
+            })
+        };
+        let value: Value = serde_json::from_str(source)
+            .map_err(|error| invalid(format!("Invalid patch input: {error}")))?;
+        let value = crate::conversion::raw_keys(value, false).map_err(invalid)?;
+        let operations: Vec<refkit_core::BibEdit> = serde_json::from_value(value)
+            .map_err(|error| invalid(format!("Invalid patch input: {error}")))?;
+        let result = self
+            .inner
+            .apply_patch(&operations)
+            .map_err(crate::errors::patch_error)?;
+        let report = json!({
+            "changes": result.changes.iter().map(|change| json!({"operations": change.operations, "kind": change.kind, "before": [change.before.start, change.before.end], "after": [change.after.start, change.after.end]})).collect::<Vec<_>>(),
+            "entries": result.entries.iter().map(|mapping| json!({"before": mapping.before.as_ref().map(entry), "after": mapping.after.as_ref().map(entry), "fields": mapping.fields.iter().map(|mapping| json!({"before": mapping.before.as_ref().map(field), "after": mapping.after.as_ref().map(field)})).collect::<Vec<_>>()})).collect::<Vec<_>>(),
+            "warnings": result.warnings.iter().map(|warning| json!({"code": warning.code, "entryId": warning.entry_id, "fieldId": warning.field_id, "message": warning.message})).collect::<Vec<_>>()
+        }).to_string();
+        Ok(NativePatchResult {
+            document: Self::from_core(result.document),
+            report,
+        })
     }
 
     pub fn entry_count(&self) -> usize {
         self.inner.entry_count()
+    }
+
+    pub fn validate(&self) -> Result<String, JsValue> {
+        let report = self.inner.validate().map_err(parse_error)?;
+        Ok(crate::conversion::validation(&report).to_string())
     }
 
     pub fn field_count(&self, entry_id: usize) -> Result<usize, JsValue> {
@@ -144,24 +240,6 @@ impl NativeRawDocument {
             .field_info(entry_id, field_id)
             .map(|value| field(&value).to_string())
             .ok_or_else(|| error("MissingReferenceError", "raw field is unavailable"))
-    }
-
-    pub fn set_field_value(
-        &mut self,
-        entry_id: usize,
-        field_id: usize,
-        value: String,
-    ) -> Result<(), JsValue> {
-        let (entry_id, field_id) = self.field_ids(entry_id, field_id)?;
-        self.inner
-            .set_field_value(entry_id, field_id, value)
-            .map_err(|value| {
-                let name = match &value {
-                    RawEditError::MissingField { .. } => "MissingReferenceError",
-                    RawEditError::InvalidValue(_) => "RangeError",
-                };
-                error(name, value)
-            })
     }
 
     pub fn metadata(&self) -> String {

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use refkit_core::{
     CitationRequest, Cite, Document, PreparedStyle, load_prepared_style, prepare_style_from_xml,
+    style_catalog,
 };
 use serde::Deserialize;
 use serde_json::{Map, json};
@@ -20,6 +21,19 @@ pub struct NativeStyle {
 
 #[wasm_bindgen]
 impl NativeStyle {
+    pub fn list() -> String {
+        let styles: Vec<_> = style_catalog()
+            .into_iter()
+            .map(|style| {
+                json!({
+                    "name": style.name, "aliases": style.aliases,
+                    "title": style.title, "cslId": style.csl_id,
+                })
+            })
+            .collect();
+        json!(styles).to_string()
+    }
+
     pub fn load(name: &str) -> Result<NativeStyle, JsValue> {
         Ok(Self {
             id: name.to_string(),
@@ -27,10 +41,12 @@ impl NativeStyle {
         })
     }
 
-    pub fn from_xml(xml: &str) -> Result<NativeStyle, JsValue> {
+    pub fn from_xml(xml: &str, parent_xml: Option<String>) -> Result<NativeStyle, JsValue> {
         Ok(Self {
             id: "xml".to_string(),
-            inner: Arc::new(prepare_style_from_xml(xml).map_err(style_error)?),
+            inner: Arc::new(
+                prepare_style_from_xml(xml, parent_xml.as_deref()).map_err(style_error)?,
+            ),
         })
     }
 
@@ -42,6 +58,11 @@ impl NativeStyle {
     #[wasm_bindgen(getter)]
     pub fn title(&self) -> String {
         self.inner.title().to_string()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn csl_id(&self) -> String {
+        self.inner.csl_id().to_string()
     }
 }
 
@@ -64,6 +85,7 @@ struct WireCite {
     key: String,
     locator: Option<String>,
     label: Option<String>,
+    purpose: String,
 }
 
 fn requests(source: &str) -> Result<(Vec<String>, Vec<CitationRequest>), JsValue> {
@@ -84,8 +106,15 @@ fn requests(source: &str) -> Result<(Vec<String>, Vec<CitationRequest>), JsValue
             citation
                 .items
                 .into_iter()
-                .map(|item| Cite::new(item.key, item.locator, item.label))
-                .collect(),
+                .map(|item| {
+                    Ok(Cite::new(
+                        item.key,
+                        item.locator,
+                        item.label,
+                        item.purpose.parse().map_err(document_error)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, JsValue>>()?,
             citation.note_number,
         ));
     }

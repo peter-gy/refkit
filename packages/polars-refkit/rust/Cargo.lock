@@ -1716,6 +1716,9 @@ dependencies = [
  "hayagriva",
  "indexmap",
  "quick-xml",
+ "serde",
+ "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]

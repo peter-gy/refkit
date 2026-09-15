@@ -70,7 +70,7 @@ Inspect `library.keys()` before rendering. `Document.render` raises `MissingRefe
 
 Use `Style.load(name)` and `Locale.load(code)` separately to validate bundled identifiers before creating a `Document`. For a custom [CSL](https://citationstyles.org/) (Citation Style Language) file, use Python `Style.from_path(path)` or Node `readStyle(path)` from `refkit-js/node`. In a browser, load XML text and pass it to `Style.fromXml`.
 
-Dependent CSL styles require parent resolution and are rejected by the explicit-style constructors. Supply the independent parent style. [Errors and Diagnostics](/reference/errors#styles-and-rendering) lists style validation failures.
+For a dependent CSL style, supply its independent parent's XML through `Style.from_xml(child_xml, parent_xml=parent_xml)` in Python or `Style.fromXml(childXml, { parentXml })` in TypeScript. The parent's CSL identifier must match the child's link. [Errors and Diagnostics](/reference/errors#styles-and-rendering) lists style validation failures.
 
 ## Browser calls fail before initialization
 

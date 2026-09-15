@@ -86,6 +86,38 @@ const page = new rk.Cite("doe2024", { locator: "12", label: "page" });
 
 The style controls the visible form. An unknown locator label raises `ValueError` in Python or `RangeError` in TypeScript during rendering.
 
+## Choose a citation purpose
+
+Set `purpose="prose"` to place an author's name in a sentence:
+
+::: code-group
+
+```python [Python]
+prose = document.render([rk.Citation("sentence", rk.Cite("doe2024", purpose="prose"))])
+print(prose["sentence"].text)
+```
+
+```ts [TypeScript]
+const prose = document.render([
+  new rk.Citation("sentence", new rk.Cite("doe2024", { purpose: "prose" })),
+]);
+console.log(prose.get("sentence").text);
+```
+
+:::
+
+The APA style renders `Doe (2024)`. Each cite item accepts one purpose:
+
+| Purpose | Output |
+| --- | --- |
+| `normal` | The style's ordinary citation. Default. |
+| `author` | Author names. |
+| `year` | Publication year, excluding disambiguation suffixes. |
+| `full` | Bibliography form when the style defines one, otherwise ordinary citation form. |
+| `prose` | Author names followed by a citation suitable for a sentence. |
+
+The style controls names, punctuation, and numeric labels. Purpose applies to text, HTML, and the rendered tree. Items remain part of the cited bibliography.
+
 ## Cite a numbered note
 
 Give a citation its document note number when the style uses note distance or first-reference note numbers:
@@ -148,6 +180,26 @@ Pass a `Cite` or `CitationGroup` for richer input. Use `Document` when several c
 
 ## Load an explicit style
 
+Use `Style.list()` to discover bundled styles before loading one:
+
+::: code-group
+
+```python [Python]
+catalog = rk.Style.list()
+apa = next(style for style in catalog if "apa" in [style["name"], *style["aliases"]])
+print(apa["csl_id"])
+```
+
+```ts [TypeScript]
+const catalog = rk.Style.list();
+const apa = catalog.find((style) => [style.name, ...style.aliases].includes("apa"))!;
+console.log(apa.cslId);
+```
+
+:::
+
+Both examples print `http://www.zotero.org/styles/apa`. Catalog entries contain a canonical name, accepted aliases, a title, and the CSL identifier.
+
 `Style` accepts an independent CSL style as XML text:
 
 ::: code-group
@@ -184,7 +236,37 @@ console.log(customDocument.render([new rk.Citation("title", "doe2024")]).get("ti
 
 This style renders `Fast Citations`. For a UTF-8 `.csl` file, use `Style.from_path(path)` in Python or `await readStyle(path)` from `refkit-js/node` in Node.js.
 
-Custom XML is limited to 2 MiB, 100,000 XML nodes, 64 nested elements, and 256 attributes per element, including namespace declarations. Expanded rendering is limited to 100,000 elements and 64 levels of combined element nesting and macro calls. Missing, duplicate, or cyclic macros and exceeded limits raise `ValueError` / `RangeError`. A dependent style that requires parent resolution also raises an error. Use `Style.load(name)` for a style in the [bundled archive](/concepts/citation-rendering).
+Custom XML is limited to 2 MiB, 100,000 XML nodes, 64 nested elements, and 256 attributes per element, including namespace declarations. Expanded rendering is limited to 100,000 elements and 64 levels of combined element nesting and macro calls. Missing, duplicate, or cyclic macros and exceeded limits raise `ValueError` / `RangeError`. These limits also apply to supplied parent XML.
+
+## Supply a dependent style's parent
+
+A dependent style selects an independent parent by its CSL identifier. Supply the parent's XML explicitly:
+
+::: code-group
+
+```python [Python]
+child_xml = """<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" default-locale="de-DE">
+  <info><title>German title citations</title><id>https://example.org/styles/german-title</id>
+    <link rel="independent-parent" href="https://example.org/styles/title-citations"/>
+  </info>
+</style>"""
+child_style = rk.Style.from_xml(child_xml, parent_xml=csl_xml)
+print(child_style.title)
+```
+
+```ts [TypeScript]
+const childXml = `<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" default-locale="de-DE">
+  <info><title>German title citations</title><id>https://example.org/styles/german-title</id>
+    <link rel="independent-parent" href="https://example.org/styles/title-citations"/>
+  </info>
+</style>`;
+const childStyle = rk.Style.fromXml(childXml, { parentXml: cslXml });
+console.log(childStyle.title);
+```
+
+:::
+
+Both examples print `German title citations`. The parent's identifier must match the child's `independent-parent` link. RefKit uses the parent's formatting rules and the child's default locale. An explicit document locale takes precedence. The application retrieves XML resources before calling RefKit.
 
 ## Render safely for the web
 

@@ -210,16 +210,22 @@ fn raw_document_parses_valueless_fields_for_formatter_transforms() {
 
 #[test]
 fn raw_document_rejects_non_empty_edits_to_valueless_fields() {
-    let mut doc = RawDocument::parse("@article{empty,\n  day,\n}\n");
+    let doc = RawDocument::parse("@article{empty,\n  day,\n}\n");
     let entry_id = doc.unique_entry("empty").unwrap().unwrap();
     let field_id = doc.unique_field(entry_id, "day").unwrap().unwrap();
 
     let error = doc
-        .set_field_value(entry_id, field_id, "12".to_string())
+        .apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id,
+            value: "12".into(),
+        }])
         .unwrap_err();
 
     assert!(
-        matches!(error, RawEditError::InvalidValue(message) if message.contains("without an assignment"))
+        error.code == BibPatchErrorCode::InvalidValue
+            && error.message.contains("without an assignment")
     );
     assert_eq!(doc.render().unwrap(), "@article{empty,\n  day,\n}\n");
 }
@@ -462,8 +468,15 @@ fn render_document_patches_only_changed_fields() {
         ("expr", "macro # \"New\""),
     ] {
         let field_id = doc.unique_field(entry_id, key).unwrap().unwrap();
-        doc.set_field_value(entry_id, field_id, value.to_string())
-            .unwrap();
+        doc = doc
+            .apply_patch(&[BibEdit::SetField {
+                expression: false,
+                entry_id,
+                field_id,
+                value: value.into(),
+            }])
+            .unwrap()
+            .document;
     }
 
     let rendered = doc.render().unwrap();
@@ -490,8 +503,15 @@ fn duplicate_field_parse_preserves_ordered_occurrences() {
     assert_eq!(title_fields[0].value, "First");
     assert_eq!(title_fields[1].value, "Second");
     assert!(doc.unique_field(entry_id, "title").is_err());
-    doc.set_field_value(entry_id, title_fields[1].id, "Edited".to_string())
-        .unwrap();
+    doc = doc
+        .apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: title_fields[1].id,
+            value: "Edited".into(),
+        }])
+        .unwrap()
+        .document;
 
     let rendered = doc.render().unwrap();
 
@@ -514,33 +534,68 @@ fn raw_document_rejects_unsafe_field_edits() {
     let subtitle_id = doc.unique_field(entry_id, "subtitle").unwrap().unwrap();
     let note_id = doc.unique_field(entry_id, "note").unwrap().unwrap();
 
+    doc = doc
+        .apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: title_id,
+            value: "{NASA} Mission".into(),
+        }])
+        .unwrap()
+        .document;
     assert!(
-        doc.set_field_value(entry_id, title_id, "{NASA} Mission".to_string())
-            .is_ok()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: title_id,
+            value: "bad%value".into()
+        }])
+        .is_err()
     );
     assert!(
-        doc.set_field_value(entry_id, title_id, "bad%value".to_string())
-            .is_err()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: title_id,
+            value: "bad\nvalue".into()
+        }])
+        .is_err()
     );
     assert!(
-        doc.set_field_value(entry_id, title_id, "bad\nvalue".to_string())
-            .is_err()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: title_id,
+            value: "bad\\".into()
+        }])
+        .is_err()
     );
     assert!(
-        doc.set_field_value(entry_id, title_id, "bad\\".to_string())
-            .is_err()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: subtitle_id,
+            value: "bad\"value".into()
+        }])
+        .is_err()
     );
     assert!(
-        doc.set_field_value(entry_id, subtitle_id, "bad\"value".to_string())
-            .is_err()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: subtitle_id,
+            value: "bad%value".into()
+        }])
+        .is_err()
     );
     assert!(
-        doc.set_field_value(entry_id, subtitle_id, "bad%value".to_string())
-            .is_err()
-    );
-    assert!(
-        doc.set_field_value(entry_id, note_id, "{unbalanced".to_string())
-            .is_err()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: note_id,
+            value: "{unbalanced".into()
+        }])
+        .is_err()
     );
 
     assert_eq!(

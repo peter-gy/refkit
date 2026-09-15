@@ -17,7 +17,7 @@ test("file readers select the format and report legacy text decoding", async (t)
   const input = join(directory, "sources.BIB");
   await writeFile(input, Buffer.from("@book{cafe,title={Caf\xe9}}", "latin1"));
   const library = await readLibrary(pathToFileURL(input));
-  assert.equal(library.get("cafe").title, "Café");
+  assert.equal(library.get("cafe").title.chunks[0].text, "Café");
   assert.equal(library.diagnostics[0].code, "text_encoding");
   const raw = await readBibDocument(input);
   assert.equal(
@@ -27,7 +27,10 @@ test("file readers select the format and report legacy text decoding", async (t)
   assert.equal(raw.diagnostics[0].code, "text_encoding");
   const yaml = join(directory, "items.YAML");
   await writeFile(yaml, "one:\n  type: book\n  title: YAML\n");
-  assert.equal((await readLibrary(yaml)).get("one").title, "YAML");
+  assert.equal(
+    (await readLibrary(yaml)).get("one").title.chunks[0].text,
+    "YAML",
+  );
   await assert.rejects(
     readLibrary(join(directory, "absent.bib")),
     (error) => error instanceof RefkitError && error.cause.code === "ENOENT",

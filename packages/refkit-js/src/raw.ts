@@ -1,7 +1,13 @@
 import type { NativeRawDocument } from "./wasm/refkit_js_native.js";
 import { getNative } from "./runtime.js";
 import { callNative, readNative } from "./errors.js";
-import { string } from "./inputs.js";
+import {
+  string,
+  iterable,
+  jsonData,
+  object,
+  optionalString,
+} from "./inputs.js";
 import { tidyBibtex, type TidySettings } from "./tidy.js";
 import type {
   Diagnostic,
@@ -10,20 +16,27 @@ import type {
   RawSpan,
   ResolvedBibEntry,
   TidyResult,
+  ValidationReport,
+  BibEdit,
+  BibPatchResult,
+  RawEntryInfo as EntryInfo,
+  RawFieldInfo as FieldInfo,
+  DuplicateRule,
+  DuplicateReport,
+  MergeFieldChoice,
+  MergePlan,
 } from "./types.js";
 
-interface EntryInfo {
-  id: number;
-  key: string;
-  kind: string;
-  span: RawSpan;
+export interface DuplicateOptions {
+  rules?: Iterable<DuplicateRule> | null;
 }
-interface FieldInfo {
-  id: number;
-  name: string;
-  value: string;
-  span: RawSpan;
+export interface MergeOptions {
+  entries: Iterable<number>;
+  retain: number;
+  fields?: Iterable<MergeFieldChoice> | null;
+  entryType?: string | null;
 }
+
 interface Metadata {
   comments: string[];
   preamble: string;
@@ -60,6 +73,39 @@ export class BibDocument {
       callNative(() => NativeRawDocument.parse(string(source, "source"))),
     );
   }
+  applyPatch(patch: Iterable<BibEdit>): BibPatchResult {
+    const input = jsonData(iterable(patch, "patch"), "patch");
+    const result = callNative(() => this.#native.apply_patch(input));
+    const report = readNative<Omit<BibPatchResult, "document">>(() =>
+      result.report(),
+    );
+    return {
+      document: new BibDocument(callNative(() => result.document)),
+      ...report,
+    };
+  }
+  findDuplicates(options: DuplicateOptions = {}): DuplicateReport {
+    object(options, "options", ["rules"]);
+    const rules =
+      options.rules == null ? null : iterable(options.rules, "rules");
+    return readNative(() =>
+      this.#native.find_duplicates(jsonData(rules, "rules")),
+    );
+  }
+  planMerge(options: MergeOptions): MergePlan {
+    object(options, "options", ["entries", "retain", "fields", "entryType"]);
+    const request = jsonData(
+      {
+        entries: iterable(options.entries, "entries"),
+        retain: options.retain,
+        fields:
+          options.fields == null ? [] : iterable(options.fields, "fields"),
+        entryType: optionalString(options.entryType, "entryType"),
+      },
+      "merge request",
+    );
+    return readNative(() => this.#native.plan_merge(request));
+  }
   #metadata(): Metadata {
     return readNative(() => this.#native.metadata());
   }
@@ -92,6 +138,9 @@ export class BibDocument {
   }
   resolve(): readonly ResolvedBibEntry[] {
     return readNative(() => this.#native.resolve());
+  }
+  validate(): ValidationReport {
+    return readNative(() => this.#native.validate());
   }
   tidy(settings: TidySettings = {}): TidyResult {
     return tidyBibtex(this.toBibtex(), settings);
@@ -156,6 +205,9 @@ export class BibEntry {
   }
   get key(): string {
     return this.#info.key;
+  }
+  get id(): number {
+    return this.#info.id;
   }
   get kind(): string {
     return this.#info.kind;
@@ -246,13 +298,10 @@ export class BibField {
   get value(): string {
     return this.#info().value;
   }
-  set value(value: string) {
-    callNative(() =>
-      this.#native.set_field_value(
-        this.#entryId,
-        this.#id,
-        string(value, "value"),
-      ),
-    );
+  get id(): number {
+    return this.#id;
+  }
+  get entryId(): number {
+    return this.#entryId;
   }
 }

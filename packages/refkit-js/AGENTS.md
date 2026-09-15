@@ -7,6 +7,7 @@
 - Keep the public TypeScript API in `src/index.ts`. `src/node.ts` owns filesystem access and automatic Node initialization.
 - Preserve Python capability and result parity with camelCase names, options objects, nullable values, and typed records. Update shared parity checks when changing a contract.
 - Keep raw entry and field wrappers attached to their original document and occurrence IDs. Native allocations follow garbage collection, and dependent wrappers retain the state they need.
+- Raw snapshots are immutable. `applyPatch` returns a new document and complete change report. Original handles retain their values and spans, including across garbage collection.
 - Generate `src/wasm` and `dist` with `npm run build`. Pin the binding generator to the Rust dependency version. Ship the WebAssembly binary, declarations, and project license in the npm tarball.
 - Keep npm package and lock versions aligned with the Rust workspace. Publish the tested tarball through `publish.yml` with the `npm` environment.
 

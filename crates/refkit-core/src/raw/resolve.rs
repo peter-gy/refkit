@@ -3,43 +3,15 @@ use std::ops::Range;
 
 use biblatex::{Field, RawChunk, Spanned};
 
-use super::parse::{parse_assignment_atoms, parse_raw_document};
+use super::parse::parse_assignment_atoms;
 use super::{RawBlock, RawDocument, RawValueAtom, RawValueMode, ResolvedBibEntry};
-use crate::library::{
-    Diagnostic, FieldResolver, ParseFailure, validate_source, validate_source_size,
-};
+use crate::library::{Diagnostic, FieldResolver, ParseFailure, validate_source_size};
 
 pub(super) fn resolve_document(
     document: &RawDocument,
 ) -> Result<Vec<ResolvedBibEntry>, ParseFailure> {
-    let (changed, edited_bytes) = document
-        .data
-        .entry_blocks
-        .iter()
-        .flat_map(|entry| &entry.field_blocks)
-        .filter(|field| field.changed)
-        .fold((false, 0usize), |(_, bytes), field| {
-            (true, bytes.saturating_add(field.value.len()))
-        });
-    validate_source_size(edited_bytes)?;
-    let current;
-    let data = if changed {
-        let source = document
-            .render()
-            .map_err(|message| Diagnostic::error("syntax_error", None, message))?;
-        validate_source(&source)?;
-        current = parse_raw_document(&source);
-        &current
-    } else {
-        validate_source_size(
-            document
-                .data
-                .blocks
-                .last()
-                .map_or(0, |block| block.span().end),
-        )?;
-        &document.data
-    };
+    let data = &document.data;
+    validate_source_size(data.blocks.last().map_or(0, |block| block.span().end))?;
     let mut definitions = Vec::new();
     for block in &data.blocks {
         match block {
@@ -192,9 +164,15 @@ mod tests {
         );
         let entry = document.unique_entry("work").unwrap().unwrap();
         let field = document.unique_field(entry, "title").unwrap().unwrap();
-        document
-            .set_field_value(entry, field, r#"new # "literal""#.to_string())
-            .unwrap();
+        document = document
+            .apply_patch(&[crate::BibEdit::SetField {
+                expression: false,
+                entry_id: entry,
+                field_id: field,
+                value: r#"new # "literal""#.into(),
+            }])
+            .unwrap()
+            .document;
         let before = document.render().unwrap();
         let entries = document.resolve().unwrap();
         assert_eq!(entries[0].fields["title"], r#"new # "literal""#);
@@ -246,13 +224,20 @@ mod tests {
                 .code,
             "resource_limit"
         );
-        let mut document = RawDocument::parse("@misc{work,title={old}}");
+        let document = RawDocument::parse("@misc{work,title={old}}");
         let entry = document.unique_entry("work").unwrap().unwrap();
         let field = document.unique_field(entry, "title").unwrap().unwrap();
-        document.set_field_value(entry, field, source).unwrap();
         assert_eq!(
-            document.resolve().unwrap_err().diagnostics[0].code,
-            "resource_limit"
+            document
+                .apply_patch(&[crate::BibEdit::SetField {
+                    expression: false,
+                    entry_id: entry,
+                    field_id: field,
+                    value: source
+                }])
+                .unwrap_err()
+                .code,
+            crate::BibPatchErrorCode::ResourceLimit
         );
     }
 
@@ -262,9 +247,15 @@ mod tests {
         let mut document = RawDocument::parse(&source);
         let entry = document.unique_entry("work").unwrap().unwrap();
         let field = document.unique_field(entry, "title").unwrap().unwrap();
-        document
-            .set_field_value(entry, field, "small".to_string())
-            .unwrap();
+        document = document
+            .apply_patch(&[crate::BibEdit::SetField {
+                expression: false,
+                entry_id: entry,
+                field_id: field,
+                value: "small".into(),
+            }])
+            .unwrap()
+            .document;
 
         let entries = document.resolve().unwrap();
         assert_eq!(entries[0].fields["title"], "small");

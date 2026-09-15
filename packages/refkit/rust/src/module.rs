@@ -3,8 +3,10 @@ use pyo3::types::PyModule;
 
 use crate::citation::{Citation, CitationGroup, Cite};
 use crate::document::{Document, RenderedDocument};
-use crate::entry::Entry;
-use crate::errors::{MissingReferenceError, ParseError, RefkitError, TidyError, TidySyntaxError};
+use crate::errors::{
+    ConversionError, MergeError, MissingReferenceError, ParseError, PatchError, RefkitError,
+    TidyError, TidySyntaxError,
+};
 use crate::filesystem::write_bibtex_py;
 use crate::library::Library;
 use crate::raw;
@@ -19,6 +21,9 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("build_mode", build_mode())?;
     m.add("RefkitError", py.get_type::<RefkitError>())?;
     m.add("ParseError", py.get_type::<ParseError>())?;
+    m.add("ConversionError", py.get_type::<ConversionError>())?;
+    m.add("PatchError", py.get_type::<PatchError>())?;
+    m.add("MergeError", py.get_type::<MergeError>())?;
     m.add(
         "MissingReferenceError",
         py.get_type::<MissingReferenceError>(),
@@ -26,7 +31,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("TidyError", py.get_type::<TidyError>())?;
     m.add("TidySyntaxError", py.get_type::<TidySyntaxError>())?;
     m.add_class::<Library>()?;
-    m.add_class::<Entry>()?;
     m.add_class::<Style>()?;
     m.add_class::<Locale>()?;
     m.add_class::<Cite>()?;
@@ -37,6 +41,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Rendered>()?;
     m.add_function(wrap_pyfunction!(write_bibtex_py, m)?)?;
     tidy::register(m)?;
+    crate::codec::register(m)?;
     raw::register(m)?;
     Ok(())
 }

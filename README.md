@@ -27,14 +27,15 @@
 </p>
 
 RefKit reads [BibTeX](https://ctan.org/pkg/bibtex),
-[BibLaTeX](https://ctan.org/pkg/biblatex), and
-[Hayagriva YAML](https://github.com/typst/hayagriva), then turns your references
+[BibLaTeX](https://ctan.org/pkg/biblatex),
+[Hayagriva YAML](https://github.com/typst/hayagriva), and CSL-JSON, then turns your references
 into citations, bibliographies, and inspectable records. Its raw BibTeX model
-supports targeted field edits.
+supports atomic entry and field patches with occurrence mappings.
 
 - **Render citations and bibliographies** with bundled or custom [Citation Style Language](https://citationstyles.org/) styles. Get text, HTML, or a structured tree.
-- **Inspect and repair bibliography data.** Select entries, project fields, review parsing diagnostics, and edit existing BibTeX fields while preserving surrounding source text.
-- **Format and deduplicate BibTeX.** Configure layout, generate citation keys, and review warnings before accepting changes.
+- **Construct and convert references.** Build libraries from structured records and convert formats with field-level loss reports.
+- **Inspect and repair bibliography data.** Validate records, review parsing diagnostics, and apply atomic BibTeX patches while preserving unrelated source text.
+- **Format and deduplicate BibTeX.** Configure layout, generate citation keys, review duplicate evidence and field conflicts, and apply accepted merge plans.
 - **Work inside [Polars](https://pola.rs/) queries.** Apply bibliography operations to columns through `pl.Expr.refkit` in eager or lazy dataframes.
 
 ## Render a citation

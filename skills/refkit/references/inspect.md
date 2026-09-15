@@ -1,6 +1,10 @@
 # Inspect bibliography data
 
+Use `decode(source, format="csl-json")` for CSL item arrays, or `format="biblatex"` / `"hayagriva"` for bibliography source formats. Its report contains `library`, `format`, and `issues`. `encode(library, format=...)` and `convert(source, source_format=..., target_format=...)` return text plus field-level issues. Set `loss="error"` when a lossy result must be refused. `ConversionError.issues` and `.diagnostics` retain the failure detail.
+
 Use `Library` for normalized lookup and projection. `recovery="report"` retains recoverable entries and records diagnostics. Strict parsing uses `recovery="error"`. Recovery raises `ParseError` when every entry fails. Inspect the exception's `.diagnostics` for structured failure details.
+
+Use `Library.validate()` for format-neutral record quality and `BibDocument.validate()` for the BibLaTeX field profile. Reports contain `profile`, `valid`, and inspect-only `issues`. Each issue includes `code`, `severity`, `target`, `related`, `message`, and nullable `suggestion`. Return bounded issue previews with the total count. Source targets carry current-snapshot occurrence IDs and UTF-8 spans. Identifier checks establish syntax or checksum validity, not registry assignment. Review shared identifiers before proposing a merge.
 
 ```python
 import refkit as rk

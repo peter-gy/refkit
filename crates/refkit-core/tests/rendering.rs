@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use refkit_core::{
-    BibliographyLayout, CitationRequest, Cite, Document, DocumentError, FontStyle, Library,
-    PreparedStyle, RecoveryPolicy, RenderedMeta, RenderedNode, prepare_style_from_xml,
+    BibliographyLayout, CitationRequest, Cite, CitePurpose, Document, DocumentError, FontStyle,
+    Library, PreparedStyle, RecoveryPolicy, RenderedMeta, RenderedNode, prepare_style_from_xml,
     render_library_citation, render_library_citation_each, render_library_citation_group,
 };
 
@@ -11,7 +11,7 @@ fn style(citation: &str, bibliography: &str, class: &str) -> Arc<PreparedStyle> 
         r#"<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="{class}">
         <info><title>Render contract</title><id>https://example.com/render</id><updated>2026-01-01T00:00:00Z</updated></info>
         {citation}{bibliography}</style>"#,
-    )).unwrap())
+    ), None).unwrap())
 }
 
 fn library() -> Arc<Library> {
@@ -24,7 +24,7 @@ fn library() -> Arc<Library> {
 fn request(keys: &[&str], note_number: Option<usize>) -> CitationRequest {
     CitationRequest::new(
         keys.iter()
-            .map(|key| Cite::new((*key).to_string(), None, None))
+            .map(|key| Cite::new((*key).to_string(), None, None, CitePurpose::Normal))
             .collect(),
         note_number,
     )

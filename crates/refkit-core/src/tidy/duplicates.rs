@@ -54,12 +54,10 @@ pub(crate) fn duplicate_plan(doc: &RawSyntaxDocument, options: &TidyOptions) -> 
     for entry in &doc.entries {
         for check in &rules {
             let duplicate = match check.rule {
-                DuplicateRule::Key => duplicate_key(entry, &mut keys),
-                DuplicateRule::Doi => duplicate_field(entry, "doi", &mut dois, None),
-                DuplicateRule::Abstract => {
-                    duplicate_field(entry, "abstract", &mut abstracts, Some(100))
-                }
-                DuplicateRule::Citation => duplicate_citation(entry, &mut citations),
+                DuplicateRule::Key => duplicate_match(entry, check.rule, &mut keys),
+                DuplicateRule::Doi => duplicate_match(entry, check.rule, &mut dois),
+                DuplicateRule::Abstract => duplicate_match(entry, check.rule, &mut abstracts),
+                DuplicateRule::Citation => duplicate_match(entry, check.rule, &mut citations),
             };
             if let Some(existing) = duplicate {
                 plan.warnings.push(TidyWarning::DuplicateEntry {
@@ -174,94 +172,18 @@ fn merge_entry(
     }
 }
 
-fn duplicate_key<'a>(
+fn duplicate_match<'a>(
     entry: &'a RawSyntaxEntry,
-    keys: &mut BTreeMap<String, &'a RawSyntaxEntry>,
-) -> Option<&'a RawSyntaxEntry> {
-    if entry.key.is_empty() {
-        return None;
-    }
-    let key = entry.key.to_ascii_lowercase();
-    if let Some(existing) = keys.get(&key) {
-        Some(*existing)
-    } else {
-        keys.insert(key, entry);
-        None
-    }
-}
-
-fn duplicate_field<'a>(
-    entry: &'a RawSyntaxEntry,
-    field: &str,
+    rule: DuplicateRule,
     values: &mut BTreeMap<String, &'a RawSyntaxEntry>,
-    truncate: Option<usize>,
 ) -> Option<&'a RawSyntaxEntry> {
-    let value = field_value(entry, field)?;
-    let mut value = alpha_num(value);
-    if let Some(limit) = truncate {
-        value = value.chars().take(limit).collect();
-    }
-    if value.is_empty() {
-        return None;
-    }
-    if let Some(existing) = values.get(&value) {
+    let signature = crate::duplicates::signature(entry, rule)?;
+    if let Some(existing) = values.get(&signature) {
         Some(*existing)
     } else {
-        values.insert(value, entry);
+        values.insert(signature, entry);
         None
     }
-}
-
-fn duplicate_citation<'a>(
-    entry: &'a RawSyntaxEntry,
-    citations: &mut BTreeMap<String, &'a RawSyntaxEntry>,
-) -> Option<&'a RawSyntaxEntry> {
-    let title = field_value(entry, "title")?;
-    let author = field_value(entry, "author")?;
-    let number = field_value(entry, "number").unwrap_or("0");
-    let value = [
-        alpha_num(&first_author_last(author)),
-        alpha_num(title),
-        alpha_num(number),
-    ]
-    .join(":");
-
-    if let Some(existing) = citations.get(&value) {
-        Some(*existing)
-    } else {
-        citations.insert(value, entry);
-        None
-    }
-}
-
-fn field_value<'a>(entry: &'a RawSyntaxEntry, field: &str) -> Option<&'a str> {
-    entry
-        .fields
-        .iter()
-        .find(|candidate| candidate.name.eq_ignore_ascii_case(field))
-        .map(|field| field.value.as_str())
-}
-
-fn first_author_last(author: &str) -> String {
-    let author = author.split(" and ").next().unwrap_or(author).trim();
-    if let Some((last, _)) = author.split_once(',') {
-        return last.trim().to_string();
-    }
-
-    let parts = author.split_whitespace().collect::<Vec<_>>();
-    match parts.as_slice() {
-        [] => String::new(),
-        [last] => (*last).to_string(),
-        [_, last @ ..] => last.join(" "),
-    }
-}
-
-fn alpha_num(value: &str) -> String {
-    value
-        .chars()
-        .filter(|ch| ch.is_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect()
 }
 
 fn duplicate_message(
@@ -277,7 +199,7 @@ fn duplicate_message(
             entry.key
         ),
         DuplicateRule::Doi => format!(
-            "Duplicate {action}. Entry {} has an identical DOI to entry {}.",
+            "Duplicate {action}. Entry {} has the same DOI signature as entry {}.",
             entry.key, existing.key
         ),
         DuplicateRule::Citation => format!(

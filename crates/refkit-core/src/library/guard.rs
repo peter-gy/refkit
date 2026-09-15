@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
-use biblatex::{Field, Pair, RawBibliography, RawChunk, RawEntry, Spanned};
+use biblatex::{ChunksExt, Field, Pair, RawBibliography, RawChunk, RawEntry, Spanned};
 
 use super::Diagnostic;
 
@@ -255,6 +255,7 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
     let mut expansion_steps = 0usize;
     let mut value = String::new();
     let mut ancestors = Vec::new();
+    let mut needs_date_check = false;
     for (index, entry) in raw.entries.iter().enumerate() {
         for field in &entry.v.fields {
             value.clear();
@@ -271,6 +272,8 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
                 diagnostic.field = Some(field.key.v.to_ascii_lowercase());
                 diagnostic
             })?;
+            let field_name = field.key.v.to_ascii_lowercase();
+            needs_date_check |= is_date_parser_field(&field_name);
             bytes = bytes.saturating_add(value.len());
             if bytes > MAX_EXPANDED_BYTES {
                 return Err(limit(
@@ -281,7 +284,7 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
             weights[index] = weights[index].saturating_add(value.len());
         }
     }
-    if !has_references {
+    if !has_references && !needs_date_check {
         return Ok(());
     }
     let entry_index: HashMap<_, _> = raw
@@ -308,6 +311,36 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
     let Ok(normalized) = biblatex::Bibliography::from_raw(detached) else {
         return Ok(());
     };
+    if needs_date_check {
+        for entry in &raw.entries {
+            let Some(normalized_entry) = normalized.get(entry.v.key.v) else {
+                continue;
+            };
+            for field in &entry.v.fields {
+                let name = field.key.v.to_ascii_lowercase();
+                if !is_date_parser_field(&name) {
+                    continue;
+                }
+                if let Some(chunks) = normalized_entry.fields.get(&name) {
+                    validate_date_parser_input(&name, &chunks.format_verbatim()).map_err(
+                        |message| {
+                            let mut diagnostic = Diagnostic::error(
+                                "invalid_field",
+                                Some(field.value.span.clone()),
+                                message,
+                            );
+                            diagnostic.entry = Some(entry.v.key.v.to_string());
+                            diagnostic.field = Some(name);
+                            diagnostic
+                        },
+                    )?;
+                }
+            }
+        }
+    }
+    if !has_references {
+        return Ok(());
+    }
     for (index, entry) in raw.entries.iter().enumerate() {
         let Some(normalized_entry) = normalized.get(entry.v.key.v) else {
             continue;
@@ -354,6 +387,51 @@ pub(crate) fn validate_raw(raw: &RawBibliography<'_>) -> Result<(), Diagnostic> 
 
 fn is_reference(name: &str) -> bool {
     name.eq_ignore_ascii_case("crossref") || name.eq_ignore_ascii_case("xdata")
+}
+
+fn validate_date_parser_input(name: &str, value: &str) -> Result<(), String> {
+    let name = name.to_ascii_lowercase();
+    let value = value.trim_start();
+    // biblatex 0.12 performs unchecked arithmetic before returning date errors.
+    if ["date", "urldate", "origdate", "eventdate"].contains(&name.as_str())
+        && value.contains(['X', 'x'])
+        && value.bytes().take_while(u8::is_ascii_digit).count() > 4
+    {
+        return Err("BibLaTeX uncertain-year dates require a four-digit year pattern".into());
+    }
+    if ["month", "urlmonth", "origmonth", "eventmonth"].contains(&name.as_str()) {
+        let digits = value.bytes().take(2).take_while(u8::is_ascii_digit).count();
+        let consumed = if digits > 0 {
+            if value[..digits].parse::<u8>().ok() == Some(0) {
+                return Err("BibLaTeX numeric months start at one".into());
+            }
+            digits
+        } else {
+            value.bytes().take_while(u8::is_ascii_alphabetic).count()
+        };
+        let tail = value[consumed..]
+            .trim_start_matches(|c: char| c.is_whitespace() && c != '\u{a0}')
+            .trim_start_matches(['-', '\u{a0}']);
+        let day_len = tail.bytes().take_while(u8::is_ascii_digit).count();
+        if day_len > 0 && tail[..day_len].parse::<u8>().is_err() {
+            return Err("BibLaTeX day embedded in a month field exceeds the numeric range".into());
+        }
+    }
+    Ok(())
+}
+
+fn is_date_parser_field(name: &str) -> bool {
+    [
+        "date",
+        "urldate",
+        "origdate",
+        "eventdate",
+        "month",
+        "urlmonth",
+        "origmonth",
+        "eventmonth",
+    ]
+    .contains(&name)
 }
 
 type ReferenceGraph = Vec<Vec<(usize, Range<usize>, String)>>;

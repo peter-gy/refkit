@@ -4,38 +4,60 @@ mod parse;
 mod recovery;
 mod source;
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
+use std::io::{self, Write};
 use std::str::FromStr;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
-use hayagriva::{Entry as HayEntry, Library as HayLibrary, Selector};
+use hayagriva::{Library as HayLibrary, Selector};
 
 use crate::quoted;
-use crate::strings::entry_type_name;
+use crate::{EntryRecord, RecordError};
 
 pub use self::diagnostic::{Diagnostic, DiagnosticAction, DiagnosticSeverity, ParseFailure};
 pub(crate) use self::guard::{
-    FieldResolver, normalize_reference, validate_literal, validate_source, validate_source_size,
+    FieldResolver, normalize_reference, validate_literal, validate_raw, validate_source,
+    validate_source_size,
 };
 pub use self::parse::parse_bibtex_report;
+pub(crate) use self::parse::parse_error;
 use self::parse::{parse_biblatex_library, parse_hayagriva_yaml};
 
 pub(crate) struct ParsedLibrary {
-    pub(crate) inner: HayLibrary,
+    pub(crate) records: Vec<EntryRecord>,
     pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
 pub struct Library {
-    inner: Arc<HayLibrary>,
+    inner: HayLibrary,
     diagnostics: Vec<Diagnostic>,
     keys: OnceLock<Vec<String>>,
-    records: OnceLock<RecordCache>,
-}
-
-struct RecordCache {
     records: Vec<EntryRecord>,
     index: HashMap<String, usize>,
+}
+
+#[derive(serde::Serialize)]
+struct RecordArchive<R> {
+    schema_version: u32,
+    records: R,
+}
+
+struct RecordSize(usize);
+
+impl Write for RecordSize {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0 = self.0.saturating_add(bytes.len());
+        if self.0 > crate::record::MAX_RECORD_JSON_BYTES {
+            return Err(io::Error::other("record serialization exceeds 128 MiB"));
+        }
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +73,7 @@ pub enum LibraryError {
     Biblatex(ParseFailure),
     HayagrivaYaml(ParseFailure),
     Selector(String),
+    Record(RecordError),
 }
 
 impl fmt::Display for LibraryError {
@@ -58,6 +81,7 @@ impl fmt::Display for LibraryError {
         match self {
             Self::Biblatex(failure) | Self::HayagrivaYaml(failure) => failure.fmt(f),
             Self::Selector(message) => write!(f, "invalid selector: {message}"),
+            Self::Record(error) => error.fmt(f),
         }
     }
 }
@@ -70,21 +94,10 @@ pub enum RecoveryPolicy {
     Report,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EntryRecord {
-    pub key: String,
-    pub entry_type: String,
-    pub title: Option<String>,
-    pub date: Option<String>,
-    pub volume: Option<String>,
-    pub doi: Option<String>,
-    pub parents: Vec<EntryRecord>,
-}
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum EntryField {
     Key,
-    Type,
+    EntryType,
     Title,
     Date,
     Doi,
@@ -108,7 +121,7 @@ impl FromStr for EntryField {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "key" => Ok(Self::Key),
-            "entry_type" | "type" => Ok(Self::Type),
+            "entry_type" => Ok(Self::EntryType),
             "title" => Ok(Self::Title),
             "date" => Ok(Self::Date),
             "doi" => Ok(Self::Doi),
@@ -119,42 +132,119 @@ impl FromStr for EntryField {
 }
 
 impl EntryRecord {
-    pub fn field(&self, field: EntryField) -> Option<&str> {
+    pub fn field(&self, field: EntryField) -> Option<Cow<'_, str>> {
         match field {
-            EntryField::Key => Some(&self.key),
-            EntryField::Type => Some(&self.entry_type),
-            EntryField::Title => self.title.as_deref(),
-            EntryField::Date => self.date.as_deref(),
-            EntryField::Doi => self.doi.as_deref(),
-            EntryField::Volume => self.volume.as_deref(),
+            EntryField::Key => Some(Cow::Borrowed(&self.key)),
+            EntryField::EntryType => Some(Cow::Borrowed(&self.entry_type)),
+            EntryField::Title => self
+                .title
+                .as_ref()
+                .map(|title| Cow::Owned(title.plain_text())),
+            EntryField::Date => self.date.as_ref().map(|date| Cow::Owned(date.display())),
+            EntryField::Doi => self
+                .identifiers
+                .get("doi")
+                .map(|doi| Cow::Borrowed(doi.as_str())),
+            EntryField::Volume => self
+                .volume
+                .as_ref()
+                .or_else(|| {
+                    self.parents
+                        .first()
+                        .and_then(|parent| parent.volume.as_ref())
+                })
+                .map(|volume| Cow::Borrowed(volume.value())),
         }
     }
 }
 
 impl Library {
+    pub fn from_records(records: Vec<EntryRecord>) -> Result<Self, LibraryError> {
+        if records.len() > 100_000 {
+            return Err(LibraryError::Record(RecordError::new(
+                "records",
+                "record count exceeds 100000",
+            )));
+        }
+        let mut visited = 0;
+        for record in &records {
+            record
+                .validate_limits(0, &mut visited)
+                .map_err(LibraryError::Record)?;
+        }
+        serde_json::to_writer(
+            RecordSize(0),
+            &RecordArchive {
+                schema_version: 1,
+                records: &records,
+            },
+        )
+        .map_err(|error| LibraryError::Record(RecordError::new("records", error)))?;
+        let mut keys = std::collections::HashSet::new();
+        let mut engine = HayLibrary::new();
+        for record in &records {
+            if !keys.insert(record.key.clone()) {
+                return Err(LibraryError::Record(RecordError::new(
+                    &record.key,
+                    "duplicate entry key",
+                )));
+            }
+            engine.push(&record.to_engine().map_err(LibraryError::Record)?);
+        }
+        let index = records
+            .iter()
+            .enumerate()
+            .map(|(index, record)| (record.key.clone(), index))
+            .collect();
+        Ok(Self {
+            inner: engine,
+            diagnostics: Vec::new(),
+            keys: OnceLock::new(),
+            records,
+            index,
+        })
+    }
+
+    pub fn from_json(source: &str) -> Result<Self, LibraryError> {
+        Self::from_records(
+            crate::record::decode_records(source, true).map_err(LibraryError::Record)?,
+        )
+    }
+
+    pub fn from_records_json(source: &str) -> Result<Self, LibraryError> {
+        Self::from_records(
+            crate::record::decode_records(source, false).map_err(LibraryError::Record)?,
+        )
+    }
+
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(&RecordArchive {
+            schema_version: 1,
+            records: self.records(),
+        })
+        .expect("validated records serialize")
+    }
+
     pub fn parse_biblatex(source: &str, recovery: RecoveryPolicy) -> Result<Self, LibraryError> {
         parse_biblatex_library(source, recovery)
-            .map(Self::from_parsed)
             .map_err(LibraryError::Biblatex)
+            .and_then(Self::from_parsed)
     }
 
     pub fn parse_hayagriva_yaml(source: &str) -> Result<Self, LibraryError> {
         parse_hayagriva_yaml(source)
-            .map(Self::from_parsed)
             .map_err(LibraryError::HayagrivaYaml)
+            .and_then(Self::from_parsed)
     }
 
-    pub(crate) fn from_parsed(parsed: ParsedLibrary) -> Self {
-        Self {
-            inner: Arc::new(parsed.inner),
-            diagnostics: parsed.diagnostics,
-            keys: OnceLock::new(),
-            records: OnceLock::new(),
-        }
+    pub(crate) fn from_parsed(parsed: ParsedLibrary) -> Result<Self, LibraryError> {
+        let mut library = Self::from_records(parsed.records)?;
+        library.diagnostics = parsed.diagnostics;
+        Ok(library)
     }
 
     pub(crate) fn inner(&self) -> &HayLibrary {
-        self.inner.as_ref()
+        &self.inner
     }
 
     pub fn diagnostics(&self) -> &[Diagnostic] {
@@ -162,77 +252,47 @@ impl Library {
     }
 
     pub fn len(&self) -> usize {
-        self.inner.len()
+        self.records.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
+        self.records.is_empty()
     }
 
     pub fn contains_key(&self, key: &str) -> bool {
-        self.inner.get(key).is_some()
+        self.index.contains_key(key)
     }
 
     pub fn keys(&self) -> &[String] {
-        self.keys
-            .get_or_init(|| self.inner.keys().map(str::to_string).collect())
+        self.keys.get_or_init(|| {
+            self.records
+                .iter()
+                .map(|record| record.key.clone())
+                .collect()
+        })
     }
 
     pub fn records(&self) -> &[EntryRecord] {
-        &self.record_cache().records
+        &self.records
     }
 
     pub fn get_record(&self, key: &str) -> Option<&EntryRecord> {
-        let cache = self.record_cache();
-        cache.index.get(key).map(|index| &cache.records[*index])
+        self.index.get(key).map(|index| &self.records[*index])
     }
 
     pub fn select_records(&self, selector: &str) -> Result<Vec<EntryRecord>, LibraryError> {
         let selector =
             Selector::parse(selector).map_err(|err| LibraryError::Selector(err.to_string()))?;
         Ok(self
-            .inner
+            .inner()
             .iter()
             .filter(|entry| selector.matches(entry))
-            .map(entry_record)
+            .map(|entry| {
+                self.get_record(entry.key())
+                    .expect("prepared entries retain keys")
+                    .clone()
+            })
             .collect())
-    }
-
-    fn record_cache(&self) -> &RecordCache {
-        self.records
-            .get_or_init(|| RecordCache::from_library(&self.inner))
-    }
-}
-
-impl RecordCache {
-    fn from_library(library: &HayLibrary) -> Self {
-        let mut records = Vec::with_capacity(library.len());
-        let mut index = HashMap::with_capacity(library.len());
-
-        for entry in library.iter() {
-            let key = entry.key().to_string();
-            index.insert(key, records.len());
-            records.push(entry_record(entry));
-        }
-
-        Self { records, index }
-    }
-}
-
-pub(crate) fn entry_record(entry: &HayEntry) -> EntryRecord {
-    EntryRecord {
-        key: entry.key().to_string(),
-        entry_type: entry_type_name(entry.entry_type()).to_string(),
-        title: entry.title().map(ToString::to_string),
-        date: entry.date().map(ToString::to_string),
-        volume: entry
-            .volume()
-            .or_else(|| entry.parents().first().and_then(|parent| parent.volume()))
-            .map(|value| value.to_string()),
-        doi: entry
-            .serial_number()
-            .and_then(|serial| serial.0.get("doi").cloned()),
-        parents: entry.parents().iter().map(entry_record).collect(),
     }
 }
 
@@ -248,15 +308,15 @@ mod tests {
         )
         .unwrap();
 
-        let library = Library::from_parsed(parsed);
+        let library = Library::from_parsed(parsed).unwrap();
         let record = &library.records()[0];
 
         assert_eq!(
             [
-                record.field(EntryField::Key),
-                record.field(EntryField::Title),
-                record.field(EntryField::Doi),
-                record.field(EntryField::Volume),
+                record.field(EntryField::Key).as_deref(),
+                record.field(EntryField::Title).as_deref(),
+                record.field(EntryField::Doi).as_deref(),
+                record.field(EntryField::Volume).as_deref(),
             ],
             [Some("doe2024"), Some("Core"), Some("10.1/test"), None]
         );
@@ -296,15 +356,27 @@ mod recovery_contracts {
         );
         let library = Library::parse_biblatex(source, RecoveryPolicy::Report).unwrap();
         assert_eq!(
-            library.get_record("good").unwrap().title.as_deref(),
+            library
+                .get_record("good")
+                .unwrap()
+                .field(crate::EntryField::Title)
+                .as_deref(),
             Some("Correct title")
         );
         assert_eq!(
-            library.get_record("first").unwrap().title.as_deref(),
+            library
+                .get_record("first")
+                .unwrap()
+                .field(crate::EntryField::Title)
+                .as_deref(),
             Some("missing suffix")
         );
         assert_eq!(
-            library.get_record("second").unwrap().title.as_deref(),
+            library
+                .get_record("second")
+                .unwrap()
+                .field(crate::EntryField::Title)
+                .as_deref(),
             Some("absent")
         );
         let diagnostics = library.diagnostics();
@@ -393,7 +465,11 @@ mod recovery_contracts {
         for policy in [RecoveryPolicy::Error, RecoveryPolicy::Report] {
             let library = Library::parse_biblatex(source, policy).unwrap();
             assert_eq!(
-                library.get_record("a").unwrap().title.as_deref(),
+                library
+                    .get_record("a")
+                    .unwrap()
+                    .field(crate::EntryField::Title)
+                    .as_deref(),
                 Some("Coffee")
             );
             assert!(library.diagnostics().is_empty());
@@ -401,7 +477,11 @@ mod recovery_contracts {
         let tidy = crate::tidy_bibtex(source, crate::TidyOptions::default()).unwrap();
         let library = Library::parse_biblatex(&tidy.bibtex, RecoveryPolicy::Error).unwrap();
         assert_eq!(
-            library.get_record("a").unwrap().title.as_deref(),
+            library
+                .get_record("a")
+                .unwrap()
+                .field(crate::EntryField::Title)
+                .as_deref(),
             Some("Coffee")
         );
     }
@@ -418,7 +498,11 @@ mod recovery_contracts {
         let library = Library::parse_biblatex(source, RecoveryPolicy::Report).unwrap();
         assert_eq!(library.keys(), ["same", "other"]);
         assert_eq!(
-            library.get_record("same").unwrap().title.as_deref(),
+            library
+                .get_record("same")
+                .unwrap()
+                .field(crate::EntryField::Title)
+                .as_deref(),
             Some("First")
         );
         assert_eq!(
@@ -455,7 +539,11 @@ mod recovery_contracts {
         assert_eq!(report.diagnostics[0].code, "cyclic_abbreviation");
         let library = Library::parse_biblatex(source, RecoveryPolicy::Report).unwrap();
         assert_eq!(
-            library.get_record("good").unwrap().title.as_deref(),
+            library
+                .get_record("good")
+                .unwrap()
+                .field(crate::EntryField::Title)
+                .as_deref(),
             Some("Good")
         );
         assert_eq!(
@@ -469,11 +557,19 @@ mod recovery_contracts {
         let source = "@book{a,title={A},crossref={parent}}\n@book{b,title={B},crossref={parent}}\n@book{parent,year={2024}}";
         let library = Library::parse_biblatex(source, RecoveryPolicy::Error).unwrap();
         assert_eq!(
-            library.get_record("a").unwrap().date.as_deref(),
+            library
+                .get_record("a")
+                .unwrap()
+                .field(crate::EntryField::Date)
+                .as_deref(),
             Some("2024")
         );
         assert_eq!(
-            library.get_record("b").unwrap().date.as_deref(),
+            library
+                .get_record("b")
+                .unwrap()
+                .field(crate::EntryField::Date)
+                .as_deref(),
             Some("2024")
         );
     }
@@ -493,7 +589,11 @@ mod recovery_contracts {
         let source = format!("% {}\n@book{{a,title={{Visible}}}}", "{".repeat(100));
         let library = Library::parse_biblatex(&source, RecoveryPolicy::Error).unwrap();
         assert_eq!(
-            library.get_record("a").unwrap().title.as_deref(),
+            library
+                .get_record("a")
+                .unwrap()
+                .field(crate::EntryField::Title)
+                .as_deref(),
             Some("Visible")
         );
     }

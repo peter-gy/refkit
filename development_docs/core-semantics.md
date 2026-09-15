@@ -19,11 +19,23 @@ Cycle and expansion checks run before recursive upstream normalization. Source a
 
 ## Normalized Records
 
-`Library` caches owned keys and `EntryRecord` projections lazily. An `EntryRecord` contains its key, normalized entry type, common scalar fields, and recursive parents. Volume falls back to the first parent volume.
+`Library` owns complete immutable `EntryRecord` values and an index. It derives a private Hayagriva library from those records for rendering and selectors. Structured construction validates the complete record set before returning. Scalar projection flattens text and dates and falls back to the first parent volume, while complete records preserve own values, creator metadata, date ranges, protected/math text, and source-specific extensions.
 
-`EntryField` accepts `entry_type` and `type` as aliases. Use `entry_type` as the canonical record name and keep `type` as a boundary alias while it remains public.
+`EntryField` uses `entry_type` as the canonical type field. The JavaScript adapter spells it `entryType`. Version-one record snapshots use snake_case throughout. Serde and serde_json are pure implementation libraries for the owned record schema and bibliography interchange.
 
 Hayagriva selectors parse at runtime and match normalized entry structure. Adapters return top-level matched records and do not expose selector bindings.
+
+## Interchange
+
+The finite codec set accepts BibLaTeX, Hayagriva YAML, and CSL-JSON. Decode reports own a library and conversion issues. Encode reports own target text and issues. Conversion reports combine source/target identity, issues, and parser diagnostics. Loss refusal is atomic and leaves input libraries unchanged.
+
+Encoders decode their generated source and compare structured record values and nonredundant source extensions. Source annotations beginning with `@` describe provenance and are excluded from that comparison. Explicit issue rules cover known numeric, date, and source-type approximations. Keep parser diagnostics separate from conversion issues, including during recovery. The CSL codec uses owned records and never sends unvalidated date ranges to the engine's CSL-JSON rendering adapter.
+
+## Bibliography Validation
+
+`Library::validate` inspects complete records. `RawDocument::validate` parses the current rendered snapshot under the shared dependency and resource guards, then applies the pinned BibLaTeX field profile to effective inherited fields. Parser failures stay `ParseFailure` values. Validation reports have their own codes, severity, occurrence targets and available UTF-8 spans.
+
+Both operations leave data unchanged. Identifier syntax and checksum checks are deterministic and perform no resolution. Matching top-level identifiers produce review groups. Repeated embedded containers are excluded from those groups. Partial date ranges are reported as reversed only when their calendar bounds establish that ordering.
 
 ## Raw Syntax And Occurrences
 
@@ -37,18 +49,22 @@ The parser can recognize a complete `@...` block that begins later on a percent-
 
 ## Raw Edit Lifecycle
 
-`set_field_value` is the structural mutation boundary. It edits an existing field occurrence.
+`RawDocument::apply_patch` accepts snapshot-relative `BibEdit` operations and returns a new document, byte changes, occurrence mappings, and warnings. Raw snapshots and their handles are immutable.
 
-1. Resolve the document-local field ID.
-2. Validate the replacement against the original value mode.
-3. Store a replacement for the field-value span.
-4. Serialize unchanged entries from their original bytes.
-5. Apply changed value-span patches inside changed entry slices.
-6. Preserve every unrelated block.
+1. Validate occurrence targets, authored values and resource bounds.
+2. Reject conflicting operations on the same field, key, type or removed entry.
+3. Plan byte replacements and unambiguous reference rewrites using shared reference-key encoding.
+4. Apply nonoverlapping replacements while copying every unrelated byte.
+5. Parse the result and verify retained entry and field boundaries.
+6. Return old-to-new occurrence mappings and spans. Original handles retain the input snapshot.
 
-Bare values remain bare while safe. Complex bare replacements become braced. Editing a concatenated expression replaces the complete expression with one braced value. Invalid newlines, percent delimiters, trailing escapes, brace balance, or quote boundaries fail before mutation.
+Bare values remain bare while safe. Complex bare replacements become braced. Editing a concatenated expression replaces the complete expression with one braced value. New fields and entries use braced values. Invalid newlines, percent delimiters, trailing escapes, brace balance, or quote boundaries fail atomically. Explicit reference edits supply final values and are excluded from automatic rewrites.
 
 ## Tidy Pipeline
+
+Duplicate review and tidy share signature generation for DOI, key, abstract and citation rules. Review reports expose the signature and its members, including transitive candidate groups. Expression-level field conflicts are separate from matching evidence. Distinct valid canonical identifiers receive identifier-conflict classification.
+
+Merge planning keeps source-order membership and explicit retained-entry and field choices. Conflicts prevent producing a patch. Accepted plans copy complete value expressions, rewrite unambiguous references, reject cycles, and validate the generated patch through `RawDocument::apply_patch`. Planning leaves the source unchanged and introduces no second serializer. Patch expression mode validates one complete raw value, preserving macros, concatenations, percent-containing URLs and multiline braced values.
 
 `tidy_bibtex` performs these stages:
 
@@ -76,6 +92,10 @@ Core `Document` stores immutable library and style handles plus an optional loca
 Within one render call, citation order can affect numbering, position-sensitive formatting, disambiguation, subsequent-name rules, and the cited bibliography. A missing reference or invalid locator label fails the complete operation before output is returned.
 
 `CitationRequest` owns cite items and an optional note number. Single, ordered-list, and grouped render operations use the same driver semantics. A grouped request shares numbering, sorting, and disambiguation within the group. Independent Polars rows keep independent processor state.
+
+Each `Cite` has a `CitePurpose`: `Normal`, `Author`, `Year`, `Full`, or `Prose`. The core maps purposes to the renderer before processing the ordered requests. Text, HTML, and trees derive from that same render. The style catalog returns owned metadata sorted by canonical load name, with aliases and CSL identifiers.
+
+Style preparation accepts a dependent source with an explicitly supplied independent parent source. Both sources pass XML bounds before deserialization. The parent identifier must exactly match the child link, and the parent's macros pass the rendering-work limits. `PreparedStyle` retains child title and CSL identity alongside the prepared parent engine rules. Locale precedence is explicit document locale, child default, parent default, then engine fallback.
 
 `render_library_bibliography` renders every library entry. `Document::cited_bibliography` renders the entries named by its ordered requests.
 
