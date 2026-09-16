@@ -114,7 +114,7 @@ print(
 
 ## The Polars plugin will not load
 
-Confirm that the installed Python package and native wheel come from one `polars-refkit` release. In [Pyodide](/pyodide), which runs Python in the browser through WebAssembly, use the documented Python, PyEmscripten, and Polars compatibility tuple. PyEmscripten identifies the Python build platform used by those wheels.
+Confirm that the installed Python package and native wheel come from one `polars-refkit` release. The Polars adapter supports native CPython on Linux, macOS, and Windows. In [Pyodide](/pyodide), use `refkit` directly.
 
 Reinstall both the package and matching Polars version in a clean environment when the application binary interface changed.
 
@@ -132,4 +132,4 @@ Pip builds from the source distribution when no compatible wheel is available. I
 
 ## Pyodide cannot find a compatible wheel
 
-Use the compatibility set in [Run in Pyodide](/pyodide). A wheel built for another PyEmscripten platform or Polars plugin ABI cannot load in the current runtime.
+Use the compatibility set in [Run in Pyodide](/pyodide). A `refkit` wheel built for another PyEmscripten platform cannot load in the current runtime. `polars-refkit` does not provide Pyodide wheels.

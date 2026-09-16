@@ -58,6 +58,6 @@ The `refkit-core` [Rust](https://www.rust-lang.org/) library owns parsing, recov
 | Python | Paths, Python objects, exceptions, native module registration, and one-call helpers. |
 | JavaScript | Typed objects, [WebAssembly](https://webassembly.org/) initialization for the compiled core, and Node.js file helpers. |
 | [Polars](https://docs.pola.rs/), a DataFrame query engine | Expressions, broadcasting, column data types, plugin loading, and row failure mapping. |
-| [Pyodide](https://pyodide.org/), Python running in a browser | The Python interfaces packaged as wheels for its WebAssembly runtime. |
+| [Pyodide](https://pyodide.org/), Python running in a browser | The `refkit` Python API packaged as a wheel for its WebAssembly runtime. |
 
 Continue with [Choose a Bibliography Model](/concepts/bibliography-models) to choose between normalized data and raw source.

@@ -9,6 +9,7 @@ GitHub Actions builds and tests source, CPython distributions, and PyEmscripten 
 - Reuse `workflows/artifacts-refkit.yml` and `workflows/artifacts-polars-refkit.yml` from CI and publication. Keep build jobs separate from installed-artifact tests so failures identify the affected boundary.
 - Configure Rust path remapping before native compilation. Run the distribution contract before upload.
 - Resolve Pyodide toolchains from `.github/pyodide/runtime.json` and the pinned xbuild environment.
+- Build and test PyEmscripten wheels for `refkit` only. `polars-refkit` supports native CPython on Linux, macOS, and Windows, and its release artifact set excludes PyEmscripten.
 - Pin the Pyodide Rust compiler at the shared build floor. Keep Emscripten, ABI tags, and linker flags from the pinned xbuild environment, and verify the resulting wheels in Pyodide.
 - Keep workflows outside product semantics. Compose Make targets, build distributions, install them in clean environments, and report failures at the affected package boundary.
 - Publish `refkit` and `polars-refkit` after their own artifact tests, then join both packages at release completion.

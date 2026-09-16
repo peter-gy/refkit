@@ -8,6 +8,8 @@ description: Parse, inspect, render, format, broadcast, and diagnose bibliograph
 
 ## Install and register the namespace
 
+Use native CPython on Linux, macOS, or Windows. For Python in [Pyodide](/pyodide), use `refkit` directly.
+
 ```bash
 python -m pip install polars-refkit
 ```

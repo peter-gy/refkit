@@ -25,9 +25,6 @@ BUILD_LOCK_PATH = ROOT / "uv.lock"
 RUNTIME = json.loads(RUNTIME_PATH.read_text())
 PYTHON_VERSION = RUNTIME["python-version"]
 XBUILDENV_VERSION = RUNTIME["xbuildenv-version"]
-POLARS_WHEEL_TAG = RUNTIME["polars-wheel-tag"]
-POLARS_PLUGIN_ABI = RUNTIME["polars-plugin-abi"]
-POLARS_CARGO_LOCK_PATH = ROOT / "packages" / "polars-refkit" / "rust" / "Cargo.lock"
 HOST_WHEEL_TAGS = ("macosx_", "manylinux_", "musllinux_", "win_")
 
 
@@ -76,15 +73,6 @@ def _packages(path: Path) -> dict[str, dict[str, Any]]:
     return packages
 
 
-def _cargo_versions(path: Path) -> dict[str, set[str]]:
-    packages = tomllib.loads(path.read_text())["package"]
-    names = ("polars", "polars-core", "pyo3", "pyo3-polars")
-    return {
-        name: {package["version"] for package in packages if package["name"] == name}
-        for name in names
-    }
-
-
 def validate_lock(path: Path) -> list[str]:
     try:
         packages = _packages(path)
@@ -104,23 +92,6 @@ def validate_lock(path: Path) -> list[str]:
         if name in packages and packages[name]["version"] != version:
             errors.append(f"{name} must resolve to {version}")
 
-    expected_python_polars = POLARS_PLUGIN_ABI["python-polars"]
-    if requirements.get("polars") != expected_python_polars:
-        errors.append(
-            f"Pyodide Polars requirement must be {expected_python_polars} for the plugin ABI"
-        )
-
-    cargo_versions = _cargo_versions(POLARS_CARGO_LOCK_PATH)
-    cargo_contract = {
-        "polars": POLARS_PLUGIN_ABI["rust-polars"],
-        "polars-core": POLARS_PLUGIN_ABI["rust-polars"],
-        "pyo3": POLARS_PLUGIN_ABI["pyo3"],
-        "pyo3-polars": POLARS_PLUGIN_ABI["pyo3-polars"],
-    }
-    for name, version in cargo_contract.items():
-        if cargo_versions[name] != {version}:
-            errors.append(f"{name} must resolve to {version} for the Polars plugin ABI")
-
     workspace = tomllib.loads((ROOT / "pyproject.toml").read_text())
     build_requirement = (
         f"pyodide-build>={RUNTIME['pyodide-build-version']}; python_version >= '3.12'"
@@ -134,12 +105,6 @@ def validate_lock(path: Path) -> list[str]:
     }
     if build_versions != {RUNTIME["pyodide-build-version"]}:
         errors.append(f"uv.lock must resolve pyodide-build to {RUNTIME['pyodide-build-version']}")
-
-    polars_wheels = packages.get("polars", {}).get("wheels", [])
-    if len(polars_wheels) != 1 or POLARS_WHEEL_TAG not in polars_wheels[0]["name"]:
-        errors.append(f"polars must resolve to one {POLARS_WHEEL_TAG} wheel")
-    elif f"/pyodide/v{XBUILDENV_VERSION}/" not in polars_wheels[0]["url"]:
-        errors.append(f"polars must come from Pyodide {XBUILDENV_VERSION}")
 
     for package in packages.values():
         for wheel in package.get("wheels", []):
@@ -166,9 +131,7 @@ def validate_lock(path: Path) -> list[str]:
             ):
                 errors.append(f"{name} must come from Pyodide {XBUILDENV_VERSION}")
             expected_prefix = f"{package['name'].replace('-', '_')}-{package['version']}-"
-            if not name.startswith(expected_prefix) or not name.endswith(
-                ("-py3-none-any.whl", f"-{POLARS_WHEEL_TAG}.whl")
-            ):
+            if not name.startswith(expected_prefix) or not name.endswith("-py3-none-any.whl"):
                 errors.append(f"incompatible wheel identity or runtime tag: {name}")
     return errors
 

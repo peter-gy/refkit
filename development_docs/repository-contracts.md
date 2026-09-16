@@ -12,7 +12,7 @@ RefKit keeps cross-file invariants executable. Each contract has one source-leve
 | Documentation site | `make docs-site-check` | Locked pnpm install, TypeScript, root and Pages-base VitePress output, routes, public assets, social metadata, raw Markdown, llms indexes, local links, and heading fragments. |
 | JavaScript package | `make js-check` | Source freshness, npm exports, installed TypeScript consumer, Python parity, automatic memory lifetime, and browser and worker execution. |
 | Release metadata | `make release-check` | Lockstep versions, exact native dependency pins, repository metadata, and release tag grammar. |
-| Pyodide runtime | `make pyodide-lock-check` | Runtime requirements, resolved wheels, hashes, and the tested Python-to-Rust Polars plugin ABI mapping. |
+| Pyodide runtime | `make pyodide-lock-check` | RefKit runtime requirements, resolved wheels, hashes, and the shared Rust compiler floor. |
 | Distribution archive | `scripts/distribution_contract.py <archives>` | Bytecode exclusion, developer-doc exclusion, builder-path removal, and exact package-specific Agent Plugin resources. |
 
 Contract diagnostics should name the offending source or archive member and return a nonzero exit status. Keep validation deterministic and free from network access. Test a new failure mode beside the script before adding it to `make check` or CI.

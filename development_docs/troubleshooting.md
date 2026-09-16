@@ -28,7 +28,7 @@ The `refkit` composition root compares package metadata with the native extensio
 
 ## Pyodide Rejects A Wheel
 
-Check `.github/pyodide/runtime.json` first. It records the Python version, xbuild environment, PyEmscripten platform, Rust target, and tested Polars plugin family.
+Check `.github/pyodide/runtime.json` first. It records the Python version, xbuild environment, build-tool version, and Rust compiler. The xbuild environment supplies the PyEmscripten platform and linker flags. Pyodide support applies to `refkit`, while `polars-refkit` requires native CPython.
 
 Run:
 

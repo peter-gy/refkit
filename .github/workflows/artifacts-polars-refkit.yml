@@ -62,64 +62,6 @@ jobs:
           path: packages/polars-refkit/dist/*
           retention-days: 7
           if-no-files-found: error
-  build-wasm:
-    name: polars-refkit / Build PyEmscripten wheel (${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      SCCACHE_GHA_ENABLED: 'true'
-      RUSTC_WRAPPER: sccache
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - python-version: '3.14'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - name: Set up uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
-        with:
-          python-version: ${{ matrix.python-version }}
-          enable-cache: false
-          cache-dependency-glob: uv.lock
-      - name: Set up Pyodide
-        id: pyodide
-        uses: ./.github/actions/setup-pyodide
-      - name: Set up sccache
-        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba
-        with:
-          version: v0.16.0
-      - name: Build wheel
-        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b
-        env:
-          CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS: ${{ steps.pyodide.outputs.rustflags }}
-          HOST_CC: cc
-          MATURIN_PYEMSCRIPTEN_PLATFORM_VERSION: ${{ steps.pyodide.outputs.pyodide-abi-version }}
-        with:
-          working-directory: packages/polars-refkit
-          target: wasm32-unknown-emscripten
-          args: --locked --release --out dist --interpreter ${{ matrix.python-version }}
-          rust-toolchain: ${{ steps.pyodide.outputs.rust-toolchain }}
-          maturin-version: v1.15.0
-      - name: Package Agent Plugin
-        shell: bash
-        run: uv run --locked --only-group build agent-plugins attach-wheel packages/polars-refkit/dist/*.whl --project packages/polars-refkit
-      - name: Check metadata
-        run: |
-          uv run --locked --only-group build twine check --strict packages/polars-refkit/dist/*
-          python scripts/distribution_contract.py packages/polars-refkit/dist/*
-
-          python scripts/artifact_manifest.py record packages/polars-refkit/dist --package polars-refkit --artifact "polars_refkit_pyemscripten_${{ matrix.python-version }}" --rust-toolchain "${{ steps.pyodide.outputs.rust-toolchain }}"
-      - name: Upload wheel
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: polars_refkit_pyemscripten_${{ matrix.python-version }}
-          path: packages/polars-refkit/dist/*
-          retention-days: 7
-          if-no-files-found: error
   build-sdist:
     name: polars-refkit / Build sdist
     runs-on: ubuntu-latest
@@ -207,44 +149,6 @@ jobs:
           uv run --no-project --python "${{ matrix.python-version }}" --with "${{ matrix.polars }}" --with "${wheels[0]}" --with "${support[0]}" python -m refkit_tests.smoke_polars_refkit
           uv run --no-project --python "${{ matrix.python-version }}" --with "${{ matrix.polars }}" --with "${wheels[0]}" --with "${support[0]}" python -m pytest -q --rootdir "$PWD" -o addopts= -p no:cacheprovider --pyargs refkit_tests.test_polars_refkit_runtime
     needs: build-cpython
-  test-pyemscripten:
-    name: polars-refkit / Test PyEmscripten install
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - name: Set up uv
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
-        with:
-          python-version: '3.14'
-          enable-cache: false
-          cache-dependency-glob: uv.lock
-      - name: Download polars-refkit wheel
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: polars_refkit_pyemscripten_3.14
-          path: dist
-      - name: Create Pyodide virtual environment
-        uses: ./.github/actions/create-pyodide-venv
-      - name: Download verification support
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: refkit-tests
-          path: support
-      - name: Test installed package
-        run: |
-          workspace="$(pwd -P)"
-          source .venv-pyodide/bin/activate
-          python -m pip install -r .github/pyodide/pylock.314.toml
-          python -m pip install --no-deps --no-index "$workspace"/support/refkit_tests-*.whl "$workspace"/dist/polars_refkit-*.whl
-          cd "$RUNNER_TEMP"
-          python -m refkit_tests.smoke_polars_refkit
-          python -m pytest -q --rootdir "$PWD" -o addopts= -p no:cacheprovider --pyargs refkit_tests.test_polars_refkit_runtime
-        shell: bash
-    needs: build-wasm
   test-sdist:
     name: polars-refkit / Test sdist
     needs: build-sdist
@@ -286,7 +190,6 @@ jobs:
     name: polars-refkit / Check complete artifact set
     needs:
       - build-cpython
-      - build-wasm
       - build-sdist
     runs-on: ubuntu-latest
     timeout-minutes: 10

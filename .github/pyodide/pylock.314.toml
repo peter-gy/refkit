@@ -46,17 +46,6 @@ url = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/pluggy-1.6.0-py3-none-any.
 sha256 = "8358dcb4259589a6dbb54b42d0c437801bac4c69e843e617e3b529e9b7926fda"
 
 [[packages]]
-name = "polars"
-version = "1.33.1"
-
-[[packages.wheels]]
-name = "polars-1.33.1-cp314-cp314-pyemscripten_2026_0_wasm32.whl"
-url = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/polars-1.33.1-cp314-cp314-pyemscripten_2026_0_wasm32.whl"
-
-[packages.wheels.hashes]
-sha256 = "3eefe347ffa293521fe54b25b4bd89baea72017eb0738c23dec9028643f66b1b"
-
-[[packages]]
 name = "pygments"
 version = "2.21.0"
 

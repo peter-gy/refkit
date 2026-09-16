@@ -10,7 +10,7 @@ A wheel is an installable Python archive. A source distribution, or sdist, conta
 | --- | --- | --- |
 | `refkit` | sdist, CPython ABI3 wheels, PyEmscripten wheel | Provides `refkit._native`, the public Python API, and its version-matched Agent Plugin. |
 | `refkit-js` | npm tarball | Provides typed ES modules and one WebAssembly module for Node.js and browsers. |
-| `polars-refkit` | sdist, CPython wheels, PyEmscripten wheel | Requires a compatible Polars runtime and provides `polars_refkit._internal`. |
+| `polars-refkit` | sdist, CPython ABI3 wheels | Requires a compatible native Polars runtime and provides `polars_refkit._internal`. |
 
 Build local CPython artifacts with:
 
@@ -89,29 +89,28 @@ for `refkit-js`. Publication requires every JavaScript artifact job to pass.
 
 ## PyEmscripten Builds
 
-[Pyodide](https://pyodide.org/) runs Python compiled through Emscripten in WebAssembly hosts. A PyEmscripten wheel contains a native Python extension built for that target. The xbuild environment pins the cross-build compiler, runtime application binary interface, and flags used to create those wheels.
+[Pyodide](https://pyodide.org/) runs Python compiled through Emscripten in WebAssembly hosts. A PyEmscripten wheel contains a native Python extension built for that target. The xbuild environment pins the Emscripten SDK, runtime application binary interface, and flags used to create those wheels.
 
-The runtime source is `.github/pyodide/runtime.json`. The current contract targets Python 3.14 and records the xbuild environment, Polars wheel tag, and tested Polars plugin application binary interface family. `.github/actions/setup-pyodide` reads the corresponding Rust toolchain, Emscripten version, Pyodide ABI, and Rust flags from the pinned xbuild environment.
+The runtime source is `.github/pyodide/runtime.json`. RefKit targets Python 3.14 and records the xbuild environment, build-tool version, and shared Rust compiler floor. `.github/actions/setup-pyodide` selects that Rust compiler and reads the Emscripten version, Pyodide ABI, and Rust flags from the pinned xbuild environment. The Polars adapter supports native CPython only.
 
 The essential build inputs are:
 
 ```bash
-pyodide config get rust_toolchain
 pyodide config get emscripten_version
 pyodide config get pyodide_abi_version
 pyodide config get rustflags
 ```
 
-Maturin receives the Python version, `wasm32-unknown-emscripten` target, PyEmscripten platform version, and Cargo Rust flags from those values. The Polars plugin ABI is a cross-file contract: Python Polars is pinned in `.github/pyodide/requirements.in`, while Rust Polars, PyO3, and `pyo3-polars` are pinned in `packages/polars-refkit/rust`. `runtime.json` records the tested mapping and `make pyodide-lock-check` validates both sides.
+Maturin receives the Python version and Rust compiler from `runtime.json`, the `wasm32-unknown-emscripten` target, and the PyEmscripten platform version and Cargo Rust flags from the xbuild environment.
 
-`make pyodide-lock` regenerates `.github/pyodide/pylock.314.toml` from `requirements.in` and the configured runtime. The check mode validates exact requirements, wheel hashes, source hosts, and the expected Polars wheel tag.
+`make pyodide-lock` regenerates `.github/pyodide/pylock.314.toml` from `requirements.in` and the configured runtime. The check mode validates exact requirements, pure-Python dependency wheels, hashes, source hosts, and the shared Rust compiler floor.
 
 ## Installed-Artifact Tests
 
 Package artifact workflows consume built artifacts through clean environments:
 
 - `artifacts-refkit.yml` builds and exercises `refkit` wheels and sdists on CPython and Pyodide.
-- `artifacts-polars-refkit.yml` builds the plugin and tests compatible Polars versions on CPython and Pyodide.
+- `artifacts-polars-refkit.yml` builds the plugin and tests compatible Polars versions on native CPython.
 
 `test-support.yml` builds the internal `refkit-tests` wheel once per CI or tag run. Both package artifact workflows install it alongside candidate distributions. Shared probes and runtime tests live in `packages/refkit-tests/src/refkit_tests`. They run outside the checkout through `python -m refkit_tests.smoke_refkit` or `python -m refkit_tests.smoke_polars_refkit`, followed by their package-specific runtime tests.
 
@@ -121,7 +120,7 @@ The Pyodide lane creates a virtual environment from the pinned xbuild environmen
 
 Each build records a manifest with the source revision, declared build bounds, Python and uv versions, the selected Rust compiler, archive filenames, and SHA-256 hashes. Publication verifies the merged package artifact set before uploading it. Isolated builds resolve tools within the declared bounds.
 
-Each artifact workflow also validates its complete archive set on Linux. This checks Windows, macOS, Linux, and Pyodide resources against the same source bytes before the workflow succeeds. `.gitattributes` fixes text checkout line endings to LF on every operating system.
+Each artifact workflow also validates its complete archive set on Linux. Both packages require Windows, macOS, Linux, and sdist archives. RefKit additionally requires its PyEmscripten wheel. Packaged resources must match the source bytes before the workflow succeeds. `.gitattributes` fixes text checkout line endings to LF on every operating system.
 
 Native wheel jobs cover Linux, macOS, and Windows in both PR and release runs. Wheels rebuilt from sdists execute the same installed behavior probes as direct wheels.
 
@@ -130,7 +129,7 @@ Native wheel jobs cover Linux, macOS, and Windows in both PR and release runs. W
 `.github/workflows/publish.yml` validates the tag, then allows source checks and package artifact builds to run in parallel. It performs these stages:
 
 1. Build and test the `refkit` sdist, CPython wheels, and PyEmscripten wheel.
-2. Build and test the `polars-refkit` sdist, CPython wheels, and PyEmscripten wheel.
+2. Build and test the `polars-refkit` sdist and CPython wheels.
 3. Build and test the `refkit-js` npm tarball in Node.js and browsers.
 4. Publish each validated Python distribution and the npm package.
 5. Reuse matching benchmark evidence or run the shared cross-platform measurement workflow.

@@ -59,6 +59,6 @@ Rendering builders choose a known plugin and dtype from `output`. Formatting bui
 
 ## Pyodide Boundary
 
-PyEmscripten wheels reuse the Python composition and Polars adapter surfaces. Shared runtime tests and probes in `packages/refkit-tests/src/refkit_tests` establish installed imports, parsing, rendering, raw editing, formatting, Polars callbacks, and row failures on CPython and the pinned Pyodide xbuild environment. CI installs the support wheel alongside each candidate package and runs it outside the checkout.
+RefKit's PyEmscripten wheels expose the Python API in Pyodide. Shared runtime tests and probes in `packages/refkit-tests/src/refkit_tests` establish installed imports, parsing, rendering, raw editing, and formatting on CPython and the pinned Pyodide xbuild environment. CI installs the support wheel alongside the candidate package and runs it outside the checkout.
 
-Keep the Python Polars package and Rust plugin application binary interface family aligned through `.github/pyodide/runtime.json` and `make pyodide-lock-check`.
+The Polars adapter supports native CPython on Linux, macOS, and Windows. Its plugin loading, callbacks, and row failures are verified through native installed-wheel tests.

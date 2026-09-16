@@ -57,7 +57,9 @@ import polars_refkit.agent
 help(polars_refkit.agent)
 ```
 
-[Agent integration](https://peter-gy.github.io/refkit/reference/agent-docs) covers discovery. [Data shapes](https://peter-gy.github.io/refkit/reference/data-shapes) defines reports and [Pyodide](https://peter-gy.github.io/refkit/pyodide) records the tested browser runtime.
+[Agent integration](https://peter-gy.github.io/refkit/reference/agent-docs) covers discovery. [Data shapes](https://peter-gy.github.io/refkit/reference/data-shapes) defines reports.
+
+`polars-refkit` supports native CPython on Linux, macOS, and Windows. For Python in [Pyodide](https://peter-gy.github.io/refkit/pyodide), use `refkit` directly. The Polars adapter does not support Pyodide.
 
 RefKit is alpha software. Public APIs may change before 1.0.
 

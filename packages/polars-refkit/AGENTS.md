@@ -16,4 +16,4 @@
 
 Rebuild with `make polars-refkit-develop` from the repository root so the native plugin and Agent Plugin marker come from the same backend. Run `make typecheck test rust` from the repository root.
 
-Use the shared Rust build floor and lint policy. The `abi3` feature selects Python 3.10 stable-ABI support, and Maturin selects extension linking. Verify every plugin ABI-family upgrade through installed CPython and Pyodide runtimes.
+Use the shared Rust build floor and lint policy. The `abi3` feature selects Python 3.10 stable-ABI support, and Maturin selects extension linking. Verify every plugin ABI-family upgrade through installed CPython runtimes on Linux, macOS, and Windows. The adapter does not support Pyodide. RefKit's Python adapter owns PyEmscripten support.
