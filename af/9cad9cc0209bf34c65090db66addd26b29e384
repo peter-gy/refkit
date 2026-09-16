@@ -1,0 +1,55 @@
+.github/pyodide/runtime.json
+  s_93f4d1359a0be2::t_856c9120979df0 5
+development_docs/repository-contracts.md
+  s_93f4d1359a0be2::t_c5da11a87a7143 15
+scripts/pyodide_lock.py
+  s_93f4d1359a0be2::t_856c9120979df0 134
+docs/concepts/how-refkit-works.md
+  s_93f4d1359a0be2::t_c5da11a87a7143 61
+docs/guides/polars.md
+  s_93f4d1359a0be2::t_ebafb522bacf4d 11-12
+scripts/tests/test_artifact_manifest.py
+  s_93f4d1359a0be2::t_610c9ddb8f52f3 13,21-23,25,30-31,46,49-68
+  s_93f4d1359a0be2::t_3c13d6b376029b 70-72
+docs/pyodide.md
+  s_93f4d1359a0be2::t_c5da11a87a7143 2,9-10
+  s_93f4d1359a0be2::t_60421f98ea5f68 19
+docs/troubleshooting.md
+  s_93f4d1359a0be2::t_c5da11a87a7143 117,135
+development_docs/troubleshooting.md
+  s_93f4d1359a0be2::t_c5da11a87a7143 31
+docs/why-refkit.md
+  s_93f4d1359a0be2::t_c5da11a87a7143 38
+packages/polars-refkit/AGENTS.md
+  s_93f4d1359a0be2::t_c5da11a87a7143 19
+.github/AGENTS.md
+  s_93f4d1359a0be2::t_c5da11a87a7143 12
+development_docs/packaging-and-release.md
+  s_93f4d1359a0be2::t_2a164d0a719fe4 13,94,104,106,113,123,132
+  s_93f4d1359a0be2::t_60421f98ea5f68 92
+packages/polars-refkit/README.md
+  s_93f4d1359a0be2::t_c5da11a87a7143 60-62
+scripts/tests/test_pyodide_lock.py
+  s_93f4d1359a0be2::t_610c9ddb8f52f3 21,24,30,33,38,43
+development_docs/adapters.md
+  s_93f4d1359a0be2::t_c5da11a87a7143 62,64
+scripts/artifact_manifest.py
+  s_93f4d1359a0be2::t_3c13d6b376029b 83
+  s_93f4d1359a0be2::t_856c9120979df0 74-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "af9cad9cc0209bf34c65090db66addd26b29e384",
+  "prompts": {},
+  "sessions": {
+    "s_93f4d1359a0be2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0a4d8-3070-7811-a991-7a9913f580e6",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
