@@ -1,6 +1,6 @@
 [package]
 name = "refkit-js-native"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.95"
 license = "Apache-2.0"
@@ -12,7 +12,7 @@ include = ["/Cargo.toml", "/src"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-refkit-core = { version = "0.3.0", path = "../../../crates/refkit-core" }
+refkit-core = { version = "0.4.0", path = "../../../crates/refkit-core" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 wasm-bindgen = "=0.2.126"

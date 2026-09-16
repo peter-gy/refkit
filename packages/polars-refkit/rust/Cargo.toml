@@ -1,6 +1,6 @@
 [package]
 name = "polars_refkit"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.95"
 license = "Apache-2.0"
@@ -27,7 +27,7 @@ polars = { version = "=0.55.2", default-features = false }
 polars-core = { version = "=0.55.2", default-features = false, features = ["dtype-array", "dtype-struct"] }
 pyo3 = "0.29.0"
 pyo3-polars = { version = "=0.28.0", features = ["derive"] }
-refkit-core = { version = "0.3.0", path = "../../../crates/refkit-core" }
+refkit-core = { version = "0.4.0", path = "../../../crates/refkit-core" }
 serde = { version = "1.0.228", features = ["derive"] }
 
 [patch.crates-io]
