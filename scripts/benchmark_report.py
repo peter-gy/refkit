@@ -25,7 +25,7 @@ def assessment(row: dict[str, Any]) -> str:
 
 
 def validate(report: dict[str, Any]) -> None:
-    if report["schema"] != 1 or report["threshold"] != THRESHOLD:
+    if report["schema"] != 2 or report["threshold"] != THRESHOLD:
         raise ValueError("unsupported CI benchmark schema or threshold")
     for key in ("baseline_sha", "candidate_sha"):
         value = report[key]
@@ -45,9 +45,12 @@ def validate(report: dict[str, Any]) -> None:
             raise ValueError("invalid platform status")
         if platform["status"] != "complete":
             continue
-        rows = platform["comparison"]["rows"]
+        mode = platform["mode"]
+        if mode not in {"comparison", "absolute"}:
+            raise ValueError("invalid measurement mode")
+        rows = platform["comparison" if mode == "comparison" else "measurement"]["rows"]
         if not rows or len(rows) > 100:
-            raise ValueError("expected 1 to 100 comparison rows")
+            raise ValueError("expected 1 to 100 benchmark rows")
         names = set()
         for row in rows:
             case = row["case"]
@@ -59,10 +62,25 @@ def validate(report: dict[str, Any]) -> None:
             ):
                 raise ValueError("invalid or duplicate benchmark case")
             names.add(case)
-            for key in ("baseline_seconds", "candidate_seconds", "candidate_over_baseline"):
+            fields = (
+                ("baseline_seconds", "candidate_seconds", "candidate_over_baseline")
+                if mode == "comparison"
+                else ("seconds",)
+            )
+            for key in fields:
                 number = row[key]
                 if type(number) not in (int, float) or not math.isfinite(number) or number <= 0:
                     raise ValueError(f"invalid {key}")
+            if mode == "absolute":
+                if type(row["workers"]) is not int or row["workers"] < 5:
+                    raise ValueError("measurement requires at least five workers")
+                if any(
+                    key.startswith("baseline_")
+                    or key in {"candidate_over_baseline", "ratio_interval_95"}
+                    for key in row
+                ):
+                    raise ValueError("absolute measurements cannot contain comparisons")
+                continue
             interval = row["ratio_interval_95"]
             if (
                 not isinstance(interval, (list, tuple))
@@ -85,8 +103,12 @@ def validate(report: dict[str, Any]) -> None:
 
 def validate_evidence(report: dict[str, Any], read: Callable[[str], bytes]) -> None:
     for name in PLATFORMS:
-        expected = {row["case"] for row in report["platforms"][name]["comparison"]["rows"]}
-        for revision in ("baseline", "candidate"):
+        platform = report["platforms"][name]
+        expected = {row["case"] for row in candidate_rows(platform)}
+        revisions = (
+            ("baseline", "candidate") if platform["mode"] == "comparison" else ("candidate",)
+        )
+        for revision in revisions:
             prefix = f"{name}/{revision}"
             manifest = json.loads(read(f"{prefix}/manifest.json"))
             if (
@@ -97,6 +119,33 @@ def validate_evidence(report: dict[str, Any], read: Callable[[str], bytes]) -> N
                 or any(row["status"] != "ok" for row in manifest["checks"])
             ):
                 raise ValueError(f"{prefix}: incomplete or inconsistent raw benchmark evidence")
+
+
+def candidate_rows(platform: dict[str, Any]) -> list[dict[str, Any]]:
+    if platform["mode"] == "absolute":
+        return platform["measurement"]["rows"]
+    return [
+        {
+            "case": row["case"],
+            "seconds": row["candidate_seconds"],
+            "workers": row["candidate_workers"],
+        }
+        for row in platform["comparison"]["rows"]
+    ]
+
+
+def absolute_table(report: dict[str, Any]) -> list[str]:
+    lines = ["| Platform | Case | Elapsed (ms) | Workers |", "| --- | --- | ---: | ---: |"]
+    for name in PLATFORMS:
+        platform = report["platforms"][name]
+        if platform["status"] != "complete":
+            lines.append(f"| {name} | Measurement failed | | |")
+            continue
+        lines.extend(
+            f"| {name} | `{row['case']}` | {row['seconds'] * 1000:.4g} | {row['workers']} |"
+            for row in candidate_rows(platform)
+        )
+    return lines
 
 
 def markdown(report: dict[str, Any]) -> str:
@@ -112,6 +161,24 @@ def markdown(report: dict[str, Any]) -> str:
     request = report.get("request", {})
     if request.get("reused") and not request.get("comparison_reused"):
         return reused_markdown(report)
+    if any(platform.get("mode") == "absolute" for platform in report["platforms"].values()):
+        return (
+            "\n".join(
+                [
+                    "## Benchmark results",
+                    "",
+                    f"Candidate `{report['candidate_sha'][:12]}`. "
+                    f"Requested base `{report['baseline_sha'][:12]}`.",
+                    "",
+                    "Benchmark API versions differ. "
+                    "Candidate release-build timings establish a new baseline.",
+                    "Elapsed time per complete operation. Cross-version ratios are unavailable.",
+                    "",
+                    *absolute_table(report),
+                ]
+            )
+            + "\n"
+        )
     lines = [
         "## Benchmark results",
         "",
@@ -187,15 +254,8 @@ def reused_markdown(report: dict[str, Any]) -> str:
         if request["unchanged"]
         else "Saved absolute timings. This commit transition requires a fresh comparison.",
         "",
-        "| Platform | Case | Elapsed (ms) | Workers |",
-        "| --- | --- | ---: | ---: |",
+        *absolute_table(report),
     ]
-    for name in PLATFORMS:
-        lines.extend(
-            f"| {name} | `{row['case']}` | {row['candidate_seconds'] * 1000:.4g} "
-            f"| {row['candidate_workers']} |"
-            for row in report["platforms"][name]["comparison"]["rows"]
-        )
     return "\n".join(lines) + "\n"
 
 
@@ -210,7 +270,7 @@ def consolidate(directory: Path, baseline: str, candidate: str) -> dict[str, Any
             platform = {"status": "failed"}
         platforms[name] = platform
     report = {
-        "schema": 1,
+        "schema": 2,
         "threshold": THRESHOLD,
         "baseline_sha": baseline,
         "candidate_sha": candidate,
@@ -252,6 +312,7 @@ def main() -> int:
         "unchanged": bool(fingerprint) and fingerprint == os.environ.get("BASELINE_INPUTS_SHA256"),
         "source_run_id": reused or os.environ.get("GITHUB_RUN_ID"),
         "comparison_reused": bool(reused)
+        and all(item.get("mode") == "comparison" for item in report["platforms"].values())
         and bool(fingerprint)
         and report.get("baseline_inputs_sha256") == os.environ.get("BASELINE_INPUTS_SHA256")
         and fingerprint != os.environ.get("BASELINE_INPUTS_SHA256"),

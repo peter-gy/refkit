@@ -53,6 +53,7 @@ def test_polars_refkit_expressions_parse_and_render_bibtex_rows() -> None:
 
     result = frame.select(
         citation=prk.cite("bibtex", "key", style="apa"),
+        namespace_citation=prk.RefkitExprNamespace(pl.col("bibtex")).cite("key", style="apa"),
         bibliography=prk.full_bibliography("bibtex", style="apa", output="html"),
         count=prk.entry_count("bibtex"),
         keys=prk.keys("bibtex"),
@@ -60,6 +61,7 @@ def test_polars_refkit_expressions_parse_and_render_bibtex_rows() -> None:
 
     row = result[0]
     assert "Doe" in row["citation"]
+    assert row["namespace_citation"] == row["citation"]
     assert "Reference Work" in row["bibliography"]
     assert row["count"] == 1
     assert row["keys"] == ["doe2024"]
@@ -126,6 +128,7 @@ def test_namespace_parse_operations_match_function_api() -> None:
     frame = pl.DataFrame({"bibtex": [BIBTEX, "@broken{missing", None]})
     namespace = prk.RefkitExprNamespace(pl.col("bibtex"))
     functions = frame.select(
+        count=prk.entry_count("bibtex"),
         keys=prk.keys("bibtex"),
         entries=prk.entries("bibtex", fields=("key", "title")),
         report=prk.parse_report("bibtex"),
@@ -134,6 +137,7 @@ def test_namespace_parse_operations_match_function_api() -> None:
         diagnostics=prk.diagnostics("bibtex"),
     )
     methods = frame.select(
+        count=namespace.entry_count(),
         keys=namespace.keys(),
         entries=namespace.entries(fields=("key", "title")),
         report=namespace.parse_report(),
@@ -738,6 +742,12 @@ def test_render_reports_distinguish_row_failures_and_missing_inputs() -> None:
         }
     )
     rows = frame.select(prk.render_report("bibtex", "keys", grouped=True)).to_series().to_list()
+    namespace_rows = (
+        frame.select(prk.RefkitExprNamespace(pl.col("bibtex")).render_report("keys", grouped=True))
+        .to_series()
+        .to_list()
+    )
+    assert namespace_rows == rows
     assert rows[0]["ok"] is True
     assert rows[0]["citations"] == [{"text": "(Doe, 2024)", "html": "(Doe, 2024)"}]
     assert rows[1]["error_code"] == "parse_error"

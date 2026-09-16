@@ -1,8 +1,12 @@
+//! Citation ordering, text/HTML equivalence, and rendered-tree metadata.
+
+#![cfg(test)]
+
 use std::sync::Arc;
 
 use refkit_core::{
-    BibliographyLayout, CitationRequest, Cite, Document, DocumentError, FontStyle, Library,
-    PreparedStyle, RecoveryPolicy, RenderedMeta, RenderedNode, prepare_style_from_xml,
+    BibliographyLayout, CitationRequest, Cite, CitePurpose, Document, DocumentError, FontStyle,
+    Library, PreparedStyle, RecoveryPolicy, RenderedMeta, RenderedNode, prepare_style_from_xml,
     render_library_citation, render_library_citation_each, render_library_citation_group,
 };
 
@@ -11,7 +15,7 @@ fn style(citation: &str, bibliography: &str, class: &str) -> Arc<PreparedStyle> 
         r#"<style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" class="{class}">
         <info><title>Render contract</title><id>https://example.com/render</id><updated>2026-01-01T00:00:00Z</updated></info>
         {citation}{bibliography}</style>"#,
-    )).unwrap())
+    ), None).unwrap())
 }
 
 fn library() -> Arc<Library> {
@@ -24,7 +28,7 @@ fn library() -> Arc<Library> {
 fn request(keys: &[&str], note_number: Option<usize>) -> CitationRequest {
     CitationRequest::new(
         keys.iter()
-            .map(|key| Cite::new((*key).to_string(), None, None))
+            .map(|key| Cite::new((*key).to_string(), None, None, CitePurpose::Normal))
             .collect(),
         note_number,
     )
@@ -75,16 +79,6 @@ fn sorted_citation_nodes_identify_original_request_items() {
         .render(vec![request(&["b", "a"], None)])
         .unwrap();
     let mut identities = Vec::new();
-    fn visit(nodes: &[RenderedNode], result: &mut Vec<(String, usize)>) {
-        for node in nodes {
-            if let RenderedNode::Element { meta, children, .. } = node {
-                if let Some(RenderedMeta::Entry { key, item_index }) = meta {
-                    result.push((key.clone(), *item_index));
-                }
-                visit(children, result);
-            }
-        }
-    }
     visit(rendered.citations[0].tree_nodes(), &mut identities);
     assert_eq!(identities, [("a".to_string(), 1), ("b".to_string(), 0)]);
 }
@@ -151,17 +145,6 @@ fn bibliography_layout_and_formatted_content_are_preserved() {
     };
     assert_eq!(key, "a");
     assert!(label.is_none());
-    fn italic(nodes: &[RenderedNode]) -> Option<&str> {
-        nodes.iter().find_map(|node| match node {
-            RenderedNode::Text { text, formatting }
-                if formatting.font_style == FontStyle::Italic =>
-            {
-                Some(text.as_str())
-            }
-            RenderedNode::Element { children, .. } => italic(children),
-            _ => None,
-        })
-    }
     assert_eq!(italic(content), Some("Alpha"));
 }
 
@@ -183,13 +166,6 @@ fn bibliography_label_and_content_have_distinct_ownership() {
     else {
         panic!("expected labeled bibliography entry");
     };
-    fn text(node: &RenderedNode) -> String {
-        match node {
-            RenderedNode::Text { text, .. } => text.clone(),
-            RenderedNode::Element { children, .. } => children.iter().map(text).collect(),
-            _ => String::new(),
-        }
-    }
     assert_eq!(text(label), "[1]");
     assert_eq!(content.iter().map(text).collect::<String>(), "Alpha");
     assert_eq!(bibliography.text, "[1] Alpha\n[2] Beta");
@@ -261,4 +237,33 @@ fn citation_html_escapes_ascii_markup_between_unicode_text() {
         citation.html,
         "Été &amp; &lt;研究&gt; &quot;引用&quot; &#39;🙂&#39;"
     );
+}
+
+fn visit(nodes: &[RenderedNode], result: &mut Vec<(String, usize)>) {
+    for node in nodes {
+        if let RenderedNode::Element { meta, children, .. } = node {
+            if let Some(RenderedMeta::Entry { key, item_index }) = meta {
+                result.push((key.clone(), *item_index));
+            }
+            visit(children, result);
+        }
+    }
+}
+
+fn italic(nodes: &[RenderedNode]) -> Option<&str> {
+    nodes.iter().find_map(|node| match node {
+        RenderedNode::Text { text, formatting } if formatting.font_style == FontStyle::Italic => {
+            Some(text.as_str())
+        }
+        RenderedNode::Element { children, .. } => italic(children),
+        _ => None,
+    })
+}
+
+fn text(node: &RenderedNode) -> String {
+    match node {
+        RenderedNode::Text { text, .. } => text.clone(),
+        RenderedNode::Element { children, .. } => children.iter().map(text).collect(),
+        _ => String::new(),
+    }
 }

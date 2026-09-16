@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyAny;
+use pyo3::types::{PyAny, PyDict};
 
 use refkit_core::{
-    PreparedStyle, StyleError, is_bundled_locale, load_prepared_style, prepare_style_from_xml,
+    PreparedStyle, is_bundled_locale, load_prepared_style, prepare_style_from_xml, style_catalog,
 };
 
 use crate::errors::{RefkitError, style_error_to_py};
@@ -23,6 +23,21 @@ pub struct Style {
 #[pymethods]
 impl Style {
     #[staticmethod]
+    fn list(py: Python<'_>) -> PyResult<Vec<Py<PyDict>>> {
+        py.detach(style_catalog)
+            .into_iter()
+            .map(|style| {
+                let record = PyDict::new(py);
+                record.set_item("name", style.name)?;
+                record.set_item("aliases", style.aliases)?;
+                record.set_item("title", style.title)?;
+                record.set_item("csl_id", style.csl_id)?;
+                Ok(record.unbind())
+            })
+            .collect()
+    }
+
+    #[staticmethod]
     fn load(py: Python<'_>, name: String) -> PyResult<Self> {
         let id = name.clone();
         py.detach(move || load_prepared_style(&name))
@@ -31,8 +46,9 @@ impl Style {
     }
 
     #[staticmethod]
-    fn from_xml(py: Python<'_>, xml: String) -> PyResult<Self> {
-        py.detach(move || prepare_style_from_xml(&xml))
+    #[pyo3(signature = (xml, *, parent_xml = None))]
+    fn from_xml(py: Python<'_>, xml: String, parent_xml: Option<String>) -> PyResult<Self> {
+        py.detach(move || prepare_style_from_xml(&xml, parent_xml.as_deref()))
             .map(|style| Self {
                 id: "xml".to_string(),
                 data: Arc::new(style),
@@ -46,7 +62,7 @@ impl Style {
         let xml = py
             .detach(move || read_style(&path))
             .map_err(RefkitError::new_err)?;
-        py.detach(move || prepare_style_from_xml(&xml))
+        py.detach(move || prepare_style_from_xml(&xml, None))
             .map(|style| Self {
                 id,
                 data: Arc::new(style),
@@ -62,6 +78,11 @@ impl Style {
     #[getter]
     fn title(&self) -> String {
         self.data.title().to_string()
+    }
+
+    #[getter]
+    fn csl_id(&self) -> String {
+        self.data.csl_id().to_string()
     }
 
     fn __repr__(&self) -> String {
@@ -87,9 +108,14 @@ impl Locale {
             let code = code.clone();
             move || is_bundled_locale(&code)
         });
-        exists.then(|| Self { code: code.clone() }).ok_or_else(|| {
-            PyValueError::new_err(format!("unknown bundled locale {}", quoted(&code)))
-        })
+        if exists {
+            Ok(Self { code })
+        } else {
+            Err(PyValueError::new_err(format!(
+                "unknown bundled locale {}",
+                quoted(&code)
+            )))
+        }
     }
 
     #[getter]
@@ -119,6 +145,3 @@ pub(crate) fn extract_locale(locale: Option<&Bound<'_, PyAny>>) -> PyResult<Opti
         "locale must be a string, Locale, or None",
     ))
 }
-
-#[allow(dead_code)]
-fn _style_error_type(_: StyleError) {}

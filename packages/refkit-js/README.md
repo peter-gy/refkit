@@ -6,6 +6,10 @@
 [WebAssembly](https://webassembly.org/), a portable compiled module loaded by
 JavaScript.
 
+Construct libraries from structured records and convert BibLaTeX, Hayagriva YAML, and CSL-JSON with field-level loss reports. The [conversion guide](https://peter-gy.github.io/refkit/guides/convert-bibliographies) covers both Python and TypeScript.
+
+`BibDocument.applyPatch` applies atomic entry and field edits and returns a new snapshot with byte changes and occurrence mappings. Existing handles retain their original values and spans. See the [raw editing guide](https://peter-gy.github.io/refkit/guides/edit-bibtex).
+
 Install for Node.js 22.19 or newer:
 
 ```sh

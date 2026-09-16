@@ -111,6 +111,8 @@ Omit `output` to return the result and leave the filesystem unchanged.
 
 ## Inspect warnings
 
+For candidate groups, field conflicts, and retained-entry choices, use [Review Duplicate References](/guides/review-duplicates). Formatter merge options apply their deterministic strategy directly.
+
 ::: code-group
 
 ```python [Python]
@@ -163,4 +165,4 @@ for (const rename of renamed.renames) {
 
 :::
 
-The rename record maps `draft` to `doe2024fast`. Key generation and merging share one plan. Final keys are unique, bibliography `crossref` and `xdata` fields point to those keys, and key sorting uses the final names. The rename report lets an application update citations in other files. Inspect the report before writing a bibliography used by an existing document.
+The rename record maps `draft` to `doe2024fast`. Key generation and merging share one plan. Final keys are unique, bibliography `crossref`, `xdata`, and `xref` fields point to those keys, and key sorting uses the final names. The rename report lets an application update citations in other files. Inspect the report before writing a bibliography used by an existing document.

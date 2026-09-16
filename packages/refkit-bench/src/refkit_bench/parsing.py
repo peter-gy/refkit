@@ -45,12 +45,7 @@ def prepare_parse(lane: str, workload: Workload, package: str) -> Prepared:
                 if library.diagnostics:
                     raise AssertionError(f"unexpected parser diagnostics: {library.diagnostics!r}")
                 rows = [_refkit_fields(entry) for entry in library.values()]
-                partial = [
-                    {key: value for key, value in row.items() if key not in {"author", "pages"}}
-                    for row in expected
-                ]
-                _equal(rows, partial)
-                # Rendering exposes authors and page ranges through the public Library contract.
+                _equal(rows, expected)
                 _equal(
                     rk.Document(library, style, locale=locale)
                     .full_bibliography()
@@ -112,7 +107,8 @@ def prepare_parse(lane: str, workload: Workload, package: str) -> Prepared:
                 return library.keys()
             if lane == "inspect.lookup":
                 return [
-                    {"key": entry.key, "title": entry.title} for entry in library.get_many(selected)
+                    {"key": entry["key"], "title": _refkit_text(entry["title"])}
+                    for entry in library.get_many(selected)
                 ]
             return library.project(fields)
         if package == "bibtexparser":
@@ -170,22 +166,37 @@ def _record_fields(record: Record) -> dict[str, object]:
 
 
 def _refkit_fields(entry: Any) -> dict[str, object]:
-    parents = entry.parents
-    if entry.entry_type != "Article" or len(parents) != 1:
+    parents = entry["parents"]
+    if entry["entry_type"] != "Article" or len(parents) != 1:
         raise AssertionError(
-            f"unexpected entry structure for {entry.key}: {entry.entry_type}, {parents!r}"
+            f"unexpected entry structure for {entry['key']}: {entry['entry_type']}, {parents!r}"
         )
     parent = parents[0]
-    kind = {"Proceedings": "inproceedings", "Periodical": "article"}.get(parent.entry_type)
+    kind = {"Proceedings": "inproceedings", "Periodical": "article"}.get(parent["entry_type"])
+    volume = entry["volume"] or parent["volume"]
     return {
-        "key": entry.key,
+        "key": entry["key"],
         "type": kind,
-        "title": entry.title,
-        "year": entry.date,
-        "container": parent.title,
-        "volume": entry.volume,
-        "doi": entry.doi,
+        "title": _refkit_text(entry["title"]),
+        "author": " and ".join(
+            f"{name['family']}, {name['given']}" if name["given"] else name["family"]
+            for name in entry["authors"]
+        ),
+        "year": str(entry["date"]["value"]["date"]["year"]),
+        "container": _refkit_text(parent["title"]),
+        "volume": volume["value"] if volume else None,
+        "pages": entry["page_range"]["value"] if entry["page_range"] else "",
+        "doi": entry["identifiers"].get("doi"),
     }
+
+
+def _refkit_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    return "".join(
+        f"${chunk['text']}$" if chunk["kind"] == "math" else chunk["text"]
+        for chunk in value["chunks"]
+    )
 
 
 def _parsed_fields(library: Any, package: str) -> list[dict[str, object]]:
@@ -256,8 +267,18 @@ def _raw_edit(workload: Workload, package: str) -> Prepared:
 
         def operation() -> object:
             document = refkit.BibDocument.parse(source)
-            document.entries[key].fields["title"].value = EDITED_TITLE
-            return document.to_bibtex()
+            field = document.entries[key].fields["title"]
+            result = document.apply_patch(
+                [
+                    {
+                        "kind": "set_field",
+                        "entry_id": field.entry_id,
+                        "field_id": field.id,
+                        "value": EDITED_TITLE,
+                    }
+                ]
+            )
+            return result["document"].to_bibtex()
     else:
 
         def operation() -> object:

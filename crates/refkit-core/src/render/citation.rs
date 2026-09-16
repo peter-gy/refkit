@@ -7,7 +7,7 @@ use hayagriva::{
     LocatorPayload, Rendered, SpecificLocator,
 };
 
-use crate::{CitationRequest, Cite, DocumentError, Library, PreparedStyle};
+use crate::{CitationRequest, Cite, CitePurpose, DocumentError, Library, PreparedStyle};
 
 use super::bundled_locales;
 
@@ -45,11 +45,18 @@ pub(crate) fn process_citations(
                     .map(|value| {
                         let label = cite.label.as_deref().unwrap_or("page");
                         let label = Locator::from_str(label)
-                            .map_err(|_| DocumentError::UnknownLocatorLabel(label.to_string()))?;
+                            .map_err(|()| DocumentError::UnknownLocatorLabel(label.to_string()))?;
                         Ok(SpecificLocator(label, LocatorPayload::Str(value)))
                     })
                     .transpose()?;
-                Ok(CitationItem::with_locator(entry, locator))
+                let purpose = match cite.purpose {
+                    CitePurpose::Normal => None,
+                    CitePurpose::Author => Some(hayagriva::CitePurpose::Author),
+                    CitePurpose::Year => Some(hayagriva::CitePurpose::Year),
+                    CitePurpose::Full => Some(hayagriva::CitePurpose::Full),
+                    CitePurpose::Prose => Some(hayagriva::CitePurpose::Prose),
+                };
+                Ok(CitationItem::new(entry, locator, None, false, purpose))
             })
             .collect::<Result<Vec<_>, DocumentError>>()?;
         driver.citation(EngineRequest::new(
@@ -77,7 +84,7 @@ pub(crate) fn process_citations(
 pub(crate) fn request_for_keys(keys: &[&str]) -> CitationRequest {
     CitationRequest::new(
         keys.iter()
-            .map(|key| Cite::new((*key).to_string(), None, None))
+            .map(|key| Cite::new((*key).to_string(), None, None, CitePurpose::Normal))
             .collect(),
         None,
     )

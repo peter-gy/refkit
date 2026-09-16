@@ -483,6 +483,7 @@ dependencies = [
  "indexmap",
  "quick-xml",
  "serde",
+ "serde_json",
  "serde_yaml",
  "walkdir",
 ]

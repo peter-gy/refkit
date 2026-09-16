@@ -39,3 +39,9 @@ pub(super) fn broadcast_get(values: &StringChunked, index: usize) -> Option<&str
 pub(super) fn compute_error(err: String) -> PolarsError {
     PolarsError::ComputeError(err.into())
 }
+
+pub(super) fn input<T>(inputs: &[T], index: usize) -> PolarsResult<&T> {
+    inputs
+        .get(index)
+        .ok_or_else(|| compute_error(format!("missing plugin input at index {index}")))
+}

@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -27,17 +28,40 @@ def comparison(ratio=0.8, interval=(0.75, 0.85)):
     }
 
 
-def report():
+def report() -> dict[str, Any]:
     return {
-        "schema": 1,
+        "schema": 2,
         "threshold": 0.05,
         "baseline_sha": BASE,
         "candidate_sha": CANDIDATE,
         "platforms": {
-            name: {"status": "complete", "comparison": {"rows": [comparison()]}}
+            name: {
+                "status": "complete",
+                "mode": "comparison",
+                "comparison": {"rows": [comparison()]},
+            }
             for name in ("Linux", "Windows", "macOS")
         },
     }
+
+
+def declare_api(root, version=1):
+    path = root / "packages/refkit-bench/src/refkit_bench/api-version.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"api_version": version}))
+
+
+def absolute_report() -> dict[str, Any]:
+    data = report()
+    for platform in data["platforms"].values():
+        platform.pop("comparison")
+        platform.update(
+            mode="absolute",
+            measurement={
+                "rows": [{"case": "parse.bibtex/real/refkit", "seconds": 0.0016, "workers": 5}]
+            },
+        )
+    return data
 
 
 @pytest.mark.parametrize(
@@ -116,6 +140,8 @@ def test_missing_platform_produces_failed_summary_and_exit_status(tmp_path, monk
 
 
 def test_runner_builds_two_revisions_and_compares_one_shared_harness(tmp_path, monkeypatch):
+    declare_api(tmp_path / "base")
+    declare_api(tmp_path / "head")
     commands = []
 
     def execute(command, *, env, capture=False):
@@ -154,6 +180,8 @@ def test_runner_builds_two_revisions_and_compares_one_shared_harness(tmp_path, m
 
 
 def test_failed_build_retains_revision_provenance(tmp_path, monkeypatch):
+    declare_api(tmp_path)
+
     def execute(command, **kwargs):
         if command[0] == "git":
             return BASE
@@ -175,6 +203,7 @@ def test_runner_installs_each_compiled_revision_with_inherited_build_directories
         pytest.skip("Cargo is required for the native build isolation check")
     roots = {name: tmp_path / name for name in ("baseline", "candidate")}
     for name, root in roots.items():
+        declare_api(root)
         (root / "src").mkdir(parents=True)
         (root / "Cargo.toml").write_text(
             '[package]\nname = "revision_probe"\nversion = "0.1.0"\nedition = "2021"\n[workspace]\n'
@@ -226,3 +255,55 @@ def test_runner_installs_each_compiled_revision_with_inherited_build_directories
         benchmark_ci.run(roots["candidate"], roots["baseline"], tmp_path / "results", "Linux") == 0
     )
     assert observed == ["baseline", "candidate"]
+
+
+@pytest.mark.parametrize("baseline_version", [None, 2])
+def test_incompatible_api_measures_candidate_without_installing_baseline(
+    tmp_path, monkeypatch, baseline_version
+):
+    declare_api(tmp_path / "head")
+    if baseline_version is not None:
+        declare_api(tmp_path / "base", baseline_version)
+    commands = []
+
+    def execute(command, **kwargs):
+        commands.append(command)
+        if command[0] == "git":
+            return BASE if command[2].endswith("base") else CANDIDATE
+        if "report" in command:
+            return json.dumps(absolute_report()["platforms"]["Linux"]["measurement"])
+        return ""
+
+    monkeypatch.setattr(benchmark_ci, "execute", execute)
+    output = tmp_path / "results"
+    assert benchmark_ci.run(tmp_path / "head", tmp_path / "base", output, "Linux") == 0
+    result = json.loads((output / "comparison.json").read_text())
+    assert result["mode"] == "absolute"
+    assert result["execution_order"] == ["candidate"]
+    assert result["api_versions"] == {"baseline": baseline_version, "candidate": 1}
+    installs = [command for command in commands if command[:3] == ["uv", "pip", "install"]]
+    assert len(installs) == 1
+    assert installs[0][-2] == str(tmp_path / "head/packages/refkit")
+    assert not any("compare" in command for command in commands)
+    assert result["measurement"]["rows"][0]["seconds"] == 0.0016
+
+
+@pytest.mark.parametrize("version", [None, True, 0, "1"])
+def test_candidate_requires_a_valid_api_declaration(tmp_path, monkeypatch, version):
+    if version is not None:
+        declare_api(tmp_path, version)
+    monkeypatch.setattr(benchmark_ci, "execute", lambda *args, **kwargs: CANDIDATE)
+    assert benchmark_ci.run(tmp_path, tmp_path, tmp_path / "results", "Linux") == 1
+    result = json.loads((tmp_path / "results/comparison.json").read_text())
+    assert "version" in result["detail"]
+
+
+def test_absolute_report_has_timings_without_ratio_claims():
+    data = absolute_report()
+    text = benchmark_report.markdown(data)
+    assert "versions differ" in text
+    assert "1.6" in text
+    assert "95% change interval" not in text
+    data["platforms"]["Linux"]["measurement"]["rows"][0]["candidate_over_baseline"] = 1
+    with pytest.raises(ValueError, match="cannot contain comparisons"):
+        benchmark_report.validate(data)

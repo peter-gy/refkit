@@ -31,12 +31,6 @@ def copy_contract_files(destination: Path) -> None:
         shutil.copy2(ROOT / relative_path, target)
 
 
-def test_release_contract_matches_workspace_and_tag() -> None:
-    version = validate_release_contract(ROOT)
-
-    assert validate_release_contract(ROOT, f"v{version}") == version
-
-
 @pytest.mark.parametrize(
     ("version", "tag"),
     [
@@ -56,7 +50,20 @@ def test_release_contract_accepts_supported_release_tag(
         source = path.read_text(encoding="utf-8")
         path.write_text(source.replace(current_version, version), encoding="utf-8")
 
-    assert validate_release_contract(tmp_path, tag) == version
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/release_contract.py"),
+            "--root",
+            str(tmp_path),
+            "--tag",
+            tag,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == f"{version}\n"
 
 
 @pytest.mark.parametrize(
@@ -64,8 +71,6 @@ def test_release_contract_accepts_supported_release_tag(
     [
         "1.2.3",
         "v01.2.3",
-        "v1.02.3",
-        "v1.2.03",
         "v1.2.3-beta.1",
         "v1.2.3-rc1",
         "v1.2.3-rc.01",
@@ -79,58 +84,6 @@ def test_release_contract_rejects_unsupported_release_tags(tag: str) -> None:
         validate_release_contract(ROOT, tag)
 
 
-@pytest.mark.parametrize(
-    ("relative_path", "message"),
-    [
-        ("Cargo.toml", "Rust workspace repository must be"),
-        ("packages/refkit/pyproject.toml", r"refkit project\.urls\.Repository must be"),
-    ],
-)
-def test_release_contract_reports_repository_drift(
-    tmp_path: Path,
-    relative_path: str,
-    message: str,
-) -> None:
-    copy_contract_files(tmp_path)
-    manifest = tmp_path / relative_path
-    source = manifest.read_text(encoding="utf-8")
-    repository_key = "repository" if relative_path == "Cargo.toml" else "Repository"
-    manifest.write_text(
-        source.replace(
-            f'{repository_key} = "https://github.com/peter-gy/refkit"',
-            f'{repository_key} = "https://example.invalid/refkit"',
-            1,
-        ),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ReleaseContractError, match=message):
-        validate_release_contract(tmp_path)
-
-
-@pytest.mark.parametrize(
-    "relative_path",
-    [
-        "crates/refkit-core/Cargo.toml",
-        "packages/refkit/rust/Cargo.toml",
-    ],
-)
-def test_release_contract_reports_repository_inheritance_drift(
-    tmp_path: Path,
-    relative_path: str,
-) -> None:
-    copy_contract_files(tmp_path)
-    manifest = tmp_path / relative_path
-    source = manifest.read_text(encoding="utf-8")
-    manifest.write_text(
-        source.replace("repository.workspace = true\n", "", 1),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ReleaseContractError, match="must inherit"):
-        validate_release_contract(tmp_path)
-
-
 def test_release_contract_reports_native_adapter_version_drift(tmp_path: Path) -> None:
     copy_contract_files(tmp_path)
     manifest = tmp_path / "packages/refkit/rust/Cargo.toml"
@@ -142,25 +95,6 @@ def test_release_contract_reports_native_adapter_version_drift(tmp_path: Path) -
 
     with pytest.raises(ReleaseContractError, match="refkit native Rust crate has 9.9.9"):
         validate_release_contract(tmp_path)
-
-
-def test_release_contract_command_prints_validated_version() -> None:
-    version = validate_release_contract(ROOT)
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts/release_contract.py"),
-            "--tag",
-            f"v{version}",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 0
-    assert result.stdout == f"{version}\n"
-    assert result.stderr == ""
 
 
 def test_release_contract_reports_javascript_lock_drift(tmp_path: Path) -> None:

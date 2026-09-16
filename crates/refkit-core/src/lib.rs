@@ -1,21 +1,47 @@
+//! Portable bibliography records, source-preserving edits, validation, and CSL rendering.
+//!
+//! [`Library`] owns normalized data. [`RawDocument`] owns immutable BibTeX snapshots.
+//! [`Document`] combines a library with prepared style and locale inputs, creating
+//! fresh citation-processing state for each operation. Host I/O belongs in adapters.
+
+mod codec;
 mod document;
+mod duplicates;
 mod library;
 mod raw;
+mod record;
+mod references;
 mod render;
 mod render_tree;
 mod source;
 mod strings;
 mod style;
+/// Deterministic BibTeX normalization, duplicate handling, and key allocation.
 pub mod tidy;
+mod validation;
 
-pub use document::{CitationRequest, Cite, Document, DocumentError, RenderedDocument};
+pub use codec::{
+    BibliographyFormat, CodecError, ConversionIssue, ConversionReport, DecodeReport, EncodeReport,
+    LossPolicy, convert, decode, encode,
+};
+pub use document::{CitationRequest, Cite, CitePurpose, Document, DocumentError, RenderedDocument};
+pub use duplicates::{
+    DuplicateConflict, DuplicateConflictKind, DuplicateEvidence, DuplicateGroup, DuplicateMember,
+    DuplicateReport, DuplicateValue, MergeError, MergeErrorCode, MergeFieldChoice, MergePlan,
+    MergeRequest,
+};
 pub use library::{
-    Diagnostic, DiagnosticAction, DiagnosticSeverity, EntryField, EntryFieldError, EntryRecord,
-    Library, LibraryError, ParseFailure, ParseReport, RecoveryPolicy, parse_bibtex_report,
+    Diagnostic, DiagnosticAction, DiagnosticSeverity, EntryField, EntryFieldError, Library,
+    LibraryError, ParseFailure, ParseReport, RecoveryPolicy, parse_bibtex_report,
 };
 pub use raw::{
-    RawBlockInfo, RawDocument, RawEditError, RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo,
-    ResolvedBibEntry,
+    BibEdit, BibEntryMapping, BibFieldMapping, BibFieldValue, BibPatchChange, BibPatchError,
+    BibPatchErrorCode, BibPatchKind, BibPatchResult, BibPatchWarning, RawBlockInfo, RawDocument,
+    RawEntryId, RawEntryInfo, RawFieldId, RawFieldInfo, RawFieldView, ResolvedBibEntry,
+};
+pub use record::{
+    Contributors, Date, DateParts, DateValue, EntryRecord, ExtensionValue, Name, Publisher,
+    RecordError, ScalarValue, Text, TextChunk, TextKind, Url, validate_record_source,
 };
 pub use render::{
     RenderedOutput, is_bundled_locale, render_library_bibliography, render_library_citation,
@@ -27,8 +53,15 @@ pub use render_tree::{
 };
 pub use source::{DecodedText, TextEncoding, decode_bibliography};
 pub(crate) use strings::quoted;
-pub use style::{PreparedStyle, StyleError, load_prepared_style, prepare_style_from_xml};
+pub use style::{
+    PreparedStyle, StyleError, StyleMetadata, load_prepared_style, prepare_style_from_xml,
+    style_catalog,
+};
 pub use tidy::{
     DuplicateRule, MergeStrategy, TidyError, TidyOptions, TidyRename, TidyResult, TidyWarning,
     tidy_bibtex,
+};
+pub use validation::{
+    ValidationCode, ValidationIssue, ValidationProfile, ValidationReport, ValidationSeverity,
+    ValidationTarget,
 };

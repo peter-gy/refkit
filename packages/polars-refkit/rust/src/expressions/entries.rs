@@ -4,7 +4,7 @@ use pyo3_polars::derive::polars_expr;
 use refkit_core::{EntryField, EntryRecord, RawDocument, ResolvedBibEntry};
 
 use super::EntriesKwargs;
-use super::broadcast::{compute_error, parse_value_library_source};
+use super::broadcast::{compute_error, input, parse_value_library_source};
 use super::dtypes::{
     entries_output, entry_struct_dtype, resolved_entry_struct_dtype, resolved_field_struct_dtype,
     resolved_output,
@@ -12,7 +12,7 @@ use super::dtypes::{
 
 #[polars_expr(output_type_func=resolved_output)]
 fn resolve(inputs: &[Series]) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
+    let bibtex = input(inputs, 0)?.str()?;
     let mut builder = AnonymousOwnedListBuilder::new(
         "resolve".into(),
         bibtex.len(),
@@ -62,14 +62,15 @@ fn resolved_entries_to_series(entries: &[ResolvedBibEntry]) -> PolarsResult<Seri
         fields.finish().into_series(),
     ];
     StructChunked::from_series("entry".into(), entries.len(), columns.iter())
-        .map(|entries| entries.into_series())
+        .map(polars::prelude::IntoSeries::into_series)
 }
 
 #[polars_expr(output_type_func_with_kwargs=entries_output)]
 fn entries(inputs: &[Series], kwargs: EntriesKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let fields = parse_project_fields(&kwargs.fields).map_err(compute_error)?;
-    let field_names = kwargs.fields.iter().map(String::as_str).collect::<Vec<_>>();
+    let bibtex = input(inputs, 0)?.str()?;
+    let EntriesKwargs { recovery, fields } = kwargs;
+    let field_names = fields.iter().map(String::as_str).collect::<Vec<_>>();
+    let fields = parse_project_fields(&fields).map_err(compute_error)?;
     let mut builder = AnonymousOwnedListBuilder::new(
         "entries".into(),
         bibtex.len(),
@@ -81,7 +82,7 @@ fn entries(inputs: &[Series], kwargs: EntriesKwargs) -> PolarsResult<Series> {
             builder.append_null();
             continue;
         };
-        match parse_value_library_source(source, kwargs.recovery.policy()) {
+        match parse_value_library_source(source, recovery.policy()) {
             Ok(library) => {
                 let entries =
                     entry_records_to_struct_series(library.records(), &fields, &field_names)?;
@@ -112,17 +113,15 @@ fn entry_records_to_struct_series(
 ) -> PolarsResult<Series> {
     let fields = field_names
         .iter()
-        .enumerate()
-        .map(|(field_index, field_name)| {
+        .zip(fields)
+        .map(|(field_name, field)| {
             StringChunked::from_iter_options(
                 (*field_name).into(),
-                records
-                    .iter()
-                    .map(move |record| record.field(fields[field_index])),
+                records.iter().map(move |record| record.field(*field)),
             )
             .into_series()
         })
         .collect::<Vec<_>>();
     StructChunked::from_series("entry".into(), records.len(), fields.iter())
-        .map(|entries| entries.into_series())
+        .map(polars::prelude::IntoSeries::into_series)
 }

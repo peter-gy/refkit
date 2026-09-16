@@ -7,6 +7,96 @@ fn raw_field_value(doc: &RawDocument, entry_key: &str, field_key: &str) -> Strin
 }
 
 #[test]
+fn non_bibliography_text_preserves_delimiters_and_unicode() {
+    let source = "研究 { unclosed ( \"quotes\" } }\n% commentaire égaré { \"\nfin 🙂";
+    let document = RawDocument::parse(source);
+    assert_eq!(document.entry_count(), 0);
+    assert!(document.failed_blocks().is_empty());
+    assert_eq!(document.render().unwrap(), source);
+}
+
+#[test]
+fn unmatched_blocks_recover_without_consuming_following_entries() {
+    use std::fmt::Write as _;
+
+    let mut source = String::new();
+    for index in 0..256 {
+        writeln!(source, "@misc{{broken{index},title={{unfinished").unwrap();
+    }
+    source.push_str("@misc{kept,title={Complete}}\n");
+    let document = RawDocument::parse(&source);
+    assert_eq!(document.entry_count(), 1);
+    assert!(document.contains_entry("kept"));
+    assert_eq!(document.failed_blocks().len(), 256);
+    assert_eq!(document.render().unwrap(), source);
+}
+
+#[test]
+fn indexed_nested_regions_preserve_root_specific_syntax() {
+    let source = concat!(
+        "% unmatched delimiters in a root comment: { (\n",
+        "@comment((}) )\n",
+        "@misc(parenthesized,\n",
+        " title = {Closing ) remains text, as does ( an opener},\n",
+        " note = \"Quoted {\"protected\"} words\",\n",
+        " abstract = {A multiline value\n@misc{not_an_entry,title={Nested}}\nends here}\n",
+        ")\n",
+        "@misc{following,title={After}}\n",
+    );
+    let document = RawDocument::parse(source);
+    assert_eq!(document.entry_count(), 2);
+    assert!(document.failed_blocks().is_empty());
+    assert_eq!(
+        raw_field_value(&document, "parenthesized", "title"),
+        "Closing ) remains text, as does ( an opener"
+    );
+    assert_eq!(
+        raw_field_value(&document, "parenthesized", "note"),
+        "Quoted {\"protected\"} words"
+    );
+    assert_eq!(document.render().unwrap(), source);
+}
+
+#[test]
+fn malformed_openers_and_parentheses_keep_recovery_boundaries() {
+    for malformed in ["@unknown\n", "@misc(broken,title=(\n"] {
+        let source = format!(
+            "{}@misc{{kept,title={{Complete}}}}\n",
+            malformed.repeat(128)
+        );
+        let document = RawDocument::parse(&source);
+        assert!(
+            document.contains_entry("kept"),
+            "failed to recover after {malformed:?}"
+        );
+        assert_eq!(document.render().unwrap(), source);
+    }
+}
+
+#[test]
+fn unfinished_entry_keys_do_not_swallow_following_blocks() {
+    let source = "@book{a,title=未定}\n@broken{unfinished\n@book{b,title=缺失}";
+    let document = RawDocument::parse(source);
+    assert_eq!(document.entry_keys(), ["a", "b"]);
+    let start = source.find("@broken").unwrap();
+    let end = source.find("@book{b").unwrap();
+    assert!(matches!(
+        document.failed_blocks().as_slice(),
+        [RawBlockInfo::Failed { span, .. }] if *span == (start..end)
+    ));
+    assert_eq!(document.render().unwrap(), source);
+}
+
+#[test]
+fn valid_keys_on_following_lines_are_not_recovery_markers() {
+    let source = "@misc{\n@x(foo,title={First}}\n@misc{\n@simple,title={Second}}";
+    let document = RawDocument::parse(source);
+    assert_eq!(document.entry_keys(), ["@x(foo", "@simple"]);
+    assert!(document.failed_blocks().is_empty());
+    assert_eq!(document.render().unwrap(), source);
+}
+
+#[test]
 fn parse_raw_document_preserves_blocks_and_recovers_entries() {
     let source = concat!(
         "% file comment\n",
@@ -103,35 +193,6 @@ fn parse_raw_document_keeps_terminal_escaped_closing_brace_inside_braced_values(
 }
 
 #[test]
-fn raw_document_exposes_shared_syntax_records_for_formatters() {
-    let doc = RawDocument::parse(concat!(
-        "% file comment\n",
-        "@article{format,\n",
-        "  title = {Shared Syntax},\n",
-        "  year = 2026\n",
-        "}\n",
-    ));
-
-    let syntax = doc.syntax();
-
-    assert_eq!(syntax.entries.len(), 1);
-    assert_eq!(syntax.entries[0].key, "format");
-    assert_eq!(syntax.entries[0].kind, "article");
-    assert_eq!(syntax.entries[0].fields.len(), 2);
-    assert_eq!(syntax.entries[0].fields[0].name, "title");
-    assert_eq!(syntax.entries[0].fields[0].value_mode, RawValueMode::Braced);
-    assert!(syntax.blocks.iter().any(
-        |block| matches!(block, RawSyntaxBlock::Comment { raw, .. } if raw == "% file comment\n")
-    ));
-    assert!(
-        syntax
-            .blocks
-            .iter()
-            .any(|block| matches!(block, RawSyntaxBlock::Entry { key, .. } if key == "format"))
-    );
-}
-
-#[test]
 fn raw_document_parses_missing_key_entries_for_formatter_warnings() {
     let doc = RawDocument::parse("@article{\n  title = {No key}\n}\n");
     let syntax = doc.syntax();
@@ -210,16 +271,22 @@ fn raw_document_parses_valueless_fields_for_formatter_transforms() {
 
 #[test]
 fn raw_document_rejects_non_empty_edits_to_valueless_fields() {
-    let mut doc = RawDocument::parse("@article{empty,\n  day,\n}\n");
+    let doc = RawDocument::parse("@article{empty,\n  day,\n}\n");
     let entry_id = doc.unique_entry("empty").unwrap().unwrap();
     let field_id = doc.unique_field(entry_id, "day").unwrap().unwrap();
 
     let error = doc
-        .set_field_value(entry_id, field_id, "12".to_string())
+        .apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id,
+            value: "12".into(),
+        }])
         .unwrap_err();
 
     assert!(
-        matches!(error, RawEditError::InvalidValue(message) if message.contains("without an assignment"))
+        error.code == BibPatchErrorCode::InvalidValue
+            && error.message.contains("without an assignment")
     );
     assert_eq!(doc.render().unwrap(), "@article{empty,\n  day,\n}\n");
 }
@@ -462,8 +529,15 @@ fn render_document_patches_only_changed_fields() {
         ("expr", "macro # \"New\""),
     ] {
         let field_id = doc.unique_field(entry_id, key).unwrap().unwrap();
-        doc.set_field_value(entry_id, field_id, value.to_string())
-            .unwrap();
+        doc = doc
+            .apply_patch(&[BibEdit::SetField {
+                expression: false,
+                entry_id,
+                field_id,
+                value: value.into(),
+            }])
+            .unwrap()
+            .document;
     }
 
     let rendered = doc.render().unwrap();
@@ -490,8 +564,15 @@ fn duplicate_field_parse_preserves_ordered_occurrences() {
     assert_eq!(title_fields[0].value, "First");
     assert_eq!(title_fields[1].value, "Second");
     assert!(doc.unique_field(entry_id, "title").is_err());
-    doc.set_field_value(entry_id, title_fields[1].id, "Edited".to_string())
-        .unwrap();
+    doc = doc
+        .apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: title_fields[1].id,
+            value: "Edited".into(),
+        }])
+        .unwrap()
+        .document;
 
     let rendered = doc.render().unwrap();
 
@@ -514,33 +595,68 @@ fn raw_document_rejects_unsafe_field_edits() {
     let subtitle_id = doc.unique_field(entry_id, "subtitle").unwrap().unwrap();
     let note_id = doc.unique_field(entry_id, "note").unwrap().unwrap();
 
+    doc = doc
+        .apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: title_id,
+            value: "{NASA} Mission".into(),
+        }])
+        .unwrap()
+        .document;
     assert!(
-        doc.set_field_value(entry_id, title_id, "{NASA} Mission".to_string())
-            .is_ok()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: title_id,
+            value: "bad%value".into()
+        }])
+        .is_err()
     );
     assert!(
-        doc.set_field_value(entry_id, title_id, "bad%value".to_string())
-            .is_err()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: title_id,
+            value: "bad\nvalue".into()
+        }])
+        .is_err()
     );
     assert!(
-        doc.set_field_value(entry_id, title_id, "bad\nvalue".to_string())
-            .is_err()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: title_id,
+            value: "bad\\".into()
+        }])
+        .is_err()
     );
     assert!(
-        doc.set_field_value(entry_id, title_id, "bad\\".to_string())
-            .is_err()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: subtitle_id,
+            value: "bad\"value".into()
+        }])
+        .is_err()
     );
     assert!(
-        doc.set_field_value(entry_id, subtitle_id, "bad\"value".to_string())
-            .is_err()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: subtitle_id,
+            value: "bad%value".into()
+        }])
+        .is_err()
     );
     assert!(
-        doc.set_field_value(entry_id, subtitle_id, "bad%value".to_string())
-            .is_err()
-    );
-    assert!(
-        doc.set_field_value(entry_id, note_id, "{unbalanced".to_string())
-            .is_err()
+        doc.apply_patch(&[BibEdit::SetField {
+            expression: false,
+            entry_id,
+            field_id: note_id,
+            value: "{unbalanced".into()
+        }])
+        .is_err()
     );
 
     assert_eq!(

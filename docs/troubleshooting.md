@@ -70,7 +70,7 @@ Inspect `library.keys()` before rendering. `Document.render` raises `MissingRefe
 
 Use `Style.load(name)` and `Locale.load(code)` separately to validate bundled identifiers before creating a `Document`. For a custom [CSL](https://citationstyles.org/) (Citation Style Language) file, use Python `Style.from_path(path)` or Node `readStyle(path)` from `refkit-js/node`. In a browser, load XML text and pass it to `Style.fromXml`.
 
-Dependent CSL styles require parent resolution and are rejected by the explicit-style constructors. Supply the independent parent style. [Errors and Diagnostics](/reference/errors#styles-and-rendering) lists style validation failures.
+For a dependent CSL style, supply its independent parent's XML through `Style.from_xml(child_xml, parent_xml=parent_xml)` in Python or `Style.fromXml(childXml, { parentXml })` in TypeScript. The parent's CSL identifier must match the child's link. [Errors and Diagnostics](/reference/errors#styles-and-rendering) lists style validation failures.
 
 ## Browser calls fail before initialization
 
@@ -114,7 +114,7 @@ print(
 
 ## The Polars plugin will not load
 
-Confirm that the installed Python package and native wheel come from one `polars-refkit` release. In [Pyodide](/pyodide), which runs Python in the browser through WebAssembly, use the documented Python, PyEmscripten, and Polars compatibility tuple. PyEmscripten identifies the Python build platform used by those wheels.
+Confirm that the installed Python package and native wheel come from one `polars-refkit` release. The Polars adapter supports native CPython on Linux, macOS, and Windows. In [Pyodide](/pyodide), use `refkit` directly.
 
 Reinstall both the package and matching Polars version in a clean environment when the application binary interface changed.
 
@@ -132,4 +132,4 @@ Pip builds from the source distribution when no compatible wheel is available. I
 
 ## Pyodide cannot find a compatible wheel
 
-Use the compatibility set in [Run in Pyodide](/pyodide). A wheel built for another PyEmscripten platform or Polars plugin ABI cannot load in the current runtime.
+Use the compatibility set in [Run in Pyodide](/pyodide). A `refkit` wheel built for another PyEmscripten platform cannot load in the current runtime. `polars-refkit` does not provide Pyodide wheels.

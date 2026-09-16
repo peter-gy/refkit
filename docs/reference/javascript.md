@@ -50,6 +50,14 @@ throws `ParseError`.
 Parses a [Hayagriva YAML](https://github.com/typst/hayagriva) bibliography,
 a structured reference format, and returns a `Library`.
 
+### `Library.fromRecords(records)`
+
+Constructs a library from an iterable of `Entry` records. Each requires a nonempty `key` and canonical TitleCase `entryType`. Omitted optional fields receive empty or null defaults. Duplicate top-level keys, unknown fields, invalid typed values, and exceeded resource bounds throw `RangeError`.
+
+### `Library.fromJson(source)` and `library.toJson()`
+
+Read or write a RefKit record snapshot with `schema_version: 1` and a `records` array. Snapshot field names are snake_case in both language bindings. Python and TypeScript can exchange these snapshots directly. Unknown schema versions throw `RangeError`.
+
 ### `Library`
 
 | Member | Contract |
@@ -57,6 +65,7 @@ a structured reference format, and returns a `Library`.
 | `diagnostics` | Structured parser diagnostics. |
 | `size` | Number of normalized entries. |
 | `keys()` / `values()` | Keys or `Entry` records in library order. |
+| `toRecords()` | Detached complete records in library order. |
 | `get(key)` | `Entry` or `null`. |
 | `getMany(keys)` | Entries in requested order, including repeated keys. Throws for a missing key. |
 | `has(key)` / `isEmpty()` | Membership or emptiness. |
@@ -64,36 +73,55 @@ a structured reference format, and returns a `Library`.
 | `project(fields?, { keys } = {})` | Records containing requested fields, optionally restricted to ordered keys. |
 
 `project()` defaults to `key`, `title`, `doi`, and `volume`. Supported fields
-are `key`, `entryType`, `type`, `title`, `date`, `doi`, and `volume`. `entryType`
-and `type` select the normalized entry type and preserve the requested field
-name. Missing selected keys throw. A missing field value is `null`.
+are `key`, `entryType`, `title`, `date`, `doi`, and `volume`. Missing selected keys throw. A missing field value is `null`.
 
-`Entry` records expose `key`, `entryType`, `title`, `date`, `doi`, `volume`, and
-`parents`. `entryType` uses normalized TitleCase names such as `Book`. `parents` is an array of `Entry` records. `title`, `date`, `doi`, and
-`volume` can be `null`. `volume` uses the entry's own volume or its first
-parent's volume. A `Library` is iterable over its `Entry` records.
+`Entry` records contain structured text, creator names, dates, publication details, identifiers, nested parents, and namespaced extensions. Returned records contain every field, with null or empty defaults for missing values. Mutating a returned record leaves its library unchanged. A `Library` is iterable over its records. Use `project()` for scalar title, date, DOI, and inherited volume values. [Bibliography records](/reference/data-shapes#bibliography-records) describes the complete structure.
+
+## Bibliography validation
+
+### `Library.validate()` and `BibDocument.validate()`
+
+Return an inspect-only `ValidationReport`. `Library` uses the format-neutral record profile. `BibDocument` uses the BibLaTeX field profile and reports current-snapshot occurrence IDs and byte spans. Source parsing failures throw `ParseError`. Read [validation behavior](/concepts/parsing-and-recovery#validate-bibliography-data) and [report fields](/reference/data-shapes#validation-reports).
+
+## Bibliography codecs
+
+### `decode(source, { format, loss = "report", recovery = "error" })`
+
+Returns `DecodeReport` with `library`, `format`, and `issues`. Formats are `biblatex`, `hayagriva`, and `csl-json`. Recovery applies to BibLaTeX input. Malformed input and refused loss throw `ConversionError` with `issues` and parser `diagnostics`.
+
+### `encode(library, { format, loss = "report" })`
+
+Returns `EncodeReport` with `format`, `text`, and `issues`. `loss: "error"` refuses reported loss and leaves the library unchanged.
+
+### `convert(source, { sourceFormat, targetFormat, loss = "report", recovery = "error" })`
+
+Returns `ConversionReport` with `sourceFormat`, `targetFormat`, `text`, `issues`, and `diagnostics`. Read [Convert Bibliographies](/guides/convert-bibliographies) for format mappings and loss semantics.
 
 ## Styles and citation inputs
 
-### `Style.load(name)` and `Style.fromXml(xml)`
+### `Style.list()`
+
+Returns `StyleMetadata[]` sorted by canonical `name`. Each record contains `name`, `aliases`, `title`, and `cslId`. Pass a name or alias to `Style.load`.
+
+### `Style.load(name)` and `Style.fromXml(xml, { parentXml = null } = {})`
 
 Return a prepared [Citation Style Language](https://citationstyles.org/)
 style, which controls citation and bibliography formatting. Bundled lookup is
-case-insensitive. Custom XML must describe an independent style. Invalid XML,
-invalid macro graphs, dependent styles, and unknown bundled names throw.
+case-insensitive. A dependent style requires `parentXml` containing its independent parent, with a CSL identifier matching the child link. Invalid XML, mismatched parents, invalid macro graphs, and unknown bundled names throw. An independent style rejects supplied parent XML.
 
-`title` is the style title. `id` is the requested bundled name or `"xml"` for
-an XML input.
+`title` and `cslId` identify the requested style, including a dependent child. `id` is the requested bundled name or `"xml"` for an XML input. A child's default locale overrides its parent's default. An explicit document locale overrides both.
 
 ### `Locale.load(code)`
 
 Validates a bundled locale and returns a `Locale` with its `code` property.
 
-### `new Cite(key, { locator = null, label = null } = {})`
+### `new Cite(key, { locator = null, label = null, purpose = "normal" } = {})`
 
 Creates a citation item. A locator with an omitted label uses `page`. A label
 has a rendering effect when a locator is supplied. Invalid labels throw at
 render time.
+
+`purpose` accepts `normal`, `author`, `year`, `full`, or `prose` and is returned by the property of the same name. An unknown purpose throws `RangeError` during construction. [Citation purposes](/guides/render-citations#choose-a-citation-purpose) describes their output.
 
 ### `new CitationGroup(items)`
 
@@ -160,30 +188,42 @@ a `Library`. Node callers read paths with `readLibrary()` first.
 
 ### `BibDocument.parse(source)`
 
-Creates a raw bibliography with live entry and field views. Malformed blocks
+Creates an immutable raw bibliography snapshot with entry and field views. Malformed blocks
 remain available through `failedBlocks`.
 
 | Member | Contract |
 | --- | --- |
-| `entries` | Live `BibEntryMap`. |
+| `entries` | Snapshot-bound `BibEntryMap`. |
 | `diagnostics` | Source decoding diagnostics. |
 | `comments` | Source-order comment strings. |
 | `preamble` | Preamble values joined with ` # `. |
 | `strings` | String definitions keyed by name. |
 | `failedBlocks` / `blocks` | Failed blocks or every source-order block. |
-| `toBibtex()` | Serializes the current edits. |
+| `toBibtex()` | Returns the snapshot source. |
 | `resolve()` | Returns detached `ResolvedBibEntry` records with expanded source fields. |
-| `tidy({ options } = {})` | Formats the current edits into a `TidyResult`. |
+| `tidy({ options } = {})` | Formats the snapshot into a `TidyResult`. |
 
-`BibEntry` exposes `key`, `kind`, `fields`, and `span`. `BibField` exposes
-`name`, mutable `value`, and `span`. Assigning `value` validates the original
-field delimiter before updating the document. `tidy()` returns a formatted
+`BibEntry` exposes `id`, `key`, `kind`, `fields`, and `span`. `BibField` exposes
+`id`, `entryId`, `name`, `value`, and `span`. These properties describe the
+handle's original snapshot and are read-only. `tidy()` returns a formatted
 result and preserves the current raw document.
 
 `resolve()` returns source-ordered records with `key`, `entryType`, and `fields`.
-It uses the current field edits and raises `ParseError` for invalid or ambiguous
+It reads the snapshot and raises `ParseError` for invalid or ambiguous
 input. See [field resolution](/guides/edit-bibtex#resolve-fields-for-inspection)
 for macro handling and diagnostics.
+
+### `BibDocument.applyPatch(patch)`
+
+Accepts an iterable of `BibEdit` records and returns `BibPatchResult` containing a new `document`, byte `changes`, occurrence mappings in `entries`, and `warnings`. The input snapshot and its handles remain unchanged. `PatchError` carries `code` and nullable input `operation` index. Read [atomic patch behavior](/guides/edit-bibtex#apply-structural-changes-atomically) and [report fields](/reference/data-shapes#patch-reports).
+
+### `BibDocument.findDuplicates({ rules = null } = {})`
+
+Returns `DuplicateReport` with source-relative candidate groups, rule signatures and conflicting values. The default rules are `doi`, `key`, `abstract`, and `citation`. An empty iterable selects no rules. Matching is inspect-only.
+
+### `BibDocument.planMerge({ entries, retain, fields = null, entryType = null })`
+
+Select at least two distinct input entry IDs and a retained member. Returns `MergePlan` with a nullable `patch` and unresolved `conflicts`. Field choices take a source occurrence or drop a field. Entry-type conflicts require `entryType`. Invalid selections, choices, and unsafe reference transformations throw `MergeError`. [Review duplicates](/guides/review-duplicates) before applying the returned patch to the same snapshot.
 
 ### `BibEntryMap` and `BibFieldMap`
 
@@ -191,7 +231,7 @@ for macro handling and diagnostics.
 | --- | --- |
 | `size` | Number of source occurrences, including duplicates. |
 | `uniqueKeys()` | Distinct keys. |
-| `occurrenceKeys()` / `occurrences()` | Keys or live views in source order. |
+| `occurrenceKeys()` / `occurrences()` | Keys or snapshot-bound views in source order. |
 | `getAll(key)` | Every occurrence of a key. |
 | `getUnique(key)` | One occurrence or `null`. Throws `RefkitError` for ambiguity. |
 | `has(key)` / `isEmpty()` | Membership or emptiness. |

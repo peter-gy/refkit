@@ -3,6 +3,11 @@ use std::collections::HashSet;
 use super::{RawBlock, parse_raw_document};
 use crate::library::{Diagnostic, DiagnosticAction};
 
+#[expect(
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    reason = "The raw parser supplies complete UTF-8 block spans in this same source. Replacing every non-newline byte in those spans with ASCII preserves length and valid UTF-8."
+)]
 pub(crate) fn sanitize_biblatex_for_library(source: &str) -> (String, Vec<Diagnostic>) {
     let data = parse_raw_document(source);
     let mut output = source.as_bytes().to_vec();

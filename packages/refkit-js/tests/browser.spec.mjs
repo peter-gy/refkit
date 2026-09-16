@@ -1,5 +1,35 @@
 import { test, expect } from "@playwright/test";
 
+test("browser duplicate review preserves expressions through an accepted merge", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const result = await page.evaluate(async () => {
+    const rk = await import("/dist/index.js");
+    await rk.init();
+    const source =
+      "@string{press={Press}}@book{a,title={A},author={Doe, Jane},year=2024,doi={10.1234/work}}@book{b,title={A},doi={10.1234/work},publisher=press}@misc{child,crossref={b}}";
+    const document = rk.BibDocument.parse(source);
+    const report = document.findDuplicates({ rules: ["doi"] });
+    const plan = document.planMerge({ entries: [0, 1], retain: 0 });
+    const updated = document.applyPatch(plan.patch).document;
+    return {
+      groups: report.groups.length,
+      original: document.toBibtex() === source,
+      publisher: updated.resolve()[0].fields.publisher,
+      reference: updated.resolve()[1].fields.crossref,
+      citation: rk.cite(rk.Library.parseBibtex(updated.toBibtex()), "a").text,
+    };
+  });
+  expect(result).toEqual({
+    groups: 1,
+    original: true,
+    publisher: "Press",
+    reference: "a",
+    citation: "(Doe, 2024)",
+  });
+});
+
 test("browser module initializes concurrently, renders, and edits with CSP", async ({
   page,
 }) => {
@@ -17,10 +47,51 @@ test("browser module initializes concurrently, renders, and edits with CSP", asy
     await Promise.all([rk.init(), rk.init()]);
     const source = "@book{doe,author={Doe, Jane},title={A Book},year={2024}}";
     const library = rk.Library.parseBibtex(source);
-    const text = rk.cite(library, "doe").text;
+    const reconstructed = rk.Library.fromRecords(
+      rk.Library.fromJson(library.toJson()).toRecords(),
+    );
+    const text = rk.cite(reconstructed, "doe").text;
+    const converted = rk.convert(source, {
+      sourceFormat: "biblatex",
+      targetFormat: "csl-json",
+      loss: "error",
+    });
+    const codecText = rk.cite(
+      rk.decode(converted.text, { format: "csl-json", loss: "error" }).library,
+      "doe",
+    ).text;
+    let lossRefused = false;
+    try {
+      const range = rk.decode(
+        '[{"id":"a","type":"book","issued":{"date-parts":[[2020],[2024]]}}]',
+        { format: "csl-json" },
+      ).library;
+      rk.encode(range, { format: "hayagriva", loss: "error" });
+    } catch (error) {
+      lossRefused =
+        error instanceof rk.ConversionError &&
+        error.issues.some((issue) => issue.lossy);
+    }
+    const prose = rk.cite(
+      library,
+      new rk.Cite("doe", { purpose: "prose" }),
+    ).text;
+    const apa = rk.Style.list().find((style) =>
+      [style.name, ...style.aliases].includes("apa"),
+    );
     const raw = rk.BibDocument.parse(source);
-    raw.entries.getUnique("doe").fields.getUnique("title").value = "Edited";
-    const title = rk.Library.parseBibtex(raw.tidy().bibtex).get("doe").title;
+    const field = raw.entries.getUnique("doe").fields.getUnique("title");
+    const patched = raw.applyPatch([
+      {
+        kind: "set_field",
+        entryId: field.entryId,
+        fieldId: field.id,
+        value: "Edited",
+      },
+    ]);
+    const title = rk.Library.parseBibtex(patched.document.tidy().bibtex).get(
+      "doe",
+    ).title.chunks[0].text;
     const structuredError = (() => {
       try {
         rk.Library.parseBibtex("@book{");
@@ -28,12 +99,44 @@ test("browser module initializes concurrently, renders, and edits with CSP", asy
         return error instanceof rk.ParseError && error.diagnostics.length > 0;
       }
     })();
-    return { beforeInit, text, title, structuredError };
+    const unsafeDateError = (() => {
+      try {
+        rk.BibDocument.parse("@misc{a,date={123456X}}").validate();
+      } catch (error) {
+        return (
+          error instanceof rk.ParseError &&
+          error.diagnostics[0].code === "invalid_field"
+        );
+      }
+      return false;
+    })();
+    return {
+      beforeInit,
+      text,
+      codecText,
+      lossRefused,
+      recordValidation: library.validate().profile,
+      sourceValidation: rk.BibDocument.parse("@article{a,title={A},doi={bad}}")
+        .validate()
+        .issues.some((issue) => issue.code === "invalid_identifier"),
+      prose,
+      cslId: apa.cslId,
+      title,
+      structuredError,
+      unsafeDateError,
+    };
   });
   expect(result.beforeInit).toBe(true);
   expect(result.text).toBe("(Doe, 2024)");
+  expect(result.codecText).toBe("(Doe, 2024)");
+  expect(result.lossRefused).toBe(true);
+  expect(result.recordValidation).toBe("records");
+  expect(result.sourceValidation).toBe(true);
+  expect(result.prose).toBe("Doe (2024)");
+  expect(result.cslId).toBe("http://www.zotero.org/styles/apa");
   expect(result.title).toBe("Edited");
   expect(result.structuredError).toBe(true);
+  expect(result.unsafeDateError).toBe(true);
   expect(errors).toEqual([]);
 });
 
@@ -54,7 +157,7 @@ test("failed initialization can retry from supplied bytes", async ({
     ).arrayBuffer();
     await rk.init(bytes);
     const parsed = rk.Library.parseBibtex("@book{a,title={A}}");
-    const title = parsed.get("a").title;
+    const title = parsed.get("a").title.chunks[0].text;
     return { failed, title };
   });
   expect(result).toEqual({ failed: true, title: "A" });

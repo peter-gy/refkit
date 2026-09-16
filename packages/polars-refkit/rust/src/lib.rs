@@ -1,3 +1,5 @@
+//! Polars expression registration and row conversion for the portable RefKit core.
+
 mod expressions;
 
 use pyo3::prelude::*;

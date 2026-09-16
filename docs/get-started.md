@@ -103,6 +103,7 @@ Doe, J. (2024). Fast Citations. Journal of Citation Tests.
 | --- | --- |
 | Understand normalized records and editable source | [Choose a bibliography model](/concepts/bibliography-models) |
 | Inspect entries, fields, and diagnostics | [Parse bibliographies](/guides/parse-bibliographies) |
+| Convert BibLaTeX, Hayagriva YAML, and CSL-JSON | [Convert bibliographies](/guides/convert-bibliographies) |
 | Render groups, locators, and ordered citations | [Render citations](/guides/render-citations) |
 | Preserve comments and duplicate occurrences during edits | [Edit raw BibTeX](/guides/edit-bibtex) |
 | Canonically format a bibliography | [Format BibTeX](/guides/format-bibtex) |

@@ -27,10 +27,12 @@
       "text": "Guides",
       "items": [
         { "text": "Parse bibliographies", "link": "/guides/parse-bibliographies" },
+        { "text": "Convert bibliographies", "link": "/guides/convert-bibliographies" },
         { "text": "Render citations", "link": "/guides/render-citations" },
         { "text": "Render structured output", "link": "/guides/render-output" },
         { "text": "Edit raw BibTeX", "link": "/guides/edit-bibtex" },
         { "text": "Format BibTeX", "link": "/guides/format-bibtex" },
+        { "text": "Review duplicates", "link": "/guides/review-duplicates" },
         { "text": "Process Polars columns", "link": "/guides/polars" },
         { "text": "Run in a browser", "link": "/guides/browser" },
         { "text": "Run in Pyodide", "link": "/pyodide" },

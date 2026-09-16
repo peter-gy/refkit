@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::render::{full_bibliography_requests, process_citations};
@@ -6,40 +7,112 @@ use crate::render_tree::{rendered_record_from_bibliography, rendered_record_from
 use crate::{Library, PreparedStyle, RenderedRecord};
 
 #[derive(Debug, Clone)]
+/// One library reference within a citation request.
 pub struct Cite {
+    /// Key of an entry in the prepared library.
     pub key: String,
+    /// Locator text such as a page or chapter range.
     pub locator: Option<String>,
+    /// CSL locator label, defaulting to page when a locator is supplied.
     pub label: Option<String>,
+    /// Requested style-supported citation form.
+    pub purpose: CitePurpose,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Style-dependent treatment of one citation item.
+pub enum CitePurpose {
+    #[default]
+    /// Ordinary citation rendering according to the style.
+    Normal,
+    /// Render the citation's author component.
+    Author,
+    /// Render the citation's year component.
+    Year,
+    /// Render the full reference form.
+    Full,
+    /// Render a narrative citation for use in prose.
+    Prose,
+}
+
+impl CitePurpose {
+    #[must_use]
+    /// Return the purpose identifier accepted by host adapters.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Author => "author",
+            Self::Year => "year",
+            Self::Full => "full",
+            Self::Prose => "prose",
+        }
+    }
+}
+
+impl FromStr for CitePurpose {
+    type Err = DocumentError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "normal" => Ok(Self::Normal),
+            "author" => Ok(Self::Author),
+            "year" => Ok(Self::Year),
+            "full" => Ok(Self::Full),
+            "prose" => Ok(Self::Prose),
+            _ => Err(DocumentError::UnknownCitationPurpose(value.to_string())),
+        }
+    }
 }
 
 impl Cite {
-    pub fn new(key: String, locator: Option<String>, label: Option<String>) -> Self {
+    #[must_use]
+    /// Construct a request item. Reference and locator validation occurs at rendering.
+    pub fn new(
+        key: String,
+        locator: Option<String>,
+        label: Option<String>,
+        purpose: CitePurpose,
+    ) -> Self {
         Self {
             key,
             locator,
             label,
+            purpose,
         }
     }
 }
 
 #[derive(Debug, Clone)]
+/// Ordered citation items with optional note context.
 pub struct CitationRequest {
+    /// Citation items in requested order. Rendering rejects an empty list.
     pub items: Vec<Cite>,
+    /// One-based note number, bounded to the portable unsigned 32-bit range.
     pub note_number: Option<usize>,
 }
 
 impl CitationRequest {
+    #[must_use]
+    /// Construct a citation request for validation during rendering.
     pub fn new(items: Vec<Cite>, note_number: Option<usize>) -> Self {
         Self { items, note_number }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Invalid citation input or a failure to materialize rendered output.
 pub enum DocumentError {
+    /// A requested key is absent from the prepared library.
     MissingReference(String),
+    /// A locator label is outside the supported CSL vocabulary.
     UnknownLocatorLabel(String),
+    /// A citation purpose is outside the supported vocabulary.
+    UnknownCitationPurpose(String),
+    /// A citation request contains no items.
     EmptyCitation,
+    /// A note number is zero or exceeds the portable range.
     InvalidNoteNumber,
+    /// The renderer could not produce the requested text, HTML, or tree.
     Render(String),
 }
 
@@ -49,6 +122,9 @@ impl fmt::Display for DocumentError {
             Self::MissingReference(key) => write!(f, "missing reference {}", crate::quoted(key)),
             Self::UnknownLocatorLabel(label) => {
                 write!(f, "unknown locator label {}", crate::quoted(label))
+            }
+            Self::UnknownCitationPurpose(purpose) => {
+                write!(f, "unknown citation purpose {}", crate::quoted(purpose))
             }
             Self::EmptyCitation => f.write_str("citation requires at least one item"),
             Self::InvalidNoteNumber => f.write_str("note number must be between 1 and 4294967295"),
@@ -60,6 +136,7 @@ impl fmt::Display for DocumentError {
 impl std::error::Error for DocumentError {}
 
 #[derive(Clone)]
+/// Prepared library, style, and locale inputs reused across fresh render operations.
 pub struct Document {
     library: Arc<Library>,
     style: Arc<PreparedStyle>,
@@ -67,12 +144,17 @@ pub struct Document {
 }
 
 #[derive(Debug)]
+/// Ordered citations and the bibliography produced by one rendering operation.
 pub struct RenderedDocument {
+    /// One rendered record per request, in request order.
     pub citations: Vec<RenderedRecord>,
+    /// Bibliography for the cited entries in style-defined order.
     pub bibliography: RenderedRecord,
 }
 
 impl Document {
+    /// Prepare shared inputs without retaining citation-processing history.
+    #[must_use]
     pub fn new(library: Arc<Library>, style: Arc<PreparedStyle>, locale: Option<String>) -> Self {
         Self {
             library,
@@ -81,10 +163,17 @@ impl Document {
         }
     }
 
+    #[must_use]
+    /// Return the number of available top-level library entries.
     pub fn entry_count(&self) -> usize {
         self.library.len()
     }
 
+    /// Render the complete ordered request sequence with fresh citation state.
+    ///
+    /// # Errors
+    /// Rejects missing keys, invalid locator or note context, empty citations,
+    /// and failures while materializing the renderer's output.
     pub fn render(
         &self,
         requests: Vec<CitationRequest>,
@@ -115,6 +204,14 @@ impl Document {
         })
     }
 
+    /// Render a bibliography using the supplied citation sequence as context.
+    ///
+    /// # Errors
+    /// Returns citation-input or output-materialization errors as in [`Self::render`].
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "The public document operations consistently consume one prepared citation-request sequence, transferred from the host adapter."
+    )]
     pub fn cited_bibliography(
         &self,
         requests: Vec<CitationRequest>,
@@ -128,6 +225,10 @@ impl Document {
         rendered_record_from_bibliography(rendered.bibliography).map_err(DocumentError::Render)
     }
 
+    /// Render every library entry in the style's bibliography order.
+    ///
+    /// # Errors
+    /// Returns a rendering or output-materialization failure.
     pub fn full_bibliography(&self) -> Result<RenderedRecord, DocumentError> {
         self.cited_bibliography(full_bibliography_requests(&self.library))
     }
@@ -138,6 +239,38 @@ mod tests {
     use crate::{Library, RecoveryPolicy, load_prepared_style};
 
     use super::*;
+
+    #[test]
+    fn citation_purposes_render_author_year_and_prose() {
+        let document = test_document(
+            "apa",
+            "@book{a,author={Doe, Jane},title={A Book},year={2024}}",
+        );
+        for (purpose, expected) in [
+            (CitePurpose::Normal, "(Doe, 2024)"),
+            (CitePurpose::Author, "Doe"),
+            (CitePurpose::Year, "2024"),
+            (CitePurpose::Prose, "Doe (2024)"),
+        ] {
+            let rendered = document
+                .render(vec![CitationRequest::new(
+                    vec![Cite::new("a".into(), None, None, purpose)],
+                    None,
+                )])
+                .unwrap();
+            assert_eq!(rendered.citations[0].text, expected);
+            assert!(rendered.citations[0].html.contains("Doe") || purpose == CitePurpose::Year);
+            assert!(rendered.bibliography.text.contains("A Book"));
+        }
+        let full = document
+            .render(vec![CitationRequest::new(
+                vec![Cite::new("a".into(), None, None, CitePurpose::Full)],
+                None,
+            )])
+            .unwrap();
+        assert!(full.citations[0].text.contains("A Book"));
+        assert!(full.citations[0].html.contains("<i>"));
+    }
 
     #[test]
     fn missing_reference_fails_whole_document_render() {
@@ -166,6 +299,7 @@ mod tests {
                     "valid".to_string(),
                     Some("12".to_string()),
                     Some("nonsense".to_string()),
+                    CitePurpose::Normal,
                 )],
                 note_number: None,
             }])
@@ -207,6 +341,9 @@ mod tests {
     }
 
     fn test_request(key: &str) -> CitationRequest {
-        CitationRequest::new(vec![Cite::new(key.to_string(), None, None)], None)
+        CitationRequest::new(
+            vec![Cite::new(key.to_string(), None, None, CitePurpose::Normal)],
+            None,
+        )
     }
 }

@@ -15,6 +15,8 @@ RefKit exposes bibliography parsing, raw BibTeX editing, Citation Style Language
 
 Use the [developer documentation](development_docs/README.md) for architecture, workflows, tests, repository contracts, packaging, releases, and benchmarks.
 
+All Rust workspaces share the Rust 1.95 floor and canonical lint tables from the root manifest. Every package inherits workspace lints. Keep `clippy.toml`, the adapter workspace mirrors, and `scripts/rust_quality_contract.py` aligned. Fix findings before adding a local `expect` with an invariant-specific reason. Never use `allow`, crate-wide expectations, broad lint-group exceptions, or dead-code suppressions. Run all-target/all-feature Clippy, all-feature tests, and `make rust-audit` across all three workspaces. See [Rust quality](development_docs/rust-quality.md) for pinned tools, dependency exceptions, and explicit-baseline API checks.
+
 ## Architecture
 
 - `crates/refkit-core` owns bibliography semantics. Its exported Rust types and operations form the portable core API used by every adapter.

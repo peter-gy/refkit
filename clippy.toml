@@ -1,0 +1,12 @@
+msrv = "1.95"
+too-many-lines-threshold = 100
+excessive-nesting-threshold = 4
+disallowed-names = ["..", "thing", "stuff", "temp", "tmp"]
+doc-valid-idents = ["..", "RefKit", "BibTeX", "BibLaTeX", "PyO3", "Pyodide"]
+
+# Tests fail through assertions and fixture extraction, not recoverable API errors.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+check-incompatible-msrv-in-tests = true

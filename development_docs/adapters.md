@@ -9,15 +9,15 @@ Adapters translate host values and lifecycle into the portable core API. They de
 | Module | Boundary |
 | --- | --- |
 | `filesystem.rs` | Reads bytes, selects file formats, attaches decode context, and writes files. |
-| `library.rs` and `entry.rs` | Maps normalized records, selectors, projection, diagnostics, and key errors. |
+| `library.rs` and `conversion.rs` | Maps normalized records, selectors, projection, diagnostics, and key errors. |
 | `style.rs` | Loads bundled or explicit styles and validates `Locale` objects. |
 | `citation.rs` and `document.rs` | Validates Python citation shapes and maps ordered rendering. |
 | `rendered.rs` | Converts text, HTML, and typed nodes into Python values. |
-| `raw.rs` | Owns GIL-bound live raw views and field mutation. |
+| `raw.rs` | Adapts immutable raw snapshots, occurrence handles, atomic patches and reports. |
 | `tidy.rs` | Parses option forms and maps warnings and structured syntax errors. |
 | `module.rs` | Registers `refkit._native` and runtime metadata. |
 
-The extension declares that it uses the Python Global Interpreter Lock. Core-heavy work detaches after Python inputs have become Rust-owned values. Live raw handles use `Rc<RefCell<RawDocument>>`, remain bound to their creating Python thread, and clone the raw state before a write or tidy operation detaches.
+The extension declares that it uses the Python Global Interpreter Lock. Core-heavy work detaches after Python inputs have become Rust-owned values. Raw handles retain `Arc<RawDocument>` snapshots and can be read across Python threads. Patching returns a new snapshot and leaves existing handles unchanged.
 
 `Style.id` is an adapter source label. It is a bundled name, path string, or `xml`. A plain locale string passed to `Document` bypasses `Locale.load` validation and is forwarded to the renderer.
 
@@ -59,6 +59,6 @@ Rendering builders choose a known plugin and dtype from `output`. Formatting bui
 
 ## Pyodide Boundary
 
-PyEmscripten wheels reuse the Python composition and Polars adapter surfaces. Shared runtime tests and probes in `packages/refkit-tests/src/refkit_tests` establish installed imports, parsing, rendering, raw editing, formatting, Polars callbacks, and row failures on CPython and the pinned Pyodide xbuild environment. CI installs the support wheel alongside each candidate package and runs it outside the checkout.
+RefKit's PyEmscripten wheels expose the Python API in Pyodide. Shared runtime tests and probes in `packages/refkit-tests/src/refkit_tests` establish installed imports, parsing, rendering, raw editing, and formatting on CPython and the pinned Pyodide xbuild environment. CI installs the support wheel alongside the candidate package and runs it outside the checkout.
 
-Keep the Python Polars package and Rust plugin application binary interface family aligned through `.github/pyodide/runtime.json` and `make pyodide-lock-check`.
+The Polars adapter supports native CPython on Linux, macOS, and Windows. Its plugin loading, callbacks, and row failures are verified through native installed-wheel tests.

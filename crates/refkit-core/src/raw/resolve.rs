@@ -3,56 +3,20 @@ use std::ops::Range;
 
 use biblatex::{Field, RawChunk, Spanned};
 
-use super::parse::{parse_assignment_atoms, parse_raw_document};
+use super::parse::parse_assignment_atoms;
 use super::{RawBlock, RawDocument, RawValueAtom, RawValueMode, ResolvedBibEntry};
-use crate::library::{
-    Diagnostic, FieldResolver, ParseFailure, validate_source, validate_source_size,
-};
+use crate::library::{Diagnostic, FieldResolver, ParseFailure, validate_source_size};
 
 pub(super) fn resolve_document(
     document: &RawDocument,
 ) -> Result<Vec<ResolvedBibEntry>, ParseFailure> {
-    let (changed, edited_bytes) = document
-        .data
-        .entry_blocks
-        .iter()
-        .flat_map(|entry| &entry.field_blocks)
-        .filter(|field| field.changed)
-        .fold((false, 0usize), |(_, bytes), field| {
-            (true, bytes.saturating_add(field.value.len()))
-        });
-    validate_source_size(edited_bytes)?;
-    let current;
-    let data = if changed {
-        let source = document
-            .render()
-            .map_err(|message| Diagnostic::error("syntax_error", None, message))?;
-        validate_source(&source)?;
-        current = parse_raw_document(&source);
-        &current
-    } else {
-        validate_source_size(
-            document
-                .data
-                .blocks
-                .last()
-                .map_or(0, |block| block.span().end),
-        )?;
-        &document.data
-    };
+    let data = &document.data;
+    validate_source_size(data.blocks.last().map_or(0, |block| block.span().end))?;
     let mut definitions = Vec::new();
     for block in &data.blocks {
         match block {
             RawBlock::StringDef { raw, span, .. } => {
-                let body_start = raw.find(['{', '(']).expect("parsed block has an opener") + 1;
-                let (key, _, atoms) = parse_assignment_atoms(&raw[body_start..raw.len() - 1])
-                    .ok_or_else(|| {
-                        Diagnostic::error(
-                            "syntax_error",
-                            Some(span.clone()),
-                            "invalid BibTeX string definition".to_string(),
-                        )
-                    })?;
+                let (key, atoms) = string_definition(raw, span)?;
                 definitions.push((key, atoms, span.clone()));
             }
             RawBlock::Failed { error, span, .. } => {
@@ -126,6 +90,23 @@ pub(super) fn resolve_document(
     Ok(entries)
 }
 
+fn string_definition(
+    raw: &str,
+    span: &Range<usize>,
+) -> Result<(String, Vec<RawValueAtom>), Diagnostic> {
+    let invalid = || {
+        Diagnostic::error(
+            "syntax_error",
+            Some(span.clone()),
+            "invalid BibTeX string definition".to_string(),
+        )
+    };
+    let body_start = raw.find(['{', '(']).ok_or_else(invalid)? + 1;
+    let body = raw.get(body_start..raw.len() - 1).ok_or_else(invalid)?;
+    let (key, _, atoms) = parse_assignment_atoms(body).ok_or_else(invalid)?;
+    Ok((key, atoms))
+}
+
 fn as_field<'a>(atoms: &'a [RawValueAtom], span: &Range<usize>) -> Field<'a> {
     atoms
         .iter()
@@ -145,6 +126,7 @@ fn as_field<'a>(atoms: &'a [RawValueAtom], span: &Range<usize>) -> Field<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fmt::Write as _;
 
     #[test]
     fn resolves_source_fields_with_macros_and_preserves_tex() {
@@ -192,9 +174,15 @@ mod tests {
         );
         let entry = document.unique_entry("work").unwrap().unwrap();
         let field = document.unique_field(entry, "title").unwrap().unwrap();
-        document
-            .set_field_value(entry, field, r#"new # "literal""#.to_string())
-            .unwrap();
+        document = document
+            .apply_patch(&[crate::BibEdit::SetField {
+                expression: false,
+                entry_id: entry,
+                field_id: field,
+                value: r#"new # "literal""#.into(),
+            }])
+            .unwrap()
+            .document;
         let before = document.render().unwrap();
         let entries = document.resolve().unwrap();
         assert_eq!(entries[0].fields["title"], r#"new # "literal""#);
@@ -223,9 +211,9 @@ mod tests {
     #[test]
     fn macro_lookup_uses_final_definitions_and_preserves_literal_escapes() {
         let entries = RawDocument::parse(
-            r#"@misc{Work,title=pub,month=JAN,note={A \} B}}
+            r"@misc{Work,title=pub,month=JAN,note={A \} B}}
 @misc{work,title={lowercase key}}
-@string{PUB={old}}@string{pub=next,}@string{next={new}}@string{jan={Custom Month}}"#,
+@string{PUB={old}}@string{pub=next,}@string{next={new}}@string{jan={Custom Month}}",
         )
         .resolve()
         .unwrap();
@@ -246,13 +234,20 @@ mod tests {
                 .code,
             "resource_limit"
         );
-        let mut document = RawDocument::parse("@misc{work,title={old}}");
+        let document = RawDocument::parse("@misc{work,title={old}}");
         let entry = document.unique_entry("work").unwrap().unwrap();
         let field = document.unique_field(entry, "title").unwrap().unwrap();
-        document.set_field_value(entry, field, source).unwrap();
         assert_eq!(
-            document.resolve().unwrap_err().diagnostics[0].code,
-            "resource_limit"
+            document
+                .apply_patch(&[crate::BibEdit::SetField {
+                    expression: false,
+                    entry_id: entry,
+                    field_id: field,
+                    value: source
+                }])
+                .unwrap_err()
+                .code,
+            crate::BibPatchErrorCode::ResourceLimit
         );
     }
 
@@ -262,9 +257,15 @@ mod tests {
         let mut document = RawDocument::parse(&source);
         let entry = document.unique_entry("work").unwrap().unwrap();
         let field = document.unique_field(entry, "title").unwrap().unwrap();
-        document
-            .set_field_value(entry, field, "small".to_string())
-            .unwrap();
+        document = document
+            .apply_patch(&[crate::BibEdit::SetField {
+                expression: false,
+                entry_id: entry,
+                field_id: field,
+                value: "small".into(),
+            }])
+            .unwrap()
+            .document;
 
         let entries = document.resolve().unwrap();
         assert_eq!(entries[0].fields["title"], "small");
@@ -338,11 +339,13 @@ mod tests {
     fn bounds_aggregate_expansion_and_dependency_depth() {
         let mut source = "@string{x0={}}".to_string();
         for index in 1..20 {
-            source.push_str(&format!(
+            write!(
+                source,
                 "@string{{x{index}=x{} # x{}}}",
                 index - 1,
                 index - 1
-            ));
+            )
+            .unwrap();
         }
         source.push_str("@misc{work,title=x19}");
         assert_eq!(
@@ -356,7 +359,7 @@ mod tests {
 
         let mut source = "@string{x0={ok}}".to_string();
         for index in 1..65 {
-            source.push_str(&format!("@string{{x{index}=x{}}}", index - 1));
+            write!(source, "@string{{x{index}=x{}}}", index - 1).unwrap();
         }
         source.push_str("@misc{work,title=x64}");
         assert_eq!(

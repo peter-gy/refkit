@@ -27,7 +27,7 @@ Rendering accepts `output="text"`, `"html"`, or `"rendered"`. The output choice 
 | `diagnostics(bibtex_col, *, recovery="error")` | `List[Diagnostic]` | Structured diagnostic records. |
 | `parse_report(bibtex_col, *, recovery="error")` | Parse report struct | `ok=False` with diagnostics. |
 
-`entries` defaults to `key`, `title`, `doi`, and `volume`. Supported fields are `key`, `entry_type`, `type`, `title`, `date`, `doi`, and `volume`. An empty field list returns one empty struct per entry. Unknown or repeated fields abort the query.
+`entries` defaults to `key`, `title`, `doi`, and `volume`. Supported fields are `key`, `entry_type`, `title`, `date`, `doi`, and `volume`. An empty field list returns one empty struct per entry. Unknown or repeated fields abort the query.
 
 `parse_report` performs one parse for `ok`, `entry_count`, `keys`, and `diagnostics`. Null source produces a null report. [Data Shapes](/reference/data-shapes) defines report and diagnostic fields.
 

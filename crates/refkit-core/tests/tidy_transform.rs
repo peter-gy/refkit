@@ -1,4 +1,9 @@
+//! Formatter transformations, key allocation, and reference rewrites.
+
+#![cfg(test)]
+
 use refkit_core::{DuplicateRule, MergeStrategy, RawDocument, TidyError, TidyOptions, tidy_bibtex};
+use std::fmt::Write as _;
 
 #[test]
 fn generated_keys_reserve_final_bases_and_retained_original_keys() {
@@ -30,9 +35,10 @@ fn generated_keys_reserve_final_bases_and_retained_original_keys() {
 
 #[test]
 fn generated_letter_suffixes_extend_past_one_letter() {
-    let source = (0..28)
-        .map(|index| format!("@misc{{k{index},title={{Shared}}}}\n"))
-        .collect::<String>();
+    let mut source = String::new();
+    for index in 0..28 {
+        writeln!(source, "@misc{{k{index},title={{Shared}}}}").unwrap();
+    }
     let result = tidy_bibtex(
         &source,
         TidyOptions {
@@ -200,8 +206,14 @@ fn renamed_crossrefs_preserve_normalized_inheritance() {
         refkit_core::Library::parse_biblatex(&result.bibtex, refkit_core::RecoveryPolicy::Error)
             .unwrap();
     let chapter = library.get_record("chapter").unwrap();
-    assert_eq!(chapter.title.as_deref(), Some("Chapter"));
-    assert_eq!(chapter.date.as_deref(), Some("2024"));
+    assert_eq!(
+        chapter.field(refkit_core::EntryField::Title).as_deref(),
+        Some("Chapter")
+    );
+    assert_eq!(
+        chapter.field(refkit_core::EntryField::Date).as_deref(),
+        Some("2024")
+    );
 }
 
 #[test]
@@ -256,7 +268,11 @@ fn reference_normalization_preserves_builtin_macros_definitions_and_literals() {
         )
         .unwrap();
         assert_eq!(
-            library.get_record("child").unwrap().date.as_deref(),
+            library
+                .get_record("child")
+                .unwrap()
+                .field(refkit_core::EntryField::Date)
+                .as_deref(),
             Some("2024"),
             "source: {source}\noutput: {}",
             result.bibtex
@@ -300,7 +316,11 @@ fn merged_reference_keys_preserve_typography_sensitive_identity() {
     let original =
         refkit_core::Library::parse_biblatex(source, refkit_core::RecoveryPolicy::Error).unwrap();
     assert_eq!(
-        original.get_record("c").unwrap().date.as_deref(),
+        original
+            .get_record("c")
+            .unwrap()
+            .field(refkit_core::EntryField::Date)
+            .as_deref(),
         Some("2024")
     );
     let result = tidy_bibtex(
@@ -316,7 +336,11 @@ fn merged_reference_keys_preserve_typography_sensitive_identity() {
             .unwrap();
     assert!(library.contains_key("A--B"));
     assert_eq!(
-        library.get_record("c").unwrap().date.as_deref(),
+        library
+            .get_record("c")
+            .unwrap()
+            .field(refkit_core::EntryField::Date)
+            .as_deref(),
         Some("2024")
     );
 }
@@ -343,7 +367,11 @@ fn reference_graph_follows_emitted_duplicate_and_omission_policy() {
     let original =
         refkit_core::Library::parse_biblatex(source, refkit_core::RecoveryPolicy::Error).unwrap();
     assert_eq!(
-        original.get_record("b").unwrap().date.as_deref(),
+        original
+            .get_record("b")
+            .unwrap()
+            .field(refkit_core::EntryField::Date)
+            .as_deref(),
         Some("2024")
     );
     for (omit, expected_date) in [(Vec::new(), Some("2024")), (vec!["crossref".into()], None)] {
@@ -363,7 +391,11 @@ fn reference_graph_follows_emitted_duplicate_and_omission_policy() {
         )
         .unwrap();
         assert_eq!(
-            library.get_record("beta").unwrap().date.as_deref(),
+            library
+                .get_record("beta")
+                .unwrap()
+                .field(refkit_core::EntryField::Date)
+                .as_deref(),
             expected_date
         );
     }

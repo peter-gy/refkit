@@ -1,3 +1,7 @@
+//! Conformance with pinned bibliography formatter specification fixtures.
+
+#![cfg(test)]
+
 use std::fs;
 use std::path::PathBuf;
 
@@ -81,38 +85,7 @@ fn all_upstream_specs_match_upstream() {
     let mut failures = Vec::new();
     for name in all_spec_files() {
         for (index, spec) in read_specs(&name).into_iter().enumerate() {
-            match tidy(&spec.input, spec.options.clone().into_tidy_options()) {
-                Ok(result) => {
-                    if let Some(expected) = spec.expected.as_ref()
-                        && result.bibtex != *expected
-                    {
-                        failures.push(format!(
-                            "{name}#{index}: output mismatch\n{}\nexpected:\n{}\nactual:\n{}",
-                            first_diff(expected, &result.bibtex),
-                            snippet(expected),
-                            snippet(&result.bibtex)
-                        ));
-                    }
-                    if !spec.warnings.is_empty() {
-                        let expected_rules = spec
-                            .warnings
-                            .iter()
-                            .filter_map(|warning| warning.rule.as_deref())
-                            .collect::<Vec<_>>();
-                        let actual_rules = result
-                            .warnings
-                            .iter()
-                            .filter_map(|warning| warning.rule().map(|rule| rule.as_str()))
-                            .collect::<Vec<_>>();
-                        if result.warnings.len() != spec.warnings.len()
-                            || (!expected_rules.is_empty() && actual_rules != expected_rules)
-                        {
-                            failures.push(format!("{name}#{index}: warning mismatch"));
-                        }
-                    }
-                }
-                Err(error) => failures.push(format!("{name}#{index}: {error}")),
-            }
+            check_spec(spec, &name, index, &mut failures);
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
@@ -126,39 +99,26 @@ impl SpecOptions {
                 serde_yaml::Value::Bool(false) => options.align = None,
                 serde_yaml::Value::Bool(true) => options.align = Some(14),
                 serde_yaml::Value::Number(value) => {
-                    options.align = value.as_u64().map(|value| value as usize);
+                    options.align = value.as_u64().map(|value| usize::try_from(value).unwrap());
                 }
                 _ => {}
             }
         }
-        if let Some(blank_lines) = self.blank_lines {
-            options.blank_lines = blank_lines;
-        }
-        if let Some(curly) = self.curly {
-            options.curly = curly;
-        }
+        options.blank_lines = self.blank_lines.unwrap_or(options.blank_lines);
+        options.curly = self.curly.unwrap_or(options.curly);
         if let Some(duplicates) = self.duplicates {
             options.duplicates = duplicate_rules(duplicates);
         }
-        if let Some(drop_all_caps) = self.drop_all_caps {
-            options.drop_all_caps = drop_all_caps;
-        }
-        if let Some(enclosing_braces) = self.enclosing_braces {
-            match enclosing_braces {
-                serde_yaml::Value::Bool(true) => options = options.with_enclosing_braces(),
-                serde_yaml::Value::Bool(false) => options.enclosing_braces = None,
-                serde_yaml::Value::Sequence(values) => {
-                    options.enclosing_braces = Some(string_sequence(values));
-                }
-                _ => {}
-            }
-        }
-        if let Some(encode_urls) = self.encode_urls {
-            options.encode_urls = encode_urls;
-        }
-        if let Some(escape) = self.escape {
-            options.escape = escape;
-        }
+        options.drop_all_caps = self.drop_all_caps.unwrap_or(options.drop_all_caps);
+        options.enclosing_braces = string_option(
+            self.enclosing_braces,
+            options.enclosing_braces,
+            TidyOptions::default()
+                .with_enclosing_braces()
+                .enclosing_braces,
+        );
+        options.encode_urls = self.encode_urls.unwrap_or(options.encode_urls);
+        options.escape = self.escape.unwrap_or(options.escape);
         if let Some(generate_keys) = self.generate_keys {
             match generate_keys {
                 serde_yaml::Value::Bool(true) => options = options.with_generate_keys(),
@@ -167,9 +127,7 @@ impl SpecOptions {
                 _ => {}
             }
         }
-        if let Some(lowercase) = self.lowercase {
-            options.lowercase = lowercase;
-        }
+        options.lowercase = self.lowercase.unwrap_or(options.lowercase);
         if let Some(max_authors) = self.max_authors {
             options.max_authors = Some(max_authors);
         }
@@ -191,88 +149,40 @@ impl SpecOptions {
                 _ => {}
             }
         }
-        if let Some(months) = self.months {
-            options.months = months;
-        }
-        if let Some(numeric) = self.numeric {
-            options.numeric = numeric;
-        }
+        options.months = self.months.unwrap_or(options.months);
+        options.numeric = self.numeric.unwrap_or(options.numeric);
         if let Some(omit) = self.omit {
             options.omit = omit;
         }
-        if let Some(remove_braces) = self.remove_braces {
-            match remove_braces {
-                serde_yaml::Value::Bool(true) => options = options.with_remove_braces(),
-                serde_yaml::Value::Bool(false) => options.remove_braces = None,
-                serde_yaml::Value::Sequence(values) => {
-                    options.remove_braces = Some(string_sequence(values));
-                }
-                _ => {}
-            }
-        }
-        if let Some(remove_duplicate_fields) = self.remove_duplicate_fields {
-            options.remove_duplicate_fields = remove_duplicate_fields;
-        }
-        if let Some(remove_empty_fields) = self.remove_empty_fields {
-            options.remove_empty_fields = remove_empty_fields;
-        }
-        if let Some(space) = self.space {
-            match space {
-                serde_yaml::Value::Bool(true) => options.space = 2,
-                serde_yaml::Value::Bool(false) => {}
-                serde_yaml::Value::Number(value) => {
-                    if let Some(value) = value.as_u64() {
-                        options.space = value as usize;
-                    }
-                }
-                _ => {}
-            }
-        }
-        if let Some(sort_fields) = self.sort_fields {
-            match sort_fields {
-                serde_yaml::Value::Bool(true) => options = options.with_sort_fields(),
-                serde_yaml::Value::Bool(false) => options.sort_fields = None,
-                serde_yaml::Value::Sequence(values) => {
-                    options.sort_fields = Some(
-                        values
-                            .into_iter()
-                            .filter_map(|value| value.as_str().map(str::to_string))
-                            .collect(),
-                    );
-                }
-                _ => {}
-            }
-        }
-        if let Some(sort) = self.sort {
-            match sort {
-                serde_yaml::Value::Bool(true) => options = options.with_sort(),
-                serde_yaml::Value::Bool(false) => options.sort = None,
-                serde_yaml::Value::Sequence(values) => {
-                    options.sort = Some(
-                        values
-                            .into_iter()
-                            .filter_map(|value| value.as_str().map(str::to_string))
-                            .collect(),
-                    );
-                }
-                _ => {}
-            }
-        }
-        if let Some(strip_comments) = self.strip_comments {
-            options.strip_comments = strip_comments;
-        }
-        if let Some(strip_enclosing_braces) = self.strip_enclosing_braces {
-            options.strip_enclosing_braces = strip_enclosing_braces;
-        }
-        if let Some(tab) = self.tab {
-            options.tab = tab;
-        }
-        if let Some(tidy_comments) = self.tidy_comments {
-            options.tidy_comments = tidy_comments;
-        }
-        if let Some(trailing_commas) = self.trailing_commas {
-            options.trailing_commas = trailing_commas;
-        }
+        options.remove_braces = string_option(
+            self.remove_braces,
+            options.remove_braces,
+            TidyOptions::default().with_remove_braces().remove_braces,
+        );
+        options.remove_duplicate_fields = self
+            .remove_duplicate_fields
+            .unwrap_or(options.remove_duplicate_fields);
+        options.remove_empty_fields = self
+            .remove_empty_fields
+            .unwrap_or(options.remove_empty_fields);
+        apply_space(self.space, &mut options.space);
+        options.sort_fields = string_option(
+            self.sort_fields,
+            options.sort_fields,
+            TidyOptions::default().with_sort_fields().sort_fields,
+        );
+        options.sort = string_option(
+            self.sort,
+            options.sort,
+            TidyOptions::default().with_sort().sort,
+        );
+        options.strip_comments = self.strip_comments.unwrap_or(options.strip_comments);
+        options.strip_enclosing_braces = self
+            .strip_enclosing_braces
+            .unwrap_or(options.strip_enclosing_braces);
+        options.tab = self.tab.unwrap_or(options.tab);
+        options.tidy_comments = self.tidy_comments.unwrap_or(options.tidy_comments);
+        options.trailing_commas = self.trailing_commas.unwrap_or(options.trailing_commas);
         if let Some(wrap) = self.wrap {
             options.wrap = Some(wrap);
         }
@@ -295,7 +205,6 @@ fn duplicate_rules(value: serde_yaml::Value) -> Option<Vec<refkit_core::Duplicat
             refkit_core::DuplicateRule::Abstract,
             refkit_core::DuplicateRule::Key,
         ]),
-        serde_yaml::Value::Bool(false) => None,
         serde_yaml::Value::Sequence(values) => Some(
             values
                 .into_iter()
@@ -423,4 +332,66 @@ fn parse_spec_document(text: &str, path: &std::path::Path) -> SpecDocument {
     serde_yaml::from_str(text).unwrap_or_else(|error| {
         panic!("failed to parse {}: {error}", path.display());
     })
+}
+
+fn check_spec(spec: SpecDocument, name: &str, index: usize, failures: &mut Vec<String>) {
+    match tidy(&spec.input, spec.options.into_tidy_options()) {
+        Ok(result) => {
+            if let Some(expected) = spec.expected.as_ref()
+                && result.bibtex != *expected
+            {
+                failures.push(format!(
+                    "{name}#{index}: output mismatch\n{}\nexpected:\n{}\nactual:\n{}",
+                    first_diff(expected, &result.bibtex),
+                    snippet(expected),
+                    snippet(&result.bibtex)
+                ));
+            }
+            if !spec.warnings.is_empty() {
+                let expected_rules = spec
+                    .warnings
+                    .iter()
+                    .filter_map(|warning| warning.rule.as_deref())
+                    .collect::<Vec<_>>();
+                let actual_rules = result
+                    .warnings
+                    .iter()
+                    .filter_map(|warning| warning.rule().map(refkit_core::DuplicateRule::as_str))
+                    .collect::<Vec<_>>();
+                if result.warnings.len() != spec.warnings.len()
+                    || (!expected_rules.is_empty() && actual_rules != expected_rules)
+                {
+                    failures.push(format!("{name}#{index}: warning mismatch"));
+                }
+            }
+        }
+        Err(error) => failures.push(format!("{name}#{index}: {error}")),
+    }
+}
+
+fn apply_space(space: Option<serde_yaml::Value>, current: &mut usize) {
+    if let Some(space) = space {
+        match space {
+            serde_yaml::Value::Bool(true) => *current = 2,
+            serde_yaml::Value::Number(value) => {
+                if let Some(value) = value.as_u64() {
+                    *current = usize::try_from(value).unwrap();
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn string_option(
+    value: Option<serde_yaml::Value>,
+    default: Option<Vec<String>>,
+    enabled: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    match value {
+        Some(serde_yaml::Value::Bool(true)) => enabled,
+        Some(serde_yaml::Value::Bool(false)) => None,
+        Some(serde_yaml::Value::Sequence(values)) => Some(string_sequence(values)),
+        _ => default,
+    }
 }

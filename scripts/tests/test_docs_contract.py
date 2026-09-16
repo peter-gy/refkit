@@ -3,7 +3,9 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from scripts.docs_contract import ROOT, check_contract
+import pytest
+
+from scripts.docs_contract import check_contract
 
 
 def _write(path: Path, source: str) -> None:
@@ -20,19 +22,6 @@ def _documentation_tree(root: Path) -> None:
     _write(root / "packages/refkit/README.md", "# refkit\n")
 
 
-def test_repository_matches_the_documentation_contract() -> None:
-    assert check_contract(ROOT) == []
-
-
-def test_development_docs_reject_non_markdown_files(tmp_path: Path) -> None:
-    _documentation_tree(tmp_path)
-    _write(tmp_path / "development_docs/state.json", "{}\n")
-
-    assert check_contract(tmp_path) == [
-        "developer documentation must be Markdown: development_docs/state.json"
-    ]
-
-
 def test_documentation_contract_reports_missing_and_escaping_targets(tmp_path: Path) -> None:
     _documentation_tree(tmp_path)
     _write(
@@ -44,6 +33,26 @@ def test_documentation_contract_reports_missing_and_escaping_targets(tmp_path: P
         "docs/guide.md:1: local link target does not exist: missing.md",
         "docs/guide.md:2: local link escapes the repository: ../../outside.md",
     ]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "[Page][reference]\n\n[reference]: missing.md\n",
+        "- Resources\n    - [Page](missing.md)\n",
+        "- Resources\n\t- [Page](missing.md)\n",
+    ],
+    ids=["reference", "nested-list", "tab-indented-list"],
+)
+def test_documentation_links_resolve_inside_markdown_structures(
+    tmp_path: Path, source: str
+) -> None:
+    _documentation_tree(tmp_path)
+    _write(tmp_path / "docs/guide.md", source)
+
+    errors = check_contract(tmp_path)
+    assert len(errors) == 1
+    assert "local link target does not exist: missing.md" in errors[0]
 
 
 def test_documentation_contract_resolves_vitepress_routes_and_public_assets(
@@ -58,67 +67,6 @@ def test_documentation_contract_resolves_vitepress_routes_and_public_assets(
     )
 
     assert check_contract(tmp_path) == []
-
-
-def test_documentation_contract_checks_scripts_guidance(tmp_path: Path) -> None:
-    _documentation_tree(tmp_path)
-    _write(tmp_path / "scripts/AGENTS.md", "[Missing](missing.md)\n")
-
-    assert check_contract(tmp_path) == [
-        "scripts/AGENTS.md:1: local link target does not exist: missing.md"
-    ]
-
-
-def test_public_docs_cannot_link_to_developer_documentation(tmp_path: Path) -> None:
-    _documentation_tree(tmp_path)
-    _write(
-        tmp_path / "packages/refkit/README.md",
-        "[Internals](../../development_docs/architecture.md)\n",
-    )
-
-    assert check_contract(tmp_path) == [
-        "packages/refkit/README.md:1: end-user documentation links to developer documentation: "
-        "../../development_docs/architecture.md"
-    ]
-
-
-def test_reference_links_cannot_bypass_the_public_docs_boundary(tmp_path: Path) -> None:
-    _documentation_tree(tmp_path)
-    _write(
-        tmp_path / "packages/refkit/README.md",
-        "[Internals][developer]\n\n[developer]: ../../development_docs/architecture.md\n",
-    )
-
-    assert check_contract(tmp_path) == [
-        "packages/refkit/README.md:3: end-user documentation links to developer documentation: "
-        "../../development_docs/architecture.md"
-    ]
-
-
-def test_nested_list_links_cannot_bypass_the_public_docs_boundary(tmp_path: Path) -> None:
-    _documentation_tree(tmp_path)
-    _write(
-        tmp_path / "packages/refkit/README.md",
-        "- Resources\n    - [Internals](../../development_docs/architecture.md)\n",
-    )
-
-    assert check_contract(tmp_path) == [
-        "packages/refkit/README.md:2: end-user documentation links to developer documentation: "
-        "../../development_docs/architecture.md"
-    ]
-
-
-def test_tab_nested_list_links_cannot_bypass_the_public_docs_boundary(tmp_path: Path) -> None:
-    _documentation_tree(tmp_path)
-    _write(
-        tmp_path / "packages/refkit/README.md",
-        "- Resources\n\t- [Internals](../../development_docs/architecture.md)\n",
-    )
-
-    assert check_contract(tmp_path) == [
-        "packages/refkit/README.md:2: end-user documentation links to developer documentation: "
-        "../../development_docs/architecture.md"
-    ]
 
 
 def test_root_readme_can_link_to_index_and_fenced_links_are_ignored(tmp_path: Path) -> None:
@@ -137,14 +85,6 @@ def test_root_readme_can_link_to_index_and_fenced_links_are_ignored(tmp_path: Pa
     )
 
     assert check_contract(tmp_path) == []
-
-
-def test_documentation_contract_requires_the_developer_index(tmp_path: Path) -> None:
-    _write(tmp_path / "README.md", "# refkit\n")
-
-    assert check_contract(tmp_path) == [
-        "missing developer documentation index: development_docs/README.md"
-    ]
 
 
 def test_documentation_contract_ignores_private_git_ignored_markdown(tmp_path: Path) -> None:

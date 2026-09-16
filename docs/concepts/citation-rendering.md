@@ -63,7 +63,7 @@ The objects describe the document at distinct levels:
 
 | Object | Owns |
 | --- | --- |
-| `Cite` | One citation key and optional locator such as a page number. |
+| `Cite` | One citation key, a purpose such as `prose`, and an optional locator such as a page number. |
 | `CitationGroup` | One or more items rendered as one citation cluster. |
 | `Citation` | A group, a unique result ID, and an optional document note number. |
 | `Document` | A library, style, and locale prepared for rendering. |

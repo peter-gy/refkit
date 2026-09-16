@@ -1,10 +1,10 @@
 ---
-description: Inspect raw BibTeX blocks and duplicate occurrences, then edit field values while preserving source layout in Python or TypeScript.
+description: Apply atomic BibTeX patches with source preservation and snapshot-relative occurrence mappings in Python or TypeScript.
 ---
 
 # Edit Raw BibTeX
 
-`BibDocument` preserves source-order [BibTeX](https://ctan.org/pkg/bibtex) blocks while field values change. Use it when comments, preambles, strings, malformed blocks, duplicate occurrences, delimiters, or surrounding layout must remain available.
+`BibDocument` preserves source-order [BibTeX](https://ctan.org/pkg/bibtex) blocks. Apply a patch to create an edited snapshot while retaining comments, preambles, strings, malformed blocks, duplicate occurrences, delimiters, and unrelated layout.
 
 ## Update a field value
 
@@ -15,7 +15,18 @@ import refkit as rk
 
 source = "@article{doe2024, title={Fast Citations}, year={2024}}"
 document = rk.BibDocument.parse(source)
-document.entries["doe2024"].fields["title"].value = "Corrected title"
+title_field = document.entries["doe2024"].fields["title"]
+patch_result = document.apply_patch(
+    [
+        {
+            "kind": "set_field",
+            "entry_id": title_field.entry_id,
+            "field_id": title_field.id,
+            "value": "Corrected title",
+        }
+    ]
+)
+document = patch_result["document"]
 print(document.to_bibtex())
 ```
 
@@ -23,8 +34,13 @@ print(document.to_bibtex())
 import * as rk from "refkit-js";
 
 const source = "@article{doe2024, title={Fast Citations}, year={2024}}";
-const document = rk.BibDocument.parse(source);
-document.entries.getUnique("doe2024")!.fields.getUnique("title")!.value = "Corrected title";
+let document = rk.BibDocument.parse(source);
+const titleField = document.entries.getUnique("doe2024")!.fields.getUnique("title")!;
+const patchResult = document.applyPatch([{
+  kind: "set_field", entryId: titleField.entryId,
+  fieldId: titleField.id, value: "Corrected title",
+}]);
+document = patchResult.document;
 console.log(document.toBibtex());
 ```
 
@@ -34,9 +50,33 @@ console.log(document.toBibtex());
 @article{doe2024, title={Corrected title}, year={2024}}
 ```
 
-The field handle updates the shared `BibDocument`. Serializing the document preserves the surrounding source layout. TypeScript examples run in Node.js. In a browser, [initialize RefKit](/guides/browser#initialize-the-module) before parsing. The remaining examples continue with `document`.
+The result contains a new document, byte changes, occurrence mappings, and warnings. The original `title_field` / `titleField` still reads `Fast Citations`. Serializing the returned document preserves every byte outside its reported changes. TypeScript examples run in Node.js. In a browser, [initialize RefKit](/guides/browser#initialize-the-module) before parsing. The remaining examples continue with the returned `document`.
 
-Field assignment validates the replacement against the original delimiter mode. An unsafe replacement raises `ValueError` in Python or `RangeError` in TypeScript before the document changes.
+By default, `set_field` validates the replacement against the original delimiter mode. An unsafe replacement raises `PatchError` and leaves the input snapshot unchanged. Default values must have balanced braces and safe quote boundaries, with no newlines, unescaped percent delimiters, or trailing escape. Bare fields preserve safe bare values. Concatenated expressions become a single braced value.
+
+Set `expression=True` / `expression: true` when `value` is one complete BibTeX expression, such as `press # { Supplement}` or `{https://example.org/a%2Fb}`. This mode preserves macros, concatenations, delimiters, and multiline braced content. Extra assignments or trailing source are rejected. It is available on `set_field`, `add_field`, and each field supplied to `add_entry`.
+
+## Apply structural changes atomically
+
+A patch is an ordered list of edit records. Entry and field IDs refer to occurrences in the input snapshot. Use the returned mappings to target a subsequent snapshot.
+
+| `kind` | Required fields | Behavior |
+| --- | --- | --- |
+| `set_field` | Entry ID, field ID, `value` | Replace one existing raw value. |
+| `add_field` | Entry ID, `name`, `value` | Append a braced field before the entry's closing delimiter. |
+| `remove_field` | Entry ID, field ID | Remove the assignment and its following separator, retaining surrounding comments. |
+| `add_entry` | `key`, entry type | Insert a new entry with optional ordered `fields`. Optional `before` names an input entry ID, otherwise append. |
+| `remove_entry` | Entry ID | Remove one entry block. |
+| `rename_entry` | Entry ID, `key` | Rename a key and rewrite unambiguous `crossref`, `xdata`, and `xref` references. |
+| `set_entry_type` | Entry ID, entry type | Replace the type spelling. |
+
+Python uses `entry_id`, `field_id`, and `entry_type`. TypeScript uses `entryId`, `fieldId`, and `entryType`. New fields use `{name, value}` records with an optional `expression` flag. New values are braced by default, and new entry/field layout uses two-space indentation. Existing unrelated layout is retained.
+
+Multiple changes to the same existing field, key, or type are rejected. Removing an entry conflicts with edits inside it. Insertions before the same anchor retain input order and can precede an anchor removed in the same patch. Duplicate fields and keys remain representable and produce warnings in the result.
+
+Automatic reference rewriting requires unique source and final targets. Ambiguity raises `PatchError`. Reference fields explicitly set or removed in the patch are excluded from automatic rewriting, so supply their final values. Macro definitions remain unchanged, while rewritten reference expressions become braced values.
+
+Patches accept at most 100,000 operations and 16 MiB of authored text. Output is limited to 16 MiB. An existing larger raw snapshot can be reduced within that bound. See [patch reports](/reference/data-shapes#patch-reports) for byte changes and occurrence mappings.
 
 ## Resolve fields for inspection
 
@@ -68,7 +108,7 @@ console.log(resolvedDocument.resolve()[0]!.fields.title);
 A Visual {Data} Guide \& Examples
 ```
 
-Each call uses the current field edits and leaves the document unchanged.
+Each call reads its document snapshot and leaves it unchanged.
 Entry keys retain their case. Entry types and field names are lowercase.
 Macro names are case-insensitive. Definitions can appear after their uses,
 and the last definition wins. Built-in month names such as `jan` expand to
@@ -100,7 +140,7 @@ for (const block of document.blocks) {
 
 :::
 
-Block kinds are `whitespace`, `comment`, `preamble`, `string`, `entry`, `failed`, and `other`. Every span is a half-open pair of UTF-8 byte offsets into the decoded source text. Spans keep their original positions after edits.
+Block kinds are `whitespace`, `comment`, `preamble`, `string`, `entry`, `failed`, and `other`. Every span is a half-open pair of UTF-8 byte offsets into that snapshot's source. Original handles retain original spans. The result document exposes updated spans.
 
 Use `comments`, `preamble`, `strings`, and `failed_blocks` / `failedBlocks` for focused views. `blocks` remains the complete source-order view.
 
@@ -117,8 +157,19 @@ duplicates = rk.BibDocument.parse("""
 """)
 matches = duplicates.entries.get_all("doe2024")
 second = matches[1]
-second.fields["title"].value = "Revised second title"
+second_field = second.fields["title"]
+duplicate_result = duplicates.apply_patch(
+    [
+        {
+            "kind": "set_field",
+            "entry_id": second.id,
+            "field_id": second_field.id,
+            "value": "Revised second title",
+        }
+    ]
+)
 print(matches[0].fields["title"].value)
+print(duplicate_result["document"].entries.get_all("doe2024")[1].fields["title"].value)
 ```
 
 ```ts [TypeScript]
@@ -128,8 +179,13 @@ const duplicates = rk.BibDocument.parse(`
 `);
 const matches = duplicates.entries.getAll("doe2024");
 const second = matches[1]!;
-second.fields.getUnique("title")!.value = "Revised second title";
+const secondField = second.fields.getUnique("title")!;
+const duplicateResult = duplicates.applyPatch([{
+  kind: "set_field", entryId: second.id,
+  fieldId: secondField.id, value: "Revised second title",
+}]);
 console.log(matches[0]!.fields.getUnique("title")!.value);
+console.log(duplicateResult.document.entries.getAll("doe2024")[1]!.fields.getUnique("title")!.value);
 ```
 
 :::
@@ -205,8 +261,18 @@ Read an existing `references.bib`, update a field, and save a separate file:
 
 ```python [Python]
 file_document = rk.BibDocument.read("references.bib")
-file_document.entries["doe2024"].fields["title"].value = "Corrected title"
-file_document.write("references.edited.bib")
+file_field = file_document.entries["doe2024"].fields["title"]
+file_result = file_document.apply_patch(
+    [
+        {
+            "kind": "set_field",
+            "entry_id": file_field.entry_id,
+            "field_id": file_field.id,
+            "value": "Corrected title",
+        }
+    ]
+)
+file_result["document"].write("references.edited.bib")
 ```
 
 ```ts [TypeScript]
@@ -214,8 +280,12 @@ import { readBibDocument } from "refkit-js/node";
 import { writeFile } from "node:fs/promises";
 
 const fileDocument = await readBibDocument("references.bib");
-fileDocument.entries.getUnique("doe2024")!.fields.getUnique("title")!.value = "Corrected title";
-await writeFile("references.edited.bib", fileDocument.toBibtex(), "utf8");
+const fileField = fileDocument.entries.getUnique("doe2024")!.fields.getUnique("title")!;
+const fileResult = fileDocument.applyPatch([{
+  kind: "set_field", entryId: fileField.entryId,
+  fieldId: fileField.id, value: "Corrected title",
+}]);
+await writeFile("references.edited.bib", fileResult.document.toBibtex(), "utf8");
 ```
 
 :::

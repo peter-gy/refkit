@@ -1,7 +1,13 @@
 import type { NativeRawDocument } from "./wasm/refkit_js_native.js";
 import { getNative } from "./runtime.js";
 import { callNative, readNative } from "./errors.js";
-import { string } from "./inputs.js";
+import {
+  string,
+  iterable,
+  jsonData,
+  object,
+  optionalString,
+} from "./inputs.js";
 import { tidyBibtex, type TidySettings } from "./tidy.js";
 import type {
   Diagnostic,
@@ -10,36 +16,31 @@ import type {
   RawSpan,
   ResolvedBibEntry,
   TidyResult,
+  ValidationReport,
+  BibEdit,
+  BibPatchResult,
+  RawEntryInfo as EntryInfo,
+  RawFieldInfo as FieldInfo,
+  DuplicateRule,
+  DuplicateReport,
+  MergeFieldChoice,
+  MergePlan,
 } from "./types.js";
 
-interface EntryInfo {
-  id: number;
-  key: string;
-  kind: string;
-  span: RawSpan;
+export interface DuplicateOptions {
+  rules?: Iterable<DuplicateRule> | null;
 }
-interface FieldInfo {
-  id: number;
-  name: string;
-  value: string;
-  span: RawSpan;
+export interface MergeOptions {
+  entries: Iterable<number>;
+  retain: number;
+  fields?: Iterable<MergeFieldChoice> | null;
+  entryType?: string | null;
 }
-interface Metadata {
-  comments: string[];
-  preamble: string;
-  strings: Record<string, string>;
-  failedBlocks: RawFailedBlock[];
-  blocks: RawBlock[];
-  diagnostics: Diagnostic[];
-}
+
 let entryMap: (native: NativeRawDocument) => BibEntryMap;
 let entry: (native: NativeRawDocument, info: EntryInfo) => BibEntry;
 let fieldMap: (native: NativeRawDocument, entryId: number) => BibFieldMap;
-let field: (
-  native: NativeRawDocument,
-  entryId: number,
-  info: FieldInfo,
-) => BibField;
+let field: (entryId: number, info: FieldInfo) => BibField;
 const sourceDiagnostics = new WeakMap<BibDocument, readonly Diagnostic[]>();
 
 export function setBibDecodingDiagnostic(
@@ -60,38 +61,68 @@ export class BibDocument {
       callNative(() => NativeRawDocument.parse(string(source, "source"))),
     );
   }
-  #metadata(): Metadata {
-    return readNative(() => this.#native.metadata());
+  applyPatch(patch: Iterable<BibEdit>): BibPatchResult {
+    const input = jsonData(iterable(patch, "patch"), "patch");
+    const result = callNative(() => this.#native.apply_patch(input));
+    const report = readNative<Omit<BibPatchResult, "document">>(() =>
+      result.report(),
+    );
+    return {
+      document: new BibDocument(callNative(() => result.document)),
+      ...report,
+    };
+  }
+  findDuplicates(options: DuplicateOptions = {}): DuplicateReport {
+    object(options, "options", ["rules"]);
+    const rules =
+      options.rules == null ? null : iterable(options.rules, "rules");
+    return readNative(() =>
+      this.#native.find_duplicates(jsonData(rules, "rules")),
+    );
+  }
+  planMerge(options: MergeOptions): MergePlan {
+    object(options, "options", ["entries", "retain", "fields", "entryType"]);
+    const request = jsonData(
+      {
+        entries: iterable(options.entries, "entries"),
+        retain: options.retain,
+        fields:
+          options.fields == null ? [] : iterable(options.fields, "fields"),
+        entryType: optionalString(options.entryType, "entryType"),
+      },
+      "merge request",
+    );
+    return readNative(() => this.#native.plan_merge(request));
   }
   get entries(): BibEntryMap {
     return entryMap(this.#native);
   }
   get diagnostics(): readonly Diagnostic[] {
-    return [
-      ...structuredClone(sourceDiagnostics.get(this) ?? []),
-      ...this.#metadata().diagnostics,
-    ];
+    return structuredClone(sourceDiagnostics.get(this) ?? []);
   }
   get comments(): string[] {
-    return this.#metadata().comments;
+    return readNative(() => this.#native.comments());
   }
   get preamble(): string {
-    return this.#metadata().preamble;
+    return callNative(() => this.#native.preamble());
   }
   get strings(): Record<string, string> {
-    return this.#metadata().strings;
+    return readNative(() => this.#native.strings());
   }
   get failedBlocks(): RawFailedBlock[] {
-    return this.#metadata().failedBlocks;
+    return readNative(() => this.#native.failed_blocks());
   }
   get blocks(): RawBlock[] {
-    return this.#metadata().blocks;
+    return readNative(() => this.#native.blocks());
   }
   toBibtex(): string {
     return callNative(() => this.#native.to_bibtex());
   }
   resolve(): readonly ResolvedBibEntry[] {
     return readNative(() => this.#native.resolve());
+  }
+  validate(): ValidationReport {
+    return readNative(() => this.#native.validate());
   }
   tidy(settings: TidySettings = {}): TidyResult {
     return tidyBibtex(this.toBibtex(), settings);
@@ -137,7 +168,7 @@ export class BibEntryMap implements Iterable<BibEntry> {
     return this.size === 0;
   }
   has(key: string): boolean {
-    return this.getAll(key).length > 0;
+    return callNative(() => this.#native.contains_entry(string(key, "key")));
   }
   [Symbol.iterator](): Iterator<BibEntry> {
     return this.occurrences()[Symbol.iterator]();
@@ -156,6 +187,9 @@ export class BibEntry {
   }
   get key(): string {
     return this.#info.key;
+  }
+  get id(): number {
+    return this.#info.id;
   }
   get kind(): string {
     return this.#info.kind;
@@ -188,21 +222,19 @@ export class BibFieldMap implements Iterable<BibField> {
     return this.#records().map((info) => info.name);
   }
   occurrences(): BibField[] {
-    return this.#records().map((info) =>
-      field(this.#native, this.#entryId, info),
-    );
+    return this.#records().map((info) => field(this.#entryId, info));
   }
   getAll(key: string): BibField[] {
     const records = readNative<FieldInfo[]>(() =>
       this.#native.fields_for_key(this.#entryId, string(key, "key")),
     );
-    return records.map((info) => field(this.#native, this.#entryId, info));
+    return records.map((info) => field(this.#entryId, info));
   }
   getUnique(key: string): BibField | null {
     const info = readNative<FieldInfo | null>(() =>
       this.#native.unique_field(this.#entryId, string(key, "key")),
     );
-    return info === null ? null : field(this.#native, this.#entryId, info);
+    return info === null ? null : field(this.#entryId, info);
   }
   get size(): number {
     return callNative(() => this.#native.field_count(this.#entryId));
@@ -211,7 +243,9 @@ export class BibFieldMap implements Iterable<BibField> {
     return this.size === 0;
   }
   has(key: string): boolean {
-    return this.getAll(key).length > 0;
+    return callNative(() =>
+      this.#native.contains_field(this.#entryId, string(key, "key")),
+    );
   }
   [Symbol.iterator](): Iterator<BibField> {
     return this.occurrences()[Symbol.iterator]();
@@ -219,40 +253,28 @@ export class BibFieldMap implements Iterable<BibField> {
 }
 
 export class BibField {
-  readonly #native: NativeRawDocument;
   readonly #entryId: number;
-  readonly #id: number;
-  private constructor(
-    native: NativeRawDocument,
-    entryId: number,
-    info: FieldInfo,
-  ) {
-    this.#native = native;
+  readonly #info: FieldInfo;
+  private constructor(entryId: number, info: FieldInfo) {
     this.#entryId = entryId;
-    this.#id = info.id;
+    this.#info = info;
   }
   static {
-    field = (native, entryId, info) => new BibField(native, entryId, info);
-  }
-  #info(): FieldInfo {
-    return readNative(() => this.#native.field(this.#entryId, this.#id));
+    field = (entryId, info) => new BibField(entryId, info);
   }
   get name(): string {
-    return this.#info().name;
+    return this.#info.name;
   }
   get span(): RawSpan {
-    return this.#info().span;
+    return [...this.#info.span];
   }
   get value(): string {
-    return this.#info().value;
+    return this.#info.value;
   }
-  set value(value: string) {
-    callNative(() =>
-      this.#native.set_field_value(
-        this.#entryId,
-        this.#id,
-        string(value, "value"),
-      ),
-    );
+  get id(): number {
+    return this.#info.id;
+  }
+  get entryId(): number {
+    return this.#entryId;
   }
 }

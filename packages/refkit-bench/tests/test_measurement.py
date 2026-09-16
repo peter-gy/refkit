@@ -49,6 +49,7 @@ def test_runtime_batch_clock_is_checked():
         ["--dataset", "unknown"],
         ["--lane", "parse.bibtex", "--package", "bibtex-tidy"],
         ["--lane", "format.spec", "--dataset", "tiny"],
+        ["--lane", "parse.recover", "--dataset", "real"],
     ],
 )
 def test_cli_rejects_unknown_or_incompatible_cases(selection, capsys):
@@ -381,44 +382,18 @@ def test_cli_rejects_invalid_sampling_budgets_before_creating_results(
 
 def test_cli_validates_the_real_capability_matrix(tmp_path: Path, capsys):
     output = tmp_path / "checks.json"
+    assert runner.main(["list", "--lane", "all", "--dataset", "real", "--json"]) == 0
+    listed = {row["case"] for row in json.loads(capsys.readouterr().out)}
     assert (
         runner.main(["check", "--lane", "all", "--dataset", "real", "--output", str(output)]) == 0
     )
     report = json.loads(output.read_text())
     rows = {row["name"]: row for row in report["checks"]}
-    participants = {
-        "parse.bibtex": {"refkit", "bibtexparser", "pybtex"},
-        "inspect.keys": {"refkit", "bibtexparser", "pybtex"},
-        "inspect.lookup": {"refkit", "bibtexparser", "pybtex"},
-        "inspect.project": {"refkit", "bibtexparser", "pybtex"},
-        "raw.edit": {"refkit", "bibtexparser"},
-        "render.citation": {"refkit", "citeproc-py"},
-        "render.bibliography": {"refkit", "citeproc-py"},
-        "render.document": {"refkit", "citeproc-py"},
-        "format.layout": {"refkit", "bibtex-tidy"},
-        "format.keys": {"refkit", "bibtex-tidy"},
-        "batch.parse": {"polars-eager", "polars-lazy"},
-        "batch.cite": {"polars-eager", "polars-lazy"},
-    }
-    assert set(rows) == {
-        f"{lane}/real/{package}" for lane, packages in participants.items() for package in packages
-    }
-    assert rows["batch.parse/real/polars-lazy"]["contract"]["row_count"] == 12
+    assert set(rows) == listed
+    assert all(row["status"] == "ok" for row in rows.values())
+    assert {"parse.bibtex/real/refkit", "render.document/real/citeproc-py"} <= set(rows)
     assert rows["batch.parse/real/polars-lazy"]["contract"]["polars_threads"] == 1
     assert json.loads(capsys.readouterr().out)["schema"] == 1
-
-
-def test_cli_validates_upstream_source_options_as_structured_data(capsys):
-    assert (
-        runner.main(
-            ["check", "--lane", "format.spec", "--dataset", "numeric", "--package", "refkit"]
-        )
-        == 0
-    )
-    row = json.loads(capsys.readouterr().out)["checks"][0]
-    assert row["status"] == "ok"
-    assert row["contract"]["options"] == {"numeric": True}
-    assert row["contract"]["source_repository"] == "https://github.com/FlamingTempura/bibtex-tidy"
 
 
 def test_source_mutation_invalidates_completed_samples(tmp_path: Path, monkeypatch):

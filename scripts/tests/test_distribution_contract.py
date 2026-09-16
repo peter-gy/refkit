@@ -16,7 +16,6 @@ from scripts.distribution_contract import (
     content_violations,
     distribution_paths,
     generated_members,
-    internal_document_members,
 )
 
 _DIST_INFO = "refkit-1.0.0.dist-info"
@@ -122,21 +121,6 @@ def test_distribution_contract_rejects_generated_bytecode(tmp_path: Path) -> Non
         "refkit/__pycache__/__init__.cpython-314.pyc",
         "refkit/runtime.pyo",
     ]
-
-
-def test_distribution_contract_rejects_internal_developer_documentation(
-    tmp_path: Path,
-) -> None:
-    sdist = tmp_path / "package.tar.gz"
-    _sdist(
-        sdist,
-        [
-            "refkit/__init__.py",
-            "refkit-1.0.0/development_docs/architecture.md",
-        ],
-    )
-
-    assert internal_document_members(sdist) == ["refkit-1.0.0/development_docs/architecture.md"]
 
 
 def test_distribution_contract_command_rejects_internal_developer_documentation(

@@ -30,9 +30,13 @@ assert "Roe" not in rendered.bibliography.text
 
 Use `CitationGroup` to combine references within one citation occurrence. A citation ID identifies that occurrence in `RenderedDocument`. For a note style, set `Citation(..., note_number=actual_note_number)` to the surrounding document's note number.
 
+Set `Cite(..., purpose="prose")` for a citation inside a sentence. Other purposes are `normal` (default), `author`, `year`, and `full`. Purpose changes text, HTML, and the rendered tree together. Discover bundled styles with `Style.list()`, which returns dictionaries containing `name`, `aliases`, `title`, and `csl_id`.
+
 Use `.text` for inspection, `.html` for HTML consumers, and `.tree` for structured formatting and link metadata. Bibliography `.layout` carries spacing and alignment requirements. The cited bibliography contains references processed by the render call. `full_bibliography()` includes every library entry.
 
 Load custom styles with `Style.from_xml(xml)` or `Style.from_path(path)`. A missing reference raises `MissingReferenceError` for the whole call. Inspect requested keys first and return a bounded candidate sample when resolving a mismatch.
+
+For dependent styles, use `Style.from_xml(child_xml, parent_xml=parent_xml)`. Supply the independent parent identified by the child's link. `title` and `csl_id` describe the child. An explicit document locale overrides the child's default locale, which overrides the parent's default.
 
 For a custom title-based style, supply Citation Style Language XML:
 

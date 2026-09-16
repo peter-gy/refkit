@@ -4,7 +4,7 @@ use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use refkit_core::{CitationRequest, Cite as CoreCite};
+use refkit_core::{CitationRequest, Cite as CoreCite, CitePurpose};
 
 use crate::repr::{option_quoted, quoted};
 
@@ -17,26 +17,41 @@ pub struct Cite {
     locator: Option<String>,
     #[pyo3(get)]
     label: Option<String>,
+    purpose: CitePurpose,
 }
 
 #[pymethods]
 impl Cite {
     #[new]
-    #[pyo3(signature = (key, *, locator = None, label = None))]
-    fn new(key: String, locator: Option<String>, label: Option<String>) -> Self {
-        Self {
+    #[pyo3(signature = (key, *, locator = None, label = None, purpose = "normal"))]
+    fn new(
+        key: String,
+        locator: Option<String>,
+        label: Option<String>,
+        purpose: &str,
+    ) -> PyResult<Self> {
+        Ok(Self {
             key,
             locator,
             label,
-        }
+            purpose: purpose
+                .parse()
+                .map_err(crate::errors::document_error_to_py)?,
+        })
+    }
+
+    #[getter]
+    fn purpose(&self) -> &'static str {
+        self.purpose.as_str()
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "Cite(key={}, locator={}, label={})",
+            "Cite(key={}, locator={}, label={}, purpose={})",
             quoted(&self.key),
             option_quoted(self.locator.as_deref()),
-            option_quoted(self.label.as_deref())
+            option_quoted(self.label.as_deref()),
+            quoted(self.purpose.as_str())
         )
     }
 }
@@ -120,7 +135,12 @@ impl Citation {
 
 impl Cite {
     fn to_core(&self) -> CoreCite {
-        CoreCite::new(self.key.clone(), self.locator.clone(), self.label.clone())
+        CoreCite::new(
+            self.key.clone(),
+            self.locator.clone(),
+            self.label.clone(),
+            self.purpose,
+        )
     }
 }
 
@@ -198,6 +218,7 @@ fn parse_single_cite(item: &Bound<'_, PyAny>) -> PyResult<Cite> {
             key,
             locator: None,
             label: None,
+            purpose: CitePurpose::Normal,
         });
     }
     if let Ok(cite) = item.extract::<PyRef<'_, Cite>>() {

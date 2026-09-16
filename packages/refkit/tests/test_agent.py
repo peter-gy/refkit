@@ -7,7 +7,6 @@ import sys
 from importlib.metadata import version
 from pathlib import Path
 from types import ModuleType
-from typing import get_type_hints
 
 import agent_plugins
 import pytest
@@ -58,10 +57,6 @@ def test_agent_resources_and_types_describe_the_installed_adapter(
     assert module.instructions() == skill.body.lstrip("\n")
     assert resources["references/inspect.md"].is_relative_to(skill.path)
     assert all(path.is_file() for path in resources.values())
-    assert get_type_hints(module.agent_plugin)["return"] is agent_plugins.Plugin
-    assert get_type_hints(module.agent_skill)["return"] is agent_plugins.Skill
-    assert get_type_hints(module.resources)["return"] == dict[str, Path]
-    assert module.AgentPluginError is agent_plugins.AgentPluginError
 
     help_text = pydoc.render_doc(module)
     assert version(distribution_name) in help_text
@@ -95,7 +90,7 @@ def test_agent_help_reports_resource_failure(
     assert "marker unavailable" in rendered
     assert f"Reinstall {distribution_name}" in rendered
     assert version(distribution_name) in rendered
-    with pytest.raises(agent_plugins.AgentPluginError, match="marker unavailable"):
+    with pytest.raises(module.AgentPluginError, match="marker unavailable"):
         module.instructions()
 
 

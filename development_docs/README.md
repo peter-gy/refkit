@@ -5,7 +5,7 @@ These documents describe how to change, test, document, package, and release Ref
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/) resolves the Python workspace and installs its development groups.
-- [Rust and Cargo](https://www.rust-lang.org/tools/install) compile and test the portable core, native Python module, and Polars plugin.
+- [Rust and Cargo](https://www.rust-lang.org/tools/install) 1.95 or newer compile and test all Rust workspaces.
 - [Node.js 24 or newer](https://nodejs.org/) runs Portless, VitePress, and the documentation verifier.
 - [pnpm](https://pnpm.io/installation) installs the locked documentation dependency graph.
 
@@ -17,9 +17,10 @@ Workspace synchronization installs [Maturin](https://www.maturin.rs/), the build
 make sync
 make refkit-develop
 make polars-refkit-develop
+make rust-tools
 ```
 
-Run `make check` before handing off a repository change. It validates locks, release metadata, architecture, documentation, Pyodide inputs, Python and Rust code, tests, the Rust 1.88 floor, and built distributions.
+Run `make check` before handing off a repository change. It validates locks, release metadata, architecture, documentation, Pyodide inputs, Python and Rust code, tests, dependency policy, the Rust 1.95 floor, and built distributions.
 
 ## Find The Right Document
 
@@ -28,6 +29,7 @@ Run `make check` before handing off a repository change. It validates locks, rel
 | Place behavior in the correct crate or package | [Architecture](architecture.md) |
 | Trace a capability across owners, interfaces, and tests | [Capability map](capabilities.md) |
 | Preserve parser, raw edit, tidy, and render invariants | [Core semantics](core-semantics.md) |
+| Apply Rust lint, suppression, dependency, and compiler policy | [Rust quality](rust-quality.md) |
 | Change Python, Polars, or Pyodide host boundaries | [Adapter contracts](adapters.md) |
 | Set up an edit and rebuild loop | [Development workflow](development.md) |
 | Choose the test boundary, installed `refkit-tests` probes, and completion gate | [Testing](testing.md) |

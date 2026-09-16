@@ -1,13 +1,14 @@
 import type { NativeLibrary } from "./wasm/refkit_js_native.js";
 import { getNative } from "./runtime.js";
 import { callNative, readNative } from "./errors.js";
-import { object, string, strings } from "./inputs.js";
+import { iterable, jsonData, object, string, strings } from "./inputs.js";
 import type {
   Diagnostic,
   Entry,
   ProjectionField,
   ProjectionRow,
   RecoveryPolicy,
+  ValidationReport,
 } from "./types.js";
 
 export interface ParseOptions {
@@ -17,6 +18,10 @@ export interface ProjectOptions {
   keys?: Iterable<string> | null;
 }
 const libraries = new WeakMap<Library, NativeLibrary>();
+let createLibrary: (native: NativeLibrary) => Library;
+export function libraryFromNative(native: NativeLibrary): Library {
+  return createLibrary(native);
+}
 const sourceDiagnostics = new WeakMap<Library, readonly Diagnostic[]>();
 
 export function nativeLibrary(library: Library): NativeLibrary {
@@ -33,8 +38,36 @@ export function setLibraryDecodingDiagnostic(
 }
 
 export class Library implements Iterable<Entry> {
+  static {
+    createLibrary = (native) => new Library(native);
+  }
   private constructor(native: NativeLibrary) {
     libraries.set(this, native);
+  }
+
+  static fromRecords(records: Iterable<Entry>): Library {
+    const { NativeLibrary } = getNative();
+    const input = jsonData(iterable(records, "records"), "records");
+    return new Library(callNative(() => NativeLibrary.from_records(input)));
+  }
+
+  static fromJson(source: string): Library {
+    const { NativeLibrary } = getNative();
+    return new Library(
+      callNative(() => NativeLibrary.from_json(string(source, "source"))),
+    );
+  }
+
+  toJson(): string {
+    return callNative(() => nativeLibrary(this).to_json());
+  }
+
+  toRecords(): Entry[] {
+    return readNative(() => nativeLibrary(this).records());
+  }
+
+  validate(): ValidationReport {
+    return readNative(() => nativeLibrary(this).validate());
   }
 
   static parseBibtex(source: string, options: ParseOptions = {}): Library {
@@ -73,7 +106,7 @@ export class Library implements Iterable<Entry> {
     return readNative(() => nativeLibrary(this).keys());
   }
   values(): Entry[] {
-    return readNative(() => nativeLibrary(this).records());
+    return this.toRecords();
   }
   get(key: string): Entry | null {
     return readNative(() => nativeLibrary(this).get_record(string(key, "key")));
@@ -83,7 +116,9 @@ export class Library implements Iterable<Entry> {
     return readNative(() => nativeLibrary(this).get_many(input));
   }
   has(key: string): boolean {
-    return this.get(key) !== null;
+    return callNative(() =>
+      nativeLibrary(this).contains_key(string(key, "key")),
+    );
   }
   isEmpty(): boolean {
     return this.size === 0;

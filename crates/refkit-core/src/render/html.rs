@@ -39,7 +39,10 @@ pub(crate) fn render_children_html(children: &ElemChildren, output: &mut String)
 
 pub(crate) fn render_child_html(child: &ElemChild, output: &mut String) -> fmt::Result {
     match child {
-        ElemChild::Text(text) => render_formatted_html(text, output),
+        ElemChild::Text(text) => {
+            render_formatted_html(text, output);
+            Ok(())
+        }
         ElemChild::Elem(elem) => render_elem_html(elem, output),
         ElemChild::Markup(value) => {
             write_html_escaped(output, value);
@@ -50,10 +53,10 @@ pub(crate) fn render_child_html(child: &ElemChild, output: &mut String) -> fmt::
                 output.push_str("<a href=\"");
                 write_html_escaped(output, href);
                 output.push_str("\">");
-                render_formatted_html(text, output)?;
+                render_formatted_html(text, output);
                 output.push_str("</a>");
             } else {
-                render_formatted_html(text, output)?;
+                render_formatted_html(text, output);
             }
             Ok(())
         }
@@ -80,11 +83,11 @@ fn render_elem_html(elem: &hayagriva::Elem, output: &mut String) -> fmt::Result 
     Ok(())
 }
 
-fn render_formatted_html(text: &hayagriva::Formatted, output: &mut String) -> fmt::Result {
+fn render_formatted_html(text: &hayagriva::Formatted, output: &mut String) {
     let formatting = text.formatting;
     if formatting == hayagriva::Formatting::default() {
         write_html_escaped(output, &text.text);
-        return Ok(());
+        return;
     }
 
     let mut css = String::new();
@@ -132,7 +135,6 @@ fn render_formatted_html(text: &hayagriva::Formatted, output: &mut String) -> fm
 
     write_html_escaped(output, &text.text);
     output.push_str(&suffix);
-    Ok(())
 }
 
 fn push_html_wrapper(output: &mut String, suffix: &mut String, start: &str, end: &str) {

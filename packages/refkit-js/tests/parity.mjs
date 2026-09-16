@@ -8,19 +8,14 @@ import {
   Library,
   ParseError,
   Style,
+  convert,
+  decode,
+  ConversionError,
   tidyBibtex,
 } from "refkit-js";
 
 function entry(value) {
-  return {
-    key: value.key,
-    entry_type: value.entryType,
-    title: value.title,
-    date: value.date,
-    doi: value.doi,
-    volume: value.volume,
-    parents: value.parents.map(entry),
-  };
+  return JSON.parse(Library.fromRecords([value]).toJson()).records[0];
 }
 
 function formatting(value) {
@@ -113,10 +108,9 @@ function libraryCase(input) {
       diagnostics: library.diagnostics,
       projection: library.project(),
       selected_projection: library
-        .project(
-          ["key", "entryType", "type", "title", "date", "doi", "volume"],
-          { keys: selected },
-        )
+        .project(["key", "entryType", "title", "date", "doi", "volume"], {
+          keys: selected,
+        })
         .map(({ entryType, ...row }) => ({ ...row, entry_type: entryType })),
       selected_records: library.getMany(selected).map(entry),
       selected_by_type: library
@@ -134,7 +128,9 @@ function libraryCase(input) {
 
 function renderCase(input) {
   const library = Library.parseBibtex(input.source);
-  const style = input.xml ? Style.fromXml(input.xml) : Style.load(input.style);
+  const style = input.xml
+    ? Style.fromXml(input.xml, { parentXml: input.parent_xml })
+    : Style.load(input.style);
   const document = new Document(library, style, { locale: "en-US" });
   const citations = input.citations.map(
     (value) =>
@@ -146,6 +142,7 @@ function renderCase(input) {
               new Cite(item.key, {
                 locator: item.locator,
                 label: item.label,
+                purpose: item.purpose,
               }),
           ),
         ),
@@ -153,6 +150,8 @@ function renderCase(input) {
       ),
   );
   return {
+    style_id: style.cslId,
+    style_title: style.title,
     rendered: renderedDocument(document.render(citations)),
     cited_bibliography: rendered(document.citedBibliography(citations)),
     full_bibliography: rendered(document.fullBibliography()),
@@ -199,11 +198,19 @@ function rawState(document) {
 }
 
 function rawCase(input) {
-  const document = BibDocument.parse(input.source);
+  let document = BibDocument.parse(input.source);
   const before = rawState(document);
   for (const edit of input.edits) {
     const entry = document.entries.getAll(edit.key)[edit.entry];
-    entry.fields.getAll(edit.field)[edit.occurrence].value = edit.value;
+    const field = entry.fields.getAll(edit.field)[edit.occurrence];
+    document = document.applyPatch([
+      {
+        kind: "set_field",
+        entryId: field.entryId,
+        fieldId: field.id,
+        value: edit.value,
+      },
+    ]).document;
   }
   return { before, after: rawState(document) };
 }
@@ -245,10 +252,175 @@ function tidyCase(input) {
 }
 
 const runners = {
+  merge: (input) => {
+    const document = BibDocument.parse(input.source);
+    const names = {
+      entryId: "entry_id",
+      fieldId: "field_id",
+      entryType: "entry_type",
+      retainedId: "retained_id",
+      removedIds: "removed_ids",
+    };
+    const canonical = (value) =>
+      Array.isArray(value)
+        ? value.map(canonical)
+        : value && typeof value === "object"
+          ? Object.fromEntries(
+              Object.entries(value).map(([key, value]) => [
+                names[key] ?? key,
+                canonical(value),
+              ]),
+            )
+          : value;
+    const report = document.findDuplicates({ rules: input.rules });
+    try {
+      const fields = input.fields?.map(({ entry_id, field_id, ...choice }) => ({
+        ...choice,
+        ...(entry_id === undefined ? {} : { entryId: entry_id }),
+        ...(field_id === undefined ? {} : { fieldId: field_id }),
+      }));
+      const plan = document.planMerge({
+        entries: input.entries,
+        retain: input.retain,
+        fields,
+        entryType: input.entry_type,
+      });
+      const updated =
+        plan.patch === null ? null : document.applyPatch(plan.patch).document;
+      return {
+        report: canonical(report),
+        plan: canonical(plan),
+        source: updated?.toBibtex() ?? null,
+        original: document.toBibtex(),
+      };
+    } catch (error) {
+      if (error.name === "MergeError")
+        return {
+          report: canonical(report),
+          error: "MergeError",
+          code: error.code,
+          original: document.toBibtex(),
+        };
+      throw error;
+    }
+  },
+  patch: (input) => {
+    const document = BibDocument.parse(input.source);
+    const before = rawState(document);
+    const names = {
+      entry_id: "entryId",
+      field_id: "fieldId",
+      entry_type: "entryType",
+    };
+    const patch = input.patch.map((operation) =>
+      Object.fromEntries(
+        Object.entries(operation).map(([key, value]) => [
+          names[key] ?? key,
+          value,
+        ]),
+      ),
+    );
+    try {
+      const result = document.applyPatch(patch);
+      return {
+        before,
+        after: rawState(result.document),
+        original_after: rawState(document),
+        report: {
+          changes: result.changes,
+          entries: result.entries,
+          warnings: result.warnings.map(({ entryId, fieldId, ...warning }) => ({
+            ...warning,
+            entry_id: entryId,
+            field_id: fieldId,
+          })),
+        },
+      };
+    } catch (error) {
+      if (error.name === "PatchError")
+        return {
+          error: "PatchError",
+          code: error.code,
+          operation: error.operation,
+          original_after: rawState(document),
+        };
+      throw error;
+    }
+  },
+  validation: (input) => {
+    try {
+      const report = input.records
+        ? Library.fromJson(
+            JSON.stringify({ schema_version: 1, records: input.records }),
+          ).validate()
+        : BibDocument.parse(input.source).validate();
+      const target = ({ entryId, fieldId, ...rest }) => ({
+        ...rest,
+        entry_id: entryId,
+        field_id: fieldId,
+      });
+      return {
+        ...report,
+        issues: report.issues.map((issue) => ({
+          ...issue,
+          target: target(issue.target),
+          related: issue.related.map(target),
+        })),
+      };
+    } catch (error) {
+      if (error instanceof ParseError)
+        return { error: "ParseError", diagnostics: error.diagnostics };
+      throw error;
+    }
+  },
+  codec: (input) => {
+    try {
+      const report = convert(input.source, {
+        sourceFormat: input.source_format,
+        targetFormat: input.target_format,
+        loss: input.loss,
+        recovery: input.recovery,
+      });
+      const restored = decode(report.text, { format: input.target_format });
+      return {
+        report: {
+          source_format: report.sourceFormat,
+          target_format: report.targetFormat,
+          text: report.text,
+          issues: report.issues,
+          diagnostics: report.diagnostics,
+        },
+        records: JSON.parse(restored.library.toJson()).records,
+        issues: restored.issues,
+      };
+    } catch (error) {
+      if (error instanceof ConversionError)
+        return {
+          error: "ConversionError",
+          issues: error.issues,
+          diagnostics: error.diagnostics,
+        };
+      throw error;
+    }
+  },
   library: libraryCase,
   render: renderCase,
   raw: rawCase,
   tidy: tidyCase,
+  records: (input) => {
+    const library = Library.fromJson(
+      JSON.stringify({ schema_version: 1, records: input.records }),
+    );
+    const restored = Library.fromRecords(library.toRecords());
+    return {
+      records: JSON.parse(restored.toJson()).records,
+      snapshot: restored.toJson(),
+      projection: restored.project(),
+      rendered: rendered(
+        new Document(restored, Style.load("apa")).fullBibliography(),
+      ),
+    };
+  },
 };
 const inputs = JSON.parse(readFileSync(0, "utf8"));
 const outputs = Object.fromEntries(

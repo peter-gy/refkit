@@ -244,35 +244,33 @@ fn wrap_text(line: &str, line_width: usize) -> Vec<String> {
 
 fn escape_characters(value: &str) -> String {
     let chars = value.chars().collect::<Vec<_>>();
+    let mut remaining = chars.as_slice();
     let mut output = String::with_capacity(value.len());
-    let mut index = 0usize;
-    while index < chars.len() {
-        if chars[index] == '$'
-            && let Some(end) = chars[index + 1..].iter().position(|ch| *ch == '$')
+    while let Some((&ch, rest)) = remaining.split_first() {
+        if ch == '$'
+            && let Some(end) = rest.iter().position(|ch| *ch == '$')
             && end > 0
         {
-            let end = index + end + 1;
-            output.extend(chars[index..=end].iter());
-            index = end + 1;
+            let (math, tail) = rest.split_at(end + 1);
+            output.push(ch);
+            output.extend(math);
+            remaining = tail;
             continue;
         }
-
-        if chars[index] == '\\' {
-            output.push(chars[index]);
-            index += 1;
-            if let Some(next) = chars.get(index) {
-                output.push(*next);
-                index += 1;
+        remaining = rest;
+        if ch == '\\' {
+            output.push(ch);
+            if let Some((&next, rest)) = remaining.split_first() {
+                output.push(next);
+                remaining = rest;
             }
             continue;
         }
-
-        if let Some(escaped) = latex_escape(chars[index]) {
+        if let Some(escaped) = latex_escape(ch) {
             output.push_str(escaped);
         } else {
-            output.push(chars[index]);
+            output.push(ch);
         }
-        index += 1;
     }
     output
 }
@@ -285,7 +283,7 @@ fn is_verbatim_field(field: &str) -> bool {
 }
 
 fn drop_all_caps(value: &str) -> String {
-    if value.chars().any(|ch| ch.is_lowercase()) {
+    if value.chars().any(char::is_lowercase) {
         return value.to_string();
     }
 
@@ -337,7 +335,7 @@ fn is_roman_numeral(word: &str) -> bool {
 
 fn roman_take(chars: &[char], index: &mut usize, ch: char, min: usize, max: usize) -> usize {
     let start = *index;
-    while *index < chars.len() && chars[*index] == ch && *index - start < max {
+    while chars.get(*index) == Some(&ch) && *index - start < max {
         *index += 1;
     }
     let count = *index - start;
@@ -408,15 +406,12 @@ fn is_bare_month(field: &RawSyntaxField, value: &str) -> bool {
 fn format_page_range(value: &str) -> String {
     let chars = value.chars().collect::<Vec<_>>();
     let mut output = String::with_capacity(value.len() + 1);
-    for index in 0..chars.len() {
-        let ch = chars[index];
+    for (index, &ch) in chars.iter().enumerate() {
         if ch == '-'
             && chars
                 .get(index.wrapping_sub(1))
-                .is_some_and(|left| left.is_ascii_digit())
-            && chars
-                .get(index + 1)
-                .is_some_and(|right| right.is_ascii_digit())
+                .is_some_and(char::is_ascii_digit)
+            && chars.get(index + 1).is_some_and(char::is_ascii_digit)
             && chars.get(index + 1) != Some(&'-')
             && chars.get(index.wrapping_sub(1)) != Some(&'-')
         {

@@ -68,10 +68,11 @@ def check(directory: Path, package: str, version: str, source: str) -> list[str]
             "cpython_Linux",
             "cpython_macOS",
             "cpython_Windows",
-            pyemscripten,
             "sdist",
         )
     }
+    if package == "refkit":
+        expected.add(f"{prefix}_{pyemscripten}")
     errors = []
     constraints = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"][
         "build-constraint-dependencies"
@@ -79,9 +80,7 @@ def check(directory: Path, package: str, version: str, source: str) -> list[str]
     files: dict[str, str] = {}
     manifests = list(directory.glob("*.json"))
     if {path.stem for path in manifests} != expected:
-        errors.append(
-            "artifact manifests must cover Linux, macOS, Windows, PyEmscripten, and sdist"
-        )
+        errors.append(f"artifact manifests must cover exactly: {', '.join(sorted(expected))}")
     for path in manifests:
         try:
             document = json.loads(path.read_text())

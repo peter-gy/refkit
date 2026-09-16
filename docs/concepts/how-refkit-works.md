@@ -17,7 +17,7 @@ RefKit moves bibliography data through three flows. Python and JavaScript expose
   </div>
   <div>
     <strong>Edit</strong>
-    <p>Raw BibTeX becomes a <code>BibDocument</code> whose field edits write back into source-order blocks.</p>
+    <p>A raw <code>BibDocument</code> and an atomic patch become a new snapshot with byte changes and occurrence mappings.</p>
   </div>
 </div>
 
@@ -31,7 +31,7 @@ Normalization resolves bibliography syntax into records suited to selection, pro
 
 `BibDocument` scans the original source into ordered blocks. An occurrence is one entry or field at one source position. Occurrence identity keeps duplicate entry keys and duplicate field names individually addressable.
 
-Assigning `BibField.value` changes the document state shared by its entry and field handles. Serializing the document produces updated BibTeX text with unrelated raw blocks retained. Write that text through the host's filesystem or browser download API when the workflow needs a file.
+`apply_patch` / `applyPatch` returns a new snapshot after validating structural edits and reference rewrites. Original entry and field handles retain their values and spans. The result maps old occurrences to new ones and records byte changes. Write the result document through the host's filesystem or browser download API when the workflow needs a file.
 
 ## Render an ordered citation document
 
@@ -58,6 +58,6 @@ The `refkit-core` [Rust](https://www.rust-lang.org/) library owns parsing, recov
 | Python | Paths, Python objects, exceptions, native module registration, and one-call helpers. |
 | JavaScript | Typed objects, [WebAssembly](https://webassembly.org/) initialization for the compiled core, and Node.js file helpers. |
 | [Polars](https://docs.pola.rs/), a DataFrame query engine | Expressions, broadcasting, column data types, plugin loading, and row failure mapping. |
-| [Pyodide](https://pyodide.org/), Python running in a browser | The Python interfaces packaged as wheels for its WebAssembly runtime. |
+| [Pyodide](https://pyodide.org/), Python running in a browser | The `refkit` Python API packaged as a wheel for its WebAssembly runtime. |
 
 Continue with [Choose a Bibliography Model](/concepts/bibliography-models) to choose between normalized data and raw source.

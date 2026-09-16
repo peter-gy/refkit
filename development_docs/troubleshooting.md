@@ -28,7 +28,7 @@ The `refkit` composition root compares package metadata with the native extensio
 
 ## Pyodide Rejects A Wheel
 
-Check `.github/pyodide/runtime.json` first. It records the Python version, xbuild environment, PyEmscripten platform, Rust target, and tested Polars plugin family.
+Check `.github/pyodide/runtime.json` first. It records the Python version, xbuild environment, build-tool version, and Rust compiler. The xbuild environment supplies the PyEmscripten platform and linker flags. Pyodide support applies to `refkit`, while `polars-refkit` requires native CPython.
 
 Run:
 
@@ -56,7 +56,7 @@ The first command reports Markdown or audience-boundary problems. TypeScript rep
 
 ## The Minimum Rust Check Installs A Toolchain
 
-`make rust-floor` installs Rust 1.88 through rustup when the toolchain is absent. This command uses the network and changes the local rustup toolchain set. Install the toolchain explicitly before a disconnected validation run.
+`make rust-floor` installs Rust 1.95 through rustup when the toolchain is absent. This command uses the network and changes the local rustup toolchain set. Install the toolchain explicitly before a disconnected validation run.
 
 ## Cleaning Invalidates Local Artifacts
 

@@ -34,6 +34,10 @@ Use `--no-sync` after building release adapters. Dependency synchronization can 
 | `inspect.lookup` | refkit, bibtexparser, pybtex | Fetch first, middle, and last entries as key/title rows. | Parse the library. |
 | `inspect.project` | refkit, bibtexparser, pybtex | Materialize key, title, DOI, and volume for every entry. | Parse the library. |
 | `raw.edit` | refkit, bibtexparser | Parse, change one title, and serialize to memory. | Load source and expected fields/blocks. |
+| `raw.recover` | refkit | Parse unclosed blocks followed by a valid entry into a raw document. | Generate source and preservation expectations. |
+| `parse.recover` | refkit | Recover unknown field atoms and normalize the bibliography with diagnostics. | Generate source, keys, and title expectations. |
+| `inspect.field` | refkit | Read one raw field's name and value span into Python values. | Parse source and retain the field handle. |
+| `encode.csl` | refkit | Encode a library with adjacent normal title chunks as a CSL JSON report. | Construct the library from structured records. |
 | `render.citation` | refkit, citeproc-py | Create a processor and request, render one citation, materialize text. | Parse equivalent source data and the shared style. |
 | `render.bibliography` | refkit, citeproc-py | Create a processor and render the complete ordered bibliography. | Parse equivalent source data and the shared style. |
 | `render.document` | refkit, citeproc-py | Create a processor and requests, render all citations and bibliography. | Parse equivalent source data and the shared style. |
@@ -52,11 +56,25 @@ Inspection uses package-owned lookup APIs. Any lookup map materialization requir
 | `tiny`, `medium`, `large` | 3, 48, and 192 generated records | Fixed-shape scaling and quick local checks. |
 | `real` | 12 curated scholarly records with complete author lists | Shared realistic metadata for parsing and rendering. |
 | `1k`, `5k`, `10k` | 1,000, 5,000, and 10,000 generated records | Explicit larger scaling experiments. |
+| `unclosed-100`, `unclosed-1k`, `unclosed-5k` | 100, 1,000, or 5,000 unclosed blocks followed by one valid entry | Raw recovery scaling and exact source preservation. |
+| `unknown-129`, `unknown-1k`, `unknown-5k` | 129, 1,000, or 5,000 entries with one unknown custom-field atom each | Batched normalized recovery and complete diagnostics. |
+| `field-1kib`, `field-1mib` | One raw abstract with 1 KiB or 1 MiB of text | Metadata access cost as field values grow. |
+| `chunks-1k`, `chunks-8k`, `chunks-32k` | One title with 1,024, 8,192, or 32,768 adjacent normal chunks | CSL text concatenation scaling. |
 | Named `format.spec` cases | 16 upstream inputs, option sets, and exact outputs | Numeric preservation, concatenation, paragraphs, braces, escaping, field cleanup, sorting, duplicates, and generated keys. |
 
 The synthetic records hold field shape constant as entry count grows. They isolate size scaling for that shape. The real metadata's sources and license are in [its provenance note](../packages/refkit-bench/src/refkit_bench/data/real-bibliography/README.md).
 
-Parsing checks require key, type, title, ordered full author names, year, container, volume, pages, and DOI. RefKit exposes authors and pages through rendering, so its checker renders the **actual parsed library** through the authored validation style outside timing. The other parsers expose those fields directly. Raw editing checks all entry fields and the preserved comment, string definition, and preamble.
+Parsing checks require key, type, title, ordered full author names, year, container, volume, pages, and DOI. RefKit's checker reads those fields from complete records and renders the **actual parsed library** through the authored validation style outside timing. The other parsers are checked through their field APIs. Raw editing checks all entry fields and the preserved comment, string definition, and preamble.
+
+The boundary-stress datasets apply to their matching lanes. Their source is generated deterministically under the package's Apache-2.0 license, with input hashes and dimensions recorded in each case. Raw recovery checks exact writeback, the retained entry, and every failed block. Normalized recovery checks every key and title plus one literalization diagnostic per unknown atom. Field inspection checks the exact name and independently calculated span. CSL encoding checks the complete decoded record and an empty issue report.
+
+Measure all scales of one boundary:
+
+```bash
+uv run --no-sync refkit-bench check --lane parse.recover --dataset all
+uv run --no-sync refkit-bench run --lane raw.recover --dataset all \
+  --output packages/refkit-bench/results/raw-recovery
+```
 
 Rendering participants consume the same [Citation Style Language](https://citationstyles.org/) XML, a format for citation rules. The authored style uses explicit `en-US` terms, complete author lists, and a fixed bibliography sort order. Checks compare exact text and native output order. This style measures basic author-date rendering. APA fidelity, locale coverage, and disambiguation need their own cases and expectations.
 
@@ -148,7 +166,7 @@ Keep the full result directories and exact commands. Result files stay local und
 
 Add a lane when it answers a distinct consumer question. Define its input shape, unit of work, setup boundary, exact output requirements, and eligible participants before collecting timings. Add independently sourced expectations and the smallest test that rejects a plausible incorrect result. Register the case, then run `make benchmark-test` and the case's `check` command.
 
-Factories return `Prepared` operations. Keep package-specific conversion and setup in `parsing.py`, `rendering.py`, `formatting.py`, or `tabular.py`. Keep timing, process lifecycle, provenance, and result analysis in their respective modules. Runtime packages depend inward on the capability core and never import benchmark code.
+Factories return `Prepared` operations. Keep package-specific conversion and setup in `parsing.py`, `rendering.py`, `formatting.py`, `tabular.py`, or `stress.py`. Keep timing, process lifecycle, provenance, and result analysis in their respective modules. Runtime packages depend inward on the capability core and never import benchmark code.
 
 
 ## Main branch and release benchmarks
@@ -163,13 +181,13 @@ A docs-only commit skips measurement, reuses saved candidate timings when availa
 
 ### Measurement and comparison
 
-For a new measurement, the baseline is the previous `main` tip and the candidate is the new tip. A release tag uses its commit's first parent. A push containing several commits measures their combined effect. Each OS builds both revisions in release mode, then measures them sequentially on the same runner. The three OS jobs run in parallel, independently of distribution and documentation checks. Rust compilation and Python downloads are cached.
+For a new measurement, the requested baseline is the previous `main` tip and the candidate is the new tip. A release tag uses its commit's first parent. A push containing several commits measures their combined effect. Each OS builds comparable revisions in release mode, then measures them sequentially on the same runner. The three OS jobs run in parallel, independently of distribution and documentation checks. Rust compilation and Python downloads are cached.
 
 Each revision uses separate Cargo target and intermediate build directories beneath the configured `CARGO_TARGET_DIR` root. [Cargo build state](https://doc.rust-lang.org/cargo/reference/build-cache.html) tracks relative source paths and modification times, so these directories belong to one revision. Dependency download caches remain shared.
 
-Both revisions use the candidate's benchmark harness and locked Python dependencies in separate environments. The comparison isolates RefKit's Python and native implementation changes under that dependency set. Changes to dependency versions need a separate experiment using each revision's dependencies.
+Revisions with matching declarations in `packages/refkit-bench/src/refkit_bench/api-version.json` use the candidate's benchmark harness and locked Python dependencies in separate environments. The comparison isolates RefKit's Python and native implementation changes under that dependency set. When the baseline has a different or missing API version, CI builds and measures the candidate alone and reports absolute timings as a new baseline. Increment the API version when the harness requires an incompatible runtime API. Changes to dependency versions need a separate experiment using each revision's dependencies.
 
-The CI selection is `--lane all --dataset real --package refkit --package polars-eager --package polars-lazy`. It covers 14 cases across parsing, inspection, editing, rendering, formatting, and eager/lazy Polars expressions. Each case uses five workers, five warmup batches, five measured batches, and a 50 ms calibration target. Case order uses seed 2026. Revision order alternates with the workflow run number.
+CI selects all lanes for `refkit`, `polars-eager`, and `polars-lazy` with datasets `real`, `unclosed-5k`, `unknown-1k`, `field-1mib`, and `chunks-8k`. The 18 cases cover parsing, inspection, editing, rendering, formatting, eager/lazy Polars expressions, and all four boundary-stress operations. Each case uses five workers, five warmup batches, five measured batches, and a 50 ms calibration target. Case order uses seed 2026. Revision order alternates with the workflow run number.
 
 | Result | 95% candidate/base interval |
 | --- | --- |
@@ -196,10 +214,10 @@ The `Consolidated results` job writes tables to the [job summary](https://docs.g
 
 | File | Contents |
 | --- | --- |
-| `report.json` | Schema 1, input fingerprint, measured commits, current request and reuse status, the 5% comparison band, and per-platform comparisons. |
+| `report.json` | Schema 2, input fingerprint, measured commits, current request and reuse status, the 5% comparison band, and per-platform comparison or absolute-measurement results. |
 | `summary.md` | The overview and tables shown in the job summary. Reused evidence shows saved candidate timings. |
-| `<OS>/comparison.json` | Revision identities, execution order, runner image, elapsed times, worker counts, ratios, and intervals. |
-| `<OS>/baseline/*.json`, `<OS>/candidate/*.json` | Validation manifests, artifact fingerprints, environment metadata, and raw pyperf samples. |
+| `<OS>/comparison.json` | Revision identities, API versions, measurement mode, execution order, runner image, elapsed times and worker counts. Comparable revisions also include ratios and intervals. |
+| `<OS>/baseline/*.json`, `<OS>/candidate/*.json` | Validation manifests, artifact fingerprints, environment metadata, and raw pyperf samples. Absolute measurements contain candidate evidence only. |
 
 The consolidated artifact is retained for 30 days. Per-platform transfer artifacts expire after one day. Failed-job reruns reuse successful platform artifacts while they remain available. Reuse validates coverage and raw timing hashes. Missing measurements appear as failed platforms.
 

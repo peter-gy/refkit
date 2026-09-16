@@ -7,6 +7,7 @@ from hashlib import sha256
 from refkit_bench.fixtures import WORKLOAD_NAMES, load_workload
 from refkit_bench.formatting import formatting_cases, key_case, layout_case, prepare_format
 from refkit_bench.model import Prepared
+from refkit_bench.stress import STRESS_SIZES, prepare_stress
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,24 @@ class Lane:
 
 
 LANES = {
+    "raw.recover": Lane(
+        "Parse unclosed blocks and retain a following valid raw entry.",
+        ("refkit",),
+        "malformed bibliography",
+    ),
+    "parse.recover": Lane(
+        "Recover unknown field atoms into a complete normalized library.",
+        ("refkit",),
+        "malformed bibliography",
+    ),
+    "inspect.field": Lane(
+        "Read a prepared raw field's name and value span.", ("refkit",), "field metadata request"
+    ),
+    "encode.csl": Lane(
+        "Encode a prepared library with adjacent title chunks as CSL JSON.",
+        ("refkit",),
+        "bibliography",
+    ),
     "parse.bibtex": Lane(
         "Parse an in-memory bibliography into a queryable model.",
         ("refkit", "bibtexparser", "pybtex"),
@@ -100,7 +119,9 @@ class Case:
         return f"{self.lane}/{self.dataset}/{self.package}"
 
     def prepare(self) -> Prepared:
-        if self.lane == "format.spec":
+        if self.lane in STRESS_SIZES:
+            prepared = prepare_stress(self.lane, self.dataset)
+        elif self.lane == "format.spec":
             fixture = next(case for case in formatting_cases() if case.name == self.dataset)
             prepared = prepare_format(fixture, self.package)
         else:
@@ -155,15 +176,26 @@ def select_cases(
         raise ValueError(f"unknown lanes: {', '.join(sorted(unknown))}")
     specs = tuple(case.name for case in formatting_cases())
     selected_datasets = list(dict.fromkeys(datasets or ["real"]))
-    known_datasets = {*WORKLOAD_NAMES, *specs, "all"}
+    known_datasets = {
+        *WORKLOAD_NAMES,
+        *specs,
+        *(name for sizes in STRESS_SIZES.values() for name in sizes),
+        "all",
+    }
     if invalid := set(selected_datasets) - known_datasets:
         raise ValueError(f"unknown datasets: {', '.join(sorted(invalid))}")
     cases = []
     for lane in selected_lanes:
-        available = specs if lane == "format.spec" else WORKLOAD_NAMES
+        if lane in STRESS_SIZES:
+            available = tuple(STRESS_SIZES[lane])
+        elif lane == "format.spec":
+            available = specs
+        else:
+            available = WORKLOAD_NAMES
         names = (
             available
-            if "all" in selected_datasets or (lane == "format.spec" and datasets is None)
+            if "all" in selected_datasets
+            or (datasets is None and (lane == "format.spec" or lane in STRESS_SIZES))
             else [name for name in selected_datasets if name in available]
         )
         participants = [

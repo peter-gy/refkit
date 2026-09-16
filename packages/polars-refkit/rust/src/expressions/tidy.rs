@@ -6,7 +6,7 @@ use refkit_core::{
     tidy_bibtex as core_tidy_bibtex,
 };
 
-use super::broadcast::compute_error;
+use super::broadcast::{compute_error, input};
 use super::dtypes::{
     string_output, tidy_rename_struct_dtype, tidy_report_output, tidy_warning_struct_dtype,
     with_struct_validity,
@@ -25,8 +25,8 @@ struct TidyReportRow {
 
 #[polars_expr(output_type_func=string_output)]
 fn tidy_bibtex(inputs: &[Series], kwargs: TidyKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let options = kwargs.to_options().map_err(compute_error)?;
+    let bibtex = input(inputs, 0)?.str()?;
+    let options = kwargs.into_options().map_err(compute_error)?;
     let output = bibtex
         .iter()
         .map(|value| {
@@ -41,8 +41,8 @@ fn tidy_bibtex(inputs: &[Series], kwargs: TidyKwargs) -> PolarsResult<Series> {
 
 #[polars_expr(output_type_func=tidy_report_output)]
 fn tidy_bibtex_report(inputs: &[Series], kwargs: TidyKwargs) -> PolarsResult<Series> {
-    let bibtex = inputs[0].str()?;
-    let options = kwargs.to_options().map_err(compute_error)?;
+    let bibtex = input(inputs, 0)?.str()?;
+    let options = kwargs.into_options().map_err(compute_error)?;
     let reports = bibtex
         .iter()
         .map(|value| value.map(|source| tidy_source_report(source, options.clone())))
@@ -51,11 +51,11 @@ fn tidy_bibtex_report(inputs: &[Series], kwargs: TidyKwargs) -> PolarsResult<Ser
 }
 
 impl TidyKwargs {
-    fn to_options(&self) -> Result<TidyOptions, String> {
+    fn into_options(self) -> Result<TidyOptions, String> {
         let mut options = TidyOptions::default();
 
-        if let Some(value) = &self.omit {
-            options.omit = value.clone();
+        if let Some(value) = self.omit {
+            options.omit = value;
         }
         if let Some(value) = self.curly {
             options.curly = value;
@@ -72,20 +72,20 @@ impl TidyKwargs {
         if let Some(value) = self.tab {
             options.tab = value;
         }
-        if let Some(value) = &self.align {
+        if let Some(value) = self.align {
             options.align = value.option_usize(TidyOptions::default().align);
         }
         if let Some(value) = self.blank_lines {
             options.blank_lines = value;
         }
-        if let Some(value) = &self.sort {
+        if let Some(value) = self.sort {
             options.sort = value.option_string_list(TidyOptions::default().with_sort().sort);
         }
-        if let Some(value) = &self.duplicates {
-            options.duplicates = Some(duplicate_rules(value)?);
+        if let Some(value) = self.duplicates {
+            options.duplicates = Some(duplicate_rules(&value)?);
         }
-        if let Some(value) = &self.merge {
-            options.merge = Some(merge_strategy(value)?);
+        if let Some(value) = self.merge {
+            options.merge = Some(merge_strategy(&value)?);
         }
         if let Some(value) = self.strip_enclosing_braces {
             options.strip_enclosing_braces = value;
@@ -96,7 +96,7 @@ impl TidyKwargs {
         if let Some(value) = self.escape {
             options.escape = value;
         }
-        if let Some(value) = &self.sort_fields {
+        if let Some(value) = self.sort_fields {
             options.sort_fields =
                 value.option_string_list(TidyOptions::default().with_sort_fields().sort_fields);
         }
@@ -118,7 +118,7 @@ impl TidyKwargs {
         if let Some(value) = self.remove_duplicate_fields {
             options.remove_duplicate_fields = value;
         }
-        if let Some(value) = &self.generate_keys {
+        if let Some(value) = self.generate_keys {
             options.generate_keys =
                 value.option_string(TidyOptions::default().with_generate_keys().generate_keys);
         }
@@ -128,18 +128,18 @@ impl TidyKwargs {
         if let Some(value) = self.lowercase {
             options.lowercase = value;
         }
-        if let Some(value) = &self.enclosing_braces {
+        if let Some(value) = self.enclosing_braces {
             options.enclosing_braces = value.option_string_list(
                 TidyOptions::default()
                     .with_enclosing_braces()
                     .enclosing_braces,
             );
         }
-        if let Some(value) = &self.remove_braces {
+        if let Some(value) = self.remove_braces {
             options.remove_braces =
                 value.option_string_list(TidyOptions::default().with_remove_braces().remove_braces);
         }
-        if let Some(value) = &self.wrap {
+        if let Some(value) = self.wrap {
             options.wrap = value.option_usize(TidyOptions::default().with_wrap().wrap);
         }
 
@@ -148,31 +148,31 @@ impl TidyKwargs {
 }
 
 impl DefaultableUsize {
-    fn option_usize(&self, default: Option<usize>) -> Option<usize> {
+    fn option_usize(self, default: Option<usize>) -> Option<usize> {
         match self {
             Self::Enabled(true) => default,
             Self::Enabled(false) => None,
-            Self::Value(value) => Some(*value),
+            Self::Value(value) => Some(value),
         }
     }
 }
 
 impl DefaultableString {
-    fn option_string(&self, default: Option<String>) -> Option<String> {
+    fn option_string(self, default: Option<String>) -> Option<String> {
         match self {
             Self::Enabled(true) => default,
             Self::Enabled(false) => None,
-            Self::Value(value) => Some(value.clone()),
+            Self::Value(value) => Some(value),
         }
     }
 }
 
 impl DefaultableStringList {
-    fn option_string_list(&self, default: Option<Vec<String>>) -> Option<Vec<String>> {
+    fn option_string_list(self, default: Option<Vec<String>>) -> Option<Vec<String>> {
         match self {
             Self::Enabled(true) => default,
             Self::Enabled(false) => None,
-            Self::Values(values) => Some(values.clone()),
+            Self::Values(values) => Some(values),
         }
     }
 }
@@ -287,7 +287,7 @@ fn warnings_to_struct_series(warnings: &[TidyWarning]) -> PolarsResult<Series> {
         "rule".into(),
         warnings
             .iter()
-            .map(|warning| warning.rule().map(|rule| rule.as_str())),
+            .map(|warning| warning.rule().map(refkit_core::DuplicateRule::as_str)),
     )
     .into_series();
     let message = StringChunked::from_iter_values(
@@ -297,7 +297,7 @@ fn warnings_to_struct_series(warnings: &[TidyWarning]) -> PolarsResult<Series> {
     .into_series();
     let fields = [code, rule, message];
     StructChunked::from_series("warning".into(), warnings.len(), fields.iter())
-        .map(|warnings| warnings.into_series())
+        .map(polars::prelude::IntoSeries::into_series)
 }
 
 fn rename_lists_to_series(reports: &[Option<TidyReportRow>]) -> PolarsResult<Series> {

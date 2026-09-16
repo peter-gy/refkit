@@ -22,13 +22,13 @@
 
 ## Projection boundaries
 
-`Library.project` and the Polars `entries` expression accept `key`, `entry_type`, `type`, `title`, `date`, `doi`, and `volume`. `type` is an output-name alias for `entry_type`. The default projection contains `key`, `title`, `doi`, and `volume`.
+`Library.project` and the Polars `entries` expression accept `key`, `entry_type`, `title`, `date`, `doi`, and `volume`. The default projection contains `key`, `title`, `doi`, and `volume`. Complete `Entry` dictionaries retain structured values and namespaced extensions. Use `Library.from_records` and `to_records` for construction and extraction. Version-one `to_json` snapshots can be read by either Python or TypeScript.
 
 ## Duplicate boundaries
 
 Normalized `Library` keys are unique. Report recovery retains the first recoverable entry for a duplicate key and records a diagnostic.
 
-Raw `BibDocument` entries and fields preserve duplicate occurrences. Direct lookup requires one match. Use `get_all` to select a source-order occurrence before editing.
+Raw `BibDocument` snapshots preserve duplicate occurrences. Direct lookup requires one match. Use `get_all` to select an occurrence, then pass its IDs to `apply_patch`. The result contains a new document, byte changes and occurrence mappings. Old handles retain their original values and spans.
 
 `BibEntry.key` is read-only. Canonical formatting can generate new keys, but accepting generated keys also requires updating downstream citations that refer to the old keys.
 

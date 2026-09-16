@@ -1,8 +1,10 @@
 import { iterable, object, optionalString, string } from "./inputs.js";
+import type { CitePurpose } from "./types.js";
 
 export interface CiteOptions {
   locator?: string | null;
   label?: string | null;
+  purpose?: CitePurpose;
 }
 export interface CitationOptions {
   noteNumber?: number | null;
@@ -13,11 +15,18 @@ export class Cite {
   readonly key: string;
   readonly locator: string | null;
   readonly label: string | null;
+  readonly purpose: CitePurpose;
   constructor(key: string, options: CiteOptions = {}) {
-    object(options, "options", ["locator", "label"]);
+    object(options, "options", ["locator", "label", "purpose"]);
     this.key = string(key, "key");
     this.locator = optionalString(options.locator, "locator");
     this.label = optionalString(options.label, "label");
+    this.purpose = options.purpose === undefined ? "normal" : options.purpose;
+    string(this.purpose, "purpose");
+    if (!["normal", "author", "year", "full", "prose"].includes(this.purpose))
+      throw new RangeError(
+        `unknown citation purpose ${JSON.stringify(this.purpose)}`,
+      );
     Object.freeze(this);
   }
 }

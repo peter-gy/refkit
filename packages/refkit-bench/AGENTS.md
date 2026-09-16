@@ -8,6 +8,7 @@
 - Keep comparison-package behavior in adapters. Do not distort a package API to force it into an unrelated lane.
 - Record workload provenance, source license, hashes, setup placement, execution mode, package versions, and build mode.
 - Generate real BibTeX and CSL JSON from the same curated records. Check every required field against independently authored expectations through public observable values.
+- Keep malformed-source, field-size, and text-chunk scaling inputs in `stress.py`. Their dedicated datasets apply to their declared lanes, with recovery and exact-output checks outside timing.
 - Fingerprint Python wrappers, native binaries, and relevant runtime dependencies. Keep artifact identity separate from the benchmark checkout. Use unknown when installed metadata cannot establish a source revision.
 - Build native adapters in release mode before collecting timing evidence.
 - Keep generated result directories under `results/` and out of commits. Track benchmark code, tests, audited fixtures, and dependency locks.
@@ -18,6 +19,7 @@
 - Apply CPU affinity before participant setup and child startup. Verify effective process and Linux thread masks outside the timing boundary.
 - On Windows, enforce measurement deadlines through the parent case process. pyperf 2.10 uses a socket-only `select()` call for timed pipe reads.
 - Compare independent worker observations with matched case and host contracts. Keep smoke runs distinct from measurements and report per-case uncertainty.
+- Increment `src/refkit_bench/api-version.json` when the harness requires incompatible runtime APIs. CI compares revisions with matching declared versions and measures the candidate alone otherwise. Preserve absolute timings and their raw evidence through reports, caches, and release attachments.
 - Use the package-local coverage configuration for subprocess tests. Node dependencies belong under `node/` and are installed by `make benchmark-test`.
 
 Run `make benchmark-test`. See the [benchmark guide](../../development_docs/benchmarks.md) for commands and interpretation rules.

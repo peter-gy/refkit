@@ -1,7 +1,9 @@
+//! Python objects, exceptions, filesystem access, and GIL boundaries for RefKit.
+
 mod citation;
+mod codec;
 mod conversion;
 mod document;
-mod entry;
 mod errors;
 mod filesystem;
 mod library;

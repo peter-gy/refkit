@@ -1,20 +1,24 @@
 use std::collections::BTreeMap;
-use std::fmt;
 use std::ops::Range;
 
 use indexmap::IndexMap;
 
 mod edit;
 mod parse;
+mod patch;
 mod resolve;
 mod sanitize;
 #[cfg(test)]
 mod tests;
 
-use self::edit::{render_raw_document, set_raw_field_value};
+use self::edit::render_raw_document;
 use self::parse::parse_raw_document;
 pub(crate) use self::sanitize::sanitize_biblatex_for_library;
 use crate::quoted;
+pub use patch::{
+    BibEdit, BibEntryMapping, BibFieldMapping, BibFieldValue, BibPatchChange, BibPatchError,
+    BibPatchErrorCode, BibPatchKind, BibPatchResult, BibPatchWarning,
+};
 
 #[derive(Debug, Clone)]
 pub struct RawFieldData {
@@ -24,7 +28,8 @@ pub struct RawFieldData {
     pub value_atoms: Vec<RawValueAtom>,
     pub span: Range<usize>,
     pub patch_span: Range<usize>,
-    pub changed: bool,
+    pub assignment_span: Range<usize>,
+    pub comma: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +55,8 @@ pub struct RawEntryData {
     pub field_blocks: Vec<RawFieldData>,
     pub span: Range<usize>,
     pub raw: String,
+    pub key_span: Range<usize>,
+    pub kind_span: Range<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -111,22 +118,43 @@ pub struct RawDocumentData {
 }
 
 #[derive(Debug, Clone)]
+/// Immutable, occurrence-preserving BibTeX syntax snapshot.
 pub struct RawDocument {
     data: RawDocumentData,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Effective source fields after bounded macro and inheritance resolution.
 pub struct ResolvedBibEntry {
+    /// Original entry key.
     pub key: String,
+    /// Source entry kind.
     pub entry_type: String,
+    /// Effective field names and resolved TeX text, ordered by field name.
     pub fields: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
+/// Source-order entry occurrence identity, meaningful only within its snapshot.
 pub struct RawEntryId(usize);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
+/// Field occurrence identity relative to one entry in one source snapshot.
 pub struct RawFieldId(usize);
+
+impl<'de> serde::Deserialize<'de> for RawEntryId {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
+        <u32 as serde::Deserialize>::deserialize(decoder).map(|id| Self(id as usize))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for RawFieldId {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> Result<Self, D::Error> {
+        <u32 as serde::Deserialize>::deserialize(decoder).map(|id| Self(id as usize))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RawSyntaxDocument {
@@ -193,105 +221,159 @@ pub(crate) struct RawSyntaxField {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Detached entry identity and coordinates from an immutable snapshot.
 pub struct RawEntryInfo {
+    /// Snapshot-relative occurrence identity.
     pub id: RawEntryId,
+    /// Entry key, which may be shared by other occurrences.
     pub key: String,
+    /// Source entry kind.
     pub kind: String,
+    /// UTF-8 byte range of the entry in its source snapshot.
     pub span: Range<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Detached field identity, inspected value, and source coordinates.
 pub struct RawFieldInfo {
+    /// Occurrence identity relative to its owning entry.
     pub id: RawFieldId,
+    /// Source field name.
     pub name: String,
+    /// Inspected value with outer syntax delimiters removed.
     pub value: String,
+    /// UTF-8 byte range of the field value in its source snapshot.
     pub span: Range<usize>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Field identity and contents borrowed from an immutable source snapshot.
+pub struct RawFieldView<'a> {
+    /// Occurrence identity relative to its owning entry.
+    pub id: RawFieldId,
+    /// Source field name.
+    pub name: &'a str,
+    /// Inspected value with outer syntax delimiters removed.
+    pub value: &'a str,
+    /// UTF-8 byte range of the field value in its source snapshot.
+    pub span: &'a Range<usize>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Source-order block inspection. Every span uses UTF-8 byte offsets.
 pub enum RawBlockInfo {
+    /// Preserved whitespace between source blocks.
     Whitespace {
+        /// Byte range in the source snapshot.
         span: Range<usize>,
     },
+    /// A retained comment block.
     Comment {
+        /// Complete original block text.
         raw: String,
+        /// Byte range in the source snapshot.
         span: Range<usize>,
     },
+    /// A BibTeX preamble declaration.
     Preamble {
+        /// Inspected preamble expression.
         value: String,
+        /// Byte range in the source snapshot.
         span: Range<usize>,
     },
+    /// A BibTeX string macro definition.
     StringDef {
+        /// Defined macro name.
         key: String,
+        /// Inspected definition value.
         value: String,
+        /// Byte range in the source snapshot.
         span: Range<usize>,
     },
+    /// One bibliography entry occurrence.
     Entry {
+        /// Identity in this snapshot's source-order entry sequence.
         id: RawEntryId,
+        /// Entry key, potentially shared with another occurrence.
         key: String,
+        /// Byte range in the source snapshot.
         span: Range<usize>,
     },
+    /// A malformed block retained for inspection and writeback.
     Failed {
+        /// Complete original block text.
         raw: String,
+        /// Parse failure associated with this block.
         error: String,
+        /// Byte range in the source snapshot.
         span: Range<usize>,
     },
+    /// Source text outside the recognized block categories.
     Other {
+        /// Complete retained text.
         raw: String,
+        /// Byte range in the source snapshot.
         span: Range<usize>,
     },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RawEditError {
-    MissingField { entry_id: usize, field_id: usize },
-    InvalidValue(String),
-}
-
-impl fmt::Display for RawEditError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::MissingField { entry_id, field_id } => write!(
-                f,
-                "raw BibTeX field {} in entry {} is no longer available",
-                field_id, entry_id
-            ),
-            Self::InvalidValue(message) => f.write_str(message),
-        }
-    }
 }
 
 impl RawDocument {
+    #[must_use]
+    /// Capture a source snapshot, retaining malformed blocks rather than rejecting them.
     pub fn parse(source: &str) -> Self {
         Self {
             data: parse_raw_document(source),
         }
     }
 
+    /// Resolve macros and inherited fields without changing the source snapshot.
+    ///
+    /// # Errors
+    /// Returns structured syntax, macro, inheritance, or resource-budget failures.
     pub fn resolve(&self) -> Result<Vec<ResolvedBibEntry>, crate::ParseFailure> {
         resolve::resolve_document(self)
     }
 
+    #[must_use]
+    /// Count entry occurrences, including duplicate keys.
     pub fn entry_count(&self) -> usize {
         self.data.entry_blocks.len()
     }
 
+    #[must_use]
+    /// Resolve a source-order occurrence index, returning `None` beyond this snapshot.
+    pub fn entry_id_at(&self, index: usize) -> Option<RawEntryId> {
+        self.data.entry_blocks.get(index).map(|_| RawEntryId(index))
+    }
+
+    #[must_use]
+    /// Count all source blocks, including whitespace, comments, and failed blocks.
     pub fn block_count(&self) -> usize {
         self.data.blocks.len()
     }
 
+    #[must_use]
+    /// List distinct keys in first-occurrence source order.
     pub fn entry_keys(&self) -> Vec<String> {
         self.data.entries.keys().cloned().collect()
     }
 
+    #[must_use]
+    /// Check whether the exact key occurs at least once.
     pub fn contains_entry(&self, key: &str) -> bool {
         self.data.entries.contains_key(key)
     }
 
+    /// Find an exact key only when it identifies one occurrence.
+    ///
+    /// # Errors
+    /// Returns an ambiguity error when more than one entry has the key.
     pub fn unique_entry(&self, key: &str) -> Result<Option<RawEntryId>, String> {
         unique_entry_id(&self.data, key).map(|entry_id| entry_id.map(RawEntryId))
     }
 
+    #[must_use]
+    /// Inspect every entry occurrence in source order.
     pub fn entry_occurrences(&self) -> Vec<RawEntryInfo> {
         self.data
             .entry_blocks
@@ -301,6 +383,8 @@ impl RawDocument {
             .collect()
     }
 
+    #[must_use]
+    /// Inspect all occurrences of an exact key in source order.
     pub fn entries_for_key(&self, key: &str) -> Vec<RawEntryInfo> {
         self.data
             .entries
@@ -311,6 +395,8 @@ impl RawDocument {
             .collect()
     }
 
+    #[must_use]
+    /// Inspect an entry occurrence, returning `None` for an invalid identity.
     pub fn entry_info(&self, entry_id: RawEntryId) -> Option<RawEntryInfo> {
         self.data
             .entry_blocks
@@ -318,6 +404,8 @@ impl RawDocument {
             .map(|entry| entry_info(entry_id, entry))
     }
 
+    #[must_use]
+    /// Count field occurrences, or return `None` if the entry does not exist.
     pub fn field_count(&self, entry_id: RawEntryId) -> Option<usize> {
         self.data
             .entry_blocks
@@ -325,6 +413,8 @@ impl RawDocument {
             .map(|entry| entry.field_blocks.len())
     }
 
+    #[must_use]
+    /// List distinct field names in first-occurrence order for an existing entry.
     pub fn field_keys(&self, entry_id: RawEntryId) -> Option<Vec<String>> {
         self.data
             .entry_blocks
@@ -332,6 +422,8 @@ impl RawDocument {
             .map(|entry| entry.fields.keys().cloned().collect())
     }
 
+    #[must_use]
+    /// Check for a case-insensitive field name in an existing entry.
     pub fn contains_field(&self, entry_id: RawEntryId, key: &str) -> bool {
         self.data
             .entry_blocks
@@ -339,6 +431,10 @@ impl RawDocument {
             .is_some_and(|entry| entry.fields.contains_key(&key.to_ascii_lowercase()))
     }
 
+    /// Find one field by case-insensitive name in an existing entry.
+    ///
+    /// # Errors
+    /// Returns an ambiguity error for duplicate fields. Missing entries or fields yield `None`.
     pub fn unique_field(
         &self,
         entry_id: RawEntryId,
@@ -351,6 +447,8 @@ impl RawDocument {
             .map(|field_id| field_id.map(RawFieldId))
     }
 
+    #[must_use]
+    /// Inspect fields in source order, or return `None` for a missing entry.
     pub fn field_occurrences(&self, entry_id: RawEntryId) -> Option<Vec<RawFieldInfo>> {
         self.data.entry_blocks.get(entry_id.0).map(|entry| {
             entry
@@ -362,6 +460,8 @@ impl RawDocument {
         })
     }
 
+    #[must_use]
+    /// Inspect all occurrences of a case-insensitive field name in an existing entry.
     pub fn fields_for_key(&self, entry_id: RawEntryId, key: &str) -> Option<Vec<RawFieldInfo>> {
         let entry = self.data.entry_blocks.get(entry_id.0)?;
         Some(
@@ -380,6 +480,8 @@ impl RawDocument {
         )
     }
 
+    #[must_use]
+    /// Inspect one field occurrence, returning `None` for invalid entry or field identities.
     pub fn field_info(&self, entry_id: RawEntryId, field_id: RawFieldId) -> Option<RawFieldInfo> {
         self.data
             .entry_blocks
@@ -388,15 +490,27 @@ impl RawDocument {
             .map(|field| field_info(field_id, field))
     }
 
-    pub fn set_field_value(
-        &mut self,
+    #[must_use]
+    /// Borrow one field occurrence, returning `None` for invalid entry or field identities.
+    pub fn field_view(
+        &self,
         entry_id: RawEntryId,
         field_id: RawFieldId,
-        value: String,
-    ) -> Result<(), RawEditError> {
-        set_raw_field_value(&mut self.data, entry_id.0, field_id.0, value)
+    ) -> Option<RawFieldView<'_>> {
+        self.data
+            .entry_blocks
+            .get(entry_id.0)
+            .and_then(|entry| entry.field_blocks.get(field_id.0))
+            .map(|field| RawFieldView {
+                id: field_id,
+                name: &field.name,
+                value: &field.value,
+                span: &field.span,
+            })
     }
 
+    #[must_use]
+    /// Collect complete comment blocks in source order.
     pub fn comments(&self) -> Vec<String> {
         self.data
             .blocks
@@ -408,6 +522,8 @@ impl RawDocument {
             .collect()
     }
 
+    #[must_use]
+    /// Join preamble values in source order with BibTeX concatenation operators.
     pub fn preamble(&self) -> String {
         self.data
             .blocks
@@ -420,6 +536,8 @@ impl RawDocument {
             .join(" # ")
     }
 
+    #[must_use]
+    /// Inspect string definitions, with later values replacing repeated names.
     pub fn strings(&self) -> IndexMap<String, String> {
         self.data
             .blocks
@@ -433,6 +551,8 @@ impl RawDocument {
             .collect()
     }
 
+    #[must_use]
+    /// Inspect malformed blocks in source order.
     pub fn failed_blocks(&self) -> Vec<RawBlockInfo> {
         self.data
             .blocks
@@ -444,6 +564,8 @@ impl RawDocument {
             .collect()
     }
 
+    /// Inspect all retained source blocks in order.
+    #[must_use]
     pub fn blocks(&self) -> Vec<RawBlockInfo> {
         self.data.blocks.iter().map(raw_block_info).collect()
     }
@@ -466,6 +588,14 @@ impl RawDocument {
         }
     }
 
+    pub(crate) fn syntax_data(&self) -> &RawDocumentData {
+        &self.data
+    }
+
+    /// Write back the immutable source snapshot with unrelated syntax preserved.
+    ///
+    /// # Errors
+    /// Returns an error if recorded syntax or span invariants cannot be rendered.
     pub fn render(&self) -> Result<String, String> {
         render_raw_document(&self.data)
     }
@@ -495,12 +625,24 @@ pub(crate) fn normalize_raw_at_command(raw: &str) -> String {
 }
 
 impl RawEntryId {
+    pub(crate) fn from_index(index: usize) -> Self {
+        Self(index)
+    }
+
+    #[must_use]
+    /// Return the zero-based index within the snapshot's entry sequence.
     pub fn index(self) -> usize {
         self.0
     }
 }
 
 impl RawFieldId {
+    pub(crate) fn from_index(index: usize) -> Self {
+        Self(index)
+    }
+
+    #[must_use]
+    /// Return the zero-based index within the owning entry's field sequence.
     pub fn index(self) -> usize {
         self.0
     }

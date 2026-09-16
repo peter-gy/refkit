@@ -1,23 +1,41 @@
+import builtins
 from collections.abc import Iterable
 from os import PathLike
 from typing import Literal, TypeAlias
 
 from .types import (
+    BibEdit,
+    BibliographyFormat,
     BibliographyLayout,
+    BibPatchErrorCode,
+    BibPatchResult,
+    CitePurpose,
+    ConversionIssue,
+    ConversionReport,
+    DecodeReport,
     Diagnostic,
+    DuplicateReport,
+    DuplicateRule,
+    EncodeReport,
+    Entry,
+    LossPolicy,
+    MergeErrorCode,
+    MergeFieldChoice,
+    MergePlan,
     ProjectionRow,
     RawBlock,
     RawFailedBlock,
     RenderedTree,
     ResolvedBibEntry,
+    StyleMetadata,
     TidyRename,
+    ValidationReport,
 )
 
 __version__: str
 build_info: str
 build_mode: Literal["debug", "release"]
 _RecoveryPolicy: TypeAlias = Literal["error", "report"]
-_DuplicateRule: TypeAlias = Literal["doi", "key", "abstract", "citation"]
 _MergeStrategy: TypeAlias = Literal["first", "last", "combine", "overwrite"]
 
 class RefkitError(Exception): ...
@@ -26,6 +44,37 @@ class ParseError(RefkitError):
     diagnostics: list[Diagnostic]
 
 class MissingReferenceError(RefkitError): ...
+
+class ConversionError(RefkitError):
+    issues: list[ConversionIssue]
+    diagnostics: list[Diagnostic]
+
+class PatchError(RefkitError):
+    code: BibPatchErrorCode
+    operation: int | None
+
+class MergeError(RefkitError):
+    code: MergeErrorCode
+
+def decode(
+    source: str,
+    *,
+    format: BibliographyFormat,
+    loss: LossPolicy = "report",
+    recovery: _RecoveryPolicy = "error",
+) -> DecodeReport: ...
+def encode(
+    library: Library, *, format: BibliographyFormat, loss: LossPolicy = "report"
+) -> EncodeReport: ...
+def convert(
+    source: str,
+    *,
+    source_format: BibliographyFormat,
+    target_format: BibliographyFormat,
+    loss: LossPolicy = "report",
+    recovery: _RecoveryPolicy = "error",
+) -> ConversionReport: ...
+
 class TidyError(RefkitError): ...
 
 class TidySyntaxError(TidyError):
@@ -48,7 +97,7 @@ class TidyOptions:
         align: bool | int | None = 14,
         blank_lines: bool = False,
         sort: bool | Iterable[str] | None = None,
-        duplicates: Iterable[_DuplicateRule] | None = None,
+        duplicates: Iterable[DuplicateRule] | None = None,
         merge: _MergeStrategy | None = None,
         strip_enclosing_braces: bool = False,
         drop_all_caps: bool = False,
@@ -72,7 +121,7 @@ class TidyWarning:
     @property
     def code(self) -> Literal["missing_key", "duplicate_entry"]: ...
     @property
-    def rule(self) -> _DuplicateRule | None: ...
+    def rule(self) -> DuplicateRule | None: ...
     @property
     def message(self) -> str: ...
 
@@ -89,23 +138,14 @@ class TidyResult:
 def tidy_bibtex(source: str, *, options: TidyOptions | None = None) -> TidyResult: ...
 def _write_bibtex(path: str | PathLike[str], source: str) -> None: ...
 
-class Entry:
-    @property
-    def key(self) -> str: ...
-    @property
-    def entry_type(self) -> str: ...
-    @property
-    def title(self) -> str | None: ...
-    @property
-    def date(self) -> str | None: ...
-    @property
-    def parents(self) -> list[Entry]: ...
-    @property
-    def volume(self) -> str | None: ...
-    @property
-    def doi(self) -> str | None: ...
-
 class Library:
+    @staticmethod
+    def from_records(records: Iterable[Entry]) -> Library: ...
+    @staticmethod
+    def from_json(source: str) -> Library: ...
+    def to_records(self) -> list[Entry]: ...
+    def validate(self) -> ValidationReport: ...
+    def to_json(self) -> str: ...
     @staticmethod
     def read(path: str | PathLike[str], *, recovery: _RecoveryPolicy = "error") -> Library: ...
     @staticmethod
@@ -134,15 +174,19 @@ class Library:
 
 class Style:
     @staticmethod
+    def list() -> builtins.list[StyleMetadata]: ...
+    @staticmethod
     def load(name: str) -> Style: ...
     @staticmethod
-    def from_xml(xml: str) -> Style: ...
+    def from_xml(xml: str, *, parent_xml: str | None = None) -> Style: ...
     @staticmethod
     def from_path(path: str | PathLike[str]) -> Style: ...
     @property
     def id(self) -> str: ...
     @property
     def title(self) -> str: ...
+    @property
+    def csl_id(self) -> str: ...
 
 class Locale:
     @staticmethod
@@ -152,7 +196,12 @@ class Locale:
 
 class Cite:
     def __init__(
-        self, key: str, *, locator: str | None = None, label: str | None = None
+        self,
+        key: str,
+        *,
+        locator: str | None = None,
+        label: str | None = None,
+        purpose: CitePurpose = "normal",
     ) -> None: ...
     @property
     def key(self) -> str: ...
@@ -160,6 +209,8 @@ class Cite:
     def locator(self) -> str | None: ...
     @property
     def label(self) -> str | None: ...
+    @property
+    def purpose(self) -> CitePurpose: ...
 
 class CitationGroup:
     def __init__(self, items: Iterable[str | Cite]) -> None: ...
@@ -207,11 +258,13 @@ class Document:
 
 class BibField:
     @property
+    def id(self) -> int: ...
+    @property
+    def entry_id(self) -> int: ...
+    @property
     def name(self) -> str: ...
     @property
     def value(self) -> str: ...
-    @value.setter
-    def value(self, value: str) -> None: ...
     @property
     def span(self) -> tuple[int, int]: ...
 
@@ -228,6 +281,8 @@ class BibFieldMap:
     def __getitem__(self, key: str) -> BibField: ...
 
 class BibEntry:
+    @property
+    def id(self) -> int: ...
     @property
     def key(self) -> str: ...
     @property
@@ -250,6 +305,18 @@ class BibEntryMap:
     def __getitem__(self, key: str) -> BibEntry: ...
 
 class BibDocument:
+    def find_duplicates(
+        self, *, rules: Iterable[DuplicateRule] | None = None
+    ) -> DuplicateReport: ...
+    def plan_merge(
+        self,
+        entries: Iterable[int],
+        *,
+        retain: int,
+        fields: Iterable[MergeFieldChoice] | None = None,
+        entry_type: str | None = None,
+    ) -> MergePlan: ...
+    def apply_patch(self, patch: Iterable[BibEdit]) -> BibPatchResult: ...
     @property
     def diagnostics(self) -> list[Diagnostic]: ...
     @staticmethod
@@ -270,5 +337,6 @@ class BibDocument:
     def blocks(self) -> list[RawBlock]: ...
     def to_bibtex(self) -> str: ...
     def resolve(self) -> list[ResolvedBibEntry]: ...
+    def validate(self) -> ValidationReport: ...
     def tidy(self, *, options: TidyOptions | None = None) -> TidyResult: ...
     def write(self, path: str | PathLike[str]) -> None: ...

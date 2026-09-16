@@ -13,7 +13,7 @@ use crate::repr::quoted;
 #[derive(Clone)]
 pub struct Rendered {
     record: Arc<RenderedRecord>,
-    tree_json: OnceLock<String>,
+    tree_json: Arc<OnceLock<String>>,
 }
 
 #[pymethods]
@@ -49,8 +49,12 @@ impl Rendered {
 
     #[getter]
     fn tree(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let payload = self.tree_json(py);
-        json_to_py(py, &payload)
+        let payload = py.detach(|| {
+            self.tree_json.get_or_init(|| {
+                Value::Array(rendered_nodes_to_json(self.record.tree_nodes())).to_string()
+            })
+        });
+        json_to_py(py, payload)
     }
 
     fn __repr__(&self) -> String {
@@ -62,25 +66,8 @@ impl Rendered {
     pub(crate) fn new(record: RenderedRecord) -> Self {
         Self {
             record: Arc::new(record),
-            tree_json: OnceLock::new(),
+            tree_json: Arc::new(OnceLock::new()),
         }
-    }
-
-    pub(crate) fn from_record(record: RenderedRecord) -> Self {
-        Self::new(record)
-    }
-
-    fn tree_json(&self, py: Python<'_>) -> String {
-        if let Some(payload) = self.tree_json.get() {
-            return payload.clone();
-        }
-
-        let record = Arc::clone(&self.record);
-        let payload = py.detach(move || {
-            serde_json::to_string(&rendered_nodes_to_json(record.tree_nodes()))
-                .expect("rendered tree should serialize to Python JSON payload")
-        });
-        self.tree_json.get_or_init(|| payload).clone()
     }
 }
 
@@ -103,7 +90,7 @@ fn rendered_node_to_json(node: &RenderedNode) -> Value {
         RenderedNode::Text { text, formatting } => json!({
             "kind": "Text",
             "text": text,
-            "formatting": formatting_to_json(formatting),
+            "formatting": formatting_to_json(*formatting),
         }),
         RenderedNode::Element {
             display,
@@ -127,7 +114,7 @@ fn rendered_node_to_json(node: &RenderedNode) -> Value {
             "kind": "Link",
             "text": text,
             "url": url,
-            "formatting": formatting_to_json(formatting),
+            "formatting": formatting_to_json(*formatting),
         }),
         RenderedNode::Transparent {
             cite_idx,
@@ -135,7 +122,7 @@ fn rendered_node_to_json(node: &RenderedNode) -> Value {
         } => json!({
             "kind": "Transparent",
             "cite_idx": cite_idx,
-            "formatting": formatting_to_json(formatting),
+            "formatting": formatting_to_json(*formatting),
         }),
         RenderedNode::BibliographyEntry {
             key,
@@ -150,7 +137,7 @@ fn rendered_node_to_json(node: &RenderedNode) -> Value {
     }
 }
 
-fn formatting_to_json(formatting: &RenderedFormatting) -> Value {
+fn formatting_to_json(formatting: RenderedFormatting) -> Value {
     json!({
         "font_style": formatting.font_style.as_str(),
         "font_variant": formatting.font_variant.as_str(),

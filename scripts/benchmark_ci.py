@@ -21,6 +21,19 @@ def execute(command: list[str], *, env: dict[str, str], capture: bool = False) -
     return result.stdout or ""
 
 
+def api_version(root: Path) -> int | None:
+    path = root / "packages/refkit-bench/src/refkit_bench/api-version.json"
+    if not path.is_file():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or set(data) != {"api_version"}:
+        raise ValueError(f"{path}: expected api_version")
+    value = data["api_version"]
+    if type(value) is not int or value < 1:
+        raise ValueError(f"{path}: api_version must be a positive integer")
+    return value
+
+
 def run(candidate: Path, baseline: Path, output: Path, platform: str) -> int:
     output.mkdir(parents=True, exist_ok=False)
     revisions = {
@@ -45,7 +58,17 @@ def run(candidate: Path, baseline: Path, output: Path, platform: str) -> int:
     target_root = Path(environment.get("CARGO_TARGET_DIR", str(output / "target"))).resolve()
     interpreters = {}
     try:
-        for name, root in (("baseline", baseline), ("candidate", candidate)):
+        versions = {"baseline": api_version(baseline), "candidate": api_version(candidate)}
+        if versions["candidate"] is None:
+            raise ValueError("candidate must declare its benchmark API version")
+        comparable = versions["baseline"] == versions["candidate"]
+        result.update(mode="comparison" if comparable else "absolute", api_versions=versions)
+        roots = (
+            [("baseline", baseline), ("candidate", candidate)]
+            if comparable
+            else [("candidate", candidate)]
+        )
+        for name, root in roots:
             venv = output / f"{name}-env"
             target = str(target_root / name)
             # Cargo's relative source paths and mtimes can alias across checkouts.
@@ -55,7 +78,7 @@ def run(candidate: Path, baseline: Path, output: Path, platform: str) -> int:
                 "CARGO_TARGET_DIR": target,
                 "CARGO_BUILD_BUILD_DIR": target,
             }
-            # Both installations use the candidate harness and dependency lock.
+            # Selected revisions use the candidate harness and dependency lock.
             execute(
                 [
                     "uv",
@@ -90,7 +113,7 @@ def run(candidate: Path, baseline: Path, output: Path, platform: str) -> int:
                 env=env,
             )
             interpreters[name] = str(python)
-        order = ["baseline", "candidate"]
+        order = [name for name, _ in roots]
         if int(os.environ.get("GITHUB_RUN_NUMBER", "0")) % 2:
             order.reverse()
         result["execution_order"] = order
@@ -105,6 +128,14 @@ def run(candidate: Path, baseline: Path, output: Path, platform: str) -> int:
                     "all",
                     "--dataset",
                     "real",
+                    "--dataset",
+                    "unclosed-5k",
+                    "--dataset",
+                    "unknown-1k",
+                    "--dataset",
+                    "field-1mib",
+                    "--dataset",
+                    "chunks-8k",
                     "--package",
                     "refkit",
                     "--package",
@@ -126,20 +157,19 @@ def run(candidate: Path, baseline: Path, output: Path, platform: str) -> int:
                 ],
                 env=environment,
             )
-        comparison = execute(
-            [
-                interpreters["candidate"],
-                "-m",
-                "refkit_bench.runner",
-                "compare",
-                str(output / "baseline"),
-                str(output / "candidate"),
-                "--json",
-            ],
+        command = [interpreters["candidate"], "-m", "refkit_bench.runner"]
+        command += (
+            ["compare", str(output / "baseline"), str(output / "candidate"), "--json"]
+            if comparable
+            else ["report", str(output / "candidate"), "--json"]
+        )
+        summary = execute(
+            command,
             env=environment,
             capture=True,
         )
-        result.update(status="complete", comparison=json.loads(comparison))
+        result["comparison" if comparable else "measurement"] = json.loads(summary)
+        result["status"] = "complete"
     except (subprocess.SubprocessError, OSError, ValueError) as exc:
         result["detail"] = str(exc)
         sys.stderr.write(f"Benchmark failed: {exc}\n")
@@ -152,7 +182,7 @@ def run(candidate: Path, baseline: Path, output: Path, platform: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Measure two release builds on the same CI runner."
+        description="Measure release builds with declared benchmark API comparability."
     )
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--baseline", type=Path, required=True)

@@ -10,6 +10,7 @@ Install the uv, Rust, Node.js, and pnpm prerequisites from the [developer index]
 make sync
 make refkit-develop
 make polars-refkit-develop
+make rust-tools
 ```
 
 `refkit` and `polars-refkit` contain native modules. Rebuild the affected module after Rust changes or Python tests can exercise an older editable binary.

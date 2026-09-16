@@ -14,32 +14,49 @@ use crate::raw::{RawDocument, RawEntryId, RawSyntaxBlock};
 pub use options::{DuplicateRule, MergeStrategy, TidyOptions};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Formatted bibliography with review warnings and occurrence-aware key changes.
 pub struct TidyResult {
+    /// Complete formatted source text.
     pub bibtex: String,
+    /// Nonfatal conditions encountered during transformation.
     pub warnings: Vec<TidyWarning>,
+    /// Number of retained entry occurrences.
     pub count: usize,
+    /// Original occurrence identities and their final allocated keys.
     pub renames: Vec<TidyRename>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Key change for one original source occurrence.
 pub struct TidyRename {
+    /// Entry identity in the input snapshot.
     pub entry_id: RawEntryId,
+    /// Original key, possibly empty or duplicated.
     pub old_key: String,
+    /// Final allocated key in the formatted source.
     pub new_key: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Reviewable condition encountered by deterministic formatting.
 pub enum TidyWarning {
+    /// An entry has no source key.
     MissingKey {
+        /// Description of the affected occurrence.
         message: String,
     },
+    /// Entries share a configured duplicate signature.
     DuplicateEntry {
+        /// Matching rule that produced the warning.
         rule: DuplicateRule,
+        /// Description of the match and any selected merge action.
         message: String,
     },
 }
 
 impl TidyWarning {
+    #[must_use]
+    /// Return the stable host-facing warning identifier.
     pub fn code(&self) -> &'static str {
         match self {
             Self::MissingKey { .. } => "missing_key",
@@ -47,12 +64,16 @@ impl TidyWarning {
         }
     }
 
+    #[must_use]
+    /// Borrow the warning's explanation.
     pub fn message(&self) -> &str {
         match self {
             Self::MissingKey { message } | Self::DuplicateEntry { message, .. } => message,
         }
     }
 
+    #[must_use]
+    /// Return the matching duplicate rule when the warning concerns a duplicate.
     pub fn rule(&self) -> Option<DuplicateRule> {
         match self {
             Self::DuplicateEntry { rule, .. } => Some(*rule),
@@ -62,16 +83,26 @@ impl TidyWarning {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Invalid source or formatter configuration that prevents a complete output.
 pub enum TidyError {
+    /// Syntax failure with both character and byte coordinates.
     Syntax {
+        /// One-based source line.
         line: usize,
+        /// One-based Unicode-character column.
         column: usize,
+        /// Zero-based UTF-8 byte offset.
         byte: usize,
+        /// First character of the offending source fragment, when present.
         character: Option<char>,
+        /// Explanation of the invalid syntax.
         message: String,
     },
+    /// Key-template syntax or evaluation failure.
     Template(String),
+    /// Creator-name parsing or formatting failure.
     Name(String),
+    /// Reference resolution or key-rewrite failure.
     Reference(String),
 }
 
@@ -93,6 +124,15 @@ impl fmt::Display for TidyError {
 
 impl std::error::Error for TidyError {}
 
+/// Normalize BibTeX with deterministic transformations and occurrence-aware renames.
+///
+/// # Errors
+/// Rejects malformed source, resource-budget violations, invalid names or templates,
+/// and references that cannot be resolved or safely rewritten.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "The public formatter consumes the host's options snapshot as part of one complete transformation operation."
+)]
 pub fn tidy_bibtex(input: &str, options: TidyOptions) -> Result<TidyResult, TidyError> {
     crate::library::validate_source(input).map_err(|diagnostic| {
         syntax_error(
@@ -110,20 +150,18 @@ pub fn tidy_bibtex(input: &str, options: TidyOptions) -> Result<TidyResult, Tidy
         return Err(syntax_error(&input, raw, error, byte));
     }
 
-    for entry in &syntax.entries {
-        for field in &entry.fields {
-            for atom in &field.value_atoms {
-                crate::library::validate_literal(&atom.value, field.span.start).map_err(
-                    |diagnostic| {
-                        syntax_error(
-                            &input,
-                            &atom.value,
-                            &diagnostic.message,
-                            diagnostic.span.map_or(field.span.start, |span| span.start),
-                        )
-                    },
-                )?;
-            }
+    for field in syntax.entries.iter().flat_map(|entry| &entry.fields) {
+        for atom in &field.value_atoms {
+            crate::library::validate_literal(&atom.value, field.span.start).map_err(
+                |diagnostic| {
+                    syntax_error(
+                        &input,
+                        &atom.value,
+                        &diagnostic.message,
+                        diagnostic.span.map_or(field.span.start, |span| span.start),
+                    )
+                },
+            )?;
         }
     }
 
@@ -144,9 +182,9 @@ pub fn tidy_bibtex(input: &str, options: TidyOptions) -> Result<TidyResult, Tidy
     } else {
         Vec::new()
     };
-    let mut duplicate_plan = duplicates::duplicate_plan(&syntax, &options);
+    let mut duplicate_plan = duplicates::duplicate_plan(&syntax, &options)?;
     warnings.extend(duplicate_plan.warnings.iter().cloned());
-    duplicate_plan.apply(&mut syntax);
+    duplicate_plan.apply(&mut syntax)?;
     let retained = syntax
         .entries
         .iter()
@@ -157,17 +195,25 @@ pub fn tidy_bibtex(input: &str, options: TidyOptions) -> Result<TidyResult, Tidy
             entry.key.clone_from(key);
         }
     }
-    let renames = original_keys
-        .iter()
-        .filter_map(|(id, old_key)| {
-            let new_key = &syntax.entries[duplicate_plan.retained_id(*id).index()].key;
-            (old_key != new_key).then(|| TidyRename {
+    let mut renames = Vec::new();
+    for (id, old_key) in &original_keys {
+        let new_key = &syntax
+            .entries
+            .get(duplicate_plan.retained_id(*id).index())
+            .ok_or_else(|| {
+                TidyError::Reference(
+                    "key allocation refers to a missing retained entry".to_string(),
+                )
+            })?
+            .key;
+        if old_key != new_key {
+            renames.push(TidyRename {
                 entry_id: *id,
                 old_key: old_key.clone(),
                 new_key: new_key.clone(),
-            })
-        })
-        .collect::<Vec<_>>();
+            });
+        }
+    }
     if !renames.is_empty() {
         references::rewrite(
             &mut syntax,

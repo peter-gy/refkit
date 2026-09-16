@@ -11,7 +11,7 @@ pub(super) fn parse_biblatex_library(
     parsed
         .diagnostics
         .sort_by_key(|diagnostic| diagnostic.span.as_ref().map(|span| span.start));
-    if !source.trim().is_empty() && parsed.inner.is_empty() && !parsed.diagnostics.is_empty() {
+    if !source.trim().is_empty() && parsed.records.is_empty() && !parsed.diagnostics.is_empty() {
         return Err(ParseFailure {
             diagnostics: parsed.diagnostics,
         });
@@ -22,9 +22,22 @@ pub(super) fn parse_biblatex_library(
 pub(super) fn parse_hayagriva_yaml(source: &str) -> Result<ParsedLibrary, ParseFailure> {
     validate_source(source)?;
     hayagriva::io::from_yaml_str(source)
-        .map(|inner| ParsedLibrary {
-            inner,
-            diagnostics: Vec::new(),
+        .and_then(|inner| {
+            let original: serde_yaml::Value = serde_yaml::from_str(source)?;
+            let records = inner
+                .iter()
+                .map(|entry| {
+                    let mut record = crate::EntryRecord::from_engine(entry);
+                    if let Some(value) = original.get(entry.key()) {
+                        record.capture_yaml_extensions(value);
+                    }
+                    record
+                })
+                .collect();
+            Ok(ParsedLibrary {
+                records,
+                diagnostics: Vec::new(),
+            })
         })
         .map_err(|error| {
             let span = error
@@ -39,12 +52,20 @@ pub(super) fn parse_hayagriva_yaml(source: &str) -> Result<ParsedLibrary, ParseF
         })
 }
 
+#[must_use]
+/// Parse BibTeX/BibLaTeX into a status, keys, count, and structured diagnostics.
 pub fn parse_bibtex_report(source: &str, recovery: RecoveryPolicy) -> ParseReport {
     match parse_biblatex_library(source, recovery) {
         Ok(parsed) => ParseReport {
             ok: true,
-            entry_count: Some(parsed.inner.len()),
-            keys: Some(parsed.inner.keys().map(str::to_string).collect()),
+            entry_count: Some(parsed.records.len()),
+            keys: Some(
+                parsed
+                    .records
+                    .iter()
+                    .map(|record| record.key.clone())
+                    .collect(),
+            ),
             diagnostics: parsed.diagnostics,
         },
         Err(mut error) => {
@@ -61,7 +82,7 @@ pub fn parse_bibtex_report(source: &str, recovery: RecoveryPolicy) -> ParseRepor
     }
 }
 
-pub(super) fn parse_error(error: &biblatex::ParseError) -> Diagnostic {
+pub(crate) fn parse_error(error: &biblatex::ParseError) -> Diagnostic {
     let code = match error.kind {
         biblatex::ParseErrorKind::UnknownAbbreviation(_) => "unknown_abbreviation",
         biblatex::ParseErrorKind::DuplicateKey(_) => "duplicate_key",

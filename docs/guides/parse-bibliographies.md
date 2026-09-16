@@ -4,7 +4,7 @@ description: Parse bibliography text, inspect normalized entries, project record
 
 # Parse Bibliographies
 
-`Library` parses [BibTeX](https://ctan.org/pkg/bibtex) and [BibLaTeX](https://ctan.org/pkg/biblatex) bibliography text into normalized `Entry` objects.
+`Library` parses [BibTeX](https://ctan.org/pkg/bibtex) and [BibLaTeX](https://ctan.org/pkg/biblatex) bibliography text into structured `Entry` records.
 
 ::: code-group
 
@@ -15,7 +15,7 @@ source = (
     "@article{doe2024, title={Fast Citations}, journal={Citation Tests}, volume={12}, year={2024}}"
 )
 library = rk.Library.parse_bibtex(source)
-print(library.get("doe2024").title)
+print(library.project(["title"])[0]["title"])
 ```
 
 ```ts [TypeScript]
@@ -23,7 +23,7 @@ import * as rk from "refkit-js";
 
 const source = "@article{doe2024, title={Fast Citations}, journal={Citation Tests}, volume={12}, year={2024}}";
 const library = rk.Library.parseBibtex(source);
-console.log(library.get("doe2024")!.title);
+console.log(library.project(["title"])[0]!.title);
 ```
 
 :::
@@ -38,6 +38,8 @@ For [Hayagriva YAML](https://github.com/typst/hayagriva#file-format), a bibliogr
 
 ## Inspect entries
 
+`get` and `values` return structured records. Use projection when a consumer needs scalar text.
+
 ::: code-group
 
 ```python [Python]
@@ -45,7 +47,7 @@ print(len(library))
 print("doe2024" in library)
 
 entry = library["doe2024"]
-print(entry.key, entry.entry_type, entry.title)
+print(entry["key"], entry["entry_type"])
 ```
 
 ```ts [TypeScript]
@@ -53,7 +55,7 @@ console.log(library.size);
 console.log(library.has("doe2024"));
 
 const entry = library.get("doe2024")!;
-console.log(entry.key, entry.entryType, entry.title);
+console.log(entry.key, entry.entryType);
 ```
 
 :::
@@ -82,7 +84,7 @@ console.log(selectedRows[0]!.title);
 
 :::
 
-`type` is an alias for the entry type under that output key. Title, date, DOI, and volume values can be `None` / `null`. [Data Shapes](/reference/data-shapes) defines the normalized fields.
+Projected title, date, DOI, and volume values can be `None` / `null`. Complete entry records preserve structured values. [Data Shapes](/reference/data-shapes) defines both shapes.
 
 ## Select by bibliography structure
 
@@ -92,7 +94,7 @@ console.log(selectedRows[0]!.title);
 
 ```python [Python]
 periodical_articles = library.select("article > periodical[volume]")
-print([entry.key for entry in periodical_articles])
+print([entry["key"] for entry in periodical_articles])
 ```
 
 ```ts [TypeScript]
@@ -153,3 +155,69 @@ for (const diagnostic of recovered.diagnostics) {
 :::
 
 The recovered library retains `doe2024` and reports the malformed trailing block. The file readers accept the same recovery option. Keep the default `"error"` policy when subsequent work requires an exact parse. [Recovery](/concepts/parsing-and-recovery) explains the diagnostic fields and recovery boundaries.
+
+## Construct structured references
+
+Construct a library directly when an application already owns reference data:
+
+::: code-group
+
+```python [Python]
+records: list[rk.Entry] = [
+    {
+        "key": "council2024",
+        "entry_type": "Book",
+        "title": {"chunks": [{"kind": "normal", "text": "Annual Report"}]},
+        "authors": [{"kind": "organization", "name": "Research Council"}],
+        "date": {"value": {"kind": "point", "date": {"year": 2024}}},
+    }
+]
+constructed = rk.Library.from_records(records)
+report = rk.Document(constructed, rk.Style.load("apa")).render(
+    [
+        rk.Citation("intro", "council2024"),
+    ]
+)
+print(report["intro"].text)
+```
+
+```ts [TypeScript]
+const records: rk.Entry[] = [{
+  key: "council2024",
+  entryType: "Book",
+  title: { chunks: [{ kind: "normal", text: "Annual Report" }] },
+  authors: [{ kind: "organization", name: "Research Council" }],
+  date: { value: { kind: "point", date: { year: 2024 } } },
+}];
+const constructed = rk.Library.fromRecords(records);
+const report = new rk.Document(constructed, rk.Style.load("apa")).render([
+  new rk.Citation("intro", "council2024"),
+]);
+console.log(report.get("intro").text);
+```
+
+:::
+
+Both print `(Research Council, 2024)`. Top-level keys must be unique. Text chunks can also preserve capitalization or mathematical content. [Bibliography records](/reference/data-shapes#bibliography-records) lists creator, date, container, identifier, and extension fields.
+
+## Exchange complete records
+
+Extract editable copies with `to_records()` / `toRecords()`. Use a versioned JSON snapshot to exchange complete data across Python and TypeScript:
+
+::: code-group
+
+```python [Python]
+snapshot = constructed.to_json()
+restored = rk.Library.from_json(snapshot)
+assert restored.to_records() == constructed.to_records()
+```
+
+```ts [TypeScript]
+const snapshot = constructed.toJson();
+const restored = rk.Library.fromJson(snapshot);
+if (restored.toJson() !== snapshot) throw new Error("Snapshot changed");
+```
+
+:::
+
+Both bindings emit the same schema with snake_case field names. Runtime records use their language's field naming. Construct a new library from changed records to make those changes available to rendering.

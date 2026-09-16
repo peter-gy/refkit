@@ -64,9 +64,9 @@ Hayagriva, BibLaTeX, Citationberg, and serializers are pure in-process implement
 
 Core records describe bibliography behavior before an adapter chooses a host shape:
 
-- `EntryRecord` becomes Python `Entry` objects, JavaScript records, or Polars entry structs.
+- `EntryRecord` becomes detached Python `Entry` dictionaries and JavaScript records. Polars entry structs project scalar fields from the same records.
 - `Diagnostic`, `ParseFailure`, and `ParseReport` become Python or JavaScript diagnostic records and exceptions, or Polars report structs.
-- `RawBlockInfo` and raw occurrence records become Python or JavaScript records and live raw handles.
+- `RawBlockInfo` and raw occurrence records become Python or JavaScript records and snapshot-bound handles.
 - `RenderedRecord` and `RenderedNode` become Python tree dictionaries or JavaScript tree records. Polars rendered expressions project text and HTML into a struct.
 - `TidyResult`, `TidyWarning`, and `TidyRename` become Python or JavaScript result records, or Polars report fields.
 
@@ -144,7 +144,7 @@ In-memory callers enter directly through `Library.parse_bibtex` or `Library.pars
 
 ### Edit Raw BibTeX
 
-`BibDocument` scans source-order blocks and indexes entry and field occurrences. A `BibField.value` assignment validates a replacement against the original delimiter mode and records a value-span patch. Serialization applies changed spans to the original entry slices and preserves unrelated blocks.
+`BibDocument` owns an immutable raw snapshot and indexes its entry and field occurrences. `apply_patch` plans structural byte edits, validates overlap and reference targets, and returns a new snapshot with complete occurrence mappings. Serialization returns that snapshot's source. Handles retain their original snapshot, including its values and spans.
 
 ### Execute A Polars Expression
 

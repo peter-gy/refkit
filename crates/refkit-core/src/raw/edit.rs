@@ -1,28 +1,32 @@
 use std::ops::Range;
 
-use super::{
-    RawBlock, RawDocumentData, RawEditError, RawEntryData, RawFieldData, RawValueAtom,
-    RawValueMode, is_safe_bare_value,
-};
+use super::{RawBlock, RawDocumentData, RawFieldData, RawValueMode, is_safe_bare_value};
 use crate::quoted;
 
-pub fn set_raw_field_value(
-    doc: &mut RawDocumentData,
-    entry_id: usize,
-    field_id: usize,
-    value: String,
-) -> Result<(), RawEditError> {
-    let field = doc
-        .entry_blocks
-        .get_mut(entry_id)
-        .and_then(|entry| entry.field_blocks.get_mut(field_id))
-        .ok_or(RawEditError::MissingField { entry_id, field_id })?;
+pub(super) fn prepare_field_edit(
+    field: &RawFieldData,
+    value: &str,
+) -> Result<(Range<usize>, String), String> {
+    validate_field_value(value, field.value_mode)?;
+    Ok(patch_field_value(field, value))
+}
 
-    validate_field_value(&value, field.value_mode).map_err(RawEditError::InvalidValue)?;
-    field.value = value;
-    field.value_atoms = edited_value_atoms(&field.value, field.value_mode);
-    field.changed = true;
-    Ok(())
+pub(super) fn prepare_new_value(value: &str) -> Result<String, String> {
+    validate_braced_field_value(value)?;
+    Ok(format!("{{{value}}}"))
+}
+
+pub(super) fn prepare_expression(value: &str) -> Result<(String, String), String> {
+    let text = value.trim();
+    if text.is_empty() {
+        return Err("BibTeX value expression must not be empty".into());
+    }
+    crate::library::validate_literal(text, 0).map_err(|error| error.message)?;
+    let parsed = super::parse::parse_value(text, 0, 0)?;
+    if parsed.1 != text.len() || parsed.3 == RawValueMode::Missing {
+        return Err("Expected one complete BibTeX value expression".into());
+    }
+    Ok((text.into(), parsed.0))
 }
 
 pub fn render_raw_document(data: &RawDocumentData) -> Result<String, String> {
@@ -45,59 +49,31 @@ pub fn render_raw_document(data: &RawDocumentData) -> Result<String, String> {
                     .entry_blocks
                     .get(*id)
                     .ok_or_else(|| format!("missing BibTeX entry {}", quoted(key)))?;
-                if entry.field_blocks.iter().any(|field| field.changed) {
-                    output.push_str(&patch_entry(entry)?);
-                } else {
-                    output.push_str(&entry.raw);
-                }
+                output.push_str(&entry.raw);
             }
         }
     }
     Ok(output)
 }
 
-fn patch_entry(entry: &RawEntryData) -> Result<String, String> {
-    let mut fields = entry
-        .field_blocks
-        .iter()
-        .filter(|field| field.changed)
-        .collect::<Vec<_>>();
-    fields.sort_by_key(|field| patch_field_value(field).0.start);
-
-    let mut output = String::with_capacity(entry.raw.len());
-    let mut cursor = entry.span.start;
-    for field in fields {
-        let (span, value) = patch_field_value(field);
-        if span.start < entry.span.start || span.end > entry.span.end || span.start < cursor {
-            return Err(format!(
-                "invalid source span for BibTeX field {}",
-                field.name
-            ));
-        }
-
-        output.push_str(&entry.raw[cursor - entry.span.start..span.start - entry.span.start]);
-        output.push_str(&value);
-        cursor = span.end;
+fn patch_field_value(field: &RawFieldData, value: &str) -> (Range<usize>, String) {
+    if field.value_mode == RawValueMode::Quoted && contains_unescaped(value, '"') {
+        return (field.patch_span.clone(), format!("{{{value}}}"));
     }
-    output.push_str(&entry.raw[cursor - entry.span.start..]);
-    Ok(output)
+    (
+        field.span.clone(),
+        render_field_value(field.value_mode, value),
+    )
 }
 
-fn patch_field_value(field: &RawFieldData) -> (Range<usize>, String) {
-    if field.value_mode == RawValueMode::Quoted && contains_unescaped(&field.value, '"') {
-        return (field.patch_span.clone(), format!("{{{}}}", field.value));
-    }
-    (field.span.clone(), render_field_value(field))
-}
-
-fn render_field_value(field: &RawFieldData) -> String {
-    match field.value_mode {
-        RawValueMode::Bare if !is_safe_bare_value(&field.value) => {
-            format!("{{{}}}", field.value)
+fn render_field_value(mode: RawValueMode, value: &str) -> String {
+    match mode {
+        RawValueMode::Bare if !is_safe_bare_value(value) => {
+            format!("{{{value}}}")
         }
         RawValueMode::Missing => String::new(),
-        RawValueMode::Expression => format!("{{{}}}", field.value),
-        RawValueMode::Bare | RawValueMode::Braced | RawValueMode::Quoted => field.value.clone(),
+        RawValueMode::Expression => format!("{{{value}}}"),
+        RawValueMode::Bare | RawValueMode::Braced | RawValueMode::Quoted => value.to_string(),
     }
 }
 
@@ -112,17 +88,6 @@ fn validate_field_value(value: &str, value_mode: RawValueMode) -> Result<(), Str
             validate_braced_field_value(value)
         }
         RawValueMode::Quoted => validate_quoted_field_value(value),
-    }
-}
-
-fn edited_value_atoms(value: &str, value_mode: RawValueMode) -> Vec<RawValueAtom> {
-    if value_mode == RawValueMode::Missing && value.is_empty() {
-        Vec::new()
-    } else {
-        vec![RawValueAtom {
-            value: value.to_string(),
-            value_mode,
-        }]
     }
 }
 

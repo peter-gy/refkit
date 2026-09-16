@@ -1,15 +1,23 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Encoding selected when decoding bibliography bytes.
 pub enum TextEncoding {
+    /// Input was valid UTF-8.
     Utf8,
+    /// Invalid UTF-8 input was decoded as Windows-1252.
     Windows1252,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Decoded Unicode source and the encoding used to obtain it.
 pub struct DecodedText {
+    /// Unicode source suitable for bibliography parsing.
     pub text: String,
+    /// Selected input encoding.
     pub encoding: TextEncoding,
 }
 
+#[must_use]
+/// Decode UTF-8 first, falling back to Windows-1252 with replacement for undefined bytes.
 pub fn decode_bibliography(bytes: &[u8]) -> DecodedText {
     match String::from_utf8(bytes.to_vec()) {
         Ok(text) => DecodedText {

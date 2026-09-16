@@ -1,37 +1,34 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+use crate::duplicates::Components;
 use crate::raw::{RawEntryId, RawSyntaxDocument, RawSyntaxEntry};
 
-use super::{DuplicateRule, MergeStrategy, TidyOptions, TidyWarning};
+use super::{DuplicateRule, MergeStrategy, TidyError, TidyOptions, TidyWarning};
 
 #[derive(Debug, Default, Clone)]
 pub(crate) struct DuplicatePlan {
     pub warnings: Vec<TidyWarning>,
-    skip_entries: HashSet<RawEntryId>,
     merged_entries: HashMap<RawEntryId, RawSyntaxEntry>,
-    merge_targets: HashMap<RawEntryId, RawEntryId>,
+    retained: Vec<RawEntryId>,
 }
 
 impl DuplicatePlan {
     pub fn should_skip(&self, id: RawEntryId) -> bool {
-        self.skip_entries.contains(&id)
+        self.retained_id(id) != id
     }
 
-    pub fn apply(&mut self, doc: &mut RawSyntaxDocument) {
+    pub fn apply(&mut self, doc: &mut RawSyntaxDocument) -> Result<(), TidyError> {
         for (id, entry) in self.merged_entries.drain() {
-            doc.entries[id.index()] = entry;
+            let target = doc.entries.get_mut(id.index()).ok_or_else(|| {
+                TidyError::Reference("duplicate plan refers to a missing entry".to_string())
+            })?;
+            *target = entry;
         }
+        Ok(())
     }
 
     pub fn retained_id(&self, id: RawEntryId) -> RawEntryId {
-        let mut current = id;
-        while let Some(next) = self.merge_targets.get(&current).copied() {
-            if next == current {
-                break;
-            }
-            current = next;
-        }
-        current
+        self.retained.get(id.index()).copied().unwrap_or(id)
     }
 }
 
@@ -41,63 +38,59 @@ struct DuplicateCheckRule {
     do_merge: bool,
 }
 
-pub(crate) fn duplicate_plan(doc: &RawSyntaxDocument, options: &TidyOptions) -> DuplicatePlan {
+pub(crate) fn duplicate_plan(
+    doc: &RawSyntaxDocument,
+    options: &TidyOptions,
+) -> Result<DuplicatePlan, TidyError> {
     let Some(rules) = duplicate_rules(options) else {
-        return DuplicatePlan::default();
+        return Ok(DuplicatePlan::default());
     };
     let mut keys = BTreeMap::new();
     let mut dois = BTreeMap::new();
     let mut citations = BTreeMap::new();
     let mut abstracts = BTreeMap::new();
     let mut plan = DuplicatePlan::default();
+    let mut components = Components::new(doc.entries.iter().map(|entry| entry.id));
 
     for entry in &doc.entries {
         for check in &rules {
             let duplicate = match check.rule {
-                DuplicateRule::Key => duplicate_key(entry, &mut keys),
-                DuplicateRule::Doi => duplicate_field(entry, "doi", &mut dois, None),
-                DuplicateRule::Abstract => {
-                    duplicate_field(entry, "abstract", &mut abstracts, Some(100))
-                }
-                DuplicateRule::Citation => duplicate_citation(entry, &mut citations),
+                DuplicateRule::Key => duplicate_match(entry, check.rule, &mut keys),
+                DuplicateRule::Doi => duplicate_match(entry, check.rule, &mut dois),
+                DuplicateRule::Abstract => duplicate_match(entry, check.rule, &mut abstracts),
+                DuplicateRule::Citation => duplicate_match(entry, check.rule, &mut citations),
             };
-            if let Some(existing) = duplicate {
-                plan.warnings.push(TidyWarning::DuplicateEntry {
-                    rule: check.rule,
-                    message: duplicate_message(check.rule, check.do_merge, entry, existing),
-                });
-                if check.do_merge && options.merge.is_some() {
-                    let left = plan.retained_id(existing.id);
-                    let right = plan.retained_id(entry.id);
-                    if left != right {
-                        let (target, source) = if left.index() < right.index() {
-                            (left, right)
-                        } else {
-                            (right, left)
-                        };
-                        plan.merge_targets.insert(source, target);
-                    }
-                }
+            let Some(existing) = duplicate else {
+                continue;
+            };
+            plan.warnings.push(TidyWarning::DuplicateEntry {
+                rule: check.rule,
+                message: duplicate_message(check.rule, check.do_merge, entry, existing),
+            });
+            if !check.do_merge || options.merge.is_none() {
+                continue;
             }
+            components.join(existing.id, entry.id);
         }
     }
 
-    if let Some(strategy) = options.merge {
-        for entry in &doc.entries {
-            let target_id = plan.retained_id(entry.id);
-            if entry.id != target_id {
-                plan.skip_entries.insert(entry.id);
-                merge_entry(
-                    strategy,
-                    &mut plan.merged_entries,
-                    &doc.entries[target_id.index()],
-                    entry,
-                );
-            }
+    let Some(strategy) = options.merge else {
+        return Ok(plan);
+    };
+    plan.retained = components.freeze();
+    for entry in &doc.entries {
+        let target_id = plan.retained_id(entry.id);
+        if entry.id != target_id {
+            let target = doc.entries.get(target_id.index()).ok_or_else(|| {
+                TidyError::Reference(
+                    "duplicate plan refers to a missing retained entry".to_string(),
+                )
+            })?;
+            merge_entry(strategy, &mut plan.merged_entries, target, entry);
         }
     }
 
-    plan
+    Ok(plan)
 }
 
 fn duplicate_rules(options: &TidyOptions) -> Option<Vec<DuplicateCheckRule>> {
@@ -160,12 +153,12 @@ fn merge_entry(
             for field in &duplicate.fields {
                 let existing = target
                     .fields
-                    .iter()
-                    .position(|candidate| candidate.name.eq_ignore_ascii_case(&field.name));
+                    .iter_mut()
+                    .find(|candidate| candidate.name.eq_ignore_ascii_case(&field.name));
                 match (strategy, existing) {
                     (_, None) => target.fields.push(field.clone()),
-                    (MergeStrategy::Overwrite, Some(index)) => {
-                        target.fields[index].clone_from(field);
+                    (MergeStrategy::Overwrite, Some(existing)) => {
+                        existing.clone_from(field);
                     }
                     _ => {}
                 }
@@ -174,94 +167,28 @@ fn merge_entry(
     }
 }
 
-fn duplicate_key<'a>(
+fn duplicate_match<'a>(
     entry: &'a RawSyntaxEntry,
-    keys: &mut BTreeMap<String, &'a RawSyntaxEntry>,
-) -> Option<&'a RawSyntaxEntry> {
-    if entry.key.is_empty() {
-        return None;
-    }
-    let key = entry.key.to_ascii_lowercase();
-    if let Some(existing) = keys.get(&key) {
-        Some(*existing)
-    } else {
-        keys.insert(key, entry);
-        None
-    }
-}
-
-fn duplicate_field<'a>(
-    entry: &'a RawSyntaxEntry,
-    field: &str,
+    rule: DuplicateRule,
     values: &mut BTreeMap<String, &'a RawSyntaxEntry>,
-    truncate: Option<usize>,
 ) -> Option<&'a RawSyntaxEntry> {
-    let value = field_value(entry, field)?;
-    let mut value = alpha_num(value);
-    if let Some(limit) = truncate {
-        value = value.chars().take(limit).collect();
-    }
-    if value.is_empty() {
-        return None;
-    }
-    if let Some(existing) = values.get(&value) {
+    let signature = crate::duplicates::signature(
+        &entry.key,
+        |name| {
+            entry
+                .fields
+                .iter()
+                .find(|field| field.name.eq_ignore_ascii_case(name))
+                .map(|field| field.value.as_str())
+        },
+        rule,
+    )?;
+    if let Some(existing) = values.get(&signature) {
         Some(*existing)
     } else {
-        values.insert(value, entry);
+        values.insert(signature, entry);
         None
     }
-}
-
-fn duplicate_citation<'a>(
-    entry: &'a RawSyntaxEntry,
-    citations: &mut BTreeMap<String, &'a RawSyntaxEntry>,
-) -> Option<&'a RawSyntaxEntry> {
-    let title = field_value(entry, "title")?;
-    let author = field_value(entry, "author")?;
-    let number = field_value(entry, "number").unwrap_or("0");
-    let value = [
-        alpha_num(&first_author_last(author)),
-        alpha_num(title),
-        alpha_num(number),
-    ]
-    .join(":");
-
-    if let Some(existing) = citations.get(&value) {
-        Some(*existing)
-    } else {
-        citations.insert(value, entry);
-        None
-    }
-}
-
-fn field_value<'a>(entry: &'a RawSyntaxEntry, field: &str) -> Option<&'a str> {
-    entry
-        .fields
-        .iter()
-        .find(|candidate| candidate.name.eq_ignore_ascii_case(field))
-        .map(|field| field.value.as_str())
-}
-
-fn first_author_last(author: &str) -> String {
-    let author = author.split(" and ").next().unwrap_or(author).trim();
-    if let Some((last, _)) = author.split_once(',') {
-        return last.trim().to_string();
-    }
-
-    let parts = author.split_whitespace().collect::<Vec<_>>();
-    match parts.as_slice() {
-        [] => String::new(),
-        [last] => (*last).to_string(),
-        [_, last @ ..] => last.join(" "),
-    }
-}
-
-fn alpha_num(value: &str) -> String {
-    value
-        .chars()
-        .filter(|ch| ch.is_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect()
 }
 
 fn duplicate_message(
@@ -277,7 +204,7 @@ fn duplicate_message(
             entry.key
         ),
         DuplicateRule::Doi => format!(
-            "Duplicate {action}. Entry {} has an identical DOI to entry {}.",
+            "Duplicate {action}. Entry {} has the same DOI signature as entry {}.",
             entry.key, existing.key
         ),
         DuplicateRule::Citation => format!(

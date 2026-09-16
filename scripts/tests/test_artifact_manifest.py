@@ -10,7 +10,7 @@ from scripts import artifact_manifest
 from scripts.artifact_manifest import check, record
 
 
-def _artifact_set(root: Path) -> None:
+def _artifact_set(root: Path, package: str = "refkit") -> None:
     artifacts = {
         "cpython_Linux": "refkit-1.2.3-cp310-abi3-manylinux_2_17_x86_64.whl",
         "cpython_macOS": "refkit-1.2.3-cp310-abi3-macosx_11_0_arm64.whl",
@@ -18,13 +18,17 @@ def _artifact_set(root: Path) -> None:
         "pyemscripten_3.14": "refkit-1.2.3-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
         "sdist": "refkit-1.2.3.tar.gz",
     }
+    if package == "polars-refkit":
+        del artifacts["pyemscripten_3.14"]
+    prefix = package.replace("-", "_")
     for target, filename in artifacts.items():
+        filename = filename.replace("refkit-", f"{prefix}-", 1)
         archive = root / filename
         archive.write_bytes(filename.encode())
         manifest = {
             "schema": 1,
-            "package": "refkit",
-            "artifact": f"refkit_{target}",
+            "package": package,
+            "artifact": f"{prefix}_{target}",
             "source": "a" * 40,
             "tools": {
                 "python": "3.14.0",
@@ -39,13 +43,33 @@ def _artifact_set(root: Path) -> None:
             },
             "files": {filename: hashlib.sha256(archive.read_bytes()).hexdigest()},
         }
-        (root / f"refkit_{target}.json").write_text(json.dumps(manifest))
+        (root / f"{prefix}_{target}.json").write_text(json.dumps(manifest))
 
 
-def test_release_artifacts_match_recorded_builds(tmp_path: Path) -> None:
-    _artifact_set(tmp_path)
+@pytest.mark.parametrize("package", ["refkit", "polars-refkit"])
+def test_release_artifacts_match_recorded_builds(tmp_path: Path, package: str) -> None:
+    _artifact_set(tmp_path, package)
 
-    assert check(tmp_path, "refkit", "1.2.3", "a" * 40) == []
+    assert check(tmp_path, package, "1.2.3", "a" * 40) == []
+
+
+@pytest.mark.parametrize(
+    ("package", "target"),
+    [("refkit", "pyemscripten_3.14"), ("polars-refkit", "cpython_Linux")],
+)
+def test_release_artifacts_require_supported_targets(
+    tmp_path: Path, package: str, target: str
+) -> None:
+    _artifact_set(tmp_path, package)
+    manifest = tmp_path / f"{package.replace('-', '_')}_{target}.json"
+    document = json.loads(manifest.read_text())
+    for filename in document["files"]:
+        (tmp_path / filename).unlink()
+    manifest.unlink()
+
+    assert any(
+        "must cover exactly" in error for error in check(tmp_path, package, "1.2.3", "a" * 40)
+    )
 
 
 @pytest.mark.parametrize("tags", ["cp311-abi3", "cp310-cp310"])

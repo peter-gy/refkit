@@ -31,8 +31,16 @@ CARGO_LOCKS = (
 )
 ALLOWED_DEPENDENCIES = {
     PORTABLE_CORE: {
-        "dependencies": {"biblatex", "hayagriva", "indexmap", "quick-xml"},
-        "dev-dependencies": {"serde", "serde_yaml", "walkdir"},
+        "dependencies": {
+            "biblatex",
+            "hayagriva",
+            "indexmap",
+            "quick-xml",
+            "serde",
+            "serde_json",
+            "serde_yaml",
+        },
+        "dev-dependencies": {"walkdir"},
     },
     NATIVE_ADAPTER: {
         "dependencies": {"pyo3", "refkit-core", "serde_json"},

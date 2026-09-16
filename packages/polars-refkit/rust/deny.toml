@@ -1,0 +1,31 @@
+[graph]
+all-features = true
+
+[advisories]
+yanked = "deny"
+unused-ignored-advisory = "deny"
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "Maintenance-only advisory: biblatex 0.12 and the pinned Hayagriva engine require paste 1.0.15 for compile-time macros; upstream has no patched release. Other advisories remain errors." },
+    { id = "RUSTSEC-2025-0141", reason = "Maintenance-only advisory: Polars 0.55 requires bincode for its serialized plan contract; replacing that transitive codec independently would change the upstream protocol. Other advisories remain errors." },
+]
+
+[licenses]
+unused-allowed-license = "deny"
+allow = ["Apache-2.0", "Apache-2.0 WITH LLVM-exception", "MIT", "BSD-2-Clause", "Unicode-3.0", "Zlib", "CC0-1.0", "BSD-3-Clause", "BSL-1.0"]
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+skip = [
+    { crate = "syn@=2.0.119", reason = "Pinned proc-macro dependencies use syn 2 while other derives use syn 3; their AST APIs are incompatible." },
+    { crate = "foldhash@=0.1.5", reason = "planus 1.1.1 uses hashbrown 0.15 and its foldhash 0.1 API; current Polars hashing uses foldhash 0.2." },
+    { crate = "hashbrown@=0.15.5", reason = "The polars-arrow-format planus dependency requires hashbrown 0.15; current index and engine dependencies use 0.17." },
+    { crate = "getrandom@=0.2.17", reason = "Polars and polars-arrow retain the getrandom 0.2 API while current random-number dependencies use 0.4." },
+    { crate = "strum_macros@=0.27.2", reason = "The pinned BibLaTeX engine uses strum 0.27 derives, while Polars 0.55 uses strum_macros 0.28." },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = ["https://github.com/typst/hayagriva", "https://github.com/typst/citationberg"]

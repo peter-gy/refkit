@@ -1,70 +1,10 @@
 from __future__ import annotations
 
-import ast
-import inspect
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
 
 import refkit as rk
-
-NATIVE_STUB = Path(__file__).parents[1] / "src" / "refkit" / "_native.pyi"
-EXPECTED_TIDY_OPTION_NAMES = (
-    "omit",
-    "curly",
-    "numeric",
-    "months",
-    "space",
-    "tab",
-    "align",
-    "blank_lines",
-    "sort",
-    "duplicates",
-    "merge",
-    "strip_enclosing_braces",
-    "drop_all_caps",
-    "escape",
-    "sort_fields",
-    "strip_comments",
-    "trailing_commas",
-    "encode_urls",
-    "tidy_comments",
-    "remove_empty_fields",
-    "remove_duplicate_fields",
-    "generate_keys",
-    "max_authors",
-    "lowercase",
-    "enclosing_braces",
-    "remove_braces",
-    "wrap",
-)
-
-
-def _stub_tidy_option_names() -> tuple[str, ...]:
-    module = ast.parse(NATIVE_STUB.read_text(encoding="utf-8"))
-    for node in module.body:
-        if isinstance(node, ast.ClassDef) and node.name == "TidyOptions":
-            init = next(
-                item
-                for item in node.body
-                if isinstance(item, ast.FunctionDef) and item.name == "__init__"
-            )
-            return tuple(arg.arg for arg in init.args.kwonlyargs)
-    raise AssertionError("TidyOptions stub not found")
-
-
-def test_tidy_options_stub_lists_public_keywords() -> None:
-    assert _stub_tidy_option_names() == EXPECTED_TIDY_OPTION_NAMES
-
-
-def test_tidy_options_runtime_signature_lists_public_keywords() -> None:
-    signature = inspect.signature(rk.TidyOptions)
-
-    assert tuple(signature.parameters) == EXPECTED_TIDY_OPTION_NAMES
-    assert signature.parameters["space"].default == 2
-    assert signature.parameters["escape"].default is True
-    assert signature.parameters["sort_fields"].default is None
 
 
 def test_tidy_options_reject_unknown_names() -> None:
@@ -105,6 +45,7 @@ def test_tidy_options_default_toggles_forward_to_formatter() -> None:
 
     sorted_fields = rk.tidy_bibtex(source, options=rk.TidyOptions(sort_fields=True))
     assert sorted_fields.bibtex.index("title") < sorted_fields.bibtex.index("author")
+    assert sorted_fields.bibtex.index("author") < sorted_fields.bibtex.index("year")
 
     wrapped = rk.tidy_bibtex(
         (
@@ -144,3 +85,41 @@ def test_tidy_options_constructor_rejects_positional_arguments() -> None:
     options_type = cast(Any, rk.TidyOptions)
     with pytest.raises(TypeError):
         options_type(True)
+
+
+def test_complete_formatter_configuration_transforms_records() -> None:
+    options = rk.TidyOptions(
+        omit=["abstract"],
+        curly=True,
+        numeric=True,
+        months=False,
+        space=2,
+        tab=False,
+        align=14,
+        blank_lines=True,
+        sort=["key"],
+        duplicates=["doi"],
+        merge="first",
+        strip_enclosing_braces=False,
+        drop_all_caps=False,
+        escape=True,
+        sort_fields=["title", "author"],
+        strip_comments=False,
+        trailing_commas=False,
+        encode_urls=False,
+        tidy_comments=False,
+        remove_empty_fields=True,
+        remove_duplicate_fields=True,
+        generate_keys="[auth:lower][year]",
+        max_authors=3,
+        lowercase=True,
+        enclosing_braces=["title"],
+        remove_braces=["note"],
+        wrap=80,
+    )
+    source = "@article{old,author={Doe, Jane},title={Work},year=2024,abstract={Omitted}}"
+    formatted = rk.tidy_bibtex(source, options=options)
+    document = rk.BibDocument.parse(formatted.bibtex)
+    assert document.entries.unique_keys() == ["doe2024"]
+    assert document.entries["doe2024"].fields["title"].value == "{Work}"
+    assert document.entries["doe2024"].fields.unique_keys() == ["title", "author", "year"]

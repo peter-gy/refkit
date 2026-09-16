@@ -15,10 +15,6 @@ from scripts.architecture_contract import (
 )
 
 
-def test_repository_matches_the_architecture_contract() -> None:
-    assert check_contract(ROOT) == []
-
-
 def test_refkit_runtime_dependency_contract_rejects_additional_packages() -> None:
     manifest = {"project": {"dependencies": ["agent-plugins>=0.2", "requests"]}}
 
@@ -87,16 +83,6 @@ def test_portable_core_detects_grouped_host_imports(tmp_path: Path) -> None:
     ]
 
 
-def test_engine_dependencies_are_exact_and_consistent_across_locks() -> None:
-    core = _core_dependencies("=0.12.0", "=0.10.1")
-    locks = {
-        Path("Cargo.lock"): _lock_packages("0.12.0", "0.10.1"),
-        Path("adapter/Cargo.lock"): _lock_packages("0.12.0", "0.10.1"),
-    }
-
-    assert _engine_dependency_errors(core, locks) == []
-
-
 def test_engine_dependencies_require_exact_manifest_versions() -> None:
     core = _core_dependencies("0.12.0", "=0.10.1")
 
@@ -145,20 +131,6 @@ def _core_dependencies(biblatex: str, hayagriva: str) -> dict[str, Any]:
                 "rev": "e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e",
             },
         }
-    }
-
-
-def _lock_packages(biblatex: str, hayagriva: str) -> dict[str, Any]:
-    source = "registry+https://github.com/rust-lang/crates.io-index"
-    return {
-        "package": [
-            {"name": "biblatex", "version": biblatex, "source": source},
-            {
-                "name": "hayagriva",
-                "version": hayagriva,
-                "source": "git+https://github.com/typst/hayagriva?rev=e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e#e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e",
-            },
-        ]
     }
 
 

@@ -56,18 +56,7 @@ pub(crate) fn generated_keys<'a>(
         let mut suffix = 1;
         for entry in entries {
             let candidate = if duplicate {
-                let mut attempted = HashSet::new();
-                loop {
-                    let mut candidate = generate_key(entry, &template, Some(suffix))?
-                        .unwrap_or_else(|| base.clone());
-                    if !attempted.insert(candidate.clone()) {
-                        candidate = format!("{base}{}", num_to_letter(suffix));
-                    }
-                    suffix += 1;
-                    if !reserved.contains(&candidate) {
-                        break candidate;
-                    }
-                }
+                duplicate_key(entry, &template, &base, &mut suffix, &reserved)?
             } else {
                 base.clone()
             };
@@ -104,7 +93,11 @@ fn parse_template(template: &str) -> Result<Vec<TemplateToken>, String> {
         tokens.push(TemplateToken::Marker {
             marker,
             parameter,
-            modifiers: parts[1..].iter().map(|part| (*part).to_string()).collect(),
+            modifiers: parts
+                .iter()
+                .skip(1)
+                .map(|part| (*part).to_string())
+                .collect(),
         });
         cursor = close + 1;
     }
@@ -118,13 +111,8 @@ fn marker_parameter(marker: &str) -> (String, Option<usize>) {
     while let Some(ch) = chars.next() {
         if ch.is_ascii_digit() {
             let mut number = ch.to_string();
-            while let Some(next) = chars.peek().copied() {
-                if next.is_ascii_digit() {
-                    number.push(next);
-                    chars.next();
-                } else {
-                    break;
-                }
+            while let Some(next) = chars.next_if(char::is_ascii_digit) {
+                number.push(next);
             }
             parameter = number.parse::<usize>().ok();
             out.push('N');
@@ -242,7 +230,7 @@ fn marker_words(
             })
         }
         "duplicateLetter" => Ok(duplicate
-            .map(|value| vec![num_to_letter(value).to_string()])
+            .map(|value| vec![num_to_letter(value)])
             .unwrap_or_default()),
         "duplicateNumber" => Ok(vec![
             duplicate.map(|value| value.to_string()).unwrap_or_default(),
@@ -291,9 +279,6 @@ fn expression_text(atoms: &[RawValueAtom]) -> String {
 
 fn parse_name_list(value: &str) -> Vec<Name> {
     value
-        .split(|_| false)
-        .next()
-        .unwrap_or(value)
         .split(" and ")
         .flat_map(|part| split_uppercase_and(part).into_iter())
         .map(parse_name)
@@ -307,9 +292,7 @@ fn split_uppercase_and(value: &str) -> Vec<&str> {
 fn parse_name(name: &str) -> Name {
     let tokens = tokenize_name(name.trim());
     let commas = tokens.iter().filter(|token| token.as_str() == ",").count();
-    let last = if tokens.is_empty() {
-        String::new()
-    } else if tokens.len() == 1 && tokens[0] == "others" {
+    let last = if matches!(tokens.as_slice(), [single] if single == "others") {
         "others".to_string()
     } else if commas > 0 {
         tokens
@@ -319,16 +302,19 @@ fn parse_name(name: &str) -> Name {
             .collect::<Vec<_>>()
             .join(" ")
     } else if let Some(prefix_index) = tokens.iter().position(|token| is_prefix_token(token)) {
-        tokens[prefix_index..]
+        tokens
             .iter()
+            .skip(prefix_index)
             .skip_while(|token| is_prefix_token(token))
             .cloned()
             .collect::<Vec<_>>()
             .join(" ")
-    } else if tokens.len() == 1 {
-        tokens[0].clone()
     } else {
-        tokens[1..].join(" ")
+        match tokens.as_slice() {
+            [] => String::new(),
+            [single] => single.clone(),
+            [_, rest @ ..] => rest.join(" "),
+        }
     };
     Name { last }
 }
@@ -378,8 +364,7 @@ fn value<'a>(entry: &'a RawSyntaxEntry, key: &str) -> Cow<'a, str> {
         .iter()
         .rev()
         .find(|field| field.name.to_lowercase() == key)
-        .map(rendered_field_value)
-        .unwrap_or(Cow::Borrowed(""))
+        .map_or(Cow::Borrowed(""), rendered_field_value)
 }
 
 fn non_function_words(value: &str) -> Vec<String> {
@@ -468,11 +453,15 @@ fn is_function_word(word: &str) -> bool {
     )
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "Modulo 26 bounds the alphabet offset to 0 through 25 before conversion to u8."
+)]
 fn num_to_letter(mut value: usize) -> String {
     let mut letters = Vec::new();
     while value > 0 {
         value -= 1;
-        letters.push((b'a' + (value % 26) as u8) as char);
+        letters.push(char::from(b'a' + (value % 26) as u8));
         value /= 26;
     }
     letters.into_iter().rev().collect()
@@ -504,4 +493,25 @@ fn remove_unsafe_key_chars(value: &str) -> String {
             ) && !ch.is_whitespace()
         })
         .collect()
+}
+
+fn duplicate_key(
+    entry: &RawSyntaxEntry,
+    template: &[TemplateToken],
+    base: &str,
+    suffix: &mut usize,
+    reserved: &HashSet<String>,
+) -> Result<String, String> {
+    let mut attempted = HashSet::new();
+    loop {
+        let mut candidate =
+            generate_key(entry, template, Some(*suffix))?.unwrap_or_else(|| base.to_string());
+        if !attempted.insert(candidate.clone()) {
+            candidate = format!("{base}{}", num_to_letter(*suffix));
+        }
+        *suffix += 1;
+        if !reserved.contains(&candidate) {
+            return Ok(candidate);
+        }
+    }
 }

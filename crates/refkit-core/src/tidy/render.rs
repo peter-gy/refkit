@@ -43,12 +43,20 @@ struct RenderContext<'a> {
 
 #[derive(Default)]
 struct LinearRenderState {
-    wrote_block: bool,
-    previous_was_comment: bool,
-    previous_comment_ended_line: bool,
-    previous_comment_was_text: bool,
+    previous: PreviousBlock,
     pending_whitespace: String,
     suppress_next_whitespace: bool,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum PreviousBlock {
+    #[default]
+    Start,
+    Content,
+    Comment {
+        ended_line: bool,
+        plain_text: bool,
+    },
 }
 
 fn render_block(
@@ -67,20 +75,12 @@ fn render_block(
             if let Some(entry) = context.doc.entries.get(id.index()) {
                 state.suppress_next_whitespace = false;
                 state.pending_whitespace.clear();
-                separate_block(
-                    output,
-                    state.wrote_block,
-                    state.previous_was_comment,
-                    context.options,
-                );
+                separate_block(output, state.previous, context.options);
                 render_entry(output, entry, context.options);
-                state.wrote_block = true;
-                state.previous_was_comment = false;
-                state.previous_comment_ended_line = false;
-                state.previous_comment_was_text = false;
+                state.previous = PreviousBlock::Content;
             }
         }
-        RawSyntaxBlock::Comment { raw, .. } => {
+        RawSyntaxBlock::Comment { raw, .. } | RawSyntaxBlock::Other { raw, .. } => {
             if !context.options.strip_comments {
                 state.suppress_next_whitespace = false;
                 render_comment_block(output, raw, context.options, state);
@@ -89,18 +89,10 @@ fn render_block(
         RawSyntaxBlock::Preamble { raw, .. } | RawSyntaxBlock::StringDef { raw, .. } => {
             state.suppress_next_whitespace = false;
             state.pending_whitespace.clear();
-            separate_block(
-                output,
-                state.wrote_block,
-                state.previous_was_comment,
-                context.options,
-            );
+            separate_block(output, state.previous, context.options);
             output.push_str(&normalize_raw_at_command(raw.trim()));
             output.push('\n');
-            state.wrote_block = true;
-            state.previous_was_comment = false;
-            state.previous_comment_ended_line = false;
-            state.previous_comment_was_text = false;
+            state.previous = PreviousBlock::Content;
         }
         RawSyntaxBlock::Whitespace { raw, .. } => {
             if !state.suppress_next_whitespace {
@@ -108,12 +100,6 @@ fn render_block(
             }
         }
         RawSyntaxBlock::Failed { .. } => {}
-        RawSyntaxBlock::Other { raw, .. } => {
-            if !context.options.strip_comments {
-                state.suppress_next_whitespace = false;
-                render_comment_block(output, raw, context.options, state);
-            }
-        }
     }
 }
 
@@ -124,43 +110,28 @@ fn render_comment_block(
     state: &mut LinearRenderState,
 ) {
     if options.tidy_comments {
-        let prefix = tidy_comment_prefix(
-            &state.pending_whitespace,
-            state.previous_was_comment,
-            state.previous_comment_ended_line,
-            state.previous_comment_was_text,
-        );
+        let prefix = tidy_comment_prefix(&state.pending_whitespace, state.previous);
         state.pending_whitespace.clear();
-        separate_block(
-            output,
-            state.wrote_block,
-            state.previous_was_comment,
-            options,
-        );
+        separate_block(output, state.previous, options);
         output.push_str(&prefix);
         output.push_str(&normalize_raw_at_command(raw.trim()));
         output.push('\n');
     } else {
-        if !state.pending_whitespace.is_empty() {
+        if state.pending_whitespace.is_empty() {
+            separate_block(output, state.previous, options);
+        } else {
             push_preserved_comment_whitespace(output, &state.pending_whitespace);
             state.pending_whitespace.clear();
-        } else {
-            separate_block(
-                output,
-                state.wrote_block,
-                state.previous_was_comment,
-                options,
-            );
         }
         output.push_str(&normalize_raw_at_command(raw));
         if !output.ends_with('\n') {
             output.push('\n');
         }
     }
-    state.wrote_block = true;
-    state.previous_was_comment = true;
-    state.previous_comment_ended_line = raw.ends_with('\n');
-    state.previous_comment_was_text = !raw.trim_start().starts_with('@');
+    state.previous = PreviousBlock::Comment {
+        ended_line: raw.ends_with('\n'),
+        plain_text: !raw.trim_start().starts_with('@'),
+    };
 }
 
 fn push_preserved_comment_whitespace(output: &mut String, pending_whitespace: &str) {
@@ -175,19 +146,18 @@ fn push_preserved_comment_whitespace(output: &mut String, pending_whitespace: &s
     }
 }
 
-fn tidy_comment_prefix(
-    pending_whitespace: &str,
-    previous_was_comment: bool,
-    previous_comment_ended_line: bool,
-    previous_comment_was_text: bool,
-) -> String {
-    if !previous_was_comment || !previous_comment_was_text {
+fn tidy_comment_prefix(pending_whitespace: &str, previous: PreviousBlock) -> String {
+    let PreviousBlock::Comment {
+        ended_line,
+        plain_text: true,
+    } = previous
+    else {
         return String::new();
-    }
+    };
     if pending_whitespace.contains('\n') {
         return "\n".to_string();
     }
-    if previous_comment_ended_line
+    if ended_line
         && pending_whitespace
             .chars()
             .all(|ch| matches!(ch, ' ' | '\t'))
@@ -203,19 +173,17 @@ fn ensure_final_newline(output: &mut String) {
     }
 }
 
-fn separate_block(
-    output: &mut String,
-    wrote_block: bool,
-    previous_was_comment: bool,
-    options: &TidyOptions,
-) {
-    if !wrote_block {
+fn separate_block(output: &mut String, previous: PreviousBlock, options: &TidyOptions) {
+    if previous == PreviousBlock::Start {
         return;
     }
     if !output.ends_with('\n') {
         output.push('\n');
     }
-    if options.blank_lines && !previous_was_comment && !output.ends_with("\n\n") {
+    if options.blank_lines
+        && !matches!(previous, PreviousBlock::Comment { .. })
+        && !output.ends_with("\n\n")
+    {
         output.push('\n');
     }
 }
@@ -238,13 +206,13 @@ fn render_entry(output: &mut String, entry: &RawSyntaxEntry, options: &TidyOptio
     let key = &entry.key;
     output.push_str(key);
     let fields = renderable_fields(entry, options);
-    if !fields.is_empty() {
+    if fields.is_empty() {
+        output.push(',');
+        output.push('\n');
+    } else {
         if !key.is_empty() {
             output.push(',');
         }
-        output.push('\n');
-    } else {
-        output.push(',');
         output.push('\n');
     }
 
@@ -266,6 +234,10 @@ fn render_entry(output: &mut String, entry: &RawSyntaxEntry, options: &TidyOptio
     output.push('\n');
 }
 
+#[expect(
+    clippy::indexing_slicing,
+    reason = "field_indices returns positions from enumerating this immutable entry's field vector, which cannot change while these references are collected."
+)]
 fn renderable_fields<'a>(
     entry: &'a RawSyntaxEntry,
     options: &TidyOptions,
