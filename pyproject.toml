@@ -13,7 +13,7 @@ exclude-newer = "3 days"
 exclude-newer-package = { agent-plugins = "2026-09-07T00:00:00Z" }
 package = false
 constraint-dependencies = ["pyodide-build==0.35.1"]
-build-constraint-dependencies = ["maturin>=1.15.0", "agent-plugins>=0.2", "hatchling>=1.32.0"]
+build-constraint-dependencies = ["maturin>=1.15.0", "agent-plugins>=0.2.4", "hatchling>=1.32.4"]
 
 [tool.uv.sources]
 refkit-bench = { workspace = true }
@@ -34,28 +34,28 @@ extra-paths = ["packages/refkit-tests/src"]
 python-version = "3.10"
 [dependency-groups]
 dev = [
-    "hatchling>=1.32.0",
-    "hypothesis>=6.167.1",
-    "marimo>=0.24.0",
+    "hatchling>=1.32.4",
+    "hypothesis>=6.168.2",
+    "marimo>=0.25.0",
     "maturin>=1.15.0",
-    "pyrefly>=1.2.0",
+    "pyrefly>=1.3.1",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "pyyaml>=6.0.3",
-    "ruff>=0.16.5",
-    "ty>=0.0.78",
+    "ruff>=0.16.9",
+    "ty>=0.0.84",
     "refkit-tests",
-    "tomli>=2.3.1",
+    "tomli>=2.4.1",
 ]
 build = [
     "twine>=7.0.0",
-    "agent-plugins>=0.2",
-    "tomli>=2.3.1; python_version < '3.11'",
+    "agent-plugins>=0.2.4",
+    "tomli>=2.4.1; python_version < '3.11'",
 ]
 pyodide-build = [
     "pyodide-build>=0.35.1; python_version >= '3.12'",
 ]
-lint = ["ruff>=0.16.5"]
+lint = ["ruff>=0.16.9"]
 
 [tool.pytest.ini_options]
 testpaths = [
