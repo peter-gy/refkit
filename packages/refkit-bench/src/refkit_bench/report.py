@@ -73,7 +73,7 @@ def _hardware(benchmark: Any) -> dict[str, object]:
 
 def summarize(directory: Path) -> dict[str, Any]:
     manifest, suite = load_result(directory)
-    rows = []
+    rows: list[dict[str, Any]] = []
     for benchmark in suite:
         workers = worker_means(benchmark)
         rows.append(

@@ -91,7 +91,7 @@ uv run --no-sync refkit-bench check --lane format.spec \
   --output packages/refkit-bench/results/formatter-conformance.json
 ```
 
-The source checkout and published npm package both identify as `1.14.0`, but the checkout contains different behavior. Published `bibtex-tidy` differs on the `numeric` and `generate-keys` expectations. The report keeps those failures with both identities and the first differing line. Exit code 1 means at least one selected contract failed. Interpret it as conformance to the pinned source specifications. The published package defines its own compatibility contract.
+The fixtures retain the pinned source checkout, which identifies as `1.14.0`. The current npm participant, `bibtex-tidy` 1.15.1, passes the curated specifications, including `numeric` and `generate-keys`. Reports record source and package identities separately and retain any failures with the first differing line. Exit code 1 means at least one selected contract failed. Interpret the result as conformance to the pinned source specifications.
 
 `run` validates every selected case before collecting timings. A failure stops that run and records a failure manifest. Select an explicit shared contract such as `format.layout` for package comparisons, or a RefKit specification case for a focused regression experiment:
 
@@ -104,7 +104,7 @@ uv run --no-sync refkit-bench run --lane format.spec --dataset numeric \
 
 ### Key allocation under collisions
 
-`format.keys` uses the explicit `[year]` template. Entries sharing a year receive suffixes `a` through `z`, then `aa`, `ab`, and so on. This deliberately stresses collision allocation. Published `bibtex-tidy` 1.14.0 emits punctuation after the first 26 suffixes and fails this contract on the larger scaling inputs. The failure stays visible, while RefKit can be measured against its own baseline:
+`format.keys` uses the explicit `[year]` template. Entries sharing a year receive suffixes `a` through `z`, then `aa`, `ab`, and so on. This deliberately stresses collision allocation. Published `bibtex-tidy` 1.15.1 reuses an unsuffixed key after the first 26 suffixes and fails this contract on the larger scaling inputs. The failure stays visible, while RefKit can be measured against its own baseline:
 
 ```bash
 uv run --no-sync refkit-bench check --lane format.keys --dataset 1k

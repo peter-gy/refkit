@@ -3,25 +3,25 @@ created-by = "pip"
 
 [[packages]]
 name = "agent-plugins"
-version = "0.2.0"
+version = "0.2.4"
 
 [[packages.wheels]]
-name = "agent_plugins-0.2.0-py3-none-any.whl"
-url = "https://files.pythonhosted.org/packages/24/43/03d7b1d3e22e0665e54feb63a50765f53611be050b3720cabafab74a1d6e/agent_plugins-0.2.0-py3-none-any.whl"
+name = "agent_plugins-0.2.4-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/8b/e0/fce035140da2730aaf0816dd49b6660d9feb91c6fe5cad7485517c80affd/agent_plugins-0.2.4-py3-none-any.whl"
 
 [packages.wheels.hashes]
-sha256 = "94dd4f5d15f8688691c3628f2848fbe92d110baf96e7314c147fcc775ce45a50"
+sha256 = "67f5255df2229823f22f2b0eb5e16f7f5828c6d72968eadebb6b3d1099a0ebc8"
 
 [[packages]]
 name = "iniconfig"
-version = "2.3.0"
+version = "2.3.1"
 
 [[packages.wheels]]
-name = "iniconfig-2.3.0-py3-none-any.whl"
-url = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/iniconfig-2.3.0-py3-none-any.whl"
+name = "iniconfig-2.3.1-py3-none-any.whl"
+url = "https://files.pythonhosted.org/packages/56/43/4ca9e49d27a1fcf6bece6f6aec0ea46bb9112489b93d4b688fb415457bdb/iniconfig-2.3.1-py3-none-any.whl"
 
 [packages.wheels.hashes]
-sha256 = "1cd8448eea1c863c970703ed01fa1baf655043150cee772772253e3461b701ed"
+sha256 = "9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7"
 
 [[packages]]
 name = "packaging"

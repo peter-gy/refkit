@@ -19,10 +19,10 @@
     "script": "dev:direct"
   },
   "devDependencies": {
-    "@types/node": "26.2.0",
-    "portless": "0.15.6",
+    "@types/node": "26.6.4",
+    "portless": "0.15.7",
     "typescript": "6.0.3",
-    "vitepress": "2.0.0-alpha.19",
-    "vitepress-plugin-llms": "1.13.5"
+    "vitepress": "2.0.0-alpha.20",
+    "vitepress-plugin-llms": "1.14.0"
   }
 }

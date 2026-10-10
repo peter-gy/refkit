@@ -1,8 +1,7 @@
 JS_REFKIT_RUST := packages/refkit-js/rust/Cargo.toml
 POLARS_REFKIT_RUST := packages/polars-refkit/rust/Cargo.toml
 UV_EXCLUDE_NEWER := 3 days
-UV_EXCLUDE_NEWER_PACKAGE := agent-plugins=2026-09-07T00:00:00Z
-UV_RESOLVER_FLAGS := --no-config --exclude-newer "$(UV_EXCLUDE_NEWER)" --exclude-newer-package "$(UV_EXCLUDE_NEWER_PACKAGE)"
+UV_RESOLVER_FLAGS := --no-config --exclude-newer "$(UV_EXCLUDE_NEWER)"
 UV_RUN := uv run $(UV_RESOLVER_FLAGS) --locked --all-packages --group dev
 PYTHON := uv run $(UV_RESOLVER_FLAGS) --isolated --locked --only-group build python
 UV_LINT := uv run $(UV_RESOLVER_FLAGS) --isolated --locked --only-group lint

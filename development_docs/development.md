@@ -95,7 +95,7 @@ RefKit uses these qualified bibliography and XML sources:
 | BibLaTeX `0.12.0` | crates.io registry. |
 | Hayagriva `0.10.1` | Canonical Git revision `e7a9e7cecbbf774fd0d5226faeec12a7f8481a2e`, including the multi-group disambiguation correction. |
 | [Citationberg](https://github.com/typst/citationberg) `0.7.0`, the CSL XML model | Canonical Git revision `06a591e2f237d25e1dfdedac3f3d1494c496c52d`, patched in both Rust workspaces. |
-| [quick-xml](https://github.com/tafia/quick-xml), the XML reader | Direct dependency `0.41.0`, with every resolved copy at least `0.41.0` from crates.io. |
+| [quick-xml](https://github.com/tafia/quick-xml), the XML reader | Direct dependency `>=0.41.0, <0.43.0`, with every resolved copy at least `0.41.0` from crates.io. |
 
 Inspect the exact resolved source and regressions before changing these dependencies. Cargo source builds require Git and network access to fetch the pinned Hayagriva and Citationberg revisions unless they are already cached.
 

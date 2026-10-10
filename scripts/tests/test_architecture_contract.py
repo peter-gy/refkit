@@ -185,10 +185,16 @@ def test_architecture_requires_one_audited_citationberg(contract_root: Path, cha
     )
 
 
-def test_architecture_requires_the_core_xml_parser_pin(contract_root: Path) -> None:
+@pytest.mark.parametrize("requirement", ["0.41.0", "=0.42.0", ">=0.38.0, <0.43.0", ">=0.41.0"])
+def test_architecture_requires_the_core_xml_parser_range(
+    contract_root: Path, requirement: str
+) -> None:
     path = contract_root / "crates/refkit-core/Cargo.toml"
-    path.write_text(path.read_text().replace('quick-xml = "=0.41.0"', 'quick-xml = "0.41.0"'))
+    path.write_text(
+        path.read_text().replace('quick-xml = ">=0.41.0, <0.43.0"', f'quick-xml = "{requirement}"')
+    )
 
-    assert "portable core must pin quick-xml =0.41.0 from crates.io" in check_contract(
-        contract_root
+    assert (
+        "portable core must require quick-xml >=0.41.0, <0.43.0 from crates.io"
+        in check_contract(contract_root)
     )

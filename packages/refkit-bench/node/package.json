@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "bibtex-tidy": "1.14.0"
+    "bibtex-tidy": "1.15.1"
   }
 }

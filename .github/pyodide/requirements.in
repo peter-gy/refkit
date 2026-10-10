@@ -1,4 +1,4 @@
 # Runtime dependencies for the Pyodide contract tests.
 # Run `make pyodide-lock` from the repository root after changing this file.
-agent-plugins==0.2.0
+agent-plugins==0.2.4
 pytest==9.1.1

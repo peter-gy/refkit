@@ -9,8 +9,9 @@ from refkit_bench.formatting import FormatCase, formatting_cases, prepare_format
 
 
 @pytest.mark.parametrize("case", formatting_cases(), ids=lambda case: case.name)
-def test_refkit_matches_curated_formatter_contract(case: FormatCase):
-    prepared = prepare_format(case, "refkit")
+@pytest.mark.parametrize("package", ["refkit", "bibtex-tidy"])
+def test_participant_matches_curated_formatter_contract(case: FormatCase, package: str):
+    prepared = prepare_format(case, package)
     try:
         prepared.check(prepared.operation())
     finally:
@@ -25,7 +26,7 @@ def test_node_batch_returns_public_output_and_worker_clock():
         assert elapsed > 0
         prepared.check(output)
         assert prepared.metadata["clock"] == "process.hrtime.bigint"
-        assert prepared.metadata["package_version"] == "1.14.0"
+        assert prepared.metadata["package_version"] == "1.15.1"
         assert prepared.operation() == output
     finally:
         prepared.close()

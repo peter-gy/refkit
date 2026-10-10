@@ -219,8 +219,8 @@ class _NodeWorker:
         self.reader.start()
         try:
             self.metadata = self._response()
-            if self.metadata.get("package_version") != "1.14.0":
-                raise RuntimeError("The Node participant requires bibtex-tidy 1.14.0")
+            if self.metadata.get("package_version") != "1.15.1":
+                raise RuntimeError("The Node participant requires bibtex-tidy 1.15.1")
         except BaseException:
             self.close()
             raise
