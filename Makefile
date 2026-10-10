@@ -85,19 +85,19 @@ test:
 
 .PHONY: refkit-develop
 refkit-develop:
-	uv pip install $(UV_RESOLVER_FLAGS) --reinstall --no-deps --editable packages/refkit
+	uv pip install $(UV_RESOLVER_FLAGS) --python .venv --reinstall --no-deps --editable packages/refkit
 
 .PHONY: refkit-develop-release
 refkit-develop-release:
-	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install $(UV_RESOLVER_FLAGS) --reinstall --no-deps --editable packages/refkit
+	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install $(UV_RESOLVER_FLAGS) --python .venv --reinstall --no-deps --editable packages/refkit
 
 .PHONY: polars-refkit-develop
 polars-refkit-develop:
-	uv pip install $(UV_RESOLVER_FLAGS) --reinstall --no-deps --editable packages/polars-refkit
+	uv pip install $(UV_RESOLVER_FLAGS) --python .venv --reinstall --no-deps --editable packages/polars-refkit
 
 .PHONY: polars-refkit-develop-release
 polars-refkit-develop-release:
-	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install $(UV_RESOLVER_FLAGS) --reinstall --no-deps --editable packages/polars-refkit
+	MATURIN_PEP517_ARGS="--profile release --locked" uv pip install $(UV_RESOLVER_FLAGS) --python .venv --reinstall --no-deps --editable packages/polars-refkit
 
 .PHONY: benchmark-test
 benchmark-test:
@@ -115,13 +115,19 @@ rust:
 
 .PHONY: rust-floor
 rust-floor:
-	@if ! rustup which --toolchain $(RUST_FLOOR) rustc >/dev/null 2>&1; then \
-		echo "Network access: installing Rust $(RUST_FLOOR) with rustup."; \
-		rustup toolchain install $(RUST_FLOOR) --profile minimal; \
-	fi
-	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --workspace --all-targets --all-features
-	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --manifest-path $(JS_REFKIT_RUST) --all-targets --all-features
-	RUSTC="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" "$$(rustup which --toolchain $(RUST_FLOOR) cargo)" check --locked --manifest-path $(POLARS_REFKIT_RUST) --all-targets --all-features
+	@if rustc --version | cut -d ' ' -f 2 | grep -Eq '^$(subst .,[.],$(RUST_FLOOR))[.]'; then \
+		floor_rustc="$$(command -v rustc)"; floor_cargo="$$(command -v cargo)"; \
+	else \
+		if ! rustup which --toolchain $(RUST_FLOOR) rustc >/dev/null 2>&1; then \
+			echo "Network access: installing Rust $(RUST_FLOOR) with rustup."; \
+			rustup toolchain install $(RUST_FLOOR) --profile minimal || exit; \
+		fi; \
+		floor_rustc="$$(rustup which --toolchain $(RUST_FLOOR) rustc)" || exit; \
+		floor_cargo="$$(rustup which --toolchain $(RUST_FLOOR) cargo)" || exit; \
+	fi; \
+	for manifest in Cargo.toml $(JS_REFKIT_RUST) $(POLARS_REFKIT_RUST); do \
+		RUSTC="$$floor_rustc" "$$floor_cargo" check --locked --workspace --manifest-path "$$manifest" --all-targets --all-features || exit; \
+	done
 
 .PHONY: pyodide-lock pyodide-lock-check
 pyodide-lock:
@@ -201,6 +207,10 @@ release-check:
 architecture-check:
 	$(PYTHON) scripts/architecture_contract.py
 
+.PHONY: environment-check
+environment-check:
+	$(PYTHON) -m scripts.environment_contract
+
 .PHONY: docs-source-check
 docs-source-check:
 	$(PYTHON) scripts/docs_contract.py
@@ -228,7 +238,7 @@ docs-build:
 docs-check: docs-source-check docs-site-check
 
 .PHONY: check
-check: js-check lock release-check architecture-check docs-check pyodide-lock-check lint typecheck test benchmark-test docs-examples-check rust rust-floor rust-audit build
+check: js-check lock release-check architecture-check environment-check docs-check pyodide-lock-check lint typecheck test benchmark-test docs-examples-check rust rust-floor rust-audit build
 
 .PHONY: js-build js-check
 js-build:

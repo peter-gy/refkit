@@ -2,6 +2,26 @@
 
 RefKit exposes bibliography parsing, raw BibTeX editing, Citation Style Language rendering, JavaScript bindings, and Polars expressions through one portable Rust capability core.
 
+## Reproducible Development Environment
+
+Install [Pixi](https://pixi.sh/latest/installation/) 0.81.0 or newer, then run from the repository root:
+
+```bash
+pixi install --locked
+pixi run --locked setup
+pixi run --locked test
+```
+
+`pixi.toml` and `pixi.lock` supply Python, uv, Rust 1.95 (including Clippy, rustfmt and the Wasm target), Node, pnpm, C/C++ compilers, linkers, and audit tools on Linux x86_64 (glibc 2.28+) and macOS 13+ Intel/Apple Silicon. Use WSL2 on Windows. macOS needs Apple's Command Line Tools (`xcode-select --install`) for the SDK. `setup` installs the pinned Wasm binding generator under `.pixi/tools`, synchronizes `uv.lock`, builds both editable native adapters and JavaScript, and installs the locked documentation dependencies.
+
+Run any existing command through `pixi run --locked`, for example `pixi run --locked make refkit-develop`, or enter `pixi shell --locked` and use the Make commands below. Run `pixi run --locked rebuild` after core changes. Configure editors to use `.venv/bin/python`; Python packages stay in uv's `.venv`. Adapter rebuild targets must explicitly select `.venv` because `UV_PYTHON` selects Pixi's interpreter for workspace creation.
+
+Development builds use limited debug information, two Cargo jobs, and one uv build at a time to bound Polars build costs. For full Rust debug information, use `pixi run --locked env CARGO_PROFILE_DEV_DEBUG=2 make refkit-develop` (or the affected Cargo/Make command).
+
+Before the full gate, run `pixi run --locked browsers` to download the browser revisions from the locked Playwright package. Linux browser tests also need Playwright's host libraries; see [setup and limits](development_docs/README.md). Then run `pixi run --locked check`. Pyodide cross-builds retain their separate pinned CI setup.
+
+Commit `pixi.lock` when changing system tools; use `pixi lock` to regenerate it intentionally. Keep Rust, pnpm, audit-tool and Wasm-generator pins aligned with the existing manifests, Cargo locks and Makefile. Linux uses `scripts/pixi-linux-linker.sh` and GCC's built-in specs to avoid embedding the local Pixi prefix in wheels; keep native-test library lookup in environment activation. macOS uses `scripts/pixi-macos-linker.sh` with Clang's default Conda configuration disabled and Apple's SDK for system libraries; `scripts/pixi-macos-runner.sh` supplies Python library lookup for native Cargo execution. Pixi owns system tools; uv, Cargo, npm and pnpm retain their package lockfiles. Do not add a second Python package graph to Pixi or commit `.pixi/`.
+
 ## Build And Validation
 
 | Purpose | Command | Expected result |

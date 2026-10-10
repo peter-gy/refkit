@@ -109,8 +109,7 @@ try {
     [
       "run",
       "--locked",
-      "--package",
-      "refkit",
+      "--all-packages",
       "--group",
       "dev",
       "python",

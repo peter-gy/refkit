@@ -305,7 +305,7 @@ mod tests {
             )
         );
         assert_eq!(result.count, 1);
-        assert!(result.warnings.is_empty());
+        assert_eq!(result.warnings, Vec::<TidyWarning>::new());
     }
 
     #[test]

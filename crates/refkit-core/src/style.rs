@@ -215,7 +215,7 @@ mod tests {
             .find(|style| style.name == "apa" || style.aliases.iter().any(|alias| alias == "apa"))
             .unwrap();
         assert_eq!(apa.csl_id, "http://www.zotero.org/styles/apa");
-        assert!(!apa.title.is_empty());
+        assert_ne!(apa.title, "");
         let prepared = load_prepared_style(&apa.name).unwrap();
         for alias in &apa.aliases {
             assert_eq!(
@@ -230,7 +230,7 @@ mod tests {
         let first = load_prepared_style("apa").unwrap();
         let second = load_prepared_style("APA").unwrap();
 
-        assert!(!first.title().is_empty());
+        assert_ne!(first.title(), "");
         assert_eq!(second.title(), first.title());
     }
 

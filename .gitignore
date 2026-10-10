@@ -15,6 +15,7 @@ packages/refkit-bench/results/*
 !packages/refkit-bench/results/.gitkeep
 
 # Virtual environments
+.pixi/
 .venv
 node_modules/
 docs/.vitepress/cache/

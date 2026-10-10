@@ -10,6 +10,7 @@
 - Raw snapshots are immutable. `applyPatch` returns a new document and complete change report. Original handles retain their values and spans, including across garbage collection.
 - Field wrappers retain their immutable field information and return detached spans. Metadata and membership queries request their own result shapes from the native boundary.
 - Generate `src/wasm` and `dist` with `npm run build`. Pin the binding generator to the Rust dependency version. Ship the WebAssembly binary, declarations, and project license in the npm tarball.
+- Use the active Cargo/Rust compiler for Wasm builds so Pixi and rustup installations share the same build path. Install the Wasm target for that compiler; do not force a global rustup toolchain.
 - Keep npm package and lock versions aligned with the Rust workspace. Publish the tested tarball through `publish.yml` with the `npm` environment.
 
 Run `make js-check` from the repository root after installing the browser runtimes described in the developer packaging guide. Test the installed tarball, browser loading, worker execution, and TypeScript imports when changing exports or build output.

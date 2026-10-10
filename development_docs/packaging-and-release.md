@@ -60,11 +60,12 @@ Local `make build` validates both wheel and sdist contents. The publish workflow
 
 ## JavaScript Builds
 
-Install the Rust target and matching binding generator, then build and
-validate the npm package:
+The [Pixi setup](README.md#set-up-the-workspace) provides the Rust target and matching binding generator. After installing the [browser prerequisites](README.md#browser-prerequisites-and-complete-gate), run `pixi run --locked make js-check`.
+
+With manually installed tools, install the target for your active Rust toolchain and matching binding generator, then build and validate the npm package:
 
 ```bash
-rustup target add wasm32-unknown-unknown --toolchain stable
+rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version 0.2.126 --locked
 make js-check
 ```

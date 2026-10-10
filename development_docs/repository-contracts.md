@@ -8,6 +8,7 @@ RefKit keeps cross-file invariants executable. Each contract has one source-leve
 | --- | --- | --- |
 | Architecture | `make architecture-check` | Core dependency classification, host-boundary ownership, workspace composition, audited engine sources, adapter direction, and locked native builds. |
 | Rust quality | `make rust-quality-contract` | Shared compiler floor, inherited lint tables, local suppression reasons, native linking features, and bounded dependency-audit exceptions. |
+| Development environment | `make environment-check` | Pixi's Rust/Wasm target, pnpm, audit-tool and binding-generator pins match their package owners; Python packages stay in uv. |
 | Documentation source | `make docs-source-check` | Markdown-only developer docs, local link targets, VitePress routes, and the public-to-developer audience boundary. |
 | Documentation site | `make docs-site-check` | Locked pnpm install, TypeScript, root and Pages-base VitePress output, routes, public assets, social metadata, raw Markdown, llms indexes, local links, and heading fragments. |
 | JavaScript package | `make js-check` | Source freshness, npm exports, installed TypeScript consumer, Python parity, automatic memory lifetime, and browser and worker execution. |
@@ -86,6 +87,7 @@ Run `make pyodide-lock` to regenerate the lock, then `make pyodide-lock-check`.
 | --- | --- |
 | Python `.pyi` files | Tracked public contracts. Update them with runtime exports. |
 | Cargo and uv locks | Tracked resolution contracts. Run `make lock-upgrade` to refresh uv from `pyproject.toml`, then validate the locks before tests. |
+| Pixi lock | Tracked system-tool packages and hashes for Linux and macOS. Regenerate with `pixi lock`; consume with `pixi install --locked` and `pixi run --locked`. |
 | Pyodide lock | Tracked generated runtime input. Regenerate through `scripts/pyodide_lock.py`. |
 | Wheels and sdists | Derived build output. Validate archives and leave them untracked. |
 | Installed-test support wheel | Built from `packages/refkit-tests` and installed alongside candidate adapters. Run its probes outside the checkout. |

@@ -11,7 +11,7 @@ fn non_bibliography_text_preserves_delimiters_and_unicode() {
     let source = "研究 { unclosed ( \"quotes\" } }\n% commentaire égaré { \"\nfin 🙂";
     let document = RawDocument::parse(source);
     assert_eq!(document.entry_count(), 0);
-    assert!(document.failed_blocks().is_empty());
+    assert_eq!(document.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(document.render().unwrap(), source);
 }
 
@@ -45,7 +45,7 @@ fn indexed_nested_regions_preserve_root_specific_syntax() {
     );
     let document = RawDocument::parse(source);
     assert_eq!(document.entry_count(), 2);
-    assert!(document.failed_blocks().is_empty());
+    assert_eq!(document.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(
         raw_field_value(&document, "parenthesized", "title"),
         "Closing ) remains text, as does ( an opener"
@@ -92,7 +92,7 @@ fn valid_keys_on_following_lines_are_not_recovery_markers() {
     let source = "@misc{\n@x(foo,title={First}}\n@misc{\n@simple,title={Second}}";
     let document = RawDocument::parse(source);
     assert_eq!(document.entry_keys(), ["@x(foo", "@simple"]);
-    assert!(document.failed_blocks().is_empty());
+    assert_eq!(document.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(document.render().unwrap(), source);
 }
 
@@ -197,7 +197,7 @@ fn raw_document_parses_missing_key_entries_for_formatter_warnings() {
     let doc = RawDocument::parse("@article{\n  title = {No key}\n}\n");
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries.len(), 1);
     assert_eq!(syntax.entries[0].key, "");
     assert_eq!(syntax.entries[0].fields[0].name, "title");
@@ -215,7 +215,7 @@ fn raw_document_preserves_case_and_strange_field_names_for_formatters() {
     ));
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries[0].kind, "ARTICLE");
     assert_eq!(syntax.entries[0].fields[0].name, "Number");
     assert_eq!(syntax.entries[0].fields[1].name, "weird-key");
@@ -235,7 +235,7 @@ fn raw_document_trims_tabbed_field_name_whitespace() {
     ));
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries[0].fields[0].name, "OPTIONS");
     assert_eq!(syntax.entries[0].fields[1].name, "AUTHOR");
 }
@@ -245,7 +245,7 @@ fn raw_document_preserves_assignmentless_string_blocks() {
     let doc = RawDocument::parse("@string{fooobaar}\n@article{foo,title={Foo}}\n");
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert!(doc.strings().is_empty());
     assert!(syntax.blocks.iter().any(
         |block| matches!(block, RawSyntaxBlock::StringDef { raw, key, value, .. } if raw == "@string{fooobaar}" && key.is_empty() && value.is_empty())
@@ -258,7 +258,7 @@ fn raw_document_parses_valueless_fields_for_formatter_transforms() {
     let doc = RawDocument::parse("@article{empty,\n  day,\n  year = {}\n}\n");
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries[0].fields[0].name, "day");
     assert_eq!(syntax.entries[0].fields[0].value, "");
     assert_eq!(
@@ -296,10 +296,10 @@ fn raw_document_parses_empty_entries_without_key_separator() {
     let doc = RawDocument::parse("@misc{emptyref2\n\n}\n");
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries.len(), 1);
     assert_eq!(syntax.entries[0].key, "emptyref2");
-    assert!(syntax.entries[0].fields.is_empty());
+    assert_eq!(syntax.entries[0].fields, Vec::<RawSyntaxField>::new());
 }
 
 #[test]
@@ -307,7 +307,7 @@ fn raw_document_recovers_entry_after_invalid_at_text() {
     let doc = RawDocument::parse("@blah @article{foo,foo=bar}\nfoo@blah @article{bar,foo=bar}\n");
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries.len(), 2);
     assert_eq!(syntax.entries[0].key, "foo");
     assert_eq!(syntax.entries[1].key, "bar");
@@ -330,7 +330,7 @@ fn raw_document_treats_line_style_comment_as_comment_block() {
     let doc = RawDocument::parse("@comment blah, blah\n@article{foo,foo=bar}\n");
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries.len(), 1);
     assert!(syntax.blocks.iter().any(
         |block| matches!(block, RawSyntaxBlock::Comment { raw, .. } if raw == "@comment blah, blah\n")
@@ -345,7 +345,7 @@ fn raw_document_treats_line_style_comment_with_braces_as_comment_block() {
     ));
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries.len(), 1);
     assert!(syntax.blocks.iter().any(
         |block| matches!(block, RawSyntaxBlock::Comment { raw, .. } if raw == "@Comment         on Automated Planning and Scheduling, {ICAPS} 2006,\n")
@@ -357,7 +357,7 @@ fn raw_document_keeps_real_comment_blocks_with_spaced_openers() {
     let doc = RawDocument::parse("@comment {real comment block}\n@article{foo,foo=bar}\n");
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries.len(), 1);
     assert!(syntax.blocks.iter().any(
         |block| matches!(block, RawSyntaxBlock::Comment { raw, .. } if raw == "@comment {real comment block}")
@@ -369,7 +369,7 @@ fn raw_document_keeps_line_style_comment_words_inside_text() {
     let doc = RawDocument::parse("plain prose with @Comment entry type.\n@article{foo,foo=bar}\n");
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert!(syntax.blocks.iter().any(
         |block| matches!(block, RawSyntaxBlock::Other { raw, .. } if raw == "plain prose with @Comment entry type.\n")
     ));
@@ -381,7 +381,7 @@ fn raw_document_recovers_unicode_at_text_without_byte_boundary_panic() {
     let doc = RawDocument::parse("@ṣource without opener\n@article{foo,foo=bar}\n");
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries.len(), 1);
     assert!(syntax.blocks.iter().any(
         |block| matches!(block, RawSyntaxBlock::Other { raw, .. } if raw == "@ṣource without opener\n")
@@ -398,7 +398,7 @@ fn raw_document_counts_backslashed_braces_inside_braced_values() {
     ));
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries.len(), 1);
     assert_eq!(
         raw_field_value(&doc, "escaped", "isbn"),
@@ -412,7 +412,7 @@ fn raw_document_recovers_entry_after_inline_percent_comment() {
     let doc = RawDocument::parse("% another comment @article{foo,foo=bar}\n");
     let syntax = doc.syntax();
 
-    assert!(doc.failed_blocks().is_empty());
+    assert_eq!(doc.failed_blocks(), Vec::<RawBlockInfo>::new());
     assert_eq!(syntax.entries.len(), 1);
     assert_eq!(syntax.entries[0].key, "foo");
     assert!(syntax.blocks.iter().any(

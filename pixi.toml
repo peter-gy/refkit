@@ -1,0 +1,53 @@
+[workspace]
+name = "refkit-dev"
+description = "Locked system tools for RefKit development"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+requires-pixi = ">=0.81.0"
+
+[dependencies]
+python = "3.14.*"
+uv = "0.11.*"
+rust = "1.95.0.*"
+rust-std-wasm32-unknown-unknown = "1.95.0.*"
+nodejs = "26.*"
+pnpm = "11.10.0.*"
+make = "4.*"
+git = "2.*"
+pkg-config = "0.29.*"
+c-compiler = "*"
+cxx-compiler = "*"
+openssl = "3.*"
+cargo-deny = "0.20.2.*"
+cargo-shear = "1.13.4.*"
+actionlint = "1.*"
+
+[activation.env]
+PATH = "$PIXI_PROJECT_ROOT/.pixi/tools/bin:$PIXI_PROJECT_ROOT/scripts:$PATH"
+UV_PYTHON = "$CONDA_PREFIX/bin/python"
+UV_PYTHON_DOWNLOADS = "never"
+UV_CONCURRENT_BUILDS = "1"
+CARGO_BUILD_JOBS = "2"
+CARGO_PROFILE_DEV_DEBUG = "1"
+PLAYWRIGHT_BROWSERS_PATH = "$PIXI_PROJECT_ROOT/.pixi/browsers"
+
+[target.linux-64.activation.env]
+CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "$PIXI_PROJECT_ROOT/scripts/pixi-linux-linker.sh"
+LD_LIBRARY_PATH = "$CONDA_PREFIX/lib"
+
+[target.osx-64.activation.env]
+CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER = "$PIXI_PROJECT_ROOT/scripts/pixi-macos-linker.sh"
+CARGO_TARGET_X86_64_APPLE_DARWIN_RUNNER = "pixi-macos-runner.sh"
+
+[target.osx-arm64.activation.env]
+CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER = "$PIXI_PROJECT_ROOT/scripts/pixi-macos-linker.sh"
+CARGO_TARGET_AARCH64_APPLE_DARWIN_RUNNER = "pixi-macos-runner.sh"
+
+[tasks]
+binding-tools = { cmd = "cargo install --root .pixi/tools --locked wasm-bindgen-cli --version 0.2.126", description = "Install the binding generator matching the Wasm Cargo lock (not packaged for macOS)" }
+setup = { cmd = "make sync js-build && pnpm --dir docs install --frozen-lockfile", depends-on = ["binding-tools"], description = "Install locked Python and JS packages and build native/Wasm adapters" }
+rebuild = { cmd = "make refkit-develop polars-refkit-develop js-build", description = "Rebuild adapters after Rust edits" }
+test = { cmd = "make python-lint typecheck test rust", description = "Run focused Python and Rust checks" }
+docs = { cmd = "make docs-check", description = "Validate documentation and both site bases" }
+browsers = { cmd = "npm --prefix packages/refkit-js exec -- playwright install chromium firefox webkit", description = "Download browser revisions from the locked Playwright package after setup" }
+check = { cmd = "make check", description = "Run the complete gate after setup and browser prerequisites" }

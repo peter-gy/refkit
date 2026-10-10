@@ -1,13 +1,12 @@
 # Rust quality policy
 
-Use Rust 1.95 or newer for every workspace. CI checks both the shared minimum and current stable Rust. After [setting up the workspace](development.md), run these commands from the repository root on your Rust build host. Native Rust tests need the Python development library for the selected interpreter.
+Use Rust 1.95 or newer for every workspace. CI checks both the shared minimum and current stable Rust. The [Pixi setup](README.md#set-up-the-workspace) provides Rust, the pinned audit tools, and Python's development library for native tests. From the repository root:
 
 ```bash
-make rust-tools
-make rust-lint rust-audit rust
+pixi run --locked make rust-lint rust-audit rust
 ```
 
-`rust-tools` installs pinned versions of cargo-shear and cargo-deny from their locked dependencies. It requires network access. `rust-audit` verifies those versions before checking dependencies and refreshing the RustSec advisory database.
+With manually installed prerequisites, `make rust-tools` installs pinned versions of cargo-shear and cargo-deny from their locked dependencies and requires network access. `rust-audit` verifies the tool versions before checking dependencies and refreshing the RustSec advisory database.
 
 ## Source policy
 

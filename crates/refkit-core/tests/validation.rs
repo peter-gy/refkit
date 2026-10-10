@@ -4,7 +4,7 @@
 
 use refkit_core::{
     Date, DateParts, DateValue, EntryRecord, Library, RawDocument, Text, ValidationCode as Code,
-    ValidationProfile,
+    ValidationIssue, ValidationProfile,
 };
 
 fn record(key: &str, identifiers: &[(&str, &str)]) -> EntryRecord {
@@ -113,7 +113,7 @@ fn identifier_edge_cases_do_not_use_a_crossref_only_doi_regex() {
 #[test]
 fn record_checks_do_not_apply_biblatex_requirements() {
     let empty = Library::from_records(vec![record("minimal", &[])]).unwrap();
-    assert!(empty.validate().issues.is_empty());
+    assert_eq!(empty.validate().issues, Vec::<ValidationIssue>::new());
     let mut entry = record("a", &[]);
     entry.title = Some(Text::plain(" "));
     entry.url = Some(refkit_core::Url {
@@ -224,12 +224,9 @@ fn nested_container_identifiers_are_not_duplicate_top_level_works() {
     let mut b = record("b", &[]);
     a.parents.push(parent.clone());
     b.parents.push(parent);
-    assert!(
-        Library::from_records(vec![a, b])
-            .unwrap()
-            .validate()
-            .issues
-            .is_empty()
+    assert_eq!(
+        Library::from_records(vec![a, b]).unwrap().validate().issues,
+        Vec::<ValidationIssue>::new()
     );
 }
 

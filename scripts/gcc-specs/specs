@@ -1,0 +1,1 @@
+# Use GCC's built-in specs instead of Conda's prefix-bearing link defaults.

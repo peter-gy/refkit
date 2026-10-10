@@ -197,7 +197,7 @@ pub(super) fn with_struct_validity(
     valid: impl Iterator<Item = bool>,
 ) -> PolarsResult<Series> {
     use pyo3_polars::export::polars_arrow::bitmap::Bitmap;
-    let valid = Bitmap::from_iter(valid);
+    let valid = valid.collect::<Bitmap>();
     if valid.len() != chunked.len() {
         polars_bail!(ShapeMismatch: "struct validity length {} does not match row count {}", valid.len(), chunked.len());
     }

@@ -3,7 +3,8 @@
 #![cfg(test)]
 
 use refkit_core::{
-    BibliographyFormat as Format, DateValue, LossPolicy, RecoveryPolicy, convert, decode, encode,
+    BibliographyFormat as Format, DateValue, Diagnostic, LossPolicy, RecoveryPolicy, convert,
+    decode, encode,
 };
 
 const BOOK: &str = r#"[{"id":"book","type":"book","title":"A Book","author":[{"family":"Doe","given":"Jane"}],"issued":{"date-parts":[[2024]]},"publisher":"Press","language":"en-US","DOI":"10.1234/book"}]"#;
@@ -426,7 +427,7 @@ fn malformed_sources_and_duplicate_ids_fail_before_output() {
     )
     .err()
     .unwrap();
-    assert!(!error.diagnostics.is_empty());
+    assert_ne!(error.diagnostics, Vec::<Diagnostic>::new());
 }
 
 #[test]

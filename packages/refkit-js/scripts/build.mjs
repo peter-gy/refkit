@@ -12,11 +12,8 @@ function run(command, args, options = {}) {
 }
 const metadata = JSON.parse(
   execFileSync(
-    "rustup",
+    "cargo",
     [
-      "run",
-      "stable",
-      "cargo",
       "metadata",
       "--manifest-path",
       manifest,
@@ -37,8 +34,8 @@ if (installed !== `wasm-bindgen ${binding.version}`) {
   );
 }
 const sysroot = execFileSync(
-  "rustup",
-  ["run", "stable", "rustc", "--print", "sysroot"],
+  process.env.RUSTC || "rustc",
+  ["--print", "sysroot"],
   { encoding: "utf8" },
 ).trim();
 const cargoHome = resolve(
@@ -57,11 +54,8 @@ const remaps = [
   `--remap-path-prefix=${root}=refkit`,
 ];
 run(
-  "rustup",
+  "cargo",
   [
-    "run",
-    "stable",
-    "cargo",
     "build",
     "--manifest-path",
     manifest,
