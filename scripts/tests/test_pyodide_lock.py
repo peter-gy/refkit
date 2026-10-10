@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -55,11 +56,6 @@ def test_pyodide_lock_rejects_requirement_drift(
             "unsupported wheel source",
         ),
         ("/pyodide/v314.0.2/full/", "/pyodide/v314.0.1/full/", "must come from Pyodide"),
-        (
-            'sha256 = "94dd4f5d15f8688691c3628f2848fbe92d110baf96e7314c147fcc775ce45a50"',
-            'sha256 = "' + "z" * 64 + '"',
-            "invalid SHA-256",
-        ),
     ],
 )
 def test_pyodide_lock_rejects_invalid_artifact_provenance(
@@ -72,6 +68,20 @@ def test_pyodide_lock_rejects_invalid_artifact_provenance(
     invalid.write_text(LOCK_PATH.read_text().replace(before, after))
 
     assert any(message in error for error in pyodide_lock.validate_lock(invalid))
+
+
+def test_pyodide_lock_rejects_invalid_wheel_hash(tmp_path: Path) -> None:
+    invalid = tmp_path / "pylock.toml"
+    source, replacements = re.subn(
+        r'sha256 = "[0-9a-f]{64}"',
+        'sha256 = "' + "z" * 64 + '"',
+        LOCK_PATH.read_text(),
+        count=1,
+    )
+    assert replacements == 1
+    invalid.write_text(source)
+
+    assert any("invalid SHA-256" in error for error in pyodide_lock.validate_lock(invalid))
 
 
 def test_pyodide_lock_requires_installable_wheel_records(tmp_path: Path) -> None:
