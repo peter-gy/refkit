@@ -2,6 +2,7 @@ import os
 import platform
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,37 @@ def test_macos_linker_uses_system_libraries_without_environment_path(tmp_path: P
     assert os.environ["CONDA_PREFIX"].encode() not in output.read_bytes()
     dependencies = subprocess.check_output(["otool", "-L", str(output)], text=True)
     assert "/usr/lib/libiconv.2.dylib" in dependencies
+
+
+@pytest.mark.skipif(
+    sys.platform != "darwin" or os.environ.get("PIXI_PROJECT_ROOT") != str(environment.ROOT),
+    reason="requires the macOS Pixi toolchain and Python library",
+)
+def test_macos_runner_loads_python_without_embedded_environment_path(tmp_path: Path) -> None:
+    target = "AARCH64" if platform.machine() == "arm64" else "X86_64"
+    source = tmp_path / "probe.c"
+    source.write_text(
+        "#include <stdio.h>\nextern const char *Py_GetVersion(void);\n"
+        "int main(void) { puts(Py_GetVersion()); return 0; }\n"
+    )
+    output = tmp_path / "probe"
+    prefix = Path(os.environ["CONDA_PREFIX"])
+    subprocess.run(
+        [
+            os.environ[f"CARGO_TARGET_{target}_APPLE_DARWIN_LINKER"],
+            str(source),
+            str(prefix / "lib" / sysconfig.get_config_var("LDLIBRARY")),
+            "-o",
+            str(output),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    assert str(prefix).encode() not in output.read_bytes()
+    version = subprocess.check_output(
+        [os.environ[f"CARGO_TARGET_{target}_APPLE_DARWIN_RUNNER"], str(output)], text=True
+    )
+    assert version.startswith(f"{sys.version_info.major}.{sys.version_info.minor}.")
 
 
 @pytest.mark.parametrize(

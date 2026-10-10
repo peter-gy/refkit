@@ -8,6 +8,8 @@ Scripts under this directory validate source, generated state, wheels, sdists, a
 
 `pixi-macos-linker.sh` uses the locked Clang without its default Conda configuration, selecting the Apple SDK through `SDKROOT` or `xcrun`. Keep Rust links free of automatic prefix RPATHs and resolve system libraries from the SDK instead of Conda.
 
+Pixi selects `pixi-macos-runner.sh` by name from `PATH` for native Cargo execution. The runner sets dyld's fallback library path after its shell starts, so macOS runtime protections cannot strip the Python library lookup before test execution. Keep this runtime lookup out of compiled artifacts.
+
 - Keep checks deterministic and free from network access.
 - Accept an explicit root or artifact path when tests need an isolated fixture.
 - Aggregate violations and name the offending file, field, or archive member.
