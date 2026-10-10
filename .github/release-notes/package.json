@@ -6,6 +6,7 @@
     "changelogithub": "14.0.0"
   },
   "overrides": {
+    "changelogen": "0.6.2",
     "tar": "7.5.22"
   }
 }

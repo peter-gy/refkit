@@ -78,7 +78,7 @@ fn builtin_month_aliases_and_custom_definitions_keep_upstream_semantics() {
         let source = format!("@book{{a,title={{A}},year=2024,month={month}}}");
         let strict = Library::parse_biblatex(&source, RecoveryPolicy::Error).unwrap();
         let report = Library::parse_biblatex(&source, RecoveryPolicy::Report).unwrap();
-        assert!(report.diagnostics().is_empty());
+        assert_eq!(report.diagnostics(), []);
         assert_eq!(strict.to_json(), report.to_json());
     }
     let source = "@string{JAN={Custom}} @book{a,title=JAN}";
@@ -115,7 +115,7 @@ fn date_guard_uses_the_last_duplicate_field_after_upstream_normalization() {
     let source = "@book{a,title={A},year=2024,month=0,MONTH=5}";
     for policy in [RecoveryPolicy::Error, RecoveryPolicy::Report] {
         let library = Library::parse_biblatex(source, policy).unwrap();
-        assert!(library.diagnostics().is_empty());
+        assert_eq!(library.diagnostics(), []);
         assert_eq!(
             library
                 .get_record("a")
@@ -240,7 +240,7 @@ fn inactive_years_with_overlong_digits_do_not_trigger_the_panic_guard() {
     for sign in ['+', '-'] {
         let source = format!("@book{{a,title={{A}},date={{2024}},year={{{sign} 12345}}}}");
         let library = Library::parse_biblatex(&source, RecoveryPolicy::Error).unwrap();
-        assert!(library.diagnostics().is_empty());
+        assert_eq!(library.diagnostics(), []);
         assert_eq!(
             library
                 .get_record("a")
@@ -453,7 +453,7 @@ fn month_error_attribution_respects_explicit_days_and_inactive_date_parts() {
         let source = format!("@misc{{a,title={{Retained}},{fields}}}");
         for policy in [RecoveryPolicy::Error, RecoveryPolicy::Report] {
             let library = Library::parse_biblatex(&source, policy).unwrap();
-            assert!(library.diagnostics().is_empty());
+            assert_eq!(library.diagnostics(), []);
             assert_eq!(
                 library
                     .get_record("a")

@@ -554,7 +554,7 @@ mod recovery_contracts {
                     .as_deref(),
                 Some("Coffee")
             );
-            assert!(library.diagnostics().is_empty());
+            assert_eq!(library.diagnostics(), []);
         }
         let tidy = crate::tidy_bibtex(source, crate::TidyOptions::default()).unwrap();
         let library = Library::parse_biblatex(&tidy.bibtex, RecoveryPolicy::Error).unwrap();

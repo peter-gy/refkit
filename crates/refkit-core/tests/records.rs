@@ -106,7 +106,7 @@ fn mixed_creators_preserve_literal_organizations_and_editor_roles() {
         matches!(&record.authors[0], Name::Organization { name } if name == "Research Council")
     );
     assert!(matches!(&record.authors[1], Name::Person { family, .. } if family == "Doe"));
-    assert!(record.editors.is_empty());
+    assert_eq!(record.editors, Vec::<Name>::new());
     assert_eq!(record.affiliated[0].role, "translator");
 }
 

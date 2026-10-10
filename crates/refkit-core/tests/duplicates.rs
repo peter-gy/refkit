@@ -83,7 +83,7 @@ fn reverse_bridge_groups_retain_the_first_occurrence_across_review_and_tidy() {
     .unwrap();
     assert_eq!(tidy.warnings.len(), 2 * (count - 1));
     let (warning_pairs, remainder) = tidy.warnings.as_chunks::<2>();
-    assert!(remainder.is_empty());
+    assert_eq!(remainder, []);
     for [doi, abstract_match] in warning_pairs {
         assert_eq!(doi.rule(), Some(DuplicateRule::Doi));
         assert_eq!(abstract_match.rule(), Some(DuplicateRule::Abstract));
