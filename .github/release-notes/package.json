@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
-    "changelogithub": "14.0.0"
+    "changelogithub": "15.0.5"
   },
   "overrides": {
     "changelogen": "0.6.2",

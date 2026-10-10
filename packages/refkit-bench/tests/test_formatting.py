@@ -25,7 +25,7 @@ def test_node_batch_returns_public_output_and_worker_clock():
         assert elapsed > 0
         prepared.check(output)
         assert prepared.metadata["clock"] == "process.hrtime.bigint"
-        assert prepared.metadata["package_version"] == "1.14.0"
+        assert prepared.metadata["package_version"] == "1.15.1"
         assert prepared.operation() == output
     finally:
         prepared.close()

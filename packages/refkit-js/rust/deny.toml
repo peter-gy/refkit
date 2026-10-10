@@ -16,6 +16,7 @@ allow = ["Apache-2.0", "MIT", "BSD-2-Clause", "Unicode-3.0", "Zlib", "CC0-1.0"]
 multiple-versions = "deny"
 wildcards = "deny"
 skip = [
+    { crate = "quick-xml@=0.41.0", reason = "Audited Citationberg requires quick-xml 0.41 while the core XML validation uses 0.42; both meet the XML safety floor." },
     { crate = "syn@=2.0.119", reason = "Pinned proc-macro dependencies use syn 2 while other derives use syn 3; their AST APIs are incompatible." },
 ]
 

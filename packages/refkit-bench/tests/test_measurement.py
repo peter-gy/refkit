@@ -365,7 +365,7 @@ def test_cli_check_retains_failures_and_continues_to_remaining_cases(
         "format.spec/generate-keys/bibtex-tidy": "failed",
     }
     assert "exact formatter output" in outcomes["format.spec/numeric/bibtex-tidy"]["detail"]
-    assert outcomes["format.spec/numeric/bibtex-tidy"]["artifact"]["package_version"] == "1.14.0"
+    assert outcomes["format.spec/numeric/bibtex-tidy"]["artifact"]["package_version"] == "1.15.1"
 
 
 @pytest.mark.parametrize("option,value", [("--processes", "0"), ("--min-time", "nan")])

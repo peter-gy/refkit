@@ -199,8 +199,8 @@ def _xml_dependency_errors(
             )
 
     xml = core.get("dependencies", {}).get("quick-xml")
-    if xml != "=0.41.0":
-        errors.append("portable core must pin quick-xml =0.41.0 from crates.io")
+    if xml != ">=0.41.0, <0.43.0":
+        errors.append("portable core must require quick-xml >=0.41.0, <0.43.0 from crates.io")
 
     source = f"git+{CITATIONBERG_REPOSITORY}?rev={CITATIONBERG_REVISION}#{CITATIONBERG_REVISION}"
     for path, lock in locks.items():
