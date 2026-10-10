@@ -4,16 +4,15 @@ Use package-focused rebuilds and checks while iterating. Run the complete reposi
 
 ## Bootstrap
 
-Install the uv, Rust, Node.js, and pnpm prerequisites from the [developer index](README.md), then synchronize the Python workspace. The development group provides Maturin for native adapter builds.
+Follow the [Pixi setup](README.md#set-up-the-workspace) to install the locked system tools and build all adapters. The development group provides Maturin for native adapter builds.
 
 ```bash
-make sync
-make refkit-develop
-make polars-refkit-develop
-make rust-tools
+pixi install --locked
+pixi run --locked setup
+pixi shell --locked
 ```
 
-`refkit` and `polars-refkit` contain native modules. Rebuild the affected module after Rust changes or Python tests can exercise an older editable binary.
+The remaining commands assume the Pixi shell. Outside it, prefix commands with `pixi run --locked`. `refkit` and `polars-refkit` contain native modules. Rebuild the affected module after Rust changes or Python tests can exercise an older editable binary.
 
 ## Iterate By Boundary
 

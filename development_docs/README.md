@@ -2,25 +2,49 @@
 
 These documents describe how to change, test, document, package, and release RefKit. The root README, `docs/`, and published package READMEs own installation and public API guidance.
 
-## Prerequisites
-
-- [uv](https://docs.astral.sh/uv/) resolves the Python workspace and installs its development groups.
-- [Rust and Cargo](https://www.rust-lang.org/tools/install) 1.95 or newer compile and test all Rust workspaces.
-- [Node.js 24 or newer](https://nodejs.org/) runs Portless, VitePress, and the documentation verifier.
-- [pnpm](https://pnpm.io/installation) installs the locked documentation dependency graph.
-
-Workspace synchronization installs [Maturin](https://www.maturin.rs/), the builder used to compile Rust-backed Python extensions.
-
 ## Set Up The Workspace
 
+Install [Pixi](https://pixi.sh/latest/installation/) 0.81.0 or newer. The committed `pixi.lock` supplies the system tools on Linux x86_64 (glibc 2.28+) and macOS 13+ Intel/Apple Silicon. On Windows, clone and run the repository inside WSL2. macOS requires Apple's Command Line Tools for the SDK (`xcode-select --install`).
+
+From the repository root:
+
 ```bash
-make sync
-make refkit-develop
-make polars-refkit-develop
-make rust-tools
+pixi install --locked
+pixi run --locked setup
+pixi run --locked test
 ```
 
-Run `make check` before handing off a repository change. It validates locks, release metadata, architecture, documentation, Pyodide inputs, Python and Rust code, tests, dependency policy, the Rust 1.95 floor, and built distributions.
+The setup task installs `wasm-bindgen-cli` 0.2.126 with its upstream Cargo lock under `.pixi/tools` (that version is unavailable from conda-forge on macOS). It then runs `make sync js-build` and installs the frozen documentation dependencies. uv builds both editable native adapters and provides Maturin. Python packages stay in `.venv`, and editors should use `.venv/bin/python`. Pixi forces uv to use its locked Python interpreter without downloading another runtime. uv builds one package at a time, and Cargo uses two jobs and limited development debug information to reduce Polars build costs.
+
+To request full Rust debug information, run `pixi run --locked env CARGO_PROFILE_DEV_DEBUG=2 make refkit-develop`, substituting the affected Cargo or Make command. Release builds retain their existing profiles.
+
+On Linux, the Rust linker wrapper uses the locked GCC with its built-in specs, avoiding Conda's automatic local-prefix RPATH in wheels. Activation supplies the library search path for native Rust test executables instead. The existing distribution contract rejects builder paths in archives.
+
+Use `pixi run --locked <command>` for individual commands, or `pixi shell --locked` for an interactive session with the same tools. For example:
+
+```bash
+pixi run --locked make refkit-develop
+pixi run --locked rebuild
+pixi run --locked docs
+```
+
+## Browser Prerequisites And Complete Gate
+
+Download the Chromium, Firefox and WebKit revisions recorded by the locked Playwright package after setup:
+
+```bash
+pixi run --locked browsers
+```
+
+Browser executables live under `.pixi/browsers`. On Linux, Playwright also needs host GUI/media libraries. On a supported Debian/Ubuntu host, install them explicitly with `pixi run --locked npm --prefix packages/refkit-js exec -- playwright install-deps chromium firefox webkit` (uses sudo/apt). These host libraries, the OS kernel, and Apple's SDK are outside the Pixi lock; the feature-development environment does not need browser libraries. Pyodide cross-builds use the separate pinned `.github/actions/setup-pyodide` workflow.
+
+Run `pixi run --locked check` before handing off a repository change. It invokes the existing `make check` gate, validating locks, release metadata, architecture, documentation, Pyodide inputs, Python and Rust code, tests, dependency policy, the Rust 1.95 floor, and built distributions. CI also exercises the locked Pixi setup on Linux and macOS; the existing artifact lanes continue to test other Python, Node and platform combinations.
+
+## Update Environment Dependencies
+
+`pixi.toml` declares system-tool requirements and `pixi.lock` records exact packages and hashes for all supported platforms. Change the manifest and run `pixi lock` for intentional updates, then commit both files. Keep Rust at the shared floor, pnpm aligned with `docs/package.json`, audit tools aligned with the Makefile, and the binding generator aligned with the Wasm Cargo lock. Preserve `uv.lock`, all three Cargo locks, and the npm/pnpm locks as the owners of their respective package graphs. Do not duplicate Python dependencies in Pixi.
+
+All Make targets remain usable with manually installed prerequisites: uv, Rust/Cargo 1.95 or newer, Node 24 or newer, pnpm 11.10.0, the Wasm target and matching binding generator, and the pinned audit tools. Pixi supplies these tools consistently for daily development.
 
 ## Find The Right Document
 

@@ -9,6 +9,35 @@ env:
   FORCE_COLOR: '1'
   RUST_BACKTRACE: '1'
 jobs:
+  pixi:
+    name: Pixi development (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f
+        with:
+          pixi-version: v0.81.0
+          locked: true
+      - name: Bootstrap all adapters from the locked environment
+        run: pixi run --locked setup
+      - name: Validate the development environment
+        run: |
+          pixi run --locked make environment-check python-lint typecheck test rust rust-floor docs-check
+          pixi run --locked npm --prefix packages/refkit-js run lint
+          pixi run --locked npm --prefix packages/refkit-js run typecheck
+          pixi run --locked npm --prefix packages/refkit-js test
+          pixi run --locked npm --prefix packages/refkit-js run test:docs
+          pixi run --locked npm --prefix packages/refkit-js run test:package
+          pixi run --locked make build
   rust-dependencies:
     name: Rust dependency policy
     runs-on: ubuntu-latest
@@ -175,4 +204,4 @@ jobs:
         with:
           python-version: '3.14'
           enable-cache: false
-      - run: make release-check architecture-check pyodide-lock-check docs-source-check
+      - run: make release-check architecture-check environment-check pyodide-lock-check docs-source-check

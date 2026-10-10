@@ -56,7 +56,7 @@ The first command reports Markdown or audience-boundary problems. TypeScript rep
 
 ## The Minimum Rust Check Installs A Toolchain
 
-`make rust-floor` installs Rust 1.95 through rustup when the toolchain is absent. This command uses the network and changes the local rustup toolchain set. Install the toolchain explicitly before a disconnected validation run.
+`pixi run --locked make rust-floor` uses the locked Rust 1.95 compiler directly. With a different active compiler, `make rust-floor` falls back to rustup and installs Rust 1.95 when absent. That fallback uses the network and changes the local rustup toolchain set. Install the floor explicitly before a disconnected validation run outside Pixi.
 
 ## Cleaning Invalidates Local Artifacts
 
