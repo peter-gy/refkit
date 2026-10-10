@@ -20,7 +20,7 @@ Development builds use limited debug information, two Cargo jobs, and one uv bui
 
 Before the full gate, run `pixi run --locked browsers` to download the browser revisions from the locked Playwright package. Linux browser tests also need Playwright's host libraries; see [setup and limits](development_docs/README.md). Then run `pixi run --locked check`. Pyodide cross-builds retain their separate pinned CI setup.
 
-Commit `pixi.lock` when changing system tools; use `pixi lock` to regenerate it intentionally. Keep Rust, pnpm, audit-tool and Wasm-generator pins aligned with the existing manifests, Cargo locks and Makefile. Linux uses `scripts/pixi-linux-linker.sh` and GCC's built-in specs to avoid embedding the local Pixi prefix in wheels; keep native-test library lookup in environment activation. Pixi owns system tools; uv, Cargo, npm and pnpm retain their package lockfiles. Do not add a second Python package graph to Pixi or commit `.pixi/`.
+Commit `pixi.lock` when changing system tools; use `pixi lock` to regenerate it intentionally. Keep Rust, pnpm, audit-tool and Wasm-generator pins aligned with the existing manifests, Cargo locks and Makefile. Linux uses `scripts/pixi-linux-linker.sh` and GCC's built-in specs to avoid embedding the local Pixi prefix in wheels; keep native-test library lookup in environment activation. macOS uses `scripts/pixi-macos-linker.sh` with Clang's default Conda configuration disabled and Apple's SDK for system libraries. Pixi owns system tools; uv, Cargo, npm and pnpm retain their package lockfiles. Do not add a second Python package graph to Pixi or commit `.pixi/`.
 
 ## Build And Validation
 

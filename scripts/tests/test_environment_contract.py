@@ -1,4 +1,5 @@
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
@@ -47,6 +48,34 @@ def test_linux_linker_does_not_embed_environment_path(tmp_path: Path) -> None:
         capture_output=True,
     )
     assert os.environ["CONDA_PREFIX"].encode() not in output.read_bytes()
+
+
+@pytest.mark.skipif(
+    sys.platform != "darwin" or os.environ.get("PIXI_PROJECT_ROOT") != str(environment.ROOT),
+    reason="requires the macOS Pixi toolchain and Apple SDK",
+)
+def test_macos_linker_uses_system_libraries_without_environment_path(tmp_path: Path) -> None:
+    target = "AARCH64" if platform.machine() == "arm64" else "X86_64"
+    source = tmp_path / "probe.c"
+    source.write_text(
+        '#include <iconv.h>\niconv_t probe(void) { return iconv_open("UTF-8", "UTF-8"); }\n'
+    )
+    output = tmp_path / "probe.dylib"
+    subprocess.run(
+        [
+            os.environ[f"CARGO_TARGET_{target}_APPLE_DARWIN_LINKER"],
+            "-dynamiclib",
+            str(source),
+            "-liconv",
+            "-o",
+            str(output),
+        ],
+        check=True,
+        capture_output=True,
+    )
+    assert os.environ["CONDA_PREFIX"].encode() not in output.read_bytes()
+    dependencies = subprocess.check_output(["otool", "-L", str(output)], text=True)
+    assert "/usr/lib/libiconv.2.dylib" in dependencies
 
 
 @pytest.mark.parametrize(

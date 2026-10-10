@@ -20,6 +20,8 @@ To request full Rust debug information, run `pixi run --locked env CARGO_PROFILE
 
 On Linux, the Rust linker wrapper uses the locked GCC with its built-in specs, avoiding Conda's automatic local-prefix RPATH in wheels. Activation supplies the library search path for native Rust test executables instead. The existing distribution contract rejects builder paths in archives.
 
+On macOS, the Rust linker wrapper uses the locked Clang with its default Conda configuration disabled. It selects Apple's SDK from `SDKROOT`, or from `xcrun` when unset, so system libraries resolve from the SDK and wheels contain no automatic Pixi-prefix RPATH.
+
 Use `pixi run --locked <command>` for individual commands, or `pixi shell --locked` for an interactive session with the same tools. For example:
 
 ```bash

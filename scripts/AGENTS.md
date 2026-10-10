@@ -6,6 +6,8 @@ Scripts under this directory validate source, generated state, wheels, sdists, a
 
 `pixi-linux-linker.sh` selects GCC's built-in specs through `gcc-specs/specs` while retaining the locked compiler and sysroot. Keep wheels free of Conda's automatic prefix RPATH; native Rust test library lookup belongs to Pixi activation.
 
+`pixi-macos-linker.sh` uses the locked Clang without its default Conda configuration, selecting the Apple SDK through `SDKROOT` or `xcrun`. Keep Rust links free of automatic prefix RPATHs and resolve system libraries from the SDK instead of Conda.
+
 - Keep checks deterministic and free from network access.
 - Accept an explicit root or artifact path when tests need an isolated fixture.
 - Aggregate violations and name the offending file, field, or archive member.

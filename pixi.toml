@@ -35,6 +35,12 @@ PLAYWRIGHT_BROWSERS_PATH = "$PIXI_PROJECT_ROOT/.pixi/browsers"
 CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "$PIXI_PROJECT_ROOT/scripts/pixi-linux-linker.sh"
 LD_LIBRARY_PATH = "$CONDA_PREFIX/lib"
 
+[target.osx-64.activation.env]
+CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER = "$PIXI_PROJECT_ROOT/scripts/pixi-macos-linker.sh"
+
+[target.osx-arm64.activation.env]
+CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER = "$PIXI_PROJECT_ROOT/scripts/pixi-macos-linker.sh"
+
 [tasks]
 binding-tools = { cmd = "cargo install --root .pixi/tools --locked wasm-bindgen-cli --version 0.2.126", description = "Install the binding generator matching the Wasm Cargo lock (not packaged for macOS)" }
 setup = { cmd = "make sync js-build && pnpm --dir docs install --frozen-lockfile", depends-on = ["binding-tools"], description = "Install locked Python and JS packages and build native/Wasm adapters" }
