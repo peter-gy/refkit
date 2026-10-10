@@ -92,11 +92,14 @@ def test_macos_runner_loads_python_without_embedded_environment_path(tmp_path: P
     )
     output = tmp_path / "probe"
     prefix = Path(os.environ["CONDA_PREFIX"])
+    python_version = sysconfig.get_python_version()
+    library = prefix / "lib" / f"libpython{python_version}.dylib"
+    assert library.is_file()
     subprocess.run(
         [
             os.environ[f"CARGO_TARGET_{target}_APPLE_DARWIN_LINKER"],
             str(source),
-            str(prefix / "lib" / sysconfig.get_config_var("LDLIBRARY")),
+            str(library),
             "-o",
             str(output),
         ],
@@ -107,7 +110,7 @@ def test_macos_runner_loads_python_without_embedded_environment_path(tmp_path: P
     version = subprocess.check_output(
         [os.environ[f"CARGO_TARGET_{target}_APPLE_DARWIN_RUNNER"], str(output)], text=True
     )
-    assert version.startswith(f"{sys.version_info.major}.{sys.version_info.minor}.")
+    assert version.startswith(f"{python_version}.")
 
 
 @pytest.mark.parametrize(

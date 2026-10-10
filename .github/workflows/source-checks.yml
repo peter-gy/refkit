@@ -27,6 +27,10 @@ jobs:
         with:
           pixi-version: v0.81.0
           locked: true
+      - name: Validate compiler and runtime boundaries before bootstrap
+        run: |
+          pixi run --locked uv sync --locked --only-group dev --no-install-workspace
+          pixi run --locked uv run --no-sync python -m pytest scripts/tests/test_environment_contract.py -q -o addopts=
       - name: Bootstrap all adapters from the locked environment
         run: pixi run --locked setup
       - name: Validate the development environment
