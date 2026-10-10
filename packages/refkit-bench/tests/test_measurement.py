@@ -338,7 +338,22 @@ def test_interruption_terminates_the_worker_and_its_child(monkeypatch: pytest.Mo
 
 def test_cli_check_retains_failures_and_continues_to_remaining_cases(
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    execute_worker = runner.execute
+
+    def inject_failure(command: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
+        process = execute_worker(command, timeout)
+        row = json.loads(process.stdout)
+        if row["name"] in {
+            "format.spec/numeric/bibtex-tidy",
+            "format.spec/generate-keys/bibtex-tidy",
+        }:
+            row.update(status="failed", detail="injected formatter mismatch")
+            return subprocess.CompletedProcess(command, 1, json.dumps(row), process.stderr)
+        return process
+
+    monkeypatch.setattr(runner, "execute", inject_failure)
     assert (
         runner.main(
             [
@@ -364,7 +379,7 @@ def test_cli_check_retains_failures_and_continues_to_remaining_cases(
         "format.spec/defaults/bibtex-tidy": "ok",
         "format.spec/generate-keys/bibtex-tidy": "failed",
     }
-    assert "exact formatter output" in outcomes["format.spec/numeric/bibtex-tidy"]["detail"]
+    assert outcomes["format.spec/numeric/bibtex-tidy"]["detail"] == "injected formatter mismatch"
     assert outcomes["format.spec/numeric/bibtex-tidy"]["artifact"]["package_version"] == "1.15.1"
 
 
