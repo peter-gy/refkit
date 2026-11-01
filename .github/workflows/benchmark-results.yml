@@ -64,16 +64,16 @@ jobs:
           ref: ${{ inputs.baseline }}
           path: baseline
           persist-credentials: false
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e
         with:
           python-version: '3.14'
           enable-cache: true
           cache-dependency-glob: uv.lock
-      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
         with:
           toolchain: stable
       - uses: ./.github/actions/configure-rust-build
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           shared-key: benchmarks
           cache-on-failure: true
@@ -86,7 +86,7 @@ jobs:
         shell: bash
       - name: Upload platform evidence
         if: ${{ always() && !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: benchmark-shard-${{ runner.os }}
           overwrite: true
@@ -113,14 +113,14 @@ jobs:
           persist-credentials: false
           fetch-depth: 2
       - continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           pattern: benchmark-shard-*
           path: results/shards
         if: needs.lookup.outputs.run-id == ''
       - name: Download matching measurements
         if: needs.lookup.outputs.run-id != ''
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: benchmark-results-${{ inputs.fingerprint }}
           run-id: ${{ needs.lookup.outputs.run-id }}
@@ -145,7 +145,7 @@ jobs:
           python -m scripts.benchmark_report results/report --baseline "$BASE_SHA" --candidate "$CANDIDATE_SHA"
       - name: Upload consolidated results
         if: ${{ always() && !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: benchmark-results-${{ inputs.fingerprint }}
           path: results/report
